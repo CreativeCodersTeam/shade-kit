@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CreativeCoders.ShadeKit.Cli/CreativeCoders.ShadeKit.Cli.csproj" />
+    <Project Path="src/CreativeCoders.ShadeKit.Core/CreativeCoders.ShadeKit.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+</Solution>
