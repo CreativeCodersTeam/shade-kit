@@ -8,4 +8,8 @@
         <AssemblyName>shade-kit</AssemblyName>
     </PropertyGroup>
 
+    <ItemGroup>
+      <Folder Include="Commands\" />
+    </ItemGroup>
+
 </Project>
