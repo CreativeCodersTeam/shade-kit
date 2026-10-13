@@ -11,17 +11,25 @@ public class KitStore : IKitStore
         _kitStorePath = Ensure.IsNotNullOrWhitespace(kitStorePath);
     }
 
+    /// <inheritdoc />
     public IEnumerable<string> GetFeatureNames()
     {
+        var featuresPath = GetFeaturesPath();
+
+        if (!Directory.Exists(featuresPath))
+        {
+            throw new FeaturesDirectoryNotFoundException(featuresPath);
+        }
+
         return
         [
-            .. Directory.EnumerateDirectories(GetFeaturesPath())
+            .. Directory.EnumerateDirectories(featuresPath)
                 .Select(Path.GetFileName)
                 .OfType<string>()
                 .Where(name => !string.IsNullOrWhiteSpace(name))
         ];
     }
-    
+
     private string GetFeaturesPath()
     {
         return Path.Combine(_kitStorePath, KitStorePaths.FeaturesDirName);

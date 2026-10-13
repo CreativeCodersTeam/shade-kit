@@ -9,22 +9,22 @@ public class KitStoreFactory : IKitStoreFactory
 
     public IKitStore Create(string path)
     {
-        var kitStorePath = FindKitRootPathRecursively(path);
+        var kitRootPath = FindKitRootPathRecursively(path);
 
-        if (string.IsNullOrWhiteSpace(kitStorePath))
+        if (string.IsNullOrWhiteSpace(kitRootPath))
         {
             throw new KitRootPathNotFoundException(path);
         }
 
-        return new KitStore(kitStorePath);
+        return new KitStore(Path.Combine(kitRootPath, KitStorePaths.RootPath));
     }
 
     private static string FindKitRootPathRecursively(string startPath)
     {
         const int maxRecursionDepth = 20;
-        
+
         var recursionDepth = 0;
-        
+
         while (recursionDepth++ < maxRecursionDepth)
         {
             if (string.IsNullOrWhiteSpace(startPath))
@@ -42,7 +42,7 @@ public class KitStoreFactory : IKitStoreFactory
             if (parentDirectory == null) return string.Empty;
             startPath = parentDirectory.FullName;
         }
-        
+
         return string.Empty;
     }
 }

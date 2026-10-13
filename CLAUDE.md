@@ -31,23 +31,29 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 | Path | Purpose |
 |---|---|
 | `skills/` | Shipped plugin content |
-| `src/` | Production .NET projects *(planned)* |
-| `tests/` | One test project per production project *(planned)* |
+| `src/` | Production .NET projects: `CreativeCoders.ShadeKit.Cli` (the `shade-kit` CLI) and `CreativeCoders.ShadeKit.Core` (engine logic) |
+| `tests/` | One test project per production project (`<Project>.Tests`) |
 | `research/` | Design notes and investigations. Not shipped. Shipped code and skills must not depend on it. |
 | `docs/specs/`, `docs/plans/` | Only created when the spec-driven workflow is used (see below) |
 
-## .NET conventions *(planned)*
+## .NET conventions
 
 - Target `net10.0`.
-- Use one `.slnx` solution at the repository root.
+- Use one `.slnx` solution at the repository root (`ShadeKit.slnx`).
 - Use Central Package Management: all NuGet versions go in `Directory.Packages.props`. Never put `Version=` on a `PackageReference`.
-- Put shared build settings (nullable, implicit usings, analyzers) in `Directory.Build.props`, not in individual `.csproj` files.
-- Tests use xUnit, FakeItEasy, and AwesomeAssertions.
+- Put shared build settings (nullable, implicit usings, analyzers) in `Directory.Build.props`, not in individual `.csproj` files. Analyzers run with `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild`, and `TreatWarningsAsErrors`, so every warning breaks the build. `tests/.editorconfig` turns off CA1707 because test method names use underscores (`Method_Scenario_ExpectedResult`).
+- Files are UTF-8 without BOM with LF line endings (`.editorconfig`).
+- Tests use xUnit v3, FakeItEasy, and AwesomeAssertions. They run on Microsoft.Testing.Platform (enabled in `global.json`), so coverage uses `coverlet.MTP` (`dotnet test --coverlet`), not `coverlet.collector`.
+- The CLI is built on `CreativeCoders.Cli.Hosting`. A command is a class with `[CliCommand([...])]` that implements `ICliCommand` or `ICliCommand<TOptions>`, placed under `Commands/<Group>/<Command>/`. A group is declared with `[assembly: CliCommandGroup([...], "...")]` in `Commands/<Group>/<Group>CommandGroup.cs`. Expected failures throw `CliCommandAbortException` with an exit code from `ShadeKitCliExitCodes`.
+- Core services are registered with `services.AddShadeKitCore()`.
 
 ```sh
 dotnet build                     # from repo root (.slnx)
 dotnet test
-dotnet publish src/<Cli> -c Release -r <rid> --self-contained -p:PublishSingleFile=true
+dotnet test --coverlet           # with coverage (writes TestResults/)
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- features list
+dotnet pack src/CreativeCoders.ShadeKit.Cli          # dotnet global tool package (command: shade-kit)
+dotnet publish src/CreativeCoders.ShadeKit.Cli -c Release -r <rid> --self-contained -p:PublishSingleFile=true
 ```
 
 ## Workflow

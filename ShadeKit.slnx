@@ -3,5 +3,8 @@
     <Project Path="src/CreativeCoders.ShadeKit.Cli/CreativeCoders.ShadeKit.Cli.csproj" />
     <Project Path="src/CreativeCoders.ShadeKit.Core/CreativeCoders.ShadeKit.Core.csproj" />
   </Folder>
-  <Folder Name="/tests/" />
+  <Folder Name="/tests/">
+    <Project Path="tests/CreativeCoders.ShadeKit.Cli.Tests/CreativeCoders.ShadeKit.Cli.Tests.csproj" />
+    <Project Path="tests/CreativeCoders.ShadeKit.Core.Tests/CreativeCoders.ShadeKit.Core.Tests.csproj" />
+  </Folder>
 </Solution>
