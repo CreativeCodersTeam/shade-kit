@@ -6,6 +6,8 @@
 
 Status: greenfield. Items marked *(planned)* are decided but not built yet. When one gets built, remove the mark and add the real commands and paths.
 
+Repository language is always English. The kit is designed to be used by English-speaking developers, and all prompts, instructions, and documentation are in English.
+
 It has two deliverables:
 
 1. **Plugin** (`skills/`): skills, agents, hooks, and commands in the Claude Code plugin layout.
