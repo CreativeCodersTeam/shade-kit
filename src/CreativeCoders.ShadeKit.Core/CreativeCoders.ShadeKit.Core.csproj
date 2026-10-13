@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+      <Folder Include="Config\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="CreativeCoders.Core" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    </ItemGroup>
+
+</Project>

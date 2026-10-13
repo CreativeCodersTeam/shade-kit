@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <AssemblyName>shade-kit</AssemblyName>
+        <PackAsTool>true</PackAsTool>
+        <ToolCommandName>shade-kit</ToolCommandName>
+        <PackageId>CreativeCoders.ShadeKit.Cli</PackageId>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="CreativeCoders.ShadeKit.Cli.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="CreativeCoders.Cli.Hosting" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CreativeCoders.ShadeKit.Core\CreativeCoders.ShadeKit.Core.csproj" />
+    </ItemGroup>
+
+</Project>
