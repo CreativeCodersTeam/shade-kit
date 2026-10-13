@@ -317,49 +317,40 @@ Decided in [ADR 0001](../docs/adr/0001-shadekit-version-drift.md): every JSON fi
 
 ### 11.1 Phase flow and gates (`feature` profile)
 
-Every transition needs a human approval (v1), shown as an edge labelled "approval". The orange hexagons are the checklist gates, checked when the next phase starts. Dashed shapes and lines are optional paths.
+Every transition needs a human approval (v1), shown as an edge labelled "approval". The hexagons are the checklist gates, checked when the next phase starts. Dashed shapes and lines are optional paths.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "16px", "primaryColor": "#ffffff", "primaryBorderColor": "#111827", "primaryTextColor": "#000000", "secondaryColor": "#e2e8f0", "tertiaryColor": "#e2e8f0", "textColor": "#000000", "titleColor": "#000000", "lineColor": "#111827", "clusterBkg": "#dbeafe", "clusterBorder": "#1e3a8a", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TB
-    subgraph canvas[" "]
-        direction TB
-        discuss(["discuss (optional)"])
-        drop(["drop (from any phase)"])
-        new["new"]
-        refine["refine (repeatable)"]
-        map["map"]
-        dor{{"DoR checklist"}}
-        plan["plan"]
+    discuss(["discuss (optional)"])
+    drop(["drop (from any phase)"])
+    new["new"]
+    refine["refine (repeatable)"]
+    map["map"]
+    dor{{"DoR checklist"}}
+    plan["plan"]
 
-        subgraph implement_loop["implement"]
-            impl["implement"] --> simplify["simplify"] --> review["review"]
-            review -- "blockers" --> impl
-        end
-
-        verify["verify"]
-        dod{{"DoD checklist"}}
-        finish(["finish"])
-
-        discuss -.-> new
-        discuss -.-> refine
-        new -- "approval" --> refine
-        refine -- "approval" --> map
-        map --> dor
-        dor -- "approval" --> plan
-        plan -- "approval" --> impl
-        review -- "no blockers, approval" --> verify
-        verify --> dod
-        dod -- "approval" --> finish
+    subgraph implement_loop["implement"]
+        impl["implement"] --> simplify["simplify"] --> review["review"]
+        review -- "blockers" --> impl
     end
 
-    linkStyle default stroke:#111827,stroke-width:2px
-    style canvas fill:#ffffff,stroke:#ffffff
-    style implement_loop fill:#dbeafe,stroke:#1e3a8a,stroke-width:2px,color:#000000
-    classDef phase fill:#ffffff,stroke:#111827,stroke-width:2.5px,color:#000000
-    classDef checklist fill:#fb923c,stroke:#7c2d12,stroke-width:2.5px,color:#000000
-    classDef side fill:#d1d5db,stroke:#374151,stroke-width:2px,color:#000000,stroke-dasharray:5 4
-    class new,refine,map,plan,impl,simplify,review,verify,finish phase
+    verify["verify"]
+    dod{{"DoD checklist"}}
+    finish(["finish"])
+
+    discuss -.-> new
+    discuss -.-> refine
+    new -- "approval" --> refine
+    refine -- "approval" --> map
+    map --> dor
+    dor -- "approval" --> plan
+    plan -- "approval" --> impl
+    review -- "no blockers, approval" --> verify
+    verify --> dod
+    dod -- "approval" --> finish
+
+    classDef checklist stroke-width:2.5px
+    classDef side stroke-dasharray:5 4
     class dor,dod checklist
     class discuss,drop side
 ```
@@ -367,34 +358,26 @@ flowchart TB
 ### 11.2 Workflow profiles
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "16px", "primaryColor": "#ffffff", "primaryBorderColor": "#111827", "primaryTextColor": "#000000", "secondaryColor": "#e2e8f0", "tertiaryColor": "#e2e8f0", "textColor": "#000000", "titleColor": "#000000", "lineColor": "#111827", "clusterBkg": "#e2e8f0", "clusterBorder": "#334155", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart LR
-    subgraph canvas[" "]
-        direction LR
-        subgraph feature["feature (v1)"]
-            direction TB
-            f1[new] --> f2[refine] --> f3[map] --> f4[plan] --> f5[implement] --> f6[verify] --> f7[finish]
-        end
-        subgraph bugfix["bugfix (v1)"]
-            direction TB
-            b1[new] --> b2["diagnose<br/>reproduce, root cause"] --> b3["plan (short)"] --> b4["implement<br/>failing test first"] --> b5[verify] --> b6[finish]
-        end
-        subgraph quick["quick (v1)"]
-            direction TB
-            q1[new] --> q2["implement<br/>all in one"] --> q3["finish<br/>single approval"]
-        end
-        subgraph refactor["refactor (later)"]
-            direction TB
-            r1[new] --> r2[map] --> r3[plan] --> r4["implement<br/>behaviour unchanged"] --> r5[verify] --> r6[finish]
-        end
-        feature ~~~ bugfix ~~~ quick ~~~ refactor
+    subgraph feature["feature (v1)"]
+        direction TB
+        f1[new] --> f2[refine] --> f3[map] --> f4[plan] --> f5[implement] --> f6[verify] --> f7[finish]
     end
+    subgraph bugfix["bugfix (v1)"]
+        direction TB
+        b1[new] --> b2["diagnose<br/>reproduce, root cause"] --> b3["plan (short)"] --> b4["implement<br/>failing test first"] --> b5[verify] --> b6[finish]
+    end
+    subgraph quick["quick (v1)"]
+        direction TB
+        q1[new] --> q2["implement<br/>all in one"] --> q3["finish<br/>single approval"]
+    end
+    subgraph refactor["refactor (later)"]
+        direction TB
+        r1[new] --> r2[map] --> r3[plan] --> r4["implement<br/>behaviour unchanged"] --> r5[verify] --> r6[finish]
+    end
+    feature ~~~ bugfix ~~~ quick ~~~ refactor
 
-    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17 stroke:#111827,stroke-width:2px
-    style canvas fill:#ffffff,stroke:#ffffff
-    classDef phase fill:#ffffff,stroke:#111827,stroke-width:2.5px,color:#000000
-    classDef later fill:#d1d5db,stroke:#374151,stroke-width:2px,color:#000000,stroke-dasharray:5 4
-    class f1,f2,f3,f4,f5,f6,f7,b1,b2,b3,b4,b5,b6,q1,q2,q3 phase
+    classDef later stroke-dasharray:5 4
     class r1,r2,r3,r4,r5,r6 later
 ```
 
