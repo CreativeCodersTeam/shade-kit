@@ -331,3 +331,7 @@ ASALocalRun/
 
 .ai-plans
 .tokensave
+
+# Cake build output (build/)
+.artifacts/
+.tests/

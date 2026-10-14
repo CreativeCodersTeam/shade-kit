@@ -6,6 +6,14 @@
         <PackAsTool>true</PackAsTool>
         <ToolCommandName>shade-kit</ToolCommandName>
         <PackageId>CreativeCoders.ShadeKit.Cli</PackageId>
+        <Description>SHADE kit (Smart Harness for AI Driven Engineering) CLI that runs AI agents through a guided, gated software lifecycle.</Description>
+        <IsPackable>true</IsPackable>
+    </PropertyGroup>
+
+    <!-- A publish for a runtime identifier produces the self-contained single-file binary. -->
+    <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+        <PublishSingleFile>true</PublishSingleFile>
+        <SelfContained>true</SelfContained>
     </PropertyGroup>
 
     <ItemGroup>

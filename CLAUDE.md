@@ -35,6 +35,8 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 | `skills/` | Shipped plugin content |
 | `src/` | Production .NET projects: `CreativeCoders.ShadeKit.Cli` (the `shade-kit` CLI) and `CreativeCoders.ShadeKit.Core` (engine logic) |
 | `tests/` | One test project per production project (`<Project>.Tests`) |
+| `build/` | Cake Frosting build project (`CreativeCoders.CakeBuild`), run through `build.sh` / `build.ps1` / `build.cmd`. Not part of `ShadeKit.slnx`; it has its own `Directory.Build.props` and `Directory.Packages.props`. |
+| `.github/` | GitHub Actions workflows and Dependabot configuration |
 | `research/` | Design notes and investigations. Not shipped. Shipped code and skills must not depend on it. |
 | `docs/specs/`, `docs/plans/` | Only created when the spec-driven workflow is used (see below) |
 
@@ -45,7 +47,9 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 - Use Central Package Management: all NuGet versions go in `Directory.Packages.props`. Never put `Version=` on a `PackageReference`.
 - Put shared build settings (nullable, implicit usings, analyzers) in `Directory.Build.props`, not in individual `.csproj` files. Analyzers run with `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild`, and `TreatWarningsAsErrors`, so every warning breaks the build. `tests/.editorconfig` turns off CA1707 because test method names use underscores (`Method_Scenario_ExpectedResult`).
 - Files are UTF-8 without BOM with LF line endings (`.editorconfig`).
-- Tests use xUnit v3, FakeItEasy, and AwesomeAssertions. They run on Microsoft.Testing.Platform (enabled in `global.json`), so coverage uses `coverlet.MTP` (`dotnet test --coverlet`), not `coverlet.collector`.
+- Tests use xUnit v3, FakeItEasy, and AwesomeAssertions. They run on Microsoft.Testing.Platform (enabled in `global.json`) with `Microsoft.Testing.Extensions.TrxReport` and `Microsoft.Testing.Extensions.CodeCoverage` (`dotnet test --coverage`), which is what the Cake test task drives.
+- Versioning: GitVersion (`GitVersion.yml`, `GitVersion.MsBuild` as `GlobalPackageReference`) derives one version from the git history for every project, the tool package, and the binaries. Never put a version in a `.csproj` or `.props` file. Builds need the full history (`fetch-depth: 0`). A release is a tag `v<SemVer>` on `main`.
+- Only `CreativeCoders.ShadeKit.Cli` is packable (`IsPackable=false` in `Directory.Build.props`). A publish with a runtime identifier produces a self-contained single-file binary (set in the CLI `.csproj`).
 - The CLI is built on `CreativeCoders.Cli.Hosting`. A command is a class with `[CliCommand([...])]` that implements `ICliCommand` or `ICliCommand<TOptions>`, placed under `Commands/<Group>/<Command>/`. A group is declared with `[assembly: CliCommandGroup([...], "...")]` in `Commands/<Group>/<Group>CommandGroup.cs`. Expected failures throw `CliCommandAbortException` with an exit code from `ShadeKitCliExitCodes`.
 - Agent contract: every agent-facing command takes options derived from `JsonCommandOptions` (`--json`). In JSON mode it writes one `CliJsonEnvelope` (`ok`, `data`, `warnings`, `error`) through `ICliJsonWriter` to stdout and nothing else; on an expected failure it writes a failure envelope and throws `CliCommandAbortException` with `PrintMessage = false`. Core exceptions are mapped to exit code, error code, and message only in `CliErrorMapper`. Exit codes are grouped by area (10–19 store, 20–29 format, 30–39 features, 40–49 phases and gates, 255 host); every exit code has a kebab-case error code in `ShadeKitCliErrorCodes`.
 - Versioned JSON files in `.shadekit/` are read and written only through `IKitStore.ReadJsonAsync`/`WriteJsonAsync`. Each file type has a format id in `FormatIds` and a definition in `FormatRegistry.CreateDefault()`; raising a format version means a new table entry plus an `IFormatMigration` step and a test that migrates a fixture from the previous version. Document models derive from `VersionedDocument`; nested classes need their own `[JsonExtensionData] Dictionary<string, JsonElement>` to keep unknown fields.
@@ -54,15 +58,30 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 ```sh
 dotnet build                     # from repo root (.slnx)
 dotnet test
-dotnet test --coverlet           # with coverage (writes TestResults/)
+dotnet test --coverage           # with coverage (writes TestResults/)
 dotnet run --project src/CreativeCoders.ShadeKit.Cli -- features list
 dotnet pack src/CreativeCoders.ShadeKit.Cli          # dotnet global tool package (command: shade-kit)
-dotnet publish src/CreativeCoders.ShadeKit.Cli -c Release -r <rid> --self-contained -p:PublishSingleFile=true
+dotnet publish src/CreativeCoders.ShadeKit.Cli -c Release -r <rid>   # self-contained single-file binary
 ```
+
+Cake build (`./build.sh` on macOS/Linux, `./build.cmd` everywhere, `build.ps1` on Windows). Output goes to `.artifacts/` (`nuget/`, `published/<rid>/`, `dist/`) and `.tests/` (`coverage/`, `coverage-report/`):
+
+```sh
+./build.sh -t pack                          # clean, restore, build, test, coverage report, tool package
+./build.sh -t smoketest                     # publish binaries for the host OS, run `shade-kit version --json` on the native one
+./build.sh -t smoketest -t createdistpackages   # plus shade-kit-<rid>.tar.gz / .zip archives
+./build.sh -t publish --runtime=linux-x64 --runtime=win-x64   # publish other runtimes explicitly
+```
+
+Without `--runtime`, the host OS decides the runtimes: Linux → `linux-x64`, `linux-arm64`; Windows → `win-x64`, `win-arm64`; macOS → `osx-arm64`.
 
 ## Workflow
 
 - **Ad hoc by default.** Use the spec → plan → implement flow (`docs/specs/`, `docs/plans/`) only when the user asks for it, for example by invoking a dedicated skill. Don't push it unprompted.
 - **Branches:** `feature/<name>`. Changes reach `main` only through a pull request.
 - **Commits:** Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`).
-- **CI:** GitHub Actions *(planned)*. Pull requests run build and test. A release workflow builds the tool package and the self-contained binaries for every target platform.
+- **CI:** GitHub Actions (`.github/workflows/`), each build job runs the Cake build on Ubuntu, Windows, and macOS:
+  - `pull-request`: pack (build, test, coverage) and smoke test on every pull request to `main`.
+  - `integration` (`feature/**`) and `main`: additionally the dist archives; Ubuntu pushes the tool package to GitHub Packages.
+  - `release` (tag `v*`): Ubuntu pushes the tool package to nuget.org (secret `NUGET_ORG_TOKEN`); after all platforms succeed, a final job creates the GitHub release with the five binary archives and the tool package.
+  - `dependabot-auto-merge` / `dependabot-manual` with `.github/dependabot.yml` (NuGet for `/` and `/build`, GitHub Actions).
