@@ -1,0 +1,225 @@
+using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Core.Engine;
+using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Store;
+using FakeItEasy;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace CreativeCoders.ShadeKit.Core.Tests;
+
+public class ShadeKitCoreServiceCollectionExtensionsTests
+{
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_ResolvesKitStoreFactory()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        serviceProvider.GetRequiredService<IKitStoreFactory>()
+            .Should().BeOfType<KitStoreFactory>();
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_RegistersKitStoreFactoryAsSingleton()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var firstInstance = serviceProvider.GetRequiredService<IKitStoreFactory>();
+        var secondInstance = serviceProvider.GetRequiredService<IKitStoreFactory>();
+
+        secondInstance.Should().BeSameAs(firstInstance);
+    }
+
+    [Theory]
+    [InlineData(typeof(IFormatRegistry), typeof(FormatRegistry))]
+    [InlineData(typeof(IVersionedJsonSerializer), typeof(VersionedJsonSerializer))]
+    [InlineData(typeof(IEngineVersionProvider), typeof(EngineVersionProvider))]
+    public void AddShadeKitCore_ServiceCollection_RegistersServiceAsSingleton(Type serviceType, Type implementationType)
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var firstInstance = serviceProvider.GetRequiredService(serviceType);
+        var secondInstance = serviceProvider.GetRequiredService(serviceType);
+
+        firstInstance.Should().BeOfType(implementationType);
+        secondInstance.Should().BeSameAs(firstInstance);
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_RegistersFormatRegistryWithAllFileTypes()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        serviceProvider.GetRequiredService<IFormatRegistry>().Formats.Select(x => x.Id)
+            .Should().Equal(FormatIds.Config, FormatIds.Gates, FormatIds.Feature, FormatIds.CurrentFeature,
+                FormatIds.TemplatesLock, FormatIds.Integrations);
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ExistingFormatRegistryRegistration_KeepsExistingRegistration()
+    {
+        // Arrange
+        var existingRegistry = A.Fake<IFormatRegistry>();
+        var services = new ServiceCollection();
+        services.AddSingleton(existingRegistry);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        serviceProvider.GetRequiredService<IFormatRegistry>()
+            .Should().BeSameAs(existingRegistry);
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ExistingFormatRegistryRegistration_SerializerUsesExistingRegistry()
+    {
+        // Arrange
+        var existingRegistry = A.Fake<IFormatRegistry>();
+        A.CallTo(() => existingRegistry.GetFormat(A<string>._))
+            .Returns(new FormatDefinition("custom", new Dictionary<int, string> { [1] = "7.0.0" }));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingRegistry);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var json = serviceProvider.GetRequiredService<IVersionedJsonSerializer>()
+            .Serialize(new TestDocument(), "custom");
+
+        json.Should().Contain("\"minEngineVersion\": \"7.0.0\"");
+    }
+
+    [Theory]
+    [InlineData(typeof(IVersionedJsonSerializer))]
+    [InlineData(typeof(IEngineVersionProvider))]
+    public void AddShadeKitCore_ExistingServiceRegistration_KeepsExistingRegistration(Type serviceType)
+    {
+        // Arrange
+        var existingService = FakeItEasy.Sdk.Create.Fake(serviceType);
+        var services = new ServiceCollection();
+        services.AddSingleton(serviceType, existingService);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        serviceProvider.GetRequiredService(serviceType)
+            .Should().BeSameAs(existingService);
+    }
+
+    [Theory]
+    [InlineData(typeof(IFormatRegistry))]
+    [InlineData(typeof(IVersionedJsonSerializer))]
+    [InlineData(typeof(IEngineVersionProvider))]
+    public void AddShadeKitCore_CalledTwice_RegistersServiceOnlyOnce(Type serviceType)
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+        services.AddShadeKitCore();
+
+        // Assert
+        services.Where(x => x.ServiceType == serviceType)
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_ReturnsSameServiceCollection()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        var result = services.AddShadeKitCore();
+
+        // Assert
+        result.Should().BeSameAs(services);
+    }
+
+    [Fact]
+    public void AddShadeKitCore_CalledTwice_RegistersKitStoreFactoryOnlyOnce()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+        services.AddShadeKitCore();
+
+        // Assert
+        services.Where(x => x.ServiceType == typeof(IKitStoreFactory))
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ExistingKitStoreFactoryRegistration_KeepsExistingRegistration()
+    {
+        // Arrange
+        var existingFactory = A.Fake<IKitStoreFactory>();
+        var services = new ServiceCollection();
+        services.AddSingleton(existingFactory);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        serviceProvider.GetRequiredService<IKitStoreFactory>()
+            .Should().BeSameAs(existingFactory);
+    }
+
+    [Fact]
+    public void AddShadeKitCore_NullServiceCollection_ThrowsArgumentNullException()
+    {
+        // Arrange
+        IServiceCollection services = null!;
+
+        // Act
+        var act = () => services.AddShadeKitCore();
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("services");
+    }
+
+    public sealed class TestDocument : VersionedDocument;
+}
