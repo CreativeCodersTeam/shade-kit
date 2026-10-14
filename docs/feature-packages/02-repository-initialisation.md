@@ -47,15 +47,30 @@ A team can turn any git repository into a SHADE kit repository with one command.
 
 ### `config.json` (v1)
 
-The team owns the values; the engine owns the schema (ADR 0001). **Decided.** Proposed v1 content:
+The team owns the values; the engine owns the schema (ADR 0001). **Decided.** v1 content, **Decided**:
 
 | Field | Purpose |
 |---|---|
 | `schemaVersion` | Format version (package 01). |
+| `minEngineVersion` | First engine version that supports this format version, stamped by the engine on every write (package 01). |
 | `kitVersion` | Kit version that initialised or last upgraded the repository. Informational only; format checks use `schemaVersion`. |
 | `defaultProfile` | Profile used by `feature new` when none is given. Default `feature`. |
+| `outdatedFormatOnRead` | What read commands do with a file in an older format (package 01): `migrate-and-warn` (default) or `stop`. |
 | `trackers` | Mapping from issue URL host to id prefix for feature ids. Default: `github.com` → `gh` (package 03). |
 | `coverageThreshold` | Optional. Minimum coverage that `verify` requires (package 14). Not written by `init`; absent means "measure and record only". |
+
+`config.json` as written by `init` (version strings depend on the release):
+
+```json
+{
+  "schemaVersion": 1,
+  "minEngineVersion": "<first engine version with format 1>",
+  "kitVersion": "<installing kit version>",
+  "defaultProfile": "feature",
+  "outdatedFormatOnRead": "migrate-and-warn",
+  "trackers": { "github.com": "gh" }
+}
+```
 
 ### Templates
 
