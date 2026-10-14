@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
@@ -13,7 +14,7 @@ public class KitStoreTests
         tempDirectory.CreateDirectory("features", "auth");
         tempDirectory.CreateDirectory("features", "billing");
 
-        var kitStore = new KitStore(tempDirectory.RootPath);
+        var kitStore = CreateStore(tempDirectory.RootPath);
 
         // Act
         var featureNames = kitStore.GetFeatureNames();
@@ -31,7 +32,7 @@ public class KitStoreTests
         tempDirectory.CreateDirectory("features", "auth");
         tempDirectory.CreateFile("features", "readme.md");
 
-        var kitStore = new KitStore(tempDirectory.RootPath);
+        var kitStore = CreateStore(tempDirectory.RootPath);
 
         // Act
         var featureNames = kitStore.GetFeatureNames();
@@ -48,7 +49,7 @@ public class KitStoreTests
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateDirectory("features");
 
-        var kitStore = new KitStore(tempDirectory.RootPath);
+        var kitStore = CreateStore(tempDirectory.RootPath);
 
         // Act
         var featureNames = kitStore.GetFeatureNames();
@@ -64,7 +65,7 @@ public class KitStoreTests
         // Arrange
         using var tempDirectory = new TempKitDirectory();
 
-        var kitStore = new KitStore(tempDirectory.RootPath);
+        var kitStore = CreateStore(tempDirectory.RootPath);
 
         // Act
         var act = () => kitStore.GetFeatureNames();
@@ -81,7 +82,7 @@ public class KitStoreTests
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateFile("features");
 
-        var kitStore = new KitStore(tempDirectory.RootPath);
+        var kitStore = CreateStore(tempDirectory.RootPath);
 
         // Act
         var act = () => kitStore.GetFeatureNames();
@@ -98,7 +99,7 @@ public class KitStoreTests
         using var tempDirectory = new TempKitDirectory();
         var missingStorePath = Path.Combine(tempDirectory.RootPath, ".shadekit");
 
-        var kitStore = new KitStore(missingStorePath);
+        var kitStore = CreateStore(missingStorePath);
 
         // Act
         var act = () => kitStore.GetFeatureNames();
@@ -120,9 +121,68 @@ public class KitStoreTests
     public void Ctor_NullEmptyOrWhitespacePath_ThrowsArgumentException(string? kitStorePath)
     {
         // Act
-        var act = () => new KitStore(kitStorePath!);
+        var act = () => CreateStore(kitStorePath!);
 
         // Assert
         act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Ctor_NullSerializer_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => new KitStore(".shadekit", null!, FormatRegistry.CreateDefault());
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("serializer");
+    }
+
+    [Fact]
+    public void Ctor_NullFormatRegistry_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => new KitStore(".shadekit", new VersionedJsonSerializer(FormatRegistry.CreateDefault()), null!);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("formatRegistry");
+    }
+
+    [Fact]
+    public void RootPath_PathWithTrailingSeparator_ReturnsFullPathWithoutTrailingSeparator()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitStorePath = tempDirectory.CreateDirectory(".shadekit");
+
+        // Act
+        var kitStore = CreateStore(kitStorePath + Path.DirectorySeparatorChar);
+
+        // Assert
+        kitStore.RootPath
+            .Should().Be(kitStorePath);
+    }
+
+    [Fact]
+    public void RootPath_PathWithParentSegments_ReturnsNormalizedFullPath()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitStorePath = tempDirectory.CreateDirectory(".shadekit");
+
+        // Act
+        var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, "src", "..", ".shadekit"));
+
+        // Assert
+        kitStore.RootPath
+            .Should().Be(kitStorePath);
+    }
+
+    private static KitStore CreateStore(string kitStorePath)
+    {
+        var formatRegistry = FormatRegistry.CreateDefault();
+
+        return new KitStore(kitStorePath, new VersionedJsonSerializer(formatRegistry), formatRegistry);
     }
 }

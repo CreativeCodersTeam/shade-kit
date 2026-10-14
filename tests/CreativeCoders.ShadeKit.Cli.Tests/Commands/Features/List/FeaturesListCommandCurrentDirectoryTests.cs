@@ -12,13 +12,12 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Features.List;
 public class FeaturesListCommandCurrentDirectoryTests
 {
     [Fact]
-    public async Task ExecuteAsync_KitRootNotFoundInDirectoryWithMarkupCharacters_EscapesAbortMessage()
+    public async Task ExecuteAsync_NotAGitRepositoryInDirectoryWithMarkupCharacters_EscapesAbortMessage()
     {
         // Arrange
         var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(new KitRootPathNotFoundException(string.Empty));
 
-        var command = new FeaturesListCommand(new TestConsole(), kitStoreFactory);
+        var command = FeaturesListCommandTests.CreateCommand(new TestConsole(), kitStoreFactory);
 
         var originalDirectory = Directory.GetCurrentDirectory();
         var markupDirectory = Directory.CreateTempSubdirectory("shade-kit-[tests]-");
@@ -26,9 +25,11 @@ public class FeaturesListCommandCurrentDirectoryTests
         try
         {
             Directory.SetCurrentDirectory(markupDirectory.FullName);
+            A.CallTo(() => kitStoreFactory.Create())
+                .Throws(new NotAGitRepositoryException(Directory.GetCurrentDirectory()));
 
             // Act
-            var act = () => command.ExecuteAsync();
+            var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
 
             // Assert
             var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;

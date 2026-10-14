@@ -4,26 +4,54 @@ namespace CreativeCoders.ShadeKit.Cli;
 /// Defines the process exit codes that SHADE kit CLI commands return for expected failures.
 /// </summary>
 /// <remarks>
-/// A successful run returns <c>0</c>. Failures detected by the CLI host itself, such as an unknown command,
-/// use the exit codes defined by <c>CreativeCoders.Cli.Hosting.CliExitCodes</c>.
+/// A successful run returns <c>0</c>, also when warnings were reported. The codes are grouped in ranges per area:
+/// 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, and 255 for failures
+/// of the CLI host itself. In JSON mode, every exit code comes with the matching error code from
+/// <see cref="ShadeKitCliErrorCodes" />.
 /// </remarks>
 public static class ShadeKitCliExitCodes
 {
     /// <summary>
-    /// Represents the exit code returned when no SHADE kit root directory (<c>.shadekit</c>) is found in the
-    /// current directory or any of its parent directories.
+    /// Represents the exit code returned when the root of the git repository that contains the current directory
+    /// contains no SHADE kit root directory (<c>.shadekit</c>). The error code is
+    /// <see cref="ShadeKitCliErrorCodes.KitRootNotFound" />.
     /// </summary>
-    public const int KitRootNotFound = 1;
+    public const int KitRootNotFound = 10;
 
     /// <summary>
     /// Represents the exit code returned when the SHADE kit root directory exists but contains no
-    /// <c>features</c> directory.
+    /// <c>features</c> directory. The error code is <see cref="ShadeKitCliErrorCodes.FeaturesDirectoryNotFound" />.
     /// </summary>
-    public const int FeaturesDirectoryNotFound = 2;
+    public const int FeaturesDirectoryNotFound = 11;
+
+    /// <summary>
+    /// Represents the exit code returned when the current directory is not inside a git repository. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.NotAGitRepository" />.
+    /// </summary>
+    public const int NotAGitRepository = 12;
+
+    /// <summary>
+    /// Represents the exit code returned when a file uses a format version that is newer than the engine supports.
+    /// The error code is <see cref="ShadeKitCliErrorCodes.FormatTooNew" />.
+    /// </summary>
+    public const int FormatTooNew = 20;
+
+    /// <summary>
+    /// Represents the exit code returned when a file uses an older format version and the command must not migrate
+    /// it in memory, so <c>shade-kit upgrade</c> is needed. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.UpgradeNeeded" />.
+    /// </summary>
+    public const int UpgradeNeeded = 21;
+
+    /// <summary>
+    /// Represents the exit code returned when a file cannot be used, for example because it is not valid JSON or has
+    /// no <c>schemaVersion</c>. The error code is <see cref="ShadeKitCliErrorCodes.InvalidFile" />.
+    /// </summary>
+    public const int InvalidFile = 22;
 
     /// <summary>
     /// Represents the exit code returned when the CLI host itself fails, for example because the command is unknown,
-    /// cannot be created, or its options are invalid.
+    /// cannot be created, or its options are invalid. The error code is <see cref="ShadeKitCliErrorCodes.HostError" />.
     /// </summary>
     /// <remarks>
     /// The CLI host reports such failures with negative exit codes based on <see cref="int.MinValue" />. Operating

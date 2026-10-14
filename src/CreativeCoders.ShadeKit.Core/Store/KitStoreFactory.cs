@@ -1,48 +1,54 @@
+using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Formats;
+
 namespace CreativeCoders.ShadeKit.Core.Store;
 
-public class KitStoreFactory : IKitStoreFactory
+/// <summary>
+/// Creates <see cref="KitStore" /> instances for the SHADE kit root at the root of a git repository.
+/// </summary>
+/// <param name="serializer">The serializer that the created stores use for versioned JSON files.</param>
+/// <param name="formatRegistry">The registry that defines the file types the created stores accept.</param>
+public class KitStoreFactory(IVersionedJsonSerializer serializer, IFormatRegistry formatRegistry) : IKitStoreFactory
 {
+    private const string GitEntryName = ".git";
+
+    private readonly IVersionedJsonSerializer _serializer = Ensure.NotNull(serializer);
+
+    private readonly IFormatRegistry _formatRegistry = Ensure.NotNull(formatRegistry);
+
+    /// <inheritdoc />
     public IKitStore Create()
     {
-        return Create(FindKitRootPathRecursively(Directory.GetCurrentDirectory()));
+        return Create(Directory.GetCurrentDirectory());
     }
 
+    /// <inheritdoc />
     public IKitStore Create(string path)
     {
-        var kitRootPath = FindKitRootPathRecursively(path);
+        Ensure.IsNotNullOrWhitespace(path);
 
-        if (string.IsNullOrWhiteSpace(kitRootPath))
-        {
-            throw new KitRootPathNotFoundException(path);
-        }
+        var gitRootPath = FindGitRootPath(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)))
+                          ?? throw new NotAGitRepositoryException(path);
 
-        return new KitStore(Path.Combine(kitRootPath, KitStorePaths.RootPath));
+        var kitStorePath = Path.Combine(gitRootPath, KitStorePaths.RootPath);
+
+        return Directory.Exists(kitStorePath)
+            ? new KitStore(kitStorePath, _serializer, _formatRegistry)
+            : throw new KitRootPathNotFoundException(path, gitRootPath);
     }
 
-    private static string FindKitRootPathRecursively(string startPath)
+    private static string? FindGitRootPath(string startPath)
     {
-        const int maxRecursionDepth = 20;
-
-        var recursionDepth = 0;
-
-        while (recursionDepth++ < maxRecursionDepth)
+        for (var directory = new DirectoryInfo(startPath); directory is not null; directory = directory.Parent)
         {
-            if (string.IsNullOrWhiteSpace(startPath))
+            var gitEntryPath = Path.Combine(directory.FullName, GitEntryName);
+
+            if (Path.Exists(gitEntryPath))
             {
-                return string.Empty;
+                return directory.FullName;
             }
-
-            if (Directory.Exists(Path.Combine(startPath, KitStorePaths.RootPath)))
-            {
-                return startPath;
-            }
-
-            var parentDirectory = Directory.GetParent(startPath);
-
-            if (parentDirectory == null) return string.Empty;
-            startPath = parentDirectory.FullName;
         }
 
-        return string.Empty;
+        return null;
     }
 }

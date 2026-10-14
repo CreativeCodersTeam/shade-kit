@@ -1,5 +1,3 @@
-using CreativeCoders.ShadeKit.Core.Store;
-
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
 
 /// <summary>
@@ -20,26 +18,59 @@ internal sealed class TempKitDirectory : IDisposable
         return path;
     }
 
+    /// <summary>
+    /// Marks the temporary directory, or the specified subdirectory, as a git repository root by creating a
+    /// <c>.git</c> directory in it.
+    /// </summary>
+    public string CreateGitRoot(params string[] relativePathParts)
+    {
+        CreateDirectory([.. relativePathParts, ".git"]);
+
+        return Path.Combine([RootPath, .. relativePathParts]);
+    }
+
     public void CreateFile(params string[] relativePathParts)
     {
         File.WriteAllText(Path.Combine([RootPath, .. relativePathParts]), string.Empty);
     }
 
-    /// <summary>
-    /// Skips the current test if a SHADE kit root exists above the temporary directory, because a "root not found"
-    /// scenario cannot be produced there.
-    /// </summary>
-    public void SkipWhenKitRootExistsAbove()
+    public string WriteFile(string content, params string[] relativePathParts)
     {
-        Assert.SkipWhen(HasKitRootAbove(),
-            $"A '{KitStorePaths.RootPath}' directory exists above '{RootPath}'; the not-found scenario cannot be tested here.");
+        var path = Path.Combine([RootPath, .. relativePathParts]);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
+
+        return path;
     }
 
-    private bool HasKitRootAbove()
+    public byte[] ReadFileBytes(params string[] relativePathParts)
+    {
+        return File.ReadAllBytes(Path.Combine([RootPath, .. relativePathParts]));
+    }
+
+    public string ReadFileText(params string[] relativePathParts)
+    {
+        return File.ReadAllText(Path.Combine([RootPath, .. relativePathParts]));
+    }
+
+    /// <summary>
+    /// Skips the current test if a git repository root exists above the temporary directory, because a "not inside
+    /// a git repository" scenario cannot be produced there.
+    /// </summary>
+    public void SkipWhenGitRootExistsAbove()
+    {
+        Assert.SkipWhen(HasGitRootAbove(),
+            $"A '.git' entry exists above '{RootPath}'; the not-in-a-repository scenario cannot be tested here.");
+    }
+
+    private bool HasGitRootAbove()
     {
         for (var directory = _directory.Parent; directory is not null; directory = directory.Parent)
         {
-            if (Directory.Exists(Path.Combine(directory.FullName, KitStorePaths.RootPath)))
+            var gitPath = Path.Combine(directory.FullName, ".git");
+
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
             {
                 return true;
             }

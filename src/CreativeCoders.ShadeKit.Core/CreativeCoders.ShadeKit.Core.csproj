@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <ItemGroup>
+      <InternalsVisibleTo Include="CreativeCoders.ShadeKit.Core.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="CreativeCoders.Core" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     </ItemGroup>

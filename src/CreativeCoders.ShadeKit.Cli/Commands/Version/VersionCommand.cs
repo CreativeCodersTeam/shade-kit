@@ -1,18 +1,28 @@
-using System.Reflection;
 using CreativeCoders.Cli.Core;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Core.Engine;
+using CreativeCoders.ShadeKit.Core.Formats;
 using JetBrains.Annotations;
 using Spectre.Console;
 
 namespace CreativeCoders.ShadeKit.Cli.Commands.Version;
 
 /// <summary>
-/// Prints the version of the SHADE kit CLI.
+/// Prints the version of the SHADE kit engine and, in JSON mode, the format version of every file type it supports.
 /// </summary>
-/// <param name="ansiConsole">The console that receives the version output.</param>
+/// <param name="ansiConsole">The console that receives the plain version output.</param>
+/// <param name="engineVersionProvider">The provider of the running engine version.</param>
+/// <param name="formatRegistry">The registry of the file types the engine supports.</param>
+/// <param name="jsonWriter">The writer that receives the JSON output.</param>
 [UsedImplicitly]
 [CliCommand([Name], Description = "Shows the version of SHADE kit")]
-public class VersionCommand(IAnsiConsole ansiConsole) : ICliCommand
+public class VersionCommand(
+    IAnsiConsole ansiConsole,
+    IEngineVersionProvider engineVersionProvider,
+    IFormatRegistry formatRegistry,
+    ICliJsonWriter jsonWriter)
+    : ICliCommand<VersionCommandOptions>
 {
     /// <summary>
     /// Represents the command name used on the command line.
@@ -23,31 +33,48 @@ public class VersionCommand(IAnsiConsole ansiConsole) : ICliCommand
 
     private readonly IAnsiConsole _ansiConsole = Ensure.NotNull(ansiConsole);
 
+    private readonly IEngineVersionProvider _engineVersionProvider = Ensure.NotNull(engineVersionProvider);
+
+    private readonly IFormatRegistry _formatRegistry = Ensure.NotNull(formatRegistry);
+
+    private readonly ICliJsonWriter _jsonWriter = Ensure.NotNull(jsonWriter);
+
     /// <summary>
-    /// Writes the tool name and the informational version of the CLI assembly to the console.
+    /// Writes the engine version, as plain text or as a JSON envelope.
     /// </summary>
     /// <remarks>
-    /// The version is taken from the <see cref="AssemblyInformationalVersionAttribute" /> of the CLI assembly without
-    /// its build metadata, such as the source revision after the first <c>+</c> sign. If the attribute is missing or
-    /// yields an empty version, the assembly version is used instead.
+    /// Plain output is the tool name followed by the engine version. JSON output is an envelope whose <c>data</c> is
+    /// a <see cref="VersionCommandData" /> with the engine version and the current format version of every file type
+    /// in registration order.
     /// </remarks>
+    /// <param name="options">The options of the command.</param>
     /// <returns>A task that represents the asynchronous operation. The task result is <see cref="CommandResult.Success" />.</returns>
-    public Task<CommandResult> ExecuteAsync()
+    /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
+    public Task<CommandResult> ExecuteAsync(VersionCommandOptions options)
     {
-        _ansiConsole.WriteLine($"{ToolName} {GetVersion(typeof(VersionCommand).Assembly)}");
+        Ensure.NotNull(options);
+
+        if (options.Json)
+        {
+            _jsonWriter.Write(CliJsonEnvelope.Success(CreateData()));
+        }
+        else
+        {
+            _ansiConsole.WriteLine($"{ToolName} {_engineVersionProvider.Version}");
+        }
 
         return Task.FromResult(CommandResult.Success);
     }
 
-    internal static string GetVersion(Assembly assembly)
+    private VersionCommandData CreateData()
     {
-        var version = assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion
-            .Split('+', 2)[0];
+        var formats = new OrderedDictionary<string, int>(StringComparer.Ordinal);
 
-        return string.IsNullOrEmpty(version)
-            ? assembly.GetName().Version?.ToString() ?? string.Empty
-            : version;
+        foreach (var format in _formatRegistry.Formats)
+        {
+            formats.Add(format.Id, format.CurrentVersion);
+        }
+
+        return new VersionCommandData(_engineVersionProvider.Version, formats);
     }
 }
