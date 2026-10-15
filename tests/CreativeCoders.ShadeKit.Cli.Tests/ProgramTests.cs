@@ -522,7 +522,7 @@ public sealed class ProgramTests : IDisposable
         exitCode
             .Should().Be(0);
 
-        output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
             .Should().Equal("Billing", "login");
     }
 
