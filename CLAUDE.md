@@ -42,7 +42,7 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 
 ## .NET conventions
 
-- Target `net10.0`.
+- Target `net10.0`. The SDK is pinned in `global.json` (`sdk.version`, `rollForward: patch`); CI installs exactly that version with `actions/setup-dotnet`.
 - Use one `.slnx` solution at the repository root (`ShadeKit.slnx`).
 - Use Central Package Management: all NuGet versions go in `Directory.Packages.props`. Never put `Version=` on a `PackageReference`.
 - Put shared build settings (nullable, implicit usings, analyzers) in `Directory.Build.props`, not in individual `.csproj` files. Analyzers run with `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild`, and `TreatWarningsAsErrors`, so every warning breaks the build. `tests/.editorconfig` turns off CA1707 because test method names use underscores (`Method_Scenario_ExpectedResult`).
@@ -83,5 +83,5 @@ Without `--runtime`, the host OS decides the runtimes: Linux → `linux-x64`, `l
 - **CI:** GitHub Actions (`.github/workflows/`), each build job runs the Cake build on Ubuntu, Windows, and macOS:
   - `pull-request`: pack (build, test, coverage) and smoke test on every pull request to `main`.
   - `integration` (`feature/**`) and `main`: additionally the dist archives; Ubuntu pushes the tool package to GitHub Packages.
-  - `release` (tag `v*`): Ubuntu pushes the tool package to nuget.org (secret `NUGET_ORG_TOKEN`); after all platforms succeed, a final job creates the GitHub release with the five binary archives and the tool package.
+  - `release` (tag `v<SemVer>`): a `verify-tag` job rejects tags that are not `v<SemVer>` or not on `main`. After all platforms succeed, a `nuget-push` job pushes the tool package built on Ubuntu to nuget.org (secret `NUGET_ORG_TOKEN`, only in that job), then a final job creates the GitHub release with the five binary archives and the tool package.
   - `dependabot-auto-merge` / `dependabot-manual` with `.github/dependabot.yml` (NuGet for `/` and `/build`, GitHub Actions).

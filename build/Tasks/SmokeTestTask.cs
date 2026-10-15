@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Cake.Common;
+using Cake.Common.Build;
 using Cake.Common.Diagnostics;
 using Cake.Core.IO;
 using Cake.Frosting;
@@ -22,7 +23,15 @@ public class SmokeTestTask : FrostingTaskBase<BuildContext>
 
         if (!context.Runtimes.Contains(runtime))
         {
-            context.Information($"Skip smoke test: no binary published for host runtime '{runtime}'");
+            var message = $"No binary published for host runtime '{runtime}' (published: {string.Join(", ", context.Runtimes)})";
+
+            // A CI build must never pass without running the binary; locally, publishing other runtimes is legitimate.
+            if (!context.BuildSystem().IsLocalBuild)
+            {
+                throw new InvalidOperationException($"Smoke test failed: {message}");
+            }
+
+            context.Warning($"Skip smoke test: {message}");
             return Task.CompletedTask;
         }
 

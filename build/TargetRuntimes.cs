@@ -23,7 +23,25 @@ public static class TargetRuntimes
         return ["linux-x64", "linux-arm64"];
     }
 
-    public static string Host => RuntimeInformation.RuntimeIdentifier;
+    /// <summary>
+    /// The portable runtime identifier of the host (e.g. <c>linux-x64</c>), built from the operating system and the
+    /// processor architecture. <see cref="RuntimeInformation.RuntimeIdentifier"/> is not used because a distro-built
+    /// SDK reports a distro-specific identifier such as <c>ubuntu.24.04-x64</c>.
+    /// </summary>
+    public static string Host => $"{HostOperatingSystem}-{RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant()}";
+
+    private static string HostOperatingSystem
+    {
+        get
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                return "win";
+            }
+
+            return OperatingSystem.IsMacOS() ? "osx" : "linux";
+        }
+    }
 
     public static bool IsWindows(string runtime)
     {

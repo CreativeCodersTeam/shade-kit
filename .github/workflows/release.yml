@@ -7,21 +7,44 @@ concurrency:
 on:
   push:
     tags:
-      - 'v**'
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  # A release is a tag v<SemVer> on main. The tag filter above is only a coarse pre-filter.
+  verify-tag:
+    name: verify-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: 'Verify: tag is v<SemVer> on main'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # No build metadata (+...): the GitHub release is tagged v<SemVer> and would not match the pushed tag.
+          if ! [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Tag '$TAG' is not v<SemVer>"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag '$TAG' points to $GITHUB_SHA, which is not on main"
+            exit 1
+          fi
+
   build:
     name: ${{ matrix.os }}
+    needs: verify-tag
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            targets: -t nugetpush -t smoketest -t createdistpackages
+            targets: -t pack -t smoketest -t createdistpackages
           - os: windows-latest
             targets: -t pack -t smoketest -t createdistpackages
           - os: macos-latest
@@ -30,6 +53,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
       - name: 'Cache: ~/.nuget/packages'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -38,8 +64,6 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('**/global.json', '**/*.csproj', '**/Directory.Packages.props') }}
       - name: 'Build with targets: ${{ matrix.targets }}'
         run: ./build.cmd ${{ matrix.targets }}
-        env:
-          NUGET_TOKEN: ${{ secrets.NUGET_ORG_TOKEN }}
       - name: 'Publish: coverage_report'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -59,15 +83,43 @@ jobs:
           name: nuget-package
           path: .artifacts/nuget/*.nupkg
 
-  # The GitHub release is created only after every platform has built, tested and smoke-tested its binaries.
-  github-release:
-    name: github-release
+  # A nuget.org push cannot be undone, so the package built on Ubuntu goes out only after every platform has built,
+  # tested and smoke-tested its binaries. --exclusive pushes it without rebuilding.
+  nuget-push:
+    name: nuget-push
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: 'Download: nuget package'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nuget-package
+          path: .artifacts/nuget
+      - name: 'Push to nuget.org'
+        run: ./build.cmd -t nugetpush --exclusive
+        env:
+          NUGET_TOKEN: ${{ secrets.NUGET_ORG_TOKEN }}
+
+  # The GitHub release is created only after the tool package is on nuget.org.
+  github-release:
+    name: github-release
+    needs: [build, nuget-push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
       - name: 'Download: dist packages'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

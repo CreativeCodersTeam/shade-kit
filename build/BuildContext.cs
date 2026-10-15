@@ -1,4 +1,5 @@
 using Cake.Common.Build;
+using Cake.Common.Build.GitHubActions.Data;
 using Cake.Common.IO;
 using Cake.Core;
 using Cake.Core.IO;
@@ -16,7 +17,8 @@ public class BuildContext(ICakeContext context)
 
     public bool UseMicrosoftTestingPlatform => true;
 
-    public string NuGetFeedUrl => this.GitHubActions().Environment.Workflow.Workflow == "release"
+    // Only release tags go to nuget.org; every other build pushes to GitHub Packages.
+    public string NuGetFeedUrl => this.GitHubActions().Environment.Workflow.RefType == GitHubActionsRefType.Tag
         ? "nuget.org"
         : "https://nuget.pkg.github.com/CreativeCodersTeam/index.json";
 
@@ -50,7 +52,7 @@ public class BuildContext(ICakeContext context)
             Format = TargetRuntimes.IsWindows(runtime) ? DistPackageFormat.Zip : DistPackageFormat.TarGz
         });
 
-    public string ReleaseName => $"v{Version.SemVer}";
+    public string ReleaseName => ReleaseVersion;
 
     public string ReleaseVersion => $"v{Version.SemVer}";
 
