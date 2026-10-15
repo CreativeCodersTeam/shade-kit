@@ -1,0 +1,54 @@
+name: integration
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            targets: -t nugetpush -t smoketest -t createdistpackages
+          - os: windows-latest
+            targets: -t pack -t smoketest -t createdistpackages
+          - os: macos-latest
+            targets: -t pack -t smoketest -t createdistpackages
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: 'Cache: ~/.nuget/packages'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.nuget/packages
+          key: ${{ runner.os }}-${{ hashFiles('**/global.json', '**/*.csproj', '**/Directory.Packages.props') }}
+      - name: 'Build with targets: ${{ matrix.targets }}'
+        run: ./build.cmd ${{ matrix.targets }}
+        env:
+          NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 'Publish: coverage_report'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-report-${{ runner.os }}
+          path: .tests/coverage-report
+      - name: 'Publish: dist packages'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ runner.os }}
+          path: |
+            .artifacts/dist/*.tar.gz
+            .artifacts/dist/*.zip
