@@ -77,7 +77,7 @@ The team owns the values; the engine owns the schema (ADR 0001). **Decided.** v1
 - Shipped templates are copied into `.shadekit/templates/` as plain files. Agents other than Claude Code need them as files in the repository (ADR 0001). **Decided.**
 - No engine code parses the structure of a template or of an artifact created from it (ADR 0001). **Decided.** Every check against artifact content is done by an agent.
 - Initial set, owned by the listed packages. Until its owner package is built, a template is a skeleton with headings only; templates change freely until the first release, so this causes no lock-file churn for users.
-- In the kit's source, every template is a file `templates/<name>.template.md`, so it cannot be mistaken for an artifact. `init` writes it to its path in the repository, given in the table below. The engine keeps this mapping as an explicit list; it does not derive paths from file names. **Proposed.** Paths in `templates.lock.json` are repository paths.
+- In the kit's source, every template is a file `templates/<name>.template.md`, so it cannot be mistaken for an artifact. The source folder has the same subfolders as `.shadekit/templates/` (the checklists are in `templates/checks/`). `init` writes each template to its path in the repository, given in the table below. The engine keeps this mapping as an explicit list; it does not derive paths from file names. **Proposed.** Paths in `templates.lock.json` are repository paths.
 
 | Template in the repository (`.shadekit/templates/`) | Source in the kit (`templates/`) | Owner package |
 |---|---|---|
@@ -90,7 +90,7 @@ The team owns the values; the engine owns the schema (ADR 0001). **Decided.** v1
 | `verification.md`, `playbook.md` | `verification.template.md`, `playbook.template.md` | 14 |
 | `report.md` | `report.template.md` | 15 |
 | `diagnosis.md` | `diagnosis.template.md` | 16 |
-| `checks/definition-of-ready.md`, `checks/definition-of-done.md` | `definition-of-ready.template.md`, `definition-of-done.template.md` | 05 |
+| `checks/definition-of-ready.md`, `checks/definition-of-done.md` | `checks/definition-of-ready.template.md`, `checks/definition-of-done.template.md` | 05 |
 
 ### Template conventions
 
@@ -124,7 +124,7 @@ Every template follows the same conventions. **Decided** in the template intervi
 - **FP02-AC5** `CLAUDE.md` and `AGENTS.md` contain exactly one managed section; existing content outside the section is unchanged.
 - **FP02-AC6** `init` in an initialised repository changes no file and points to `shade-kit upgrade`.
 - **FP02-AC7** `init` outside a git repository stops with an exit code and creates nothing.
-- **FP02-AC8** `init` writes every shipped template to its repository path from the template table, for example `spec.template.md` to `.shadekit/templates/spec.md` and `definition-of-ready.template.md` to `.shadekit/templates/checks/definition-of-ready.md`.
+- **FP02-AC8** `init` writes every shipped template to its repository path from the template table, for example `spec.template.md` to `.shadekit/templates/spec.md` and `checks/definition-of-ready.template.md` to `.shadekit/templates/checks/definition-of-ready.md`.
 
 ## Open points
 

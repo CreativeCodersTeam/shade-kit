@@ -1,10 +1,10 @@
 # SHADE kit concept
 
-Status: draft, 2026-10-13. Result of an interview on the original working notes. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-13, updated 2026-10-17 (template interview). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
 
 Labels used in this document:
 
-- **Decided**: confirmed in the interview.
+- **Decided**: confirmed in the interview, or in a later interview named with its date.
 - **Proposed**: added while working the notes into shape; not confirmed yet.
 - **Open**: needs a decision before it is built.
 - **Unverified**: an assumption about an external tool that has not been checked.
@@ -122,7 +122,8 @@ The kit root is `.shadekit/` (decided; matches ADR 0001 and `KitStorePaths`).
 .shadekit/
 ├── config.json                 # schemaVersion; user owns values, engine owns schema
 ├── gates.json                  # gate on/off per transition and profile
-├── templates/                  # spec/plan/tasks templates, editable by the team
+├── templates/                  # artifact templates, editable by the team (section 4.5)
+│   └── checks/                 # checklist templates: definition-of-ready.md, definition-of-done.md
 ├── templates.lock.json         # kit version + hash per shipped template (ADR 0001)
 ├── local.json                  # gitignored; local settings and repo paths (section 4.4)
 ├── memory/                     # later (section 8)
@@ -139,15 +140,15 @@ The kit root is `.shadekit/` (decided; matches ADR 0001 and `KitStorePaths`).
         ├── feature.json        # schemaVersion, profile, phase, status, approvals, history
         ├── request.md          # original input (text, issue link, file)
         ├── researches.md       # research results from refine and map
-        ├── spec.md             # requirements (with IDs), acceptance criteria, out of scope
-        ├── plan.md
-        ├── tasks.md            # tasks, each linked to requirement IDs and the tests that prove them
+        ├── spec.md             # requirements (IDs, priority), acceptance criteria, out of scope, assumptions, open questions, decisions
+        ├── plan.md             # approach, design decisions, test strategy with quality commands, deviations
+        ├── tasks.md            # tasks as checkboxes, each linked to requirement IDs and the tests that prove them; coverage matrix
         ├── data.md             # open: purpose not defined yet
         ├── review.md           # proposed: review findings from implement
         ├── playbook.md         # proposed: manual test playbook from verify
         └── checks/
-            ├── definition-of-ready.md  # Definition of Ready (entry gate of plan)
-            └── definition-of-done.md   # Definition of Done (entry gate of finish)
+            ├── definition-of-ready.md  # filled copy of the Definition of Ready (entry gate of plan)
+            └── definition-of-done.md   # filled copy of the Definition of Done (entry gate of finish)
 ```
 
 ### 4.2 Feature ids
@@ -188,6 +189,16 @@ For a product made of several code repositories. Decided: both directions are po
 
 **Open:** which branch decides the current feature (section 4.3) in this mode? Proposal: the feature branch in the code repository; the spec repository stays on its default branch, or uses the same branch name.
 
+### 4.5 Templates
+
+Decided in the template interview on 2026-10-17. Details in [package 02](../docs/feature-packages/02-repository-initialisation.md) (conventions), [10](../docs/feature-packages/10-refine.md) (`spec.md`), [12](../docs/feature-packages/12-plan.md) (`plan.md`, `tasks.md`), and [05](../docs/feature-packages/05-gates-and-checklists.md) (checklists).
+
+- In the kit's source, templates are `templates/<name>.template.md`, with the checklists in `templates/checks/`. `init` writes them to the same subfolders of `.shadekit/templates/`.
+- Guidance for the agent is written in HTML comments, with at most one example per section inside the comment. Every agent reads the same file, so this stays agent-neutral.
+- Placeholders are written `{{name}}`, so leftovers can be found by a text search.
+- An artifact's header holds only the title, the feature id, and links to related artifacts. The feature state stays in `feature.json`.
+- IDs are stable and never renumbered: `REQ`, `AC`, `A` (assumption), `Q` (question) in `spec.md`; `D` (design decision) and `T` (task) in `plan.md` and `tasks.md`; `F` (finding) in `review.md`; `DOR`, `DOD` in the checklists.
+
 ## 5. Phases
 
 ### 5.1 Overview
@@ -196,9 +207,9 @@ For a product made of several code repositories. Decided: both directions are po
 |---|---|---|---|
 | `discuss` | Brainstorm any topic. Optional, can run as input for `new` or in any other phase. | Anything | Discussion notes (**open:** where they are stored; proposal `.shadekit/discussions/` or inside the feature folder when a feature is current) |
 | `new` | Create the feature folder. | Requirement as text, issue URL, Markdown file, discussion notes | `feature.json`, `request.md` |
-| `refine` | Clarify vague statements, gaps, and open questions about the requirement. Can run several times. | `request.md` | `spec.md`: requirements with IDs, acceptance criteria, out of scope; research in `researches.md` |
+| `refine` | Clarify vague statements, gaps, and open questions about the requirement. Can run several times. | `request.md` | `spec.md`: requirements with IDs and priority, acceptance criteria, edge cases, out of scope, assumptions, open questions, decisions; research in `researches.md` |
 | `map` | Map the feature onto the code base, using parallel research subagents. | `spec.md`, code base | `researches.md`: best practice, existing architecture, affected code, don't hand-roll, security |
-| `plan` | Plan the implementation. | `spec.md`, `researches.md` | `plan.md`, `tasks.md` with requirement → test mapping |
+| `plan` | Plan the implementation. | `spec.md`, `researches.md` | `plan.md` with design decisions and test strategy, `tasks.md` with requirement → test mapping and coverage matrix |
 | `implement` | Implement, simplify, and review in a loop until the review has no blockers. | `plan.md`, `tasks.md` | Code and tests, `review.md` |
 | `verify` | AI verification (quality checks, every acceptance criterion covered by a passing test) plus a playbook for manual tests by a developer or user. | Code, `spec.md`, `tasks.md` | Verification result, `playbook.md` |
 | `finish` | Mark the feature as done. Later: distill memory. | Everything | `feature.json` status `done`, report |
@@ -214,14 +225,11 @@ Decided for v1:
 - DoR is the entry gate of `plan`, checked against `spec.md`. DoD is the entry gate of `finish`.
 - All other transitions are plain approvals without a checklist. Extension point: a `checks/<phase>.md` file can add a checklist to any transition later.
 
-Proposed content of the checklists (the defaults come from templates and can be edited per repository):
+Content and format of the checklists, decided in the template interview on 2026-10-17. The defaults come from templates and can be edited per repository; the full item lists are in [package 05](../docs/feature-packages/05-gates-and-checklists.md).
 
-| DoR (entry of `plan`) | DoD (entry of `finish`) |
-|---|---|
-| Every requirement has an ID and at least one acceptance criterion | Build, test, lint, and coverage checks pass |
-| No open questions left in `spec.md` | Every acceptance criterion is covered by a passing test (`tasks.md` mapping) |
-| Out of scope is stated | `review.md` has no open blockers |
-| Affected areas known (`map` done, or skipped on purpose) | Every item in `playbook.md` is checked off by a human |
+- Each checklist is a table `ID | Criterion | Result | Evidence`. `Result` is `pending`, `pass`, `fail`, or `n/a` (an item for a phase or artifact the profile does not have). A "Check runs" log keeps the result of every run.
+- **DoR (entry of `plan`), ten items:** every requirement has an ID, a priority, and at least one testable acceptance criterion; no open questions and no template leftovers in `spec.md`; out of scope is stated; assumptions are confirmed or marked as risks; every edge case has a criterion or is out of scope; security considerations are filled in; affected areas are known (`map` done, or skipped on purpose).
+- **DoD (entry of `finish`), nine items:** build, test, and lint pass; coverage is measured and reaches `coverageThreshold` if set; every acceptance criterion is covered by a passing test or a playbook item; every task is done or has an accepted reason; `review.md` has no open blockers; the quality bar was not lowered; plan deviations and rollout steps are recorded; documentation is updated; every item in `playbook.md` is checked off by a human.
 
 Proposed `gates.json` shape:
 
@@ -257,9 +265,10 @@ Decided: one phase engine, several profiles. A profile is an ordered list of pha
 
 ## 6. Quality gates and traceability
 
-- Requirements in `spec.md` get stable IDs (for example `REQ-001`).
-- `tasks.md` links each task to requirement IDs and names the tests that prove them.
-- `verify` checks that every requirement has a passing test and runs the quality checks (build, test, lint, coverage).
+- Requirements in `spec.md` get stable IDs (for example `REQ-001`), and their acceptance criteria get IDs linked to them (for example `AC-001.1`).
+- `tasks.md` links each task to requirement IDs and names the tests that prove each acceptance criterion. A coverage matrix at its end lists every acceptance criterion with its tests and tasks, or marks it as manual.
+- The quality commands (build, test, lint, coverage) are planned in the test strategy of `plan.md` and approved with the plan.
+- `verify` checks that every acceptance criterion has a passing test or a playbook item and runs the quality checks.
 - v1: the agent runs the checks and reports. Later: the commands are configured in `gates.json` and the CLI runs them and stores the result.
 - `finish` writes a report: requirements, tests, check results, approvals.
 

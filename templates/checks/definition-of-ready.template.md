@@ -6,7 +6,7 @@ Entry gate of plan. The engine copies this template into the feature folder as c
 - "n/a" only when an item refers to a phase or artifact that the feature's profile does not have (for example map in bugfix). The reason goes into Evidence. "n/a" does not fail the gate.
 - Evidence: what was checked, with IDs or paths. For "fail": what is missing.
 - On every run, also after a reopen, recheck every item, overwrite Result and Evidence, and add a line to "Check runs", so earlier results stay visible.
-- Teams may add, change, or remove items in .shadekit/templates/. Keep the IDs of existing items stable.
+- Teams may add, change, or remove items in .shadekit/templates/checks/. Keep the IDs of existing items stable.
 -->
 
 Feature: `{{feature-id}}` · Spec: [spec.md](../spec.md)
