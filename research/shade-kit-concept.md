@@ -317,11 +317,11 @@ Decided in [ADR 0001](../docs/adr/0001-shadekit-version-drift.md): every JSON fi
 
 ### 11.1 Phase flow and gates (`feature` profile)
 
-Every transition needs a human approval (v1), shown as an edge labelled "approval". The hexagons are the checklist gates, checked when the next phase starts. Dashed shapes and lines are optional paths.
+Every transition needs a human approval (v1), shown as an edge labelled "approval". The hexagons are the checklist gates, checked when the next phase starts. Dashed shapes and lines are optional paths. `discuss` and `drop` are outside the phase order: `discuss` can feed `new` and run during any phase, `drop` is possible from any phase.
 
 ```mermaid
 flowchart TB
-    discuss(["discuss (optional)"])
+    discuss(["discuss (optional, any phase)"])
     drop(["drop (from any phase)"])
     new["new"]
     refine["refine (repeatable)"]
@@ -338,8 +338,7 @@ flowchart TB
     dod{{"DoD checklist"}}
     finish(["finish"])
 
-    discuss -.-> new
-    discuss -.-> refine
+    discuss -. "input" .-> new
     new -- "approval" --> refine
     refine -- "approval" --> map
     map --> dor

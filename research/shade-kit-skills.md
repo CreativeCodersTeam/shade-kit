@@ -24,7 +24,7 @@ Called by the user, directly or through `shade-kit-next-phase`.
 | Skill | Purpose |
 |---|---|
 | `shade-kit-next-phase` | Finds the current feature and phase, offers the allowed next phases, lets the user choose, and starts the chosen phase skill. |
-| `shade-kit-discuss` | Free brainstorming on any topic. Outside every profile; can run before `new` or between `refine` rounds. |
+| `shade-kit-discuss` | Free brainstorming on any topic. Outside every profile; can run as input for `new` or in any other phase. |
 | `shade-kit-new` | Creates a feature with a profile (`feature.json`, `request.md`) from text, an issue URL, a file, or discussion notes. |
 | `shade-kit-refine` | Clarifies the requirement through interview and research. Writes `spec.md` (requirement IDs, acceptance criteria, out of scope). Can run several times. |
 | `shade-kit-map` | Maps the feature onto the code base with parallel research agents. Writes `researches.md`. |
