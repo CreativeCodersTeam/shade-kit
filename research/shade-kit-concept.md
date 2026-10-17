@@ -194,7 +194,7 @@ For a product made of several code repositories. Decided: both directions are po
 
 | Phase | Purpose | Input | Output |
 |---|---|---|---|
-| `discuss` | Brainstorm any topic. Optional, can run before `new` or between `refine` runs. | Anything | Discussion notes (**open:** where they are stored; proposal `.shadekit/discussions/` or inside the feature folder when a feature is current) |
+| `discuss` | Brainstorm any topic. Optional, can run as input for `new` or in any other phase. | Anything | Discussion notes (**open:** where they are stored; proposal `.shadekit/discussions/` or inside the feature folder when a feature is current) |
 | `new` | Create the feature folder. | Requirement as text, issue URL, Markdown file, discussion notes | `feature.json`, `request.md` |
 | `refine` | Clarify vague statements, gaps, and open questions about the requirement. Can run several times. | `request.md` | `spec.md`: requirements with IDs, acceptance criteria, out of scope; research in `researches.md` |
 | `map` | Map the feature onto the code base, using parallel research subagents. | `spec.md`, code base | `researches.md`: best practice, existing architecture, affected code, don't hand-roll, security |

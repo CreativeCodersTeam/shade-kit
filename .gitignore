@@ -335,3 +335,5 @@ ASALocalRun/
 # Cake build output (build/)
 .artifacts/
 .tests/
+
+/TestResults
