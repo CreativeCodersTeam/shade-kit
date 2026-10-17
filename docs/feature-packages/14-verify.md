@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14 |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (commands from `plan.md`, coverage matrix) |
 | Source | Concept §5.1 (`verify`), §5.2 (DoD), §6 |
 | Depends on | 06, 12, 13 |
 | Enables | 15 (DoD gate and report) |
@@ -29,8 +29,8 @@ Before a feature is called done, there is evidence that every acceptance criteri
 
 ### Run
 
-1. Run the build, test, and lint commands recorded in `review.md` (package 13), plus the coverage command, found the same way as in package 13 and recorded in `verification.md`. **Decided** (agent runs them in v1).
-2. For every acceptance criterion in `spec.md`, find the proving tests from `tasks.md` and confirm that they exist and passed in this run. Criteria marked "manual" (package 12) go to the playbook.
+1. Run the build, test, and lint commands recorded in `review.md` (package 13), plus the coverage command from the test strategy in `plan.md` (package 12), or found the same way as in package 13 where there is no `plan.md`. Record every command in `verification.md`. **Decided** (agent runs them in v1).
+2. For every acceptance criterion in `spec.md`, find the proving tests in the coverage matrix of `tasks.md` and confirm that they exist and passed in this run. Criteria marked manual in the matrix (package 12) go to the playbook.
 3. Write `verification.md`: date, commands with their results, coverage value, and a table acceptance criterion → test → result.
 4. Write `playbook.md`: one checkbox item per manual criterion and per behaviour the human should see working (steps, expected result). Every item starts unchecked.
 5. Report the result. If anything failed, recommend reopening `implement` and name the failures.

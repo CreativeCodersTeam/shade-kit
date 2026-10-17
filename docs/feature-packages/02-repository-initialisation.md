@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14 |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions) |
 | Source | Concept §3.1 (`init`), §4.1, §9; [ADR 0001](../adr/0001-shadekit-version-drift.md) decision 5 |
 | Depends on | 01 |
 | Enables | 03, 05, 18 and every phase package (they ship templates through this mechanism) |
@@ -77,19 +77,31 @@ The team owns the values; the engine owns the schema (ADR 0001). **Decided.** v1
 - Shipped templates are copied into `.shadekit/templates/` as plain files. Agents other than Claude Code need them as files in the repository (ADR 0001). **Decided.**
 - No engine code parses the structure of a template or of an artifact created from it (ADR 0001). **Decided.** Every check against artifact content is done by an agent.
 - Initial set, owned by the listed packages. Until its owner package is built, a template is a skeleton with headings only; templates change freely until the first release, so this causes no lock-file churn for users.
+- In the kit's source, every template is a file `templates/<name>.template.md`, so it cannot be mistaken for an artifact. `init` writes it to its path in the repository, given in the table below. The engine keeps this mapping as an explicit list; it does not derive paths from file names. **Proposed.** Paths in `templates.lock.json` are repository paths.
 
-| Template | Owner package |
-|---|---|
-| `request.md` | 09 |
-| `discussion.md` | 09 |
-| `spec.md` | 10 |
-| `researches.md` | 06 (shared format), sections filled in 10 and 11 |
-| `plan.md`, `tasks.md` | 12 |
-| `review.md` | 13 |
-| `verification.md`, `playbook.md` | 14 |
-| `report.md` | 15 |
-| `diagnosis.md` | 16 |
-| `checks/dor.md`, `checks/dod.md` | 05 |
+| Template in the repository (`.shadekit/templates/`) | Source in the kit (`templates/`) | Owner package |
+|---|---|---|
+| `request.md` | `request.template.md` | 09 |
+| `discussion.md` | `discussion.template.md` | 09 |
+| `spec.md` | `spec.template.md` | 10 |
+| `researches.md` | `researches.template.md` | 06 (shared format), sections filled in 10 and 11 |
+| `plan.md`, `tasks.md` | `plan.template.md`, `tasks.template.md` | 12 |
+| `review.md` | `review.template.md` | 13 |
+| `verification.md`, `playbook.md` | `verification.template.md`, `playbook.template.md` | 14 |
+| `report.md` | `report.template.md` | 15 |
+| `diagnosis.md` | `diagnosis.template.md` | 16 |
+| `checks/definition-of-ready.md`, `checks/definition-of-done.md` | `definition-of-ready.template.md`, `definition-of-done.template.md` | 05 |
+
+### Template conventions
+
+Every template follows the same conventions. **Decided** in the template interview on 2026-10-17.
+
+- **Guidance for the agent** is written in HTML comments (`<!-- … -->`), one per template and one per section where needed. Every agent reads the same file, so the rules work the same in Claude Code, Copilot, and Codex, and teams that edit a template see the rules next to the structure.
+- **Examples** appear only inside a guidance comment, at most one per section, so they cannot be left behind as content.
+- **Placeholders** are written `{{name}}`; a choice of values is written `{{a | b}}`, with the pipe escaped as `\|` inside table cells. Leftover placeholders can be found by a plain text search.
+- **Header:** a title, the feature id, and relative links to the related artifacts. No status or phase: `feature.json` is the only source of the feature state.
+- **IDs** are stable and never renumbered: `REQ`, `AC`, `A`, `Q` (package 10), `D`, `T` (package 12), `F` (package 13), `DOR`, `DOD` (package 05).
+- When an artifact is filled in, every placeholder is replaced and every guidance comment is removed. Checklist copies (package 05) are the exception: they keep their guidance comment, because they are rechecked on every run.
 
 ### `templates.lock.json`
 
@@ -112,6 +124,7 @@ The team owns the values; the engine owns the schema (ADR 0001). **Decided.** v1
 - **FP02-AC5** `CLAUDE.md` and `AGENTS.md` contain exactly one managed section; existing content outside the section is unchanged.
 - **FP02-AC6** `init` in an initialised repository changes no file and points to `shade-kit upgrade`.
 - **FP02-AC7** `init` outside a git repository stops with an exit code and creates nothing.
+- **FP02-AC8** `init` writes every shipped template to its repository path from the template table, for example `spec.template.md` to `.shadekit/templates/spec.md` and `definition-of-ready.template.md` to `.shadekit/templates/checks/definition-of-ready.md`.
 
 ## Open points
 

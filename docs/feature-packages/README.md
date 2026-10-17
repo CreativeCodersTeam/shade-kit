@@ -82,7 +82,7 @@ Not in any package because the concept puts them later: MCP server, extensions (
 | `review.md` | 13 (also 16, 17) |
 | `verification.md` | 14 (also 17) |
 | `playbook.md` | 14 |
-| `checks/dor.md`, `checks/dod.md` | Engine copies (05), agent fills (06) |
+| `checks/definition-of-ready.md`, `checks/definition-of-done.md` | Engine copies (05), agent fills (06) |
 | `report.md` | 15 |
 
 ## Changes and additions to the concept that need confirmation
@@ -142,3 +142,4 @@ After each package, the whole draft was checked against the concept, ADR 0001, a
 | 18 | `current-feature.json` and the user-level integration record were missing from 01's file types; nobody migrated the integration record. | Added to 01; 07 migrates it. |
 | 19 | Format changes must be visible to the handshake. | Format change is at least a minor release. |
 | All | Automated check: every dependency points to a lower number, every package reference exists, every AC id is unique. `gates.json` and templates in 02 depend on later content. | Check passed. 02 clarified: skeletons and a version-only `gates.json` until the owner package is built. |
+| Templates (2026-10-17) | First drafts of the `spec`, `plan`, `tasks`, DoR, and DoD templates (template interview) differed from the packages: `*.template.md` source names, no order of work in `plan.md`, task status as checkbox, coverage matrix, more spec sections, ten DoR and nine DoD items in a result table, quality commands planned in `plan.md`. | 02 (source names, template conventions), 05 (checklist format, default items), 06 (conventions, checklist check), 10 (`spec.md`), 12 (`plan.md`, `tasks.md`), 13 (checkboxes, commands from `plan.md`), 14 (commands, coverage matrix) aligned. |

@@ -30,7 +30,7 @@ A finished feature leaves a single report that shows what was required, which te
 ### Run
 
 1. Read the feature state with `shade-kit feature show <id> --json` (package 03): profile, phases, approval history.
-2. Read the artifacts the profile produced: `spec.md`, `tasks.md`, `review.md`, `verification.md`, `playbook.md`, the filled `checks/dod.md`, and in `bugfix` `diagnosis.md`.
+2. Read the artifacts the profile produced: `spec.md`, `tasks.md`, `review.md`, `verification.md`, `playbook.md`, the filled `checks/definition-of-done.md`, and in `bugfix` `diagnosis.md`.
 3. Write `report.md` with the report skill (package 06).
 4. Show the report summary to the human.
 5. Call `shade-kit phase complete`. The feature is `done`.

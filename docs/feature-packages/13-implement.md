@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14 |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (task checkboxes, commands from `plan.md`) |
 | Source | Concept §5.1 (`implement`), §11.1 (implement loop), §4.1 (`review.md`), §6 |
 | Depends on | 06, 12 |
 | Enables | 14 (`verify`), 15 (DoD item "no open blockers") |
@@ -36,7 +36,7 @@ implement ──► simplify ──► review ──(blockers)──► implemen
                               └──(no blockers)──► ready for verify
 ```
 
-1. **Implement:** work through the open tasks in `tasks.md` in plan order. For each task, write the code and the proving tests named in the task, run build and tests, and set the task to `done` when they pass. Deviations from the plan are recorded in `plan.md` with the reason.
+1. **Implement:** work through the open tasks in `tasks.md` in their order, respecting "Depends on". Tasks marked "Parallel: yes" may run in parallel subagents where the agent supports them. **Proposed.** For each task, write the code and the proving tests named in the task, and run build and tests. Check off each proving test when it exists and passes, and the task when all its tests pass (package 12). A task that cannot be finished keeps its empty checkbox and gets a `Not done:` note with the reason. Deviations from the plan are recorded in the "Deviations" section of `plan.md` with the date and the reason; a changed or added test is also updated in the coverage matrix.
 2. **Simplify:** go over the changed code and remove duplication, needless complexity, and dead code without changing behaviour. Tests must stay green.
 3. **Review:** an independent review of the change against `spec.md`, `plan.md`, and the repository's conventions. Independent means a separate context that did not write the code (a subagent where the agent supports it, see package 08 for the fallback). Findings go into `review.md`.
 4. If the review has open blockers, fix them and repeat the loop.
@@ -45,7 +45,7 @@ The loop stops after three rounds with open blockers and asks the human how to c
 
 ### Quality commands
 
-In v1 the agent runs the build, test, and lint commands itself (concept §6). It takes them from the repository's agent instructions (for example `CLAUDE.md`, `AGENTS.md`) or the build files, and records the commands it used in `review.md`, so `verify` runs the same ones. **Proposed.**
+In v1 the agent runs the build, test, and lint commands itself (concept §6). It takes them from the test strategy in `plan.md`, which the human approved with the plan (package 12). If a command does not work as planned, the agent records the change as a deviation in `plan.md`. Without a `plan.md` (`quick`, package 17), it takes them from the repository's agent instructions (for example `CLAUDE.md`, `AGENTS.md`) or the build files. In every case it records the commands it used in `review.md`, so `verify` runs the same ones. **Proposed.**
 
 ### `review.md`
 
@@ -59,13 +59,15 @@ Severities: `blocker`, `major`, `minor`, `note`. Status: `open`, `fixed`, `accep
 
 ## Acceptance criteria
 
-- **FP13-AC1** After `implement`, every task in `tasks.md` is `done` or has a recorded reason why not.
+- **FP13-AC1** After `implement`, every task in `tasks.md` is checked off or has a `Not done:` note with the reason.
 - **FP13-AC2** Every proving test named in `tasks.md` exists after `implement`.
 - **FP13-AC3** The review runs in a context separate from the one that wrote the code where the agent supports it.
 - **FP13-AC4** The loop repeats while `review.md` has an `open` blocker and stops after three rounds with a question to the human.
 - **FP13-AC5** Every finding in `review.md` has an ID, a severity, a location, and a status.
 - **FP13-AC6** A finding is `accepted` only with a reason and after the human agreed in the conversation.
 - **FP13-AC7** `review.md` records the build, test, and lint commands used.
+- **FP13-AC8** The commands used are the ones from the test strategy in `plan.md`, or every difference is recorded as a deviation in `plan.md`.
+- **FP13-AC9** After `implement`, the coverage matrix in `tasks.md` names the same proving tests as the task blocks.
 
 ## Open points
 

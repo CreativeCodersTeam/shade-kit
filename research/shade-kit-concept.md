@@ -146,8 +146,8 @@ The kit root is `.shadekit/` (decided; matches ADR 0001 and `KitStorePaths`).
         ├── review.md           # proposed: review findings from implement
         ├── playbook.md         # proposed: manual test playbook from verify
         └── checks/
-            ├── dor.md          # Definition of Ready (entry gate of plan)
-            └── dod.md          # Definition of Done (entry gate of finish)
+            ├── definition-of-ready.md  # Definition of Ready (entry gate of plan)
+            └── definition-of-done.md   # Definition of Done (entry gate of finish)
 ```
 
 ### 4.2 Feature ids
@@ -229,8 +229,8 @@ Proposed `gates.json` shape:
 {
   "schemaVersion": 1,
   "gates": {
-    "plan":   { "approval": true, "checklist": "checks/dor.md" },
-    "finish": { "approval": true, "checklist": "checks/dod.md" },
+    "plan":   { "approval": true, "checklist": "checks/definition-of-ready.md" },
+    "finish": { "approval": true, "checklist": "checks/definition-of-done.md" },
     "verify": { "approval": false }
   }
 }
@@ -420,7 +420,7 @@ sequenceDiagram
     CLI-->>Agent: feature, profile, phase, status
     Agent->>CLI: phase start plan --json
     CLI->>Store: read profile and gates.json
-    CLI-->>Agent: transition allowed, checklist checks/dor.md, skills to load
+    CLI-->>Agent: transition allowed, checklist checks/definition-of-ready.md, skills to load
     opt checklist is switched on
         Agent->>Agent: check DoR against spec.md
     end

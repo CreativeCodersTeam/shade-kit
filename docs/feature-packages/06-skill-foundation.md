@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14 |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format) |
 | Source | Concept §3.2, §3.3, §3.4, §11.4; [ADR 0001](../adr/0001-shadekit-version-drift.md) decision 6 |
 | Depends on | 01, 03, 04, 05 |
 | Enables | 07, 08, and every phase package (09–17) |
@@ -33,7 +33,7 @@ A developer only has to say "continue" (or start a new feature) and the agent fi
 
 - Skills are written in the shared `SKILL.md` format and the plugin layout of `skills/`. Claude-only features (for example subagents) are only used where an agent-neutral way would lose function, and each such use is named in the skill. **Decided** (constraint), **Unverified** (format compatibility, resolved in package 08).
 - Skills never read or write `feature.json`, `gates.json`, or `config.json` directly. They use the CLI with `--json`. Skills read and write Markdown artifacts in the feature folder directly. **Proposed.** This keeps every state change behind the engine's version check (package 01).
-- Every artifact a skill creates starts from the repository's template in `.shadekit/templates/`, not from text built into the skill, so team edits to templates take effect. **Proposed.**
+- Every artifact a skill creates starts from the repository's template in `.shadekit/templates/`, not from text built into the skill, so team edits to templates take effect. **Proposed.** The skill follows the template conventions of package 02: it follows the guidance comments, replaces every placeholder, and removes the guidance comments, except in checklist copies.
 
 ### Version handshake
 
@@ -66,7 +66,7 @@ The router never approves without a human answer in the conversation. **Decided.
 | Skill | Purpose | Used by |
 |---|---|---|
 | Interview | Asks open questions one topic at a time, offers its own proposals, records answers in the target artifact. Uses the agent's structured question tool where one exists, plain questions otherwise. | `discuss`, `refine`, `diagnose`, `plan` |
-| Checklist check | Checks every item of a feature checklist against the artifacts, marks each item passed, failed (with reason), or not applicable (package 05 rule), and writes the result into the checklist copy. | Router (every gate with a checklist) |
+| Checklist check | Checks every item of a feature checklist against the artifacts, sets its `Result` to `pass`, `fail`, or `n/a` (package 05 rule) with the `Evidence`, and adds a line to the "Check runs" log of the checklist copy (format in package 05). | Router (every gate with a checklist) |
 | Research | Runs a set of research focuses, one subagent per focus in parallel where the agent supports it, sequentially otherwise, and merges the results into `researches.md`. | `refine`, `map` |
 | Report | Writes a Markdown report from a template and from data the CLI returns. | `verify`, `finish` |
 
