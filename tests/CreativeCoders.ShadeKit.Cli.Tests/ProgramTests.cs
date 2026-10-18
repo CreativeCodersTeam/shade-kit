@@ -269,7 +269,7 @@ public sealed class ProgramTests : IDisposable
         try
         {
             // Act
-            var exitCode = await Program.RunAsync(["features", "list", "--json"], output, error);
+            var exitCode = await Program.RunAsync(["feature", "list", "--json"], output, error);
 
             // Assert
             exitCode
@@ -315,7 +315,7 @@ public sealed class ProgramTests : IDisposable
     [Fact]
     [Trait("Requirement", "FP01-AC2")]
     [Trait("Requirement", "FP01-AC8")]
-    public async Task RunAsync_FeaturesListJsonInRepositoryWithoutKitRoot_WritesKitRootNotFoundEnvelopeAndReturns10()
+    public async Task RunAsync_FeatureListJsonInRepositoryWithoutKitRoot_WritesKitRootNotFoundEnvelopeAndReturns10()
     {
         // Arrange
         Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
@@ -325,7 +325,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["features", "list", "--json"], output, error);
+        var exitCode = await Program.RunAsync(["feature", "list", "--json"], output, error);
 
         // Assert
         exitCode
@@ -345,7 +345,7 @@ public sealed class ProgramTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP01-AC1")]
-    public async Task RunAsync_FeaturesListJsonInSubdirectoryOfInitialisedRepository_ListsFeaturesOfRepositoryRoot()
+    public async Task RunAsync_FeatureListJsonInSubdirectoryOfInitialisedRepository_ListsFeaturesOfRepositoryRoot()
     {
         // Arrange
         Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
@@ -357,7 +357,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["features", "list", "--json"], output, error);
+        var exitCode = await Program.RunAsync(["feature", "list", "--json"], output, error);
 
         // Assert
         exitCode
@@ -371,7 +371,7 @@ public sealed class ProgramTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP01-AC2")]
-    public async Task RunAsync_FeaturesListPlainInRepositoryWithoutKitRoot_PrintsInitHintAndReturns10()
+    public async Task RunAsync_FeatureListPlainInRepositoryWithoutKitRoot_PrintsInitHintAndReturns10()
     {
         // Arrange
         Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
@@ -381,7 +381,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["features", "list"], output, error);
+        var exitCode = await Program.RunAsync(["feature", "list"], output, error);
 
         // Assert
         exitCode
@@ -477,7 +477,7 @@ public sealed class ProgramTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP01-AC8")]
-    public async Task RunAsync_FeaturesListJsonWithoutFeaturesDirectory_WritesFeaturesDirEnvelopeAndReturns11()
+    public async Task RunAsync_FeatureListJsonWithoutFeaturesDirectory_WritesFeaturesDirEnvelopeAndReturns11()
     {
         // Arrange
         Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
@@ -488,7 +488,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["features", "list", "--json"], output, error);
+        var exitCode = await Program.RunAsync(["feature", "list", "--json"], output, error);
 
         // Assert
         exitCode
@@ -504,7 +504,7 @@ public sealed class ProgramTests : IDisposable
     }
 
     [Fact]
-    public async Task RunAsync_FeaturesListPlainInInitialisedRepository_PrintsNamesInOrdinalOrder()
+    public async Task RunAsync_FeatureListPlainInInitialisedRepository_PrintsNamesInOrdinalOrder()
     {
         // Arrange
         Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
@@ -516,7 +516,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["features", "list"], output, error);
+        var exitCode = await Program.RunAsync(["feature", "list"], output, error);
 
         // Assert
         exitCode
@@ -547,7 +547,7 @@ public sealed class ProgramTests : IDisposable
         try
         {
             // Act
-            var exitCode = await Program.RunAsync(["features", "list"], output, error);
+            var exitCode = await Program.RunAsync(["feature", "list"], output, error);
 
             // Assert
             exitCode

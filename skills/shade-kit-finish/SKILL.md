@@ -5,7 +5,7 @@ description: SHADE kit phase skill for `finish` (every profile). Checks the Defi
 
 # shade-kit-finish
 
-<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/15-finish-and-report.md. CLI commands other than `shade-kit version` and `shade-kit features list` are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/15-finish-and-report.md. CLI commands other than `shade-kit version` and `shade-kit feature list` are planned and do not exist yet. -->
 
 ## Purpose
 
@@ -19,9 +19,9 @@ Closes the feature with a traceable record: which requirements were built, which
 
 1. **Entry protocol:**
    1. Version handshake: `shade-kit version --json`. Stop on a mismatch and name what to update.
-   2. `shade-kit phase start finish --json`. Stop if the transition is not allowed and report why.
+   2. `shade-kit phase start finish --json`. Stop if the transition is not allowed and report why. If the phase is already in progress, the CLI returns no gate: go to step 5.
    3. If the gate has a checklist (default: Definition of Done): load `shade-kit-gate-check` on it.
-   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve finish`.
+   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve finish`. On a no, call `shade-kit phase reject finish --note "<gaps>"`, hand off to `shade-kit-next-phase`, and stop. If approval is switched off, a failed checklist is only a warning.
    5. Load the skills the CLI returned.
 2. **Read state:** `shade-kit feature show <id> --json` (profile, phases, approval history).
 3. **Read artifacts** the profile produced: `spec.md`, `tasks.md`, `review.md`, `verification.md`, `playbook.md`, `checks/definition-of-done.md`, and in `bugfix` `diagnosis.md`.

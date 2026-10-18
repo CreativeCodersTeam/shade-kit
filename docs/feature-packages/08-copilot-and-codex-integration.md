@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | Draft, 2026-10-14 |
-| Source | Concept §1 (Success, Constraint), §2 (Agents), §3.4, §10 open question 5; [ADR 0001](../adr/0001-shadekit-version-drift.md) |
+| Source | Concept §1 (Success, Constraint), §2 (Agents), §3.4, §10 open question 5, [concept §9](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 02, 06, 07 |
 | Enables | Phase packages 09–17 are built and accepted on all three agents |
 
@@ -62,8 +62,8 @@ From this package on, every phase package (09–17) counts as done only when its
 ## Acceptance criteria
 
 - **FP08-AC1** An ADR answers every research question for both agents, with sources.
-- **FP08-AC2** After `integrations install --agent copilot`, a Copilot session can load the router skill and run the version handshake.
-- **FP08-AC3** After `integrations install --agent codex`, a Codex CLI session can load the router skill and run the version handshake.
+- **FP08-AC2** After `integrations install --agent copilot`, a Copilot session can load `shade-kit-next-phase` and run the version handshake.
+- **FP08-AC3** After `integrations install --agent codex`, a Codex CLI session can load `shade-kit-next-phase` and run the version handshake.
 - **FP08-AC4** The kit repository holds one source per skill; agent-specific differences are produced at install time.
 - **FP08-AC5** The research skill (package 06) produces the same `researches.md` structure on every agent, also where it runs sequentially.
 - **FP08-AC6** `init` writes the managed section into every instruction file the ADR names.

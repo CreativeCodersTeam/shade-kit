@@ -22,7 +22,8 @@ Code is written task by task against the plan, cleaned up, and reviewed independ
 
 ### Out of scope
 
-- The `bugfix` variant (failing test first) and the `quick` variant (all in one). Packages 16 and 17 add them to this skill.
+- The `bugfix` variant (failing test first). Package 16 adds it to this skill.
+- The `quick` profile. It has its own phase `quick` with its own skill (package 17) instead of an `implement` phase.
 - The final verification of acceptance criteria and the quality checks for the DoD (package 14).
 - Committing. The kit never commits, pushes, or opens pull requests; the human does. **Proposed.**
 
@@ -45,7 +46,7 @@ The loop stops after three rounds with open blockers and asks the human how to c
 
 ### Quality commands
 
-In v1 the agent runs the build, test, and lint commands itself (concept §6). It takes them from the test strategy in `plan.md`, which the human approved with the plan (package 12). If a command does not work as planned, the agent records the change as a deviation in `plan.md`. Without a `plan.md` (`quick`, package 17), it takes them from the repository's agent instructions (for example `CLAUDE.md`, `AGENTS.md`) or the build files. In every case it records the commands it used in `review.md`, so `verify` runs the same ones. **Proposed.**
+In v1 the agent runs the build, test, and lint commands itself (concept §6). It takes them from the test strategy in `plan.md`, which the human approved with the plan (package 12). If a command does not work as planned, the agent records the change as a deviation in `plan.md`. Without a `plan.md` (`quick` phase, package 17), it takes them from the repository's agent instructions (for example `CLAUDE.md`, `AGENTS.md`) or the build files. In every case it records the commands it used in `review.md`, so `verify` runs the same ones. **Proposed.**
 
 ### `review.md`
 

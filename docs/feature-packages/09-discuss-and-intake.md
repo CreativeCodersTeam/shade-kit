@@ -5,7 +5,7 @@
 | Status | Draft, 2026-10-14 |
 | Source | Concept §5.1 (`discuss`, `new`), §5.4, §10 open question 2 |
 | Depends on | 03, 04, 06 |
-| Enables | 10 (`refine`), 16 (`diagnose`), 17 (`quick` implement) |
+| Enables | 10 (`refine`), 16 (`diagnose`), 17 (`quick`) |
 
 ## Benefit
 
@@ -39,7 +39,7 @@ Ideas can be explored freely before they become a feature, without creating any 
 
 ### `new`
 
-Runs when no feature exists for the work yet. The router (package 06) hands off to it.
+Runs when no feature exists for the work yet. `shade-kit-next-phase` (package 06) hands off to it, or the human calls it directly.
 
 1. Collect the input: free text, an issue URL, a Markdown file, or discussion notes.
 2. Ask for the profile if the human did not name it; propose one from the input (a defect report suggests `bugfix`, a small, clear change suggests `quick`). Default from `config.json`.
@@ -47,7 +47,7 @@ Runs when no feature exists for the work yet. The router (package 06) hands off 
 4. Call `shade-kit feature new --profile <p> --source <…> [--title <…>] --json`.
 5. Fill `request.md`: source kind and reference, the original input unchanged (issue title and body, file content, or notes), date, and who created the feature. The agent does not rewrite or summarise the input.
 6. Offer to create and switch to the branch `feature/<id>` (suggested by package 03) so the current feature follows the branch. The agent runs the git command only after a yes. **Proposed.**
-7. Report the id and the next phase of the profile (`refine`, `diagnose`, or `implement`). The transition then goes through the normal gate dialogue (package 06).
+7. Report the id and the next phase of the profile (`refine`, `diagnose`, or `quick`). The transition then goes through the entry protocol of that phase skill (package 06).
 
 ### Templates
 
@@ -63,7 +63,7 @@ Runs when no feature exists for the work yet. The router (package 06) hands off 
 - **FP09-AC3** `new` with an issue URL creates an issue-based id and puts the issue's title and body unchanged into `request.md`.
 - **FP09-AC4** `new` with a Markdown file or discussion notes copies their content unchanged into `request.md`.
 - **FP09-AC5** `new` creates a branch only after the human agrees.
-- **FP09-AC6** After `new`, the router offers the next phase of the feature's profile through the gate dialogue.
+- **FP09-AC6** After `new`, `shade-kit-next-phase` offers the next phase of the feature's profile.
 
 ## Open points
 

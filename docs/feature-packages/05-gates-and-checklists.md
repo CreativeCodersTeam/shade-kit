@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items) and 2026-10-18 (`quick` phase) |
 | Source | Concept §2 (Gates), §4.1 (`checks/`), §5.2, §6, §11.1, §11.4 |
 | Depends on | 02, 04 |
 | Enables | 12 (DoR), 15 (DoD), every phase transition |
@@ -23,7 +23,7 @@ A team decides per repository how strict the workflow is: which transitions need
 
 ### Out of scope
 
-- Checking a checklist. The agent does that with the checklist-check skill (package 06). The engine does not parse checklists (ADR 0001, package 02).
+- Checking a checklist. The agent does that with the checklist-check skill (package 06). The engine does not parse checklists (concept §9.5, package 02).
 - Quality checks run by the CLI and check commands configured in `gates.json` (later, concept §6).
 - Approval enforcement (later, package 04 "Known weak point").
 
@@ -63,7 +63,7 @@ The concept's example is keyed by phase only. Because the `quick` profile needs 
       "finish":    { "approval": true, "checklist": "checks/definition-of-done.md" }
     },
     "quick": {
-      "implement": { "approval": false },
+      "quick":     { "approval": false },
       "finish":    { "approval": true, "checklist": "checks/definition-of-done.md" }
     }
   }
@@ -73,7 +73,7 @@ The concept's example is keyed by phase only. Because the `quick` profile needs 
 - A transition with no entry uses `{ "approval": true }`. Approval is the safe default. **Proposed.**
 - With `approval: false`, `phase start` performs the transition at once and records it in `history` with the note "approval off". **Proposed.**
 - With `approval: false` and a `checklist`, the checklist copy is still created and checked by the agent, but a failed item is only reported as a warning; it does not block, because nobody is asked to decide. An agent never approves on its own instead. **Proposed.**
-- The defaults follow concept §5.2: every transition needs an approval, except the `quick` transition into `implement` (concept §5.4: "one approval at the end").
+- The defaults follow concept §5.2: every transition needs an approval, except the `quick` profile's transition into the `quick` phase (concept §5.4: "one approval at the end").
 
 ### Checklists
 
@@ -126,7 +126,7 @@ A checklist item that refers to a phase or artifact the feature's profile does n
 
 ### `phase start` result
 
-The gate part of the result contains: target phase, `approval` (true or false), `checklist` (path in the feature folder, or none), and whether the transition was already performed because approval is off.
+The gate part of the result contains: target phase, `approval` (true or false), `checklist` (path in the feature folder, or none), whether the transition was already performed because approval is off, and whether the phase was already in progress (re-entry, package 04; then there is no gate).
 
 ## Acceptance criteria
 
@@ -136,7 +136,7 @@ The gate part of the result contains: target phase, `approval` (true or false), 
 - **FP05-AC4** With `approval: false` for a transition, `phase start` performs the transition and records it as "approval off" in `history`.
 - **FP05-AC5** Without a `checklist` entry, `phase start` returns no checklist and creates no file.
 - **FP05-AC6** A transition missing from `gates.json` requires approval.
-- **FP05-AC7** In a new `quick` feature, `phase start implement` moves to `implement` without approval, and `phase start finish` asks for approval with the DoD checklist.
+- **FP05-AC7** In a new `quick` feature, `phase start quick` moves to `quick` without approval, and `phase start finish` asks for approval with the DoD checklist.
 - **FP05-AC8** A team-defined `checks/<phase>.md` referenced in `gates.json` is copied and returned for that transition.
 - **FP05-AC9** The shipped checklist templates contain the default items above, each with `Result` `pending`, and an empty "Check runs" section.
 

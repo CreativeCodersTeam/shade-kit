@@ -5,7 +5,7 @@ description: SHADE kit phase skill for `new`. Creates a feature with a workflow 
 
 # shade-kit-new
 
-<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/09-discuss-and-intake.md. CLI commands other than `shade-kit version` and `shade-kit features list` are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/09-discuss-and-intake.md. CLI commands other than `shade-kit version` and `shade-kit feature list` are planned and do not exist yet. -->
 
 ## Purpose
 
@@ -24,4 +24,4 @@ Creates the feature folder (`feature.json`, `request.md`) so the work has lastin
 5. **Create:** `shade-kit feature new --profile <p> --source <text|url|file> [--title <t>] --json`.
 6. **`request.md`:** fill it from the template: source kind and reference, the original input unchanged, date, creator. Do not rewrite or summarise the input.
 7. **Branch:** offer to create and switch to `feature/<id>`. Run the git command only after a yes.
-8. **Report:** the feature id and the next phase of the profile (`refine`, `diagnose`, or `implement`). Offer `shade-kit-next-phase` to continue.
+8. **Report:** the feature id and the next phase of the profile (`refine`, `diagnose`, or `quick`). Offer `shade-kit-next-phase` to continue.

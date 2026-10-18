@@ -1,13 +1,14 @@
 # SHADE kit concept
 
-Status: draft, 2026-10-13, updated 2026-10-17 (template interview). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-13, updated 2026-10-17 (template interview) and 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
 
 Labels used in this document:
 
-- **Decided**: confirmed in the interview, or in a later interview named with its date.
+- **Decided**: confirmed in the interview, or in a later interview or review named with its date.
 - **Proposed**: added while working the notes into shape; not confirmed yet.
 - **Open**: needs a decision before it is built.
 - **Unverified**: an assumption about an external tool that has not been checked.
+- **Implemented**: exists in the code; the label names where.
 
 ## 1. Purpose
 
@@ -66,11 +67,11 @@ SHADE kit keeps what worked (interviews, draft → approve, requirement-to-test 
 | `shade-kit integrations install [--agent claude\|copilot\|codex]` | Sets up the agent integration (skills, agents, hooks, MCP config) at **user level**: as a plugin where the agent has one, otherwise by writing the same content to the agent's user directory. **Decided.** |
 | `shade-kit integrations update` | Updates the user-level integration to the installed kit version. |
 | `shade-kit init` | Creates `.shadekit/` in a repository: `config.json`, `gates.json`, templates, `templates.lock.json`, `.gitignore` entries, and a short SHADE kit section in `CLAUDE.md` / `AGENTS.md`. |
-| `shade-kit upgrade` | Migrates an initialised repository to the current format versions. Rules in [ADR 0001](../docs/adr/0001-shadekit-version-drift.md). |
-| `shade-kit version` | Prints the engine version. Exists already. Skills call it before they run (ADR 0001). |
-| `shade-kit features list` | Lists the features in the store. Exists already. |
+| `shade-kit upgrade` | Migrates an initialised repository to the current format versions. Rules in [section 9](#9-version-drift). |
+| `shade-kit version` | Prints the engine version. **Implemented** (`VersionCommand`). Skills call it before they run (section 9.6). |
+| `shade-kit feature list` | Lists the features in the store. **Implemented** (`FeatureListCommand`, names only). |
 
-Skills and agent files are not written into the repository (ADR 0001, confirmed in the interview). The repository only holds kit data and the short instruction section.
+Skills and agent files are not written into the repository (section 9.6, confirmed in the interview). The repository only holds kit data and the short instruction section.
 
 ### 3.2 CLI for agents
 
@@ -78,11 +79,13 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 
 | Command (proposed name) | Returns / does |
 |---|---|
-| `shade-kit feature current --json` | The current feature: id, profile, phase, phase status, artifact paths. Resolution in section 4.3. |
+| `shade-kit feature current --json` | The current feature: id, profile, feature status (`active` or `done`), phase, phase status, artifact paths. Resolution in section 4.3. |
 | `shade-kit feature set <id>` | Writes the local override (`current-feature.json`). |
 | `shade-kit feature new --profile <p> --source <text\|url\|file>` | Creates the feature folder and `request.md`. |
-| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. |
+| `shade-kit feature drop <id> [--yes]` | Deletes the feature folder. Without `--yes` it only shows what it would delete, or asks in an interactive terminal. |
+| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate. |
 | `shade-kit phase approve <phase>` | Records the human approval in `feature.json` (who, when). |
+| `shade-kit phase reject <phase> [--note <text>]` | Cancels the pending transition after a "no"; the previous phase is in progress again. Recorded in the history with the note. |
 | `shade-kit phase skills <phase> --json` | The skills to load before the phase runs, including extension skills later. |
 | `shade-kit extensions get --phase <p> [--slot <s>] --json` | Extension bindings for a phase. **Later.** |
 | `shade-kit memory get [--topic <t>] --json` | Relevant memory entries. **Later.** |
@@ -91,14 +94,15 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 
 ### 3.3 Skills and agents
 
-- **Phase skills:** one per phase (`shade-kit-refine`, `shade-kit-plan`, …), plus a router skill that asks the CLI for the current feature and phase and hands off to the right phase skill. **Proposed.**
+- **Phase skills:** one per phase (`shade-kit-refine`, `shade-kit-plan`, …). Each runs the entry protocol (phase start, gate check, approval) itself, so a direct call is gated too. There is no router: `shade-kit-next-phase` finds the current feature and phase, offers the possible next steps, and starts the chosen phase skill. **Decided** in the skills interview on 2026-10-17 ([shade-kit-skills.md](shade-kit-skills.md)).
 - **General skills:** used across phases, for example an interview skill, a checklist-check skill for gates, and a skill that writes reports.
-- **Research agents:** one subagent per focus, run in parallel, results merged into `researches.md`:
+- **Research agents:** one subagent per focus, run in parallel, results merged into `researches.md`. Seven agent definitions, one per row; security is split by level. **Decided** on 2026-10-18.
 
 | Focus | Used in |
 |---|---|
 | Gaps and open questions in the requirement | `refine` |
-| Security concerns and considerations | `refine` (at requirement level) and `map` (at code level) |
+| Security at requirement level: data to protect, roles and permissions, abuse cases | `refine` |
+| Security at code level: code paths that handle input, authentication, secrets, protected data | `map` |
 | Best practice | `map` |
 | Existing architecture | `map` |
 | Existing affected code | `map` |
@@ -109,14 +113,14 @@ The split between `refine` and `map` is **proposed**: `refine` deals with the re
 ### 3.4 Distribution
 
 - CLI as a `dotnet` global tool and as self-contained single-file binaries (see `CLAUDE.md`). An installer script for the binaries is **proposed**.
-- Plugin and CLI are released together under one version number and check each other's version (ADR 0001).
+- Plugin and CLI are released together under one version number and check each other's version (section 9.6).
 - Claude Code: plugin. Copilot: plugin if available, otherwise user directory. Codex: user directory. **Unverified:** whether Copilot and Codex can load the same `SKILL.md` format and support subagents and hooks. This decides how much of the content can be shared unchanged, and has to be researched before the integration work starts.
 
 ## 4. Store
 
 ### 4.1 Directory structure
 
-The kit root is `.shadekit/` (decided; matches ADR 0001 and `KitStorePaths`).
+The kit root is `.shadekit/` (decided; **Implemented** in `KitStorePaths`).
 
 ```
 .shadekit/
@@ -124,7 +128,7 @@ The kit root is `.shadekit/` (decided; matches ADR 0001 and `KitStorePaths`).
 ├── gates.json                  # gate on/off per transition and profile
 ├── templates/                  # artifact templates, editable by the team (section 4.5)
 │   └── checks/                 # checklist templates: definition-of-ready.md, definition-of-done.md
-├── templates.lock.json         # kit version + hash per shipped template (ADR 0001)
+├── templates.lock.json         # kit version + hash per shipped template (section 9.5)
 ├── local.json                  # gitignored; local settings and repo paths (section 4.4)
 ├── memory/                     # later (section 8)
 │   ├── memory.json             # index: topic → file, source feature, date
@@ -258,8 +262,10 @@ Decided: one phase engine, several profiles. A profile is an ordered list of pha
 |---|---|---|
 | `feature` | `new` → `refine` → `map` → `plan` → `implement` → `verify` → `finish` | yes |
 | `bugfix` | `new` → `diagnose` (reproduce, root cause) → `plan` (short) → `implement` (failing test first) → `verify` → `finish` | yes |
-| `quick` | `new` → `implement` (all in one) → `finish`, one approval at the end | yes |
+| `quick` | `new` → `quick` (clarify, plan, and implement in one run) → `finish`, one approval at the end | yes |
 | `refactor` | `new` → `map` → `plan` → `implement` (behaviour must not change) → `verify` → `finish` | later |
+
+`quick` is a phase of its own, not a mode of `implement`, so every phase runs through exactly one skill named after it (`shade-kit-<phase>`). **Decided** on 2026-10-18.
 
 `discuss` is outside every profile and can be used at any time. `drop` is possible from every phase.
 
@@ -309,7 +315,56 @@ Decided: at `finish`, the agent distills lasting knowledge from the feature arti
 
 ## 9. Version drift
 
-Decided in [ADR 0001](../docs/adr/0001-shadekit-version-drift.md): every JSON file has its own `schemaVersion` and migration chain, templates are tracked with a hash lock file, and only `shade-kit upgrade` rewrites data. Every new JSON file in this concept (`gates.json`, `local.json`, `extension.yml`, `memory.json`) follows the same rule.
+A repository keeps its kit data in `.shadekit/`, checked into git. The installed engine can be newer than that data (the repository needs an upgrade) or older (someone else already upgraded it). These decisions come from ADR 0001 of 2026-10-13, which was removed on 2026-10-17 and is merged into this section; package 01 refined them. **Decided.** Packages and other documents refer to them as §9.1–§9.6.
+
+### 9.1 Format version in every JSON file
+
+- Every JSON file in `.shadekit/` has a top-level integer `schemaVersion`. Every `feature.json` carries its own, so features created on different branches with different engine versions stay independent.
+- Each file type has its own format version and its own chain of small migration steps (v1→v2→v3).
+- Every JSON file also carries `minEngineVersion`, the first engine version that supports its format version, stamped by the engine on every write. An older engine can read it without understanding the rest of the format.
+- A file without `schemaVersion` is invalid, not version 1.
+- The format version changes only when the structure changes, not with every engine release.
+- The team owns the values in `config.json`; the engine owns its schema and migrates it.
+
+### 9.2 Version check on every command
+
+- A file whose format is newer than the engine supports stops every command that touches it, with the message "shade-kit >= X required" (X from `minEngineVersion`).
+- A file in an older format stops write commands with "`shade-kit upgrade` needed". Read commands follow `outdatedFormatOnRead` in `config.json`: `migrate-and-warn` (default) migrates in memory and warns, `stop` behaves like a write command.
+- The check covers only the files a command touches.
+
+### 9.3 Data is rewritten only by `shade-kit upgrade`
+
+- `upgrade` refuses to run while `.shadekit/` has uncommitted changes, so git is the backup.
+- It writes all files or none: everything goes to temporary files first and is then renamed into place.
+- Features in any phase are migrated in place.
+
+### 9.4 Unknown fields are preserved
+
+An engine writes back every field it does not know, unchanged. Changes that only add fields therefore do not raise the format version, and the engine accepts files where the new fields are missing. Renaming, removing, or changing the meaning of a field raises the format version.
+
+### 9.5 Templates are plain files with a lock file
+
+- Shipped templates are copied into the repository as plain files. They are not served from the engine, because agents other than Claude Code need every template as a file.
+- No engine code parses the structure of a template or of an artifact made from it.
+- `.shadekit/templates.lock.json` records, for each shipped template, the kit version and the content hash at install time. On `upgrade`, templates the team has not changed are replaced without asking; a changed template stays, and the new version is written next to it as `<name>.new` with a diff shown.
+
+### 9.6 Skills stay out of the repository; plugin and CLI release together
+
+- Skills and agent files are installed at user level, never written into the target repository.
+- Plugin content and CLI share one version number. A skill checks `shade-kit version` before it runs.
+
+### Why per-file versions
+
+The deciding case is a git merge. Branch A upgrades the repository to state format 3; branch B, still on the old engine, creates a feature in format 2. With one central version (for example a manifest), the merged repository claims format 3 while one file is in format 2, and the engine misreads it. With a version in every file, the engine sees format 2 for that one file and reports that `upgrade` is needed. Considered and rejected: a central manifest, serving templates from the engine (overlay with `eject`), which other agents cannot see, and pinning the engine version per repository, which does not solve the merge case.
+
+### Consequences
+
+- Every JSON model needs `schemaVersion`, a store for unknown fields, and a registered migration chain, even at version 1.
+- Raising a format version always ships a migration step and a test that migrates a fixture from the previous version.
+- After a merge, a repository can hold files in different format versions. This is a valid state, and `upgrade` resolves it.
+- Pinning the engine version per repository (`requiredVersion` in `config.json`) remains a possible later addition.
+
+Every new JSON file in this concept (`gates.json`, `local.json`, `extension.yml`, `memory.json`) follows the same rules.
 
 ## 10. Open questions
 
@@ -377,7 +432,7 @@ flowchart LR
     end
     subgraph quick["quick (v1)"]
         direction TB
-        q1[new] --> q2["implement<br/>all in one"] --> q3["finish<br/>single approval"]
+        q1[new] --> q2["quick<br/>clarify, plan, implement"] --> q3["finish<br/>single approval"]
     end
     subgraph refactor["refactor (later)"]
         direction TB
@@ -399,7 +454,7 @@ stateDiagram-v2
     [*] --> pending
     pending --> in_progress: phase start, entry gate approved
     in_progress --> awaiting_approval: phase work done, next phase requested
-    awaiting_approval --> in_progress: gate failed or changes requested
+    awaiting_approval --> in_progress: phase reject (gate failed or changes requested)
     awaiting_approval --> approved: human approves the transition
     approved --> in_progress: reopened (another refine round, review findings)
     approved --> [*]
@@ -426,7 +481,10 @@ sequenceDiagram
         Dev->>Agent: gh-142-login-sso
         Agent->>CLI: feature set gh-142-login-sso
     end
-    CLI-->>Agent: feature, profile, phase, status
+    CLI-->>Agent: feature, profile, status, phase, phase status
+    Agent->>Dev: possible next steps (shade-kit-next-phase)
+    Dev->>Agent: plan
+    Note over Agent: shade-kit-plan runs its entry protocol
     Agent->>CLI: phase start plan --json
     CLI->>Store: read profile and gates.json
     CLI-->>Agent: transition allowed, checklist checks/definition-of-ready.md, skills to load
@@ -441,6 +499,8 @@ sequenceDiagram
         Agent->>Agent: load skills and run plan
     else rejected or gaps found
         Dev->>Agent: no, fix the gaps first
-        Agent->>Agent: stay in refine
+        Agent->>CLI: phase reject plan --note "gaps"
+        CLI->>Store: map back to in-progress, reject in history
+        Agent->>Agent: hand off to shade-kit-next-phase, continue in map
     end
 ```

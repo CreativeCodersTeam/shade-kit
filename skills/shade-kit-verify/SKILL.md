@@ -5,7 +5,7 @@ description: SHADE kit phase skill for `verify` (feature and bugfix profiles). R
 
 # shade-kit-verify
 
-<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/14-verify.md. CLI commands other than `shade-kit version` and `shade-kit features list` are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/14-verify.md. CLI commands other than `shade-kit version` and `shade-kit feature list` are planned and do not exist yet. -->
 
 ## Purpose
 
@@ -19,9 +19,9 @@ Proves that the implementation meets the spec: automated checks by the agent, pl
 
 1. **Entry protocol:**
    1. Version handshake: `shade-kit version --json`. Stop on a mismatch and name what to update.
-   2. `shade-kit phase start verify --json`. Stop if the transition is not allowed and report why.
+   2. `shade-kit phase start verify --json`. Stop if the transition is not allowed and report why. If the phase is already in progress, the CLI returns no gate: go to step 5.
    3. If the gate has a checklist: load `shade-kit-gate-check` on it.
-   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve verify`.
+   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve verify`. On a no, call `shade-kit phase reject verify --note "<gaps>"`, hand off to `shade-kit-next-phase`, and stop. If approval is switched off, a failed checklist is only a warning.
    5. Load the skills the CLI returned.
 2. **Quality checks:** run the build, test, and lint commands recorded in `review.md` and the coverage command from the test strategy in `plan.md`.
 3. **Coverage of criteria:** for every acceptance criterion in `spec.md`, find its proving tests in the coverage matrix of `tasks.md` and confirm that they exist and passed in this run. Criteria marked manual go to the playbook.

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | Draft, 2026-10-14 |
-| Source | Concept §2 (Lifecycle), §3.1 (`integrations install/update`), §3.4; [ADR 0001](../adr/0001-shadekit-version-drift.md) decision 6 |
+| Source | Concept §2 (Lifecycle), §3.1 (`integrations install/update`), §3.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 01, 06 |
 | Enables | 08 (same mechanism for more agents); end-to-end use of all phase packages in Claude Code |
 
@@ -24,14 +24,14 @@ A developer installs the kit's skills and agents for Claude Code with one comman
 
 - GitHub Copilot and OpenAI Codex CLI (package 08).
 - Hooks and MCP configuration. The concept lists them as possible integration content, but no v1 feature needs them (approval enforcement and the MCP server are later). **Proposed.**
-- Writing anything into a repository (ADR 0001, **Decided**).
+- Writing anything into a repository (concept §9.6, **Decided**).
 - Removing an integration. `integrations uninstall` is a later addition. **Proposed.**
 
 ## Functional description
 
 ### Content source
 
-- The integration content (skills from package 06 and the phase packages, research agent definitions) is packed into the engine release, so an engine always installs exactly the content of its own version. **Proposed.** This makes "plugin and CLI release together" (ADR 0001) hold by construction on every machine.
+- The integration content (skills from package 06 and the phase packages, research agent definitions) is packed into the engine release, so an engine always installs exactly the content of its own version. **Proposed.** This makes "plugin and CLI release together" (concept §9.6) hold by construction on every machine.
 
 ### `integrations install --agent claude`
 
@@ -53,7 +53,7 @@ A developer installs the kit's skills and agents for Claude Code with one comman
 
 ## Acceptance criteria
 
-- **FP07-AC1** After `integrations install --agent claude`, a new Claude Code session in any repository can load the router skill.
+- **FP07-AC1** After `integrations install --agent claude`, a new Claude Code session in any repository can load `shade-kit-next-phase`.
 - **FP07-AC2** The installed skills have the same kit version as the engine that installed them.
 - **FP07-AC3** After an engine update, `integrations update` replaces the Claude Code content and reports old and new version.
 - **FP07-AC4** `shade-kit version --json` lists the installed Claude Code integration with its kit version.

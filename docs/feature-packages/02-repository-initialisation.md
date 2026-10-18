@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions) |
-| Source | Concept §3.1 (`init`), §4.1, §9; [ADR 0001](../adr/0001-shadekit-version-drift.md) decision 5 |
+| Source | Concept §3.1 (`init`), §4.1, [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.5) |
 | Depends on | 01 |
 | Enables | 03, 05, 18 and every phase package (they ship templates through this mechanism) |
 
@@ -27,7 +27,7 @@ A team can turn any git repository into a SHADE kit repository with one command.
 - `gates.json` content and the checklist templates (package 05; `init` writes them through the same mechanism).
 - The final wording of each artifact template. Each phase package owns the content of its templates; this package ships the mechanism and the initial set.
 - Updating templates or the instruction section in an existing repository (package 18).
-- Installing skills (packages 07, 08). Skills are never written into the repository (ADR 0001, **Decided**).
+- Installing skills (packages 07, 08). Skills are never written into the repository (concept §9.6, **Decided**).
 
 ## Functional description
 
@@ -47,7 +47,7 @@ A team can turn any git repository into a SHADE kit repository with one command.
 
 ### `config.json` (v1)
 
-The team owns the values; the engine owns the schema (ADR 0001). **Decided.** v1 content, **Decided**:
+The team owns the values; the engine owns the schema (concept §9.1). **Decided.** v1 content, **Decided**:
 
 | Field | Purpose |
 |---|---|
@@ -74,8 +74,8 @@ The team owns the values; the engine owns the schema (ADR 0001). **Decided.** v1
 
 ### Templates
 
-- Shipped templates are copied into `.shadekit/templates/` as plain files. Agents other than Claude Code need them as files in the repository (ADR 0001). **Decided.**
-- No engine code parses the structure of a template or of an artifact created from it (ADR 0001). **Decided.** Every check against artifact content is done by an agent.
+- Shipped templates are copied into `.shadekit/templates/` as plain files. Agents other than Claude Code need them as files in the repository (concept §9.5). **Decided.**
+- No engine code parses the structure of a template or of an artifact created from it (concept §9.5). **Decided.** Every check against artifact content is done by an agent.
 - Initial set, owned by the listed packages. Until its owner package is built, a template is a skeleton with headings only; templates change freely until the first release, so this causes no lock-file churn for users.
 - In the kit's source, every template is a file `templates/<name>.template.md`, so it cannot be mistaken for an artifact. The source folder has the same subfolders as `.shadekit/templates/` (the checklists are in `templates/checks/`). `init` writes each template to its path in the repository, given in the table below. The engine keeps this mapping as an explicit list; it does not derive paths from file names. **Proposed.** Paths in `templates.lock.json` are repository paths.
 
@@ -105,13 +105,13 @@ Every template follows the same conventions. **Decided** in the template intervi
 
 ### `templates.lock.json`
 
-- One entry per shipped template: path, kit version, and content hash at install time. **Decided** (ADR 0001).
+- One entry per shipped template: path, kit version, and content hash at install time. **Decided** (concept §9.5).
 - `init` writes it; package 18 uses it to tell changed from unchanged templates.
 
 ### Managed instruction section
 
 - A short section in `CLAUDE.md` and `AGENTS.md`, delimited by begin and end markers so the engine can find and replace exactly that section later. **Proposed.**
-- Content: the repository uses SHADE kit, the kit data lives in `.shadekit/`, how to start (the router skill from package 06), and that the engine is called as `shade-kit … --json`.
+- Content: the repository uses SHADE kit, the kit data lives in `.shadekit/`, how to start (`shade-kit-next-phase` from package 06), and that the engine is called as `shade-kit … --json`.
 - If a file does not exist, `init` creates it with only the section. If it exists, `init` appends the section and leaves the rest unchanged.
 - **Unverified:** whether GitHub Copilot reads `AGENTS.md` or needs `.github/copilot-instructions.md`. Package 08 resolves this and may add a third target file.
 

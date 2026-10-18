@@ -1,15 +1,15 @@
 using AwesomeAssertions;
 using CreativeCoders.Cli.Hosting.Exceptions;
-using CreativeCoders.ShadeKit.Cli.Commands.Features.List;
+using CreativeCoders.ShadeKit.Cli.Commands.Feature.List;
 using CreativeCoders.ShadeKit.Core.Store;
 using FakeItEasy;
 using Spectre.Console;
 using Spectre.Console.Testing;
 
-namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Features.List;
+namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Feature.List;
 
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
-public class FeaturesListCommandCurrentDirectoryTests
+public class FeatureListCommandCurrentDirectoryTests
 {
     [Fact]
     public async Task ExecuteAsync_NotAGitRepositoryInDirectoryWithMarkupCharacters_EscapesAbortMessage()
@@ -17,7 +17,7 @@ public class FeaturesListCommandCurrentDirectoryTests
         // Arrange
         var kitStoreFactory = A.Fake<IKitStoreFactory>();
 
-        var command = FeaturesListCommandTests.CreateCommand(new TestConsole(), kitStoreFactory);
+        var command = FeatureListCommandTests.CreateCommand(new TestConsole(), kitStoreFactory);
 
         var originalDirectory = Directory.GetCurrentDirectory();
         var markupDirectory = Directory.CreateTempSubdirectory("shade-kit-[tests]-");
@@ -29,7 +29,7 @@ public class FeaturesListCommandCurrentDirectoryTests
                 .Throws(new NotAGitRepositoryException(Directory.GetCurrentDirectory()));
 
             // Act
-            var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
+            var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
             // Assert
             var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;

@@ -5,7 +5,7 @@ description: SHADE kit phase skill for `plan` (feature and bugfix profiles). Wri
 
 # shade-kit-plan
 
-<!-- Skeleton: purpose and flow only, details follow. Sources: docs/feature-packages/12-plan.md, 16-bugfix-profile.md. CLI commands other than `shade-kit version` and `shade-kit features list` are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Sources: docs/feature-packages/12-plan.md, 16-bugfix-profile.md. CLI commands other than `shade-kit version` and `shade-kit feature list` are planned and do not exist yet. -->
 
 ## Purpose
 
@@ -19,9 +19,9 @@ Decides how the spec is built and why, and binds every acceptance criterion to t
 
 1. **Entry protocol:**
    1. Version handshake: `shade-kit version --json`. Stop on a mismatch and name what to update.
-   2. `shade-kit phase start plan --json`. Stop if the transition is not allowed and report why.
+   2. `shade-kit phase start plan --json`. Stop if the transition is not allowed and report why. If the phase is already in progress, the CLI returns no gate: go to step 5.
    3. If the gate has a checklist (default: Definition of Ready): load `shade-kit-gate-check` on it.
-   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve plan`.
+   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve plan`. On a no, call `shade-kit phase reject plan --note "<gaps>"`, hand off to `shade-kit-next-phase`, and stop. If approval is switched off, a failed checklist is only a warning.
    5. Load the skills the CLI returned.
 2. **Read** `spec.md` and `researches.md`.
 3. **Clarify** open design choices with `shade-kit-interview`, each with an own recommendation.

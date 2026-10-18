@@ -5,7 +5,7 @@ description: SHADE kit phase skill for `refine` (feature profile). Clarifies the
 
 # shade-kit-refine
 
-<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/10-refine.md. CLI commands other than `shade-kit version` and `shade-kit features list` are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/10-refine.md. CLI commands other than `shade-kit version` and `shade-kit feature list` are planned and do not exist yet. -->
 
 ## Purpose
 
@@ -19,9 +19,9 @@ Turns the raw request into a testable specification: vague statements, gaps, con
 
 1. **Entry protocol:**
    1. Version handshake: `shade-kit version --json`. Stop on a mismatch and name what to update.
-   2. `shade-kit phase start refine --json`. Stop if the transition is not allowed and report why.
+   2. `shade-kit phase start refine --json`. Stop if the transition is not allowed and report why. If the phase is already in progress, the CLI returns no gate: go to step 5.
    3. If the gate has a checklist: load `shade-kit-gate-check` on it.
-   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve refine`.
+   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve refine`. On a no, call `shade-kit phase reject refine --note "<gaps>"`, hand off to `shade-kit-next-phase`, and stop. If approval is switched off, a failed checklist is only a warning.
    5. Load the skills the CLI returned.
 2. **Read** `request.md`, the feature's discussion notes, and an existing `spec.md`.
 3. **Research:** load `shade-kit-research` with the focuses "gaps and open questions" and "security at requirement level".

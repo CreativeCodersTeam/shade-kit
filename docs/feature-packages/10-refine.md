@@ -61,7 +61,7 @@ IDs are never renumbered. A removed requirement keeps its ID with the status "re
 
 ### Repeated rounds
 
-`refine` can run several times. **Decided.** A new round starts from the current `spec.md`. If the feature has moved on, the human reopens `refine` through the router (package 04 reopen). Later phases then go back to `pending`, and their artifacts must be checked against the changed spec when they run again.
+`refine` can run several times. **Decided.** A new round starts from the current `spec.md`. If the feature has moved on, the human reopens `refine` through `shade-kit-next-phase` (package 04 reopen). Later phases then go back to `pending`, and their artifacts must be checked against the changed spec when they run again.
 
 ## Acceptance criteria
 

@@ -52,14 +52,14 @@ A section whose artifact the profile does not produce says so in one line instea
 ### After finish
 
 - The feature folder stays in the repository with status `done`. Nothing is deleted or archived. **Proposed.**
-- The branch may still be checked out. The router (package 06) then reports that the feature is finished.
+- The branch may still be checked out. `shade-kit-next-phase` (package 06) then reports that the feature is finished.
 
 ## Acceptance criteria
 
 - **FP15-AC1** `report.md` contains every section of the template for every profile.
 - **FP15-AC2** The approvals section lists every transition in `history`, including "approval off" transitions.
 - **FP15-AC3** Every requirement of `spec.md` that is not marked "removed" appears in the requirements table.
-- **FP15-AC4** After `finish`, `feature current` on the feature's branch shows status `done`, and the router reports the feature as finished.
+- **FP15-AC4** After `finish`, `feature current` on the feature's branch shows status `done`, and `shade-kit-next-phase` reports the feature as finished.
 - **FP15-AC5** After `finish`, a local override that pointed to the feature is cleared.
 
 ## Open points

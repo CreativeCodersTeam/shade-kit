@@ -59,7 +59,7 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 dotnet build                     # from repo root (.slnx)
 dotnet test
 dotnet test --coverage           # with coverage (writes TestResults/)
-dotnet run --project src/CreativeCoders.ShadeKit.Cli -- features list
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- feature list
 dotnet pack src/CreativeCoders.ShadeKit.Cli          # dotnet global tool package (command: shade-kit)
 dotnet publish src/CreativeCoders.ShadeKit.Cli -c Release -r <rid>   # self-contained single-file binary
 ```

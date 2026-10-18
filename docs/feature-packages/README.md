@@ -1,10 +1,10 @@
 # SHADE kit v1 feature packages
 
-Status: draft, 2026-10-14. Derived step by step from [`research/shade-kit-concept.md`](../../research/shade-kit-concept.md) and [ADR 0001](../adr/0001-shadekit-version-drift.md). Existing code was not taken into account.
+Status: draft, 2026-10-14, updated 2026-10-18 (consistency review). Derived step by step from [`research/shade-kit-concept.md`](../../research/shade-kit-concept.md); its [section 9](../../research/shade-kit-concept.md#9-version-drift) holds the version-drift decisions of the former ADR 0001. Parts that exist in the code are labelled **Implemented**.
 
 Each package describes the functional behaviour of one clearly bounded piece of v1, with its benefit, scope, acceptance criteria (`FPnn-ACm`), and open points. The number prefix is the implementation order: every package depends only on packages with a lower number.
 
-Labels follow the concept: **Decided** (confirmed in the concept interview), **Proposed** (added in the concept or in these packages, not confirmed yet), **Open**, **Unverified**.
+Labels follow the concept: **Decided** (confirmed in the concept interview or a later interview or review named with its date), **Proposed** (added in the concept or in these packages, not confirmed yet), **Open**, **Unverified**, **Implemented** (exists in the code; the label names where).
 
 ## Packages
 
@@ -35,7 +35,7 @@ Labels follow the concept: **Decided** (confirmed in the concept interview), **P
 | Milestone | Packages | Result |
 |---|---|---|
 | M1 Engine core | 01–05 | The CLI manages repositories, features, phases, and gates; usable by hand. |
-| M2 Agent foundation | 06–08 | Router and shared skills run on Claude Code, Copilot, and Codex. |
+| M2 Agent foundation | 06–08 | `shade-kit-next-phase`, the entry protocol, and the shared skills run on Claude Code, Copilot, and Codex. |
 | M3 `feature` profile end to end | 09–15 | First v1 success criterion reachable: `new` to `finish` on every agent. |
 | M4 All v1 profiles | 16–17 | `bugfix` and `quick` complete. |
 | M5 Releasable | 18–19 | Upgrades and distribution; v1 can be released. |
@@ -89,7 +89,7 @@ Not in any package because the concept puts them later: MCP server, extensions (
 
 1. `gates.json` is keyed by profile, then by target phase (05). The concept example is keyed by phase only, which cannot express `quick`'s "one approval at the end".
 2. New artifacts not in the concept tree: `discussions/` (09), `diagnosis.md` (16), `verification.md` (14), `report.md` (15).
-3. New commands: `feature show` (03), `phase complete` (04); `feature drop` needs `--yes` (03). Resume and reopen are expressed through `phase start` (04).
+3. New commands: `feature show`, `feature drop` (03), `phase complete`, `phase reject` (04). `feature drop` deletes only with `--yes` or after a console confirmation in an interactive terminal (03). Re-entry and reopen are expressed through `phase start` (04).
 4. Approval off together with a checklist: the checklist is checked but only warns (05, 06).
 5. "Skipping `map`" skips the work, not the phase (11).
 6. Hooks and MCP configuration are not shipped in v1 because no v1 feature needs them (07).
@@ -120,7 +120,7 @@ New open points from the packages:
 
 ## Consistency log
 
-After each package, the whole draft was checked against the concept, ADR 0001, and the packages before it.
+After each package, the whole draft was checked against the concept, ADR 0001 (now concept section 9), and the packages before it.
 
 | After | Finding | Resolution |
 |---|---|---|
@@ -143,3 +143,4 @@ After each package, the whole draft was checked against the concept, ADR 0001, a
 | 19 | Format changes must be visible to the handshake. | Format change is at least a minor release. |
 | All | Automated check: every dependency points to a lower number, every package reference exists, every AC id is unique. `gates.json` and templates in 02 depend on later content. | Check passed. 02 clarified: skeletons and a version-only `gates.json` until the owner package is built. |
 | Templates (2026-10-17) | First drafts of the `spec`, `plan`, `tasks`, DoR, and DoD templates (template interview) differed from the packages: `*.template.md` source names, no order of work in `plan.md`, task status as checkbox, coverage matrix, more spec sections, ten DoR and nine DoD items in a result table, quality commands planned in `plan.md`. | 02 (source names, template conventions), 05 (checklist format, default items), 06 (conventions, checklist check), 10 (`spec.md`), 12 (`plan.md`, `tasks.md`), 13 (checkboxes, commands from `plan.md`), 14 (commands, coverage matrix) aligned. |
+| Review (2026-10-18) | The entry protocol from `shade-kit-skills.md` failed on re-entry and had no rejection path; package 06 still described a router; ADR 0001 was deleted but cited; `quick` was a skill without its own phase; `feature drop` skeleton omitted `--yes`; `feature current` had no status; six vs. seven research agents; `features` vs. `feature` command group; packages 01 and 19 ignored existing code. | 04 (re-entry, `phase reject`, `quick` phase), 05 (`quick` gate), 06 (entry protocol, `shade-kit-next-phase`), 03 (drop confirmation, `status`), 17 (`quick` phase), 01 and 19 (**Implemented**), ADR decisions moved into concept §9, CLI group renamed to `feature` in the code, router references replaced in 02, 07, 08, 09, 10, 15. |

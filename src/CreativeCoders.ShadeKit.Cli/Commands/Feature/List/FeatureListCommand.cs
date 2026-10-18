@@ -6,7 +6,7 @@ using CreativeCoders.ShadeKit.Core.Store;
 using JetBrains.Annotations;
 using Spectre.Console;
 
-namespace CreativeCoders.ShadeKit.Cli.Commands.Features.List;
+namespace CreativeCoders.ShadeKit.Cli.Commands.Feature.List;
 
 /// <summary>
 /// Lists the names of all features in the SHADE kit store of the current repository.
@@ -16,16 +16,16 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Features.List;
 /// <param name="jsonWriter">The writer that receives the JSON output.</param>
 /// <param name="errorMapper">The mapper that turns store failures into exit codes, error codes, and messages.</param>
 [UsedImplicitly]
-[CliCommand([FeaturesCommandGroup.Name, Name], Description = "Lists all features of the SHADE kit store")]
-public class FeaturesListCommand(
+[CliCommand([FeatureCommandGroup.Name, Name], Description = "Lists all features of the SHADE kit store")]
+public class FeatureListCommand(
     IAnsiConsole ansiConsole,
     IKitStoreFactory kitStoreFactory,
     ICliJsonWriter jsonWriter,
     CliErrorMapper errorMapper)
-    : ICliCommand<FeaturesListCommandOptions>
+    : ICliCommand<FeatureListCommandOptions>
 {
     /// <summary>
-    /// Represents the command name used on the command line within the <see cref="FeaturesCommandGroup" />.
+    /// Represents the command name used on the command line within the <see cref="FeatureCommandGroup" />.
     /// </summary>
     public const string Name = "list";
 
@@ -43,7 +43,7 @@ public class FeaturesListCommand(
     /// <remarks>
     /// The store is the <c>.shadekit</c> directory at the root of the git repository that contains the current
     /// directory. Plain output is one name per line, or a hint if the store has no features. JSON output is an
-    /// envelope whose <c>data</c> is a <see cref="FeaturesListCommandData" />; a store without features is a result,
+    /// envelope whose <c>data</c> is a <see cref="FeatureListCommandData" />; a store without features is a result,
     /// not an error. In JSON mode, an expected failure is written as an error envelope and the abort message is not
     /// printed.
     /// </remarks>
@@ -55,7 +55,7 @@ public class FeaturesListCommand(
     /// root directory contains no <c>features</c> directory (exit code
     /// <see cref="ShadeKitCliExitCodes.FeaturesDirectoryNotFound" />).
     /// </exception>
-    public async Task<CommandResult> ExecuteAsync(FeaturesListCommandOptions options)
+    public async Task<CommandResult> ExecuteAsync(FeatureListCommandOptions options)
     {
         Ensure.NotNull(options);
 
@@ -63,7 +63,7 @@ public class FeaturesListCommand(
 
         if (options.Json)
         {
-            _jsonWriter.Write(CliJsonEnvelope.Success(new FeaturesListCommandData(featureNames)));
+            _jsonWriter.Write(CliJsonEnvelope.Success(new FeatureListCommandData(featureNames)));
 
             return CommandResult.Success;
         }

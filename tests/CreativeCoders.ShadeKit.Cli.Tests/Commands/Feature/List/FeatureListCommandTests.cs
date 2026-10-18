@@ -4,7 +4,7 @@ using AwesomeAssertions;
 using CreativeCoders.Cli.Core;
 using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands;
-using CreativeCoders.ShadeKit.Cli.Commands.Features.List;
+using CreativeCoders.ShadeKit.Cli.Commands.Feature.List;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Store;
@@ -12,9 +12,9 @@ using FakeItEasy;
 using Spectre.Console;
 using Spectre.Console.Testing;
 
-namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Features.List;
+namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Feature.List;
 
-public class FeaturesListCommandTests
+public class FeatureListCommandTests
 {
     [Fact]
     public async Task ExecuteAsync_FeaturesExist_WritesFeatureNamesInOrdinalOrder()
@@ -24,7 +24,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, CreateKitStoreFactory("login", "Billing", "auth"));
 
         // Act
-        await command.ExecuteAsync(new FeaturesListCommandOptions());
+        await command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         console.Lines
@@ -38,7 +38,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), CreateKitStoreFactory("auth"));
 
         // Act
-        var result = await command.ExecuteAsync(new FeaturesListCommandOptions());
+        var result = await command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         result.ExitCode
@@ -53,7 +53,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, CreateKitStoreFactory("[red]feature[/]"));
 
         // Act
-        await command.ExecuteAsync(new FeaturesListCommandOptions());
+        await command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         console.Lines
@@ -68,7 +68,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, CreateKitStoreFactory());
 
         // Act
-        var result = await command.ExecuteAsync(new FeaturesListCommandOptions());
+        var result = await command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         console.Lines
@@ -91,7 +91,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, kitStoreFactory);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
@@ -126,7 +126,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, kitStoreFactory);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
@@ -161,7 +161,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, kitStoreFactory);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
@@ -185,7 +185,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, kitStoreFactory);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         (await act.Should().ThrowAsync<DirectoryNotFoundException>())
@@ -206,7 +206,7 @@ public class FeaturesListCommandTests
         Task<CommandResult>? task = null;
 
         // Act
-        var act = () => { task = command.ExecuteAsync(new FeaturesListCommandOptions()); };
+        var act = () => { task = command.ExecuteAsync(new FeatureListCommandOptions()); };
 
         // Assert
         act.Should().NotThrow();
@@ -232,7 +232,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, kitStoreFactory);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         (await act.Should().ThrowAsync<DirectoryNotFoundException>())
@@ -255,7 +255,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), kitStoreFactory);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         (await act.Should().ThrowAsync<DirectoryNotFoundException>())
@@ -273,7 +273,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), kitStoreFactory);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         (await act.Should().ThrowAsync<UnauthorizedAccessException>())
@@ -294,7 +294,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, kitStoreFactory);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions());
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         (await act.Should().ThrowAsync<IOException>())
@@ -308,7 +308,7 @@ public class FeaturesListCommandTests
     public void Ctor_NullConsole_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeaturesListCommand(null!, A.Fake<IKitStoreFactory>(), A.Fake<ICliJsonWriter>(),
+        var act = () => new FeatureListCommand(null!, A.Fake<IKitStoreFactory>(), A.Fake<ICliJsonWriter>(),
             CliErrorMapperTests.CreateMapper());
 
         // Assert
@@ -320,7 +320,7 @@ public class FeaturesListCommandTests
     public void Ctor_NullKitStoreFactory_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeaturesListCommand(new TestConsole(), null!, A.Fake<ICliJsonWriter>(),
+        var act = () => new FeatureListCommand(new TestConsole(), null!, A.Fake<ICliJsonWriter>(),
             CliErrorMapperTests.CreateMapper());
 
         // Assert
@@ -332,7 +332,7 @@ public class FeaturesListCommandTests
     public void Ctor_NullJsonWriter_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeaturesListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(), null!,
+        var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(), null!,
             CliErrorMapperTests.CreateMapper());
 
         // Assert
@@ -344,7 +344,7 @@ public class FeaturesListCommandTests
     public void Ctor_NullErrorMapper_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeaturesListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(),
+        var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(),
             A.Fake<ICliJsonWriter>(), null!);
 
         // Assert
@@ -376,7 +376,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, CreateKitStoreFactory("login", "Billing", "auth"), jsonOutput);
 
         // Act
-        var result = await command.ExecuteAsync(new FeaturesListCommandOptions { Json = true });
+        var result = await command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
         using var document = JsonDocument.Parse(jsonOutput.ToString());
@@ -407,7 +407,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), CreateKitStoreFactory(), jsonOutput);
 
         // Act
-        var result = await command.ExecuteAsync(new FeaturesListCommandOptions { Json = true });
+        var result = await command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
         using var document = JsonDocument.Parse(jsonOutput.ToString());
@@ -437,7 +437,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(console, kitStoreFactory, jsonOutput);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions { Json = true });
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
         var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
@@ -484,7 +484,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions { Json = true });
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
         (await act.Should().ThrowAsync<CliCommandAbortException>())
@@ -508,7 +508,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions { Json = true });
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
         (await act.Should().ThrowAsync<IOException>())
@@ -526,7 +526,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), CreateKitStoreFactory("auth"), jsonOutput);
 
         // Act
-        await command.ExecuteAsync(new FeaturesListCommandOptions());
+        await command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         jsonOutput.ToString()
@@ -534,37 +534,37 @@ public class FeaturesListCommandTests
     }
 
     [Fact]
-    public void FeaturesListCommandOptions_Type_DerivesFromJsonCommandOptions()
+    public void FeatureListCommandOptions_Type_DerivesFromJsonCommandOptions()
     {
         // Assert
-        typeof(FeaturesListCommandOptions)
+        typeof(FeatureListCommandOptions)
             .Should().BeDerivedFrom<JsonCommandOptions>();
     }
 
     [Fact]
-    public void FeaturesListCommand_CliCommandAttribute_IsRegisteredAsFeaturesListCommand()
+    public void FeatureListCommand_CliCommandAttribute_IsRegisteredAsFeatureListCommand()
     {
         // Act
-        var attribute = typeof(FeaturesListCommand).GetCustomAttribute<CliCommandAttribute>();
+        var attribute = typeof(FeatureListCommand).GetCustomAttribute<CliCommandAttribute>();
 
         // Assert
         attribute
             .Should().NotBeNull();
 
         attribute!.Commands
-            .Should().Equal("features", "list");
+            .Should().Equal("feature", "list");
     }
 
     [Fact]
     public void CliAssembly_CliCommandGroupAttributes_ContainFeaturesGroup()
     {
         // Act
-        var groupAttributes = typeof(FeaturesListCommand).Assembly
+        var groupAttributes = typeof(FeatureListCommand).Assembly
             .GetCustomAttributes<CliCommandGroupAttribute>();
 
         // Assert
         groupAttributes
-            .Where(x => x.Commands is ["features"])
+            .Where(x => x.Commands is ["feature"])
             .Should().ContainSingle();
     }
 
@@ -606,7 +606,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions { Json = true });
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
         await act.Should().ThrowAsync<CliCommandAbortException>();
@@ -628,7 +628,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), CreateKitStoreFactory("[red]feature[/]"), jsonOutput);
 
         // Act
-        await command.ExecuteAsync(new FeaturesListCommandOptions { Json = true });
+        await command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
         using var document = JsonDocument.Parse(jsonOutput.ToString());
@@ -651,7 +651,7 @@ public class FeaturesListCommandTests
         var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
 
         // Act
-        var act = () => command.ExecuteAsync(new FeaturesListCommandOptions { Json = true });
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
         var abortException = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
@@ -681,10 +681,10 @@ public class FeaturesListCommandTests
             .Should().Equal("code", "message");
     }
 
-    internal static FeaturesListCommand CreateCommand(IAnsiConsole console, IKitStoreFactory kitStoreFactory,
+    internal static FeatureListCommand CreateCommand(IAnsiConsole console, IKitStoreFactory kitStoreFactory,
         TextWriter? jsonOutput = null)
     {
-        return new FeaturesListCommand(console, kitStoreFactory, new CliJsonWriter(jsonOutput ?? TextWriter.Null),
+        return new FeatureListCommand(console, kitStoreFactory, new CliJsonWriter(jsonOutput ?? TextWriter.Null),
             CliErrorMapperTests.CreateMapper());
     }
 }

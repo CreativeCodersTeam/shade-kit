@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | Draft, 2026-10-14 |
-| Source | Concept §2 (Lifecycle), §3.1 (`upgrade`), §9; [ADR 0001](../adr/0001-shadekit-version-drift.md) decisions 2, 3, 5 |
+| Source | Concept §2 (Lifecycle), §3.1 (`upgrade`), [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.2, §9.3, §9.5) |
 | Depends on | 01, 02, 05, 08 |
 | Enables | Kit releases that change a file format or a template, without stranding existing repositories |
 
@@ -24,7 +24,7 @@ When the kit evolves, a team brings its repository to the new formats with one s
 ### Out of scope
 
 - Updating the engine itself or the agent integrations (`integrations update`, package 07).
-- Version pinning of the engine per repository (ADR 0001, possible later addition).
+- Version pinning of the engine per repository (concept §9, possible later addition).
 - Merging a `.new` template into the team's version. The human does that.
 
 ## Functional description
@@ -44,7 +44,7 @@ When the kit evolves, a team brings its repository to the new formats with one s
 
 ### Templates
 
-For each template the running kit version ships (**Decided**, ADR 0001):
+For each template the running kit version ships (**Decided**, concept §9.5):
 
 | State in the repository | Action |
 |---|---|
@@ -81,7 +81,7 @@ A summary per file: migrated from version x to y, template replaced, `.new` writ
 - **FP18-AC5** If one file fails to migrate, no file is changed.
 - **FP18-AC6** `--dry-run` writes nothing and reports the same actions as a real run.
 - **FP18-AC7** The managed section is replaced, and content outside the markers is byte-for-byte unchanged.
-- **FP18-AC8** Every migration step that exists has a test that migrates a fixture from the previous version (ADR 0001 consequence).
+- **FP18-AC8** Every migration step that exists has a test that migrates a fixture from the previous version (concept §9 consequence).
 
 ## Open points
 
