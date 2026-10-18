@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (task checkboxes, commands from `plan.md`) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (task checkboxes, commands from `plan.md`) and 2026-10-18 (owner of the review skill) |
 | Source | Concept §5.1 (`implement`), §11.1 (implement loop), §4.1 (`review.md`), §6 |
 | Depends on | 06, 12 |
 | Enables | 14 (`verify`), 15 (DoD item "no open blockers") |
@@ -17,6 +17,7 @@ Code is written task by task against the plan, cleaned up, and reviewed independ
 
 - The `implement` phase skill in the `feature` profile.
 - The loop implement → simplify → review.
+- The general skill `shade-kit-review`, also used by the `quick` phase (package 17). **Decided** on 2026-10-18 (findings clarification): this package owns the skill and the `review.md` format; package 06 lists it among the general skills.
 - The `review.md` template and finding severities.
 - Updating task status in `tasks.md`.
 
@@ -25,7 +26,7 @@ Code is written task by task against the plan, cleaned up, and reviewed independ
 - The `bugfix` variant (failing test first). Package 16 adds it to this skill.
 - The `quick` profile. It has its own phase `quick` with its own skill (package 17) instead of an `implement` phase.
 - The final verification of acceptance criteria and the quality checks for the DoD (package 14).
-- Committing. The kit never commits, pushes, or opens pull requests; the human does. **Proposed.**
+- Committing. The kit never commits, pushes, or opens pull requests; the human does. **Decided** (confirmation list, 2026-10-18).
 
 ## Functional description
 

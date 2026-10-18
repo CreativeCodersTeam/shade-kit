@@ -47,7 +47,7 @@ A team can turn any git repository into a SHADE kit repository with one command.
 
 ### `config.json` (v1)
 
-The team owns the values; the engine owns the schema (concept §9.1). **Decided.** v1 content, **Decided**:
+The team owns the values; the engine owns the schema. **Decided** (concept §9.1). v1 content: **Proposed**, except `schemaVersion`, `minEngineVersion`, and `outdatedFormatOnRead` (**Decided**, concept §9.1–9.2) and `report` (**Decided** on 2026-10-18):
 
 | Field | Purpose |
 |---|---|
@@ -58,6 +58,7 @@ The team owns the values; the engine owns the schema (concept §9.1). **Decided.
 | `outdatedFormatOnRead` | What read commands do with a file in an older format (package 01): `migrate-and-warn` (default) or `stop`. |
 | `trackers` | Mapping from issue URL host to id prefix for feature ids. Default: `github.com` → `gh` (package 03). |
 | `coverageThreshold` | Optional. Minimum coverage that `verify` requires (package 14). Not written by `init`; absent means "measure and record only". |
+| `report` | Whether `finish` writes `report.md` (package 15): `ask` (default, `finish` asks the human), `always`, or `never`. Absent means `ask`. **Decided** on 2026-10-18 (findings clarification). |
 
 `config.json` as written by `init` (version strings depend on the release):
 
@@ -68,7 +69,8 @@ The team owns the values; the engine owns the schema (concept §9.1). **Decided.
   "kitVersion": "<installing kit version>",
   "defaultProfile": "feature",
   "outdatedFormatOnRead": "migrate-and-warn",
-  "trackers": { "github.com": "gh" }
+  "trackers": { "github.com": "gh" },
+  "report": "ask"
 }
 ```
 

@@ -30,9 +30,9 @@ Several developers can create features in parallel on their own branches without
 
 ### Feature ids
 
-- No sequential numbers. **Decided.**
-- With an issue: `<tracker prefix>-<number>-<slug>`, for example `gh-142-login-sso`. The prefix comes from the `trackers` mapping in `config.json` (package 02). **Decided** (format), **Proposed** (mapping).
-- Without an issue: `<yyyymmdd>-<hhmm>-<slug>`, for example `20261013-1530-login-sso`. **Decided.**
+- No sequential numbers. **Decided** (concept §4.2).
+- With an issue: `<tracker prefix>-<number>-<slug>`, for example `gh-142-login-sso`. The prefix comes from the `trackers` mapping in `config.json` (package 02). **Decided** (format, concept §4.2), **Proposed** (mapping).
+- Without an issue: `<yyyymmdd>-<hhmm>-<slug>`, for example `20261013-1530-login-sso`. **Decided** (concept §4.2).
 - The slug is built from the title: lower case, ASCII, words joined by `-`, limited to a short length. **Proposed.**
 - If the id already exists, `new` stops with an exit code. It does not add a suffix silently, because an existing id usually means the feature was already created on another branch. **Proposed.**
 
@@ -60,7 +60,7 @@ Feature `status`: `active` or `done`. **Proposed.** A dropped feature has no sta
 
 ### Resolving the current feature
 
-Order (**Decided**):
+Order (**Decided**, concept §4.3):
 
 1. The current branch name. The id is the part after the last `/` (`feature/gh-142-login-sso` → `gh-142-login-sso`). It counts only if a feature folder with that id exists. **Proposed** (matching rule).
 2. The local override `features/current-feature.json`.

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (`phase reject`, re-entry, `quick` phase) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (`phase reject`, re-entry, `quick` phase; `phase next`, pending transition on `phase start <current>`) |
 | Source | Concept §3.2, §5.1, §5.3, §5.4, §11.2–11.4 |
 | Depends on | 01, 03 |
 | Enables | 05 and every phase package |
@@ -17,7 +17,7 @@ The engine is the referee of the workflow: it knows each feature's phase, allows
 
 - The three v1 profiles `feature`, `bugfix`, `quick` as built-in definitions.
 - The phase state machine and the phase fields of `feature.json`.
-- `phase start`, `phase approve`, `phase reject`, `phase complete`, `phase skills`.
+- `phase start`, `phase approve`, `phase reject`, `phase complete`, `phase skills`, `phase next`.
 - Forward transitions, re-entering a phase that is in progress, rejecting a pending transition, and reopening an earlier phase.
 - The approval history.
 
@@ -32,7 +32,7 @@ The engine is the referee of the workflow: it knows each feature's phase, allows
 
 ### Profiles
 
-A profile is an ordered list of phases plus its gate defaults. One phase engine runs every profile. **Decided.**
+A profile is an ordered list of phases plus its gate defaults. One phase engine runs every profile. **Decided** (concept §5.4).
 
 | Profile | Phases |
 |---|---|
@@ -43,7 +43,7 @@ A profile is an ordered list of phases plus its gate defaults. One phase engine 
 - `quick` is a phase of its own: clarification, compact spec, implementation, and review in one run (package 17). **Decided** on 2026-10-18.
 - Every phase runs through the skill named after it (`shade-kit-<phase>`, **Proposed** names); with the `quick` phase this holds for every phase of every profile. Skills adapt their behaviour to the profile they read from `feature current` (for example `plan` is short in `bugfix`).
 - The profile of a feature is fixed at `feature new` and cannot change in v1. **Proposed.**
-- `discuss` and `drop` are not phases of any profile. `discuss` needs no feature state (package 09), `drop` is `feature drop` (package 03). **Decided.**
+- `discuss` and `drop` are not phases of any profile. `discuss` needs no feature state (package 09), `drop` is `feature drop` (package 03). **Decided** (findings clarification, 2026-10-18).
 
 ### Phase states
 
@@ -65,9 +65,9 @@ States per phase (**Proposed** in the concept, adopted): `pending` → `in-progr
 | Command | Allowed when | Effect |
 |---|---|---|
 | `phase start <next> --json` | `<next>` is the phase that follows `currentPhase` in the profile, and the current phase is `in-progress` | Current phase → `awaiting-approval`, `pendingTransition` = `<next>`. Returns: transition allowed, entry gate (approval required, checklist path or none), skills to load. |
-| `phase start <next> --json` (repeated) | `pendingTransition` is already `<next>` | Changes nothing and returns the same gate again, for example in a new session. No `history` entry. **Proposed.** |
+| `phase start <next> --json` (repeated) | `pendingTransition` is already `<next>` | Changes nothing and returns the same gate again, for example in a new session. No `history` entry. **Decided** on 2026-10-18 (findings clarification). |
 | `phase start <current> --json` (re-entry) | `<current>` is `currentPhase` and `in-progress` | Changes nothing and returns "already in progress" with no gate and the skills to load, so a phase skill can be called again in a new session or for another `refine` round. No `history` entry. **Decided** on 2026-10-18. |
-| `phase start <current> --json` | `<current>` is `currentPhase` and `awaiting-approval` | Same effect as `phase reject <pendingTransition>`: the human wants to keep working on the current phase instead of moving on. **Proposed.** |
+| `phase start <current> --json` | `<current>` is `currentPhase` and `awaiting-approval` | Changes nothing and returns "transition to `<pendingTransition>` pending" with no gate and the skills to load. The phase skill asks the human whether to discard the pending transition and, on yes, calls `phase reject <pendingTransition>` (package 06). No `history` entry. **Decided** on 2026-10-18 (findings clarification). |
 | `phase approve <next>` | `pendingTransition` is `<next>` | Records the approval in `history`. Current phase → `approved`, `<next>` → `in-progress`, `currentPhase` = `<next>`. |
 | `phase reject <next> [--note <text>]` | `pendingTransition` is `<next>` | Cancels the pending transition after the human said no; the current phase goes back to `in-progress` (gate failed, changes requested). Recorded as `reject` with the note, for example the failed checklist items. **Decided** on 2026-10-18. |
 | `phase start <earlier> --json` | `<earlier>` comes before `currentPhase` in the profile, and the current phase is `in-progress` | Like a forward transition, but needs an approval and is recorded as `reopen`. On approval, `<earlier>` → `in-progress` and every phase after it → `pending`. Their artifacts stay on disk. A "no" is a `phase reject <earlier>`. **Proposed.** |
@@ -77,13 +77,25 @@ Every other request (skipping a phase, a phase that is not in the profile, any t
 
 The diagram in concept §11.3 stays valid: `pending → in-progress` happens through `phase approve`, `in-progress → awaiting-approval` through `phase start <next>`, and `awaiting-approval → in-progress` through `phase reject`.
 
-Because every phase skill calls `phase start <its phase>` as the first step of its entry protocol (package 06), the same call covers four situations: moving forward, repeating a pending transition, re-entering a phase in progress, and reopening an earlier phase.
+Because every phase skill calls `phase start <its phase>` as the first step of its entry protocol (package 06), the same call covers five situations: moving forward, repeating a pending transition, re-entering a phase in progress, resuming a phase whose transition is pending, and reopening an earlier phase.
 
 ### Approval
 
-- Every transition needs an explicit human approval in v1. Package 05 adds switching it off per transition. **Decided.**
-- The agent asks the human, and only after the human says yes does it call `phase approve`. **Decided.**
+- Every transition needs an explicit human approval in v1. Package 05 adds switching it off per transition. **Decided** (concept §5.2).
+- The agent asks the human, and only after the human says yes does it call `phase approve`. **Decided** (concept §3.2).
 - **Known weak point (Decided, accepted for v1):** nothing technically stops an agent from calling `phase approve` on its own. Later options: `approve` only in an interactive terminal, or a hook that blocks the call.
+
+### `phase next --json`
+
+Returns the possible next steps of the current feature, so `shade-kit-next-phase` (package 06) does not derive them from the profile. **Decided** on 2026-10-18 (findings clarification). It changes nothing.
+
+| Field | Content |
+|---|---|
+| `current` | Current phase and its state, and the feature status. For a `done` feature this is the only field. |
+| `continue` | Present when the current phase is `in-progress`: the phase and its skill. |
+| `pending` | Present when the current phase is `awaiting-approval`: the target phase, its gate (approval, checklist), and its skill. |
+| `forward` | The next phase of the profile with its gate and skill, or absent in the last phase. |
+| `reopen` | List of earlier phases with their skills. A reopen always needs an approval. |
 
 ### `phase skills <phase> --json`
 
@@ -107,6 +119,8 @@ Returns the phase skill for the feature's profile and the general skills it need
 - **FP04-AC10** `phase skills` returns a different phase skill list per profile where the profiles differ.
 - **FP04-AC11** `phase start <current>` while the current phase is `in-progress` leaves `feature.json` byte-for-byte unchanged and returns "already in progress" without a gate.
 - **FP04-AC12** `phase start <next>` while the transition to `<next>` is already pending returns the same gate again and adds no `history` entry.
+- **FP04-AC13** `phase start <current>` while the transition away from `<current>` is pending leaves `feature.json` unchanged and returns the pending transition without a gate.
+- **FP04-AC14** `phase next --json` returns `continue`, `forward`, and `reopen` for a phase `in-progress`, `pending` for a phase `awaiting-approval`, no `forward` in the last phase, and only `current` for a `done` feature; `feature.json` is unchanged.
 
 ## Open points
 

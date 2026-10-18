@@ -28,10 +28,10 @@ Ideas can be explored freely before they become a feature, without creating any 
 
 ### `discuss`
 
-- Brainstorm any topic: an idea, a design question, a problem. Optional, outside every profile, possible at any time. **Decided.**
+- Brainstorm any topic: an idea, a design question, a problem. Optional, outside every profile, possible at any time. **Decided** (concept §5.1, §5.4).
 - Uses the interview skill (package 06) in an open mode: the agent asks, proposes alternatives, and challenges assumptions.
 - At the end, or when the human asks, the agent writes the notes from the `discussion.md` template: topic, date, participants (git user), options discussed, conclusions, open questions.
-- Storage (concept open question 2, the concept's **Proposed** answer, adopted):
+- Storage (concept open question 2, **Decided** (confirmation list, 2026-10-18)):
   - No current feature: `.shadekit/discussions/<yyyymmdd>-<hhmm>-<slug>.md`.
   - Current feature: `.shadekit/features/<id>/discussions/<yyyymmdd>-<hhmm>-<slug>.md`.
 - Discussion notes are committed like all kit data. `discuss` never changes `feature.json`.
@@ -67,4 +67,4 @@ Runs when no feature exists for the work yet. `shade-kit-next-phase` (package 06
 
 ## Open points
 
-- None. Concept open question 2 is answered here with the concept's own proposal; it needs confirmation.
+- None.

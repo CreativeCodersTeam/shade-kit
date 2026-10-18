@@ -16,15 +16,17 @@ Moves a feature forward without the user having to know its state. This skill on
 1. **Version handshake:** `shade-kit version --json`. Stop and tell the user what to update if the engine and kit versions do not match.
 2. **Current feature:** `shade-kit feature current --json`.
    - Not resolved: list the features (`shade-kit feature list --json`), ask which one to use or offer to create a new one. Then `shade-kit feature set <id>`, or hand off to `shade-kit-new`.
-3. **State:** read profile, feature status, current phase, and phase state.
-   - Feature `done`: report that it is finished and offer to pick another feature.
-   - Current phase `in-progress`: offer to continue it or to move on to the next phase.
-   - Current phase `awaiting-approval`: offer to repeat the pending transition.
-4. **Next phases:** get the allowed next phases (planned: `shade-kit phase next --json`). Offer reopening an earlier phase, and always offer `shade-kit-discuss` and `shade-kit-drop` as well.
+3. **Next steps:** `shade-kit phase next --json`. It returns the current phase and state and the possible steps, each with its gate and skill:
+   - Feature `done`: only the status. Report that it is finished and offer to pick another feature.
+   - `continue` (current phase `in-progress`): continue it.
+   - `pending` (current phase `awaiting-approval`): repeat the pending transition.
+   - `forward`: move on to the next phase of the profile.
+   - `reopen[]`: reopen an earlier phase (always needs approval).
+4. **Offer** these steps, and always offer `shade-kit-discuss` and `shade-kit-drop` as well.
 5. **Choice:** let the user choose, using the agent's structured question tool where one exists.
 6. **Hand-off:** start the phase skill of the chosen phase (`shade-kit-<phase>`). Its entry protocol performs the transition: forward, re-entry, or reopen.
 
 ## Rules
 
-- Do not derive the next phases from the profile in the skill once the CLI returns them; that would duplicate engine logic.
+- Do not derive the next steps from the profile; `phase next` returns them, so the skill does not duplicate engine logic.
 - Never call `shade-kit phase approve`.

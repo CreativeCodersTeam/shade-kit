@@ -10,17 +10,17 @@ Repository language is always English. The kit is designed to be used by English
 
 It has two deliverables:
 
-1. **Plugin** (`skills/`): skills, agents, hooks, and commands in the Claude Code plugin layout.
+1. **Plugin** (`skills/`): skills and research agent definitions in the Claude Code plugin layout. Hooks and commands come later.
 2. **Engine** (`src/`): a .NET 10 CLI, shipped two ways:
    - as a `dotnet` global tool
    - as self-contained single-file binaries (no .NET install needed) for `osx-arm64`, `linux-x64`, `linux-arm64`, `win-x64`, `win-arm64`
 
 ### v1 scope
 
-- **Gated workflow phases:** spec → plan → implement → verify → review, with an explicit approval gate between phases.
-- **Quality gates:** build, test, lint, and coverage checks must pass before a phase can complete.
-- **State & traceability:** workflow state is saved, requirements are mapped to the tests that cover them, and reports are generated.
-- **Install/sync:** the engine installs and updates the kit's skills in a target repository, for each supported agent.
+- **Gated workflow profiles:** `feature` (new → refine → map → plan → implement → verify → finish), `bugfix` (new → diagnose → plan → implement → verify → finish), and `quick` (new → quick → finish). The agent checks each gate when the next phase starts; the human approves the transition. Each gate's approval and checklist can be switched off in `gates.json`.
+- **Quality gates:** the Definition of Ready (gate into `plan`) and Definition of Done (gate into `finish`) are checklists. In v1 the agent runs build, test, lint, and coverage with the commands approved in `plan.md` and records the results; the CLI enforcing and running them comes later.
+- **State & traceability:** workflow state and approval history are saved in `.shadekit/`, requirements are mapped to the tests that prove them, and `finish` can write a report (`report` in `config.json`).
+- **Install/sync:** the engine installs and updates the kit's skills at user level for each supported agent (`integrations install/update`) and initialises and upgrades a repository's `.shadekit/` (`init`, `upgrade`). Nothing is installed into a repository.
 
 ## Target agents
 

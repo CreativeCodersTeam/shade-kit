@@ -48,7 +48,7 @@ Before planning, the team knows where the feature lands in the code: which archi
 
 The human can skip `map` on purpose, for example for a change confined to one file. The agent then records in `researches.md` a `map / skipped` section with the reason and the git user. The DoR item "affected areas known (`map` done, or skipped on purpose)" (package 05) passes on that record. **Proposed.**
 
-Skipping means skipping the work, not the phase: the engine does not allow skipping a phase (package 04), so the feature still passes through `map` and its gate. This keeps the decision visible in the history.
+Skipping means skipping the work, not the phase: the engine does not allow skipping a phase (package 04), so the feature still passes through `map` and its gate. This keeps the decision visible in the history. **Decided** (confirmation list, 2026-10-18).
 
 ## Acceptance criteria
 

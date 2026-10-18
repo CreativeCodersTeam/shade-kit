@@ -6,6 +6,7 @@ How to fill this template:
 - Describe HOW the spec is built and WHY this way. The order of work and the requirement → test mapping belong in tasks.md.
 - Take facts from the code base and researches.md. Mark anything that could not be verified as "unverified" and list it under "Risks".
 - Reference requirements by their REQ IDs from spec.md.
+- Profile bugfix (short plan): fill only Summary (the chosen fix option and why, with a link to diagnosis.md), Test strategy, Risks, and Deviations. Every other section says "n/a in bugfix".
 -->
 
 Feature: `{{feature-id}}` · Spec: [spec.md](spec.md) · Research: [researches.md](researches.md) · Tasks: [tasks.md](tasks.md)

@@ -1,6 +1,6 @@
 # SHADE kit concept
 
-Status: draft, 2026-10-13, updated 2026-10-17 (template interview) and 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-13, updated 2026-10-17 (template interview) and 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
 
 Labels used in this document:
 
@@ -40,8 +40,6 @@ SHADE kit keeps what worked (interviews, draft → approve, requirement-to-test 
 | Memory | | Knowledge distilled at `finish` |
 | Lifecycle | `integrations install/update`, `init`, `upgrade` (migration) | |
 
-> `CLAUDE.md` still lists the v1 phases as "spec → plan → implement → verify → review". This concept replaces that list with the phases in section 5. `CLAUDE.md` should be updated once this concept is accepted.
-
 ## 3. Components
 
 ```
@@ -64,7 +62,7 @@ SHADE kit keeps what worked (interviews, draft → approve, requirement-to-test 
 
 | Command (proposed name) | Purpose |
 |---|---|
-| `shade-kit integrations install [--agent claude\|copilot\|codex]` | Sets up the agent integration (skills, agents, hooks, MCP config) at **user level**: as a plugin where the agent has one, otherwise by writing the same content to the agent's user directory. **Decided.** |
+| `shade-kit integrations install [--agent claude\|copilot\|codex]` | Sets up the agent integration (skills and agents; hooks and MCP configuration come later, no v1 feature needs them) at **user level**: as a plugin where the agent has one, otherwise by writing the same content to the agent's user directory. **Decided.** |
 | `shade-kit integrations update` | Updates the user-level integration to the installed kit version. |
 | `shade-kit init` | Creates `.shadekit/` in a repository: `config.json`, `gates.json`, templates, `templates.lock.json`, `.gitignore` entries, and a short SHADE kit section in `CLAUDE.md` / `AGENTS.md`. |
 | `shade-kit upgrade` | Migrates an initialised repository to the current format versions. Rules in [section 9](#9-version-drift). |
@@ -80,12 +78,15 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 | Command (proposed name) | Returns / does |
 |---|---|
 | `shade-kit feature current --json` | The current feature: id, profile, feature status (`active` or `done`), phase, phase status, artifact paths. Resolution in section 4.3. |
+| `shade-kit feature show <id> --json` | The full state of a feature: profile, phases, approval history. |
 | `shade-kit feature set <id>` | Writes the local override (`current-feature.json`). |
 | `shade-kit feature new --profile <p> --source <text\|url\|file>` | Creates the feature folder and `request.md`. |
 | `shade-kit feature drop <id> [--yes]` | Deletes the feature folder. Without `--yes` it only shows what it would delete, or asks in an interactive terminal. |
-| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate. |
+| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate. If a transition away from the phase is pending, it changes nothing and reports the pending transition; the skill asks the human whether to discard it. The same command reopens an earlier phase. |
 | `shade-kit phase approve <phase>` | Records the human approval in `feature.json` (who, when). |
 | `shade-kit phase reject <phase> [--note <text>]` | Cancels the pending transition after a "no"; the previous phase is in progress again. Recorded in the history with the note. |
+| `shade-kit phase complete` | Ends the last phase (`finish`); the feature status becomes `done`. |
+| `shade-kit phase next --json` | The possible next steps of the current feature: continue, the pending transition, forward, and reopen, each with its gate and skill. Used by `shade-kit-next-phase`. |
 | `shade-kit phase skills <phase> --json` | The skills to load before the phase runs, including extension skills later. |
 | `shade-kit extensions get --phase <p> [--slot <s>] --json` | Extension bindings for a phase. **Later.** |
 | `shade-kit memory get [--topic <t>] --json` | Relevant memory entries. **Later.** |
@@ -95,20 +96,20 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 ### 3.3 Skills and agents
 
 - **Phase skills:** one per phase (`shade-kit-refine`, `shade-kit-plan`, …). Each runs the entry protocol (phase start, gate check, approval) itself, so a direct call is gated too. There is no router: `shade-kit-next-phase` finds the current feature and phase, offers the possible next steps, and starts the chosen phase skill. **Decided** in the skills interview on 2026-10-17 ([shade-kit-skills.md](shade-kit-skills.md)).
-- **General skills:** used across phases, for example an interview skill, a checklist-check skill for gates, and a skill that writes reports.
+- **General skills:** used across phases: an interview skill, a checklist-check skill for gates, a research skill, a review skill, and an optional skill that writes reports. **Decided** on 2026-10-18.
 - **Research agents:** one subagent per focus, run in parallel, results merged into `researches.md`. Seven agent definitions, one per row; security is split by level. **Decided** on 2026-10-18.
 
 | Focus | Used in |
 |---|---|
 | Gaps and open questions in the requirement | `refine` |
 | Security at requirement level: data to protect, roles and permissions, abuse cases | `refine` |
-| Security at code level: code paths that handle input, authentication, secrets, protected data | `map` |
+| Security at code level: code paths that handle input, authentication, secrets, protected data | `map`, `diagnose` |
 | Best practice | `map` |
 | Existing architecture | `map` |
 | Existing affected code | `map` |
 | Don't hand-roll: existing frameworks, libraries, APIs | `map` |
 
-The split between `refine` and `map` is **proposed**: `refine` deals with the requirement, `map` with the code base.
+The split between `refine` and `map` is **proposed**: `refine` deals with the requirement, `map` with the code base. In the `bugfix` profile, `diagnose` runs the code-level security focus on the affected code (**Decided** on 2026-10-18).
 
 ### 3.4 Distribution
 
@@ -125,7 +126,8 @@ The kit root is `.shadekit/` (decided; **Implemented** in `KitStorePaths`).
 ```
 .shadekit/
 ├── config.json                 # schemaVersion; user owns values, engine owns schema
-├── gates.json                  # gate on/off per transition and profile
+├── gates.json                  # gate per profile and target phase
+├── discussions/                # discuss notes without a current feature
 ├── templates/                  # artifact templates, editable by the team (section 4.5)
 │   └── checks/                 # checklist templates: definition-of-ready.md, definition-of-done.md
 ├── templates.lock.json         # kit version + hash per shipped template (section 9.5)
@@ -143,13 +145,17 @@ The kit root is `.shadekit/` (decided; **Implemented** in `KitStorePaths`).
     └── <feature-id>/
         ├── feature.json        # schemaVersion, profile, phase, status, approvals, history
         ├── request.md          # original input (text, issue link, file)
-        ├── researches.md       # research results from refine and map
+        ├── discussions/        # discuss notes while this feature is current
+        ├── researches.md       # research results from refine, map, and diagnose
+        ├── diagnosis.md        # bugfix: reproduction, root cause, fix options
         ├── spec.md             # requirements (IDs, priority), acceptance criteria, out of scope, assumptions, open questions, decisions
         ├── plan.md             # approach, design decisions, test strategy with quality commands, deviations
         ├── tasks.md            # tasks as checkboxes, each linked to requirement IDs and the tests that prove them; coverage matrix
-        ├── data.md             # open: purpose not defined yet
-        ├── review.md           # proposed: review findings from implement
-        ├── playbook.md         # proposed: manual test playbook from verify
+        ├── data.md             # open: purpose not defined yet; not created in v1
+        ├── review.md           # review findings and commands from implement or quick
+        ├── verification.md     # check results and criterion → test results from verify or quick
+        ├── playbook.md         # manual test playbook from verify, or from quick when a criterion is manual
+        ├── report.md           # optional report from finish
         └── checks/
             ├── definition-of-ready.md  # filled copy of the Definition of Ready (entry gate of plan)
             └── definition-of-done.md   # filled copy of the Definition of Done (entry gate of finish)
@@ -209,14 +215,14 @@ Decided in the template interview on 2026-10-17. Details in [package 02](../docs
 
 | Phase | Purpose | Input | Output |
 |---|---|---|---|
-| `discuss` | Brainstorm any topic. Optional, can run as input for `new` or in any other phase. | Anything | Discussion notes (**open:** where they are stored; proposal `.shadekit/discussions/` or inside the feature folder when a feature is current) |
+| `discuss` | Brainstorm any topic. Optional, can run as input for `new` or in any other phase. | Anything | Discussion notes in `.shadekit/discussions/`, or in the feature's `discussions/` folder when a feature is current. **Decided** on 2026-10-18 (package 09). |
 | `new` | Create the feature folder. | Requirement as text, issue URL, Markdown file, discussion notes | `feature.json`, `request.md` |
 | `refine` | Clarify vague statements, gaps, and open questions about the requirement. Can run several times. | `request.md` | `spec.md`: requirements with IDs and priority, acceptance criteria, edge cases, out of scope, assumptions, open questions, decisions; research in `researches.md` |
 | `map` | Map the feature onto the code base, using parallel research subagents. | `spec.md`, code base | `researches.md`: best practice, existing architecture, affected code, don't hand-roll, security |
 | `plan` | Plan the implementation. | `spec.md`, `researches.md` | `plan.md` with design decisions and test strategy, `tasks.md` with requirement → test mapping and coverage matrix |
 | `implement` | Implement, simplify, and review in a loop until the review has no blockers. | `plan.md`, `tasks.md` | Code and tests, `review.md` |
-| `verify` | AI verification (quality checks, every acceptance criterion covered by a passing test) plus a playbook for manual tests by a developer or user. | Code, `spec.md`, `tasks.md` | Verification result, `playbook.md` |
-| `finish` | Mark the feature as done. Later: distill memory. | Everything | `feature.json` status `done`, report |
+| `verify` | AI verification (quality checks, every acceptance criterion covered by a passing test) plus a playbook for manual tests by a developer or user. | Code, `spec.md`, `tasks.md` | `verification.md`, `playbook.md` |
+| `finish` | Mark the feature as done. Later: distill memory. | Everything | `feature.json` status `done`, optional `report.md` |
 | `drop` | Delete the feature and clear the current feature. Possible from any phase. | | |
 
 ### 5.2 Gates
@@ -225,30 +231,17 @@ Decided for v1:
 
 - A gate is checked **when the next phase starts**. The agent checks the entry conditions and reports the result.
 - The human **always** approves the transition explicitly, also when the check passes.
-- Each gate can be switched off in `gates.json`.
+- Each gate can be switched off in `gates.json`: its approval and its checklist are separate switches. With approval off and a checklist on, the checklist is still checked but a failed item only warns. **Decided** on 2026-10-18.
 - DoR is the entry gate of `plan`, checked against `spec.md`. DoD is the entry gate of `finish`.
 - All other transitions are plain approvals without a checklist. Extension point: a `checks/<phase>.md` file can add a checklist to any transition later.
 
 Content and format of the checklists, decided in the template interview on 2026-10-17. The defaults come from templates and can be edited per repository; the full item lists are in [package 05](../docs/feature-packages/05-gates-and-checklists.md).
 
 - Each checklist is a table `ID | Criterion | Result | Evidence`. `Result` is `pending`, `pass`, `fail`, or `n/a` (an item for a phase or artifact the profile does not have). A "Check runs" log keeps the result of every run.
-- **DoR (entry of `plan`), ten items:** every requirement has an ID, a priority, and at least one testable acceptance criterion; no open questions and no template leftovers in `spec.md`; out of scope is stated; assumptions are confirmed or marked as risks; every edge case has a criterion or is out of scope; security considerations are filled in; affected areas are known (`map` done, or skipped on purpose).
+- **DoR (entry of `plan`), ten items:** every requirement has an ID, a priority, and at least one testable acceptance criterion; no open questions and no template leftovers in `spec.md`; out of scope is stated; assumptions are confirmed or marked as risks; every edge case has a criterion or is out of scope; security considerations are filled in; affected areas are known (`map` done, skipped on purpose, or `diagnosis.md` lists the affected code).
 - **DoD (entry of `finish`), nine items:** build, test, and lint pass; coverage is measured and reaches `coverageThreshold` if set; every acceptance criterion is covered by a passing test or a playbook item; every task is done or has an accepted reason; `review.md` has no open blockers; the quality bar was not lowered; plan deviations and rollout steps are recorded; documentation is updated; every item in `playbook.md` is checked off by a human.
 
-Proposed `gates.json` shape:
-
-```json
-{
-  "schemaVersion": 1,
-  "gates": {
-    "plan":   { "approval": true, "checklist": "checks/definition-of-ready.md" },
-    "finish": { "approval": true, "checklist": "checks/definition-of-done.md" },
-    "verify": { "approval": false }
-  }
-}
-```
-
-**Open:** can approval be switched off completely, or only the checklist? The interview said "each gate can be switched off", so this proposal allows both.
+`gates.json` is keyed by profile, then by target phase, because the `quick` profile needs other defaults than `feature`. By default every transition needs an approval; the only exception is the transition into the `quick` phase of the `quick` profile ("one approval at the end"). A transition without an entry needs an approval. **Decided** on 2026-10-18. Shape and defaults: [package 05](../docs/feature-packages/05-gates-and-checklists.md).
 
 ### 5.3 Phase state
 
@@ -269,6 +262,10 @@ Decided: one phase engine, several profiles. A profile is an ordered list of pha
 
 `discuss` is outside every profile and can be used at any time. `drop` is possible from every phase.
 
+The engine never skips a phase. Skipping `map` on purpose skips its work, not the phase: the feature still passes through `map` and its gate, and the reason is recorded in `researches.md` (package 11). **Decided** on 2026-10-18.
+
+The kit never commits, pushes, or opens pull requests; the human does (package 13). **Decided** on 2026-10-18.
+
 ## 6. Quality gates and traceability
 
 - Requirements in `spec.md` get stable IDs (for example `REQ-001`), and their acceptance criteria get IDs linked to them (for example `AC-001.1`).
@@ -276,7 +273,7 @@ Decided: one phase engine, several profiles. A profile is an ordered list of pha
 - The quality commands (build, test, lint, coverage) are planned in the test strategy of `plan.md` and approved with the plan.
 - `verify` checks that every acceptance criterion has a passing test or a playbook item and runs the quality checks.
 - v1: the agent runs the checks and reports. Later: the commands are configured in `gates.json` and the CLI runs them and stores the result.
-- `finish` writes a report: requirements, tests, check results, approvals.
+- `finish` can write a report: requirements, tests, check results, approvals. Whether it does is set by `report` in `config.json` (`ask`, `always`, `never`; package 15). **Decided** on 2026-10-18.
 
 ## 7. Extensions (later)
 
@@ -352,6 +349,7 @@ An engine writes back every field it does not know, unchanged. Changes that only
 
 - Skills and agent files are installed at user level, never written into the target repository.
 - Plugin content and CLI share one version number. A skill checks `shade-kit version` before it runs.
+- The integration content is packed into the engine release, so an engine always installs the content of its own version (package 07). **Decided** on 2026-10-18.
 
 ### Why per-file versions
 
@@ -369,9 +367,9 @@ Every new JSON file in this concept (`gates.json`, `local.json`, `extension.yml`
 ## 10. Open questions
 
 1. Purpose of `data.md` in the feature folder.
-2. Where `discuss` output is stored.
+2. Where `discuss` output is stored. **Decided** on 2026-10-18: `.shadekit/discussions/`, or the feature's `discussions/` folder when a feature is current (package 09).
 3. Which branch decides the current feature in the separate spec store mode.
-4. Whether approval can be switched off completely for a transition, or only its checklist.
+4. Whether approval can be switched off completely for a transition, or only its checklist. **Decided** on 2026-10-18: both are separate switches; approval off with a checklist only warns (package 05).
 5. Whether Copilot and Codex can use the same skill, subagent, and hook format as Claude Code (**unverified**, needs research).
 6. Exact CLI command names (all names in section 3 are proposals).
 7. Ordering and conflicts between extensions.
@@ -381,7 +379,7 @@ Every new JSON file in this concept (`gates.json`, `local.json`, `extension.yml`
 
 ### 11.1 Phase flow and gates (`feature` profile)
 
-Every transition needs a human approval (v1), shown as an edge labelled "approval". The hexagons are the checklist gates, checked when the next phase starts. Dashed shapes and lines are optional paths. `discuss` and `drop` are outside the phase order: `discuss` can feed `new` and run during any phase, `drop` is possible from any phase.
+Every transition needs a human approval (v1), shown as an edge labelled "approval". The hexagons are the checklist gates, checked when the next phase starts. Dashed shapes and lines are optional paths. `discuss` and `drop` are outside the phase order: `discuss` can feed `new` and run during any phase, `drop` is possible from any phase. Any phase can reopen an earlier phase with an approval (package 04); only the common path back from `verify` to `implement` is drawn.
 
 ```mermaid
 flowchart TB
@@ -411,6 +409,7 @@ flowchart TB
     review -- "no blockers, approval" --> verify
     verify --> dod
     dod -- "approval" --> finish
+    verify -. "failures, reopen" .-> impl
 
     classDef checklist stroke-width:2.5px
     classDef side stroke-dasharray:5 4

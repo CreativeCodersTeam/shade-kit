@@ -33,14 +33,14 @@ Every file the kit writes into a repository is safe across branch merges and kit
 
 ### Kit root
 
-- The kit root is `.shadekit/` at the repository root. **Decided.**
+- The kit root is `.shadekit/` at the repository root. **Decided** (concept §4.1).
 - Commands find it by walking up from the working directory to the git repository root. A command that needs an initialised repository and finds no kit root stops with a clear message that points to `shade-kit init`. **Implemented** (`KitStoreFactory`, `KitStorePaths`).
 
 ### Versioned files (concept §9.1, §9.4)
 
-- Every JSON file in `.shadekit/` has a top-level integer `schemaVersion`. **Decided.** The version lives in the file it describes: every `features/<id>/feature.json` carries its own, so features created on different branches with different engine versions stay independent. **Decided.**
-- Every JSON file also has a top-level `minEngineVersion` (semver string): the first engine version that supports the file's format version. The engine stamps it on every write from an internal table "format version → engine version that introduced it". An older engine reads it without understanding the rest of the format. **Decided.** **Implemented** (`VersionedDocument`, `VersionedJsonSerializer`).
-- Each file type has its own format version and its own migration chain of small steps (v1→v2→v3). **Decided.** **Implemented** (`FormatDefinition`, `IFormatMigration`). File types are identified by these logical ids, all starting at format version 1. **Decided.** **Implemented** (`FormatIds`, `FormatRegistry.CreateDefault()`).
+- Every JSON file in `.shadekit/` has a top-level integer `schemaVersion`. **Decided** (concept §9.1). The version lives in the file it describes: every `features/<id>/feature.json` carries its own, so features created on different branches with different engine versions stay independent. **Decided** (concept §9.1).
+- Every JSON file also has a top-level `minEngineVersion` (semver string): the first engine version that supports the file's format version. The engine stamps it on every write from an internal table "format version → engine version that introduced it". An older engine reads it without understanding the rest of the format. **Decided** (concept §9.1). **Implemented** (`VersionedDocument`, `VersionedJsonSerializer`).
+- Each file type has its own format version and its own migration chain of small steps (v1→v2→v3). **Decided** (concept §9.1). **Implemented** (`FormatDefinition`, `IFormatMigration`). File types are identified by these logical ids, all starting at format version 1. **Decided** (implemented in code). **Implemented** (`FormatIds`, `FormatRegistry.CreateDefault()`).
 
   | Format id | File |
   |---|---|
@@ -51,29 +51,29 @@ Every file the kit writes into a repository is safe across branch merges and kit
   | `templates-lock` | `.shadekit/templates.lock.json` |
   | `integrations` | User-level integration record (package 07) |
 
-- Fields the engine does not know are kept unchanged when the file is written back. Adding a field never raises the format version. **Decided.** **Implemented** (`[JsonExtensionData]` in `VersionedDocument`).
-- A file without `schemaVersion` is treated as invalid, not as version 1, and every command that touches it stops (`invalid-file`). **Decided**, because a missing version most likely means a hand-edited or foreign file. **Implemented** (`InvalidKitFileException`).
+- Fields the engine does not know are kept unchanged when the file is written back. Adding a field never raises the format version. **Decided** (concept §9.4). **Implemented** (`[JsonExtensionData]` in `VersionedDocument`).
+- A file without `schemaVersion` is treated as invalid, not as version 1, and every command that touches it stops (`invalid-file`). **Decided** (concept §9.1), because a missing version most likely means a hand-edited or foreign file. **Implemented** (`InvalidKitFileException`).
 
 ### Version check on every command
 
 | Situation | Behaviour |
 |---|---|
-| File format is newer than the engine supports | Hard stop (`format-too-new`), message "shade-kit >= X required" with X taken from the file's `minEngineVersion`. **Decided.** |
-| File format is older than the engine's current format | Write commands stop and report that `shade-kit upgrade` is needed (`upgrade-needed`). **Decided.** Read commands follow `outdatedFormatOnRead` in `config.json` (package 02): `migrate-and-warn` (default) migrates in memory, returns the result, and adds an `upgrade-needed` warning; `stop` behaves like a write command. **Decided.** To read this setting, an outdated `config.json` is itself migrated in memory. |
+| File format is newer than the engine supports | Hard stop (`format-too-new`), message "shade-kit >= X required" with X taken from the file's `minEngineVersion`. **Decided** (concept §9.2). |
+| File format is older than the engine's current format | Write commands stop and report that `shade-kit upgrade` is needed (`upgrade-needed`). **Decided** (concept §9.2). Read commands follow `outdatedFormatOnRead` in `config.json` (package 02): `migrate-and-warn` (default) migrates in memory, returns the result, and adds an `upgrade-needed` warning; `stop` behaves like a write command. **Decided** (concept §9.2). To read this setting, an outdated `config.json` is itself migrated in memory. |
 | File format is current | Normal operation. |
 
 **Implemented** (`KitStore`, `FormatTooNewException`, `UpgradeNeededException`, `OutdatedFormatOnReadPolicy`). The check covers only the files a command touches. A repository that contains files in several format versions after a merge is a valid state (concept §9).
 
 ### `shade-kit version`
 
-- Plain output: the engine version. **Decided.** **Implemented** (`VersionCommand`).
-- `--json` output: engine version and the current format version per file type, keyed by format id (`"formats": { "config": 1, … }`). This is the engine's capability, not the state of a repository. **Decided.** **Implemented** (`VersionCommandData`). Skills use it for the version handshake (package 06), and package 07 adds the installed integration versions to it.
+- Plain output: the engine version. **Decided** (implemented in code). **Implemented** (`VersionCommand`).
+- `--json` output: engine version and the current format version per file type, keyed by format id (`"formats": { "config": 1, … }`). This is the engine's capability, not the state of a repository. **Decided** (implemented in code). **Implemented** (`VersionCommandData`). Skills use it for the version handshake (package 06), and package 07 adds the installed integration versions to it.
 
 ### Agent contract (applies to every agent-facing command)
 
-- Every command an agent calls supports `--json`. **Decided.**
-- JSON output goes to stdout. Warnings and errors in JSON mode are part of the JSON document, not free text on stderr. **Decided.**
-- Every JSON output uses the same envelope. **Decided.**
+- Every command an agent calls supports `--json`. **Decided** (concept §3.2).
+- JSON output goes to stdout. Warnings and errors in JSON mode are part of the JSON document, not free text on stderr. **Decided** (implemented in code).
+- Every JSON output uses the same envelope. **Decided** (implemented in code).
 
   ```json
   {
@@ -85,8 +85,8 @@ Every file the kit writes into a repository is safe across branch merges and kit
   ```
 
   On failure, `ok` is `false`, `data` is `null`, and `error` is `{ "code": "…", "message": "…" }`. **Implemented** (`CliJsonEnvelope`, `ICliJsonWriter`, `CliErrorMapper`).
-- Every failure has a stable exit code from `ShadeKitCliExitCodes` and, in JSON mode, a stable error code string, so skills can branch on it without parsing messages. **Decided.** Error and warning codes are kebab-case. **Decided.**
-- Exit codes are grouped in ranges per area: 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, 255 host errors. **Decided.** Codes owned by packages 01 and 02, all **Implemented** (`ShadeKitCliExitCodes`, `ShadeKitCliErrorCodes`):
+- Every failure has a stable exit code from `ShadeKitCliExitCodes` and, in JSON mode, a stable error code string, so skills can branch on it without parsing messages. **Decided** (implemented in code). Error and warning codes are kebab-case. **Decided** (implemented in code).
+- Exit codes are grouped in ranges per area: 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, 255 host errors. **Decided** (implemented in code). Codes owned by packages 01 and 02, all **Implemented** (`ShadeKitCliExitCodes`, `ShadeKitCliErrorCodes`):
 
   | Exit code | Error code | Owner |
   |---|---|---|

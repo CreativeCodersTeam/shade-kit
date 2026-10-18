@@ -32,13 +32,13 @@ When the kit evolves, a team brings its repository to the new formats with one s
 ### Preconditions
 
 - The repository is initialised (package 01 kit root check).
-- `.shadekit/` has no uncommitted changes. Otherwise `upgrade` stops, because git is the backup. **Decided.**
+- `.shadekit/` has no uncommitted changes. Otherwise `upgrade` stops, because git is the backup. **Decided** (concept §9.3).
 - No file has a format newer than the engine supports; otherwise the hard stop from package 01 applies.
 
 ### JSON files
 
-- Every JSON file in `.shadekit/` (`config.json`, `gates.json`, `templates.lock.json`, every `feature.json`) is migrated from its own `schemaVersion` to the engine's current format through its chain. Files from different format versions after a merge are handled file by file. **Decided.**
-- Features in any phase are migrated in place. **Decided.**
+- Every JSON file in `.shadekit/` (`config.json`, `gates.json`, `templates.lock.json`, every `feature.json`) is migrated from its own `schemaVersion` to the engine's current format through its chain. Files from different format versions after a merge are handled file by file. **Decided** (concept §9.1, §9 Consequences).
+- Features in any phase are migrated in place. **Decided** (concept §9.3).
 - Unknown fields are kept (package 01).
 - Gitignored local files (`current-feature.json`) are migrated too, but are not part of the uncommitted-changes check. **Proposed.**
 
@@ -66,7 +66,7 @@ The managed section in `CLAUDE.md`, `AGENTS.md`, and any further instruction fil
 
 ### All or nothing
 
-Every changed file is first written to a temporary file; only when all are written are they renamed into place. If anything fails, no file in `.shadekit/` or in the instruction files has changed. **Decided** (for `.shadekit/`), **Proposed** (extended to the instruction files).
+Every changed file is first written to a temporary file; only when all are written are they renamed into place. If anything fails, no file in `.shadekit/` or in the instruction files has changed. **Decided** (for `.shadekit/`, concept §9.3), **Proposed** (extended to the instruction files).
 
 ### Output
 

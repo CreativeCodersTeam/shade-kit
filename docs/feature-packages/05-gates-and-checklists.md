@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items) and 2026-10-18 (`quick` phase) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items) and 2026-10-18 (`quick` phase; DOR-10, DOD-01, items that do not apply) |
 | Source | Concept §2 (Gates), §4.1 (`checks/`), §5.2, §6, §11.1, §11.4 |
 | Depends on | 02, 04 |
 | Enables | 12 (DoR), 15 (DoD), every phase transition |
@@ -31,17 +31,17 @@ A team decides per repository how strict the workflow is: which transitions need
 
 ### Gate model
 
-- A gate belongs to a transition and is identified by its target phase. **Decided.**
-- It is checked when the next phase starts. **Decided.**
-- It has two independent switches: `approval` (a human must approve) and `checklist` (path of a checklist the agent must check first, or none). **Decided** that each gate can be switched off; switching off approval and checklist independently is the concept's **Proposed** answer to open question 4, adopted here.
-- DoR is the checklist of the gate into `plan`. DoD is the checklist of the gate into `finish`. All other gates have no checklist by default. **Decided.**
-- Any transition can get a checklist by pointing its gate to a `checks/<phase>.md` template. **Decided** as an extension point.
+- A gate belongs to a transition and is identified by its target phase. **Decided** (concept §5.2).
+- It is checked when the next phase starts. **Decided** (concept §5.2).
+- It has two independent switches: `approval` (a human must approve) and `checklist` (path of a checklist the agent must check first, or none). **Decided** (concept §5.2) that each gate can be switched off; switching off approval and checklist independently answers concept open question 4, **Decided** (confirmation list, 2026-10-18).
+- DoR is the checklist of the gate into `plan`. DoD is the checklist of the gate into `finish`. All other gates have no checklist by default. **Decided** (concept §5.2).
+- Any transition can get a checklist by pointing its gate to a `checks/<phase>.md` template. **Decided** as an extension point (concept §5.2).
 
 ### `gates.json`
 
 Written by `init` (package 02), owned by the team for its values, versioned like every JSON file (package 01).
 
-The concept's example is keyed by phase only. Because the `quick` profile needs different defaults than `feature` (one approval at the end), gates are keyed by profile and then by target phase. **Proposed**, deviation from the concept example.
+The concept's example is keyed by phase only. Because the `quick` profile needs different defaults than `feature` (one approval at the end), gates are keyed by profile and then by target phase. **Decided** (confirmation list, 2026-10-18); the concept now describes this shape.
 
 ```json
 {
@@ -70,9 +70,9 @@ The concept's example is keyed by phase only. Because the `quick` profile needs 
 }
 ```
 
-- A transition with no entry uses `{ "approval": true }`. Approval is the safe default. **Proposed.**
+- A transition with no entry uses `{ "approval": true }`. Approval is the safe default. **Decided** (confirmation list, 2026-10-18).
 - With `approval: false`, `phase start` performs the transition at once and records it in `history` with the note "approval off". **Proposed.**
-- With `approval: false` and a `checklist`, the checklist copy is still created and checked by the agent, but a failed item is only reported as a warning; it does not block, because nobody is asked to decide. An agent never approves on its own instead. **Proposed.**
+- With `approval: false` and a `checklist`, the checklist copy is still created and checked by the agent, but a failed item is only reported as a warning; it does not block, because nobody is asked to decide. An agent never approves on its own instead. **Decided** (confirmation list, 2026-10-18).
 - The defaults follow concept §5.2: every transition needs an approval, except the `quick` profile's transition into the `quick` phase (concept §5.4: "one approval at the end").
 
 ### Checklists
@@ -106,11 +106,11 @@ The concept's example is keyed by phase only. Because the `quick` profile needs 
 | DOR-07 | Every assumption is confirmed by a human or marked as a risk. |
 | DOR-08 | Every edge case has an acceptance criterion or is listed in "Out of scope". |
 | DOR-09 | "Security considerations" lists the findings, or says "None identified." with a reason. |
-| DOR-10 | The affected areas are known: `map` is done, or was skipped on purpose with a recorded reason. |
+| DOR-10 | The affected areas are known: `map` is done, was skipped on purpose with a recorded reason, or `diagnosis.md` lists the affected code. |
 
 | ID | Definition of Done (gate into `finish`) |
 |---|---|
-| DOD-01 | Build, test, and lint pass with the quality commands from `plan.md`, as recorded in `verification.md`. |
+| DOD-01 | Build, test, and lint pass with the quality commands recorded in `review.md`, as recorded in `verification.md`. |
 | DOD-02 | Coverage was measured and recorded in `verification.md`. If `config.json` sets `coverageThreshold`, the value reaches it. |
 | DOD-03 | Every acceptance criterion is covered by a passing test, or is marked manual and has an item in `playbook.md`. |
 | DOD-04 | Every task in `tasks.md` is done, or has a "Not done" reason that the human accepted. |
@@ -122,7 +122,7 @@ The concept's example is keyed by phase only. Because the `quick` profile needs 
 
 ### Items that do not apply
 
-A checklist item that refers to a phase or artifact the feature's profile does not have is marked `n/a` with the reason in `Evidence`, and does not fail the gate. Examples: DOR-10 "`map` done" in `bugfix` (`diagnose` covers affected areas); DOD-04 (`tasks.md`), DOD-07 (`plan.md`), and DOD-09 (`playbook.md`) in `quick`. **Proposed.** This keeps one DoR and one DoD for all profiles instead of a checklist per profile.
+A checklist item that refers to a phase or artifact the feature's profile does not have is marked `n/a` with the reason in `Evidence`, and does not fail the gate. Examples: DOD-04 (`tasks.md`) and DOD-07 (`plan.md`) in `quick`, and DOD-09 (`playbook.md`) in `quick` when no criterion is manual (package 17). In `bugfix`, DOR-10 is not `n/a`: it passes on the "affected code" section of `diagnosis.md` (package 16). **Proposed.** This keeps one DoR and one DoD for all profiles instead of a checklist per profile.
 
 ### `phase start` result
 
@@ -142,5 +142,4 @@ The gate part of the result contains: target phase, `approval` (true or false), 
 
 ## Open points
 
-- The deviation from the concept's `gates.json` example (keyed by profile) needs confirmation.
 - The value of the coverage threshold. DOD-02 checks `coverageThreshold` from `config.json` only when it is set (packages 02 and 14).

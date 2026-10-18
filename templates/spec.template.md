@@ -78,7 +78,7 @@ Example:
 ## Security considerations
 
 <!--
-Findings of the security research at requirement level (section "refine / security" in researches.md): data that needs protection, roles and permissions, abuse cases. Link each finding to the requirement or criterion that handles it. If there are none, write "None identified." with the reason.
+Findings of the security research in researches.md: section "refine / security" (requirement level: data that needs protection, roles and permissions, abuse cases), or in the bugfix profile section "diagnose / security" (code level: whether the bug is a vulnerability and what the fix touches). Link each finding to the requirement or criterion that handles it. If there are none, write "None identified." with the reason.
 Example:
 - Tokens from the identity provider are secrets and must never be logged → REQ-004
 -->

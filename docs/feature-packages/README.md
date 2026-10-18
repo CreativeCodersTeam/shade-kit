@@ -1,6 +1,6 @@
 # SHADE kit v1 feature packages
 
-Status: draft, 2026-10-14, updated 2026-10-18 (consistency review). Derived step by step from [`research/shade-kit-concept.md`](../../research/shade-kit-concept.md); its [section 9](../../research/shade-kit-concept.md#9-version-drift) holds the version-drift decisions of the former ADR 0001. Parts that exist in the code are labelled **Implemented**.
+Status: draft, 2026-10-14, updated 2026-10-18 (consistency review and findings clarification). Derived step by step from [`research/shade-kit-concept.md`](../../research/shade-kit-concept.md); its [section 9](../../research/shade-kit-concept.md#9-version-drift) holds the version-drift decisions of the former ADR 0001. Parts that exist in the code are labelled **Implemented**.
 
 Each package describes the functional behaviour of one clearly bounded piece of v1, with its benefit, scope, acceptance criteria (`FPnn-ACm`), and open points. The number prefix is the implementation order: every package depends only on packages with a lower number.
 
@@ -15,16 +15,16 @@ Labels follow the concept: **Decided** (confirmed in the concept interview or a 
 | 03 | [Feature management](03-feature-management.md) | Collision-free feature ids; the engine knows the current feature | 01, 02 |
 | 04 | [Phase engine and workflow profiles](04-phase-engine-and-workflow-profiles.md) | The engine referees phases and records every approval | 01, 03 |
 | 05 | [Gates and checklists](05-gates-and-checklists.md) | Configurable approvals, DoR and DoD with a record per feature | 02, 04 |
-| 06 | [Skill foundation](06-skill-foundation.md) | "Continue" finds the next step; shared interview, gate, research, report skills | 01, 03, 04, 05 |
+| 06 | [Skill foundation](06-skill-foundation.md) | "Continue" finds the next step; shared interview, gate, research, and optional report skills | 01, 03, 04, 05 |
 | 07 | [Claude Code integration](07-claude-code-integration.md) | One-command, version-matched install for Claude Code | 01, 06 |
 | 08 | [GitHub Copilot and OpenAI Codex CLI integration](08-copilot-and-codex-integration.md) | Same workflow on all three agents | 02, 06, 07 |
 | 09 | [Discuss and intake](09-discuss-and-intake.md) | Free brainstorming; any input becomes a feature with the original kept | 03, 04, 06 |
 | 10 | [Refine](10-refine.md) | A spec with stable requirement IDs and testable criteria | 06, 09 |
 | 11 | [Map](11-map.md) | Plans build on facts about the code base | 06, 10 |
 | 12 | [Plan](12-plan.md) | Every requirement bound to tasks and proving tests | 05, 06, 10, 11 |
-| 13 | [Implement](13-implement.md) | Code passes an independent review loop before verification | 06, 12 |
+| 13 | [Implement](13-implement.md) | Code passes an independent review loop (review skill) before verification | 06, 12 |
 | 14 | [Verify](14-verify.md) | Evidence for every criterion, plus a manual playbook | 06, 12, 13 |
-| 15 | [Finish and report](15-finish-and-report.md) | One report with requirements, tests, checks, approvals | 03, 04, 05, 06, 14 |
+| 15 | [Finish and report](15-finish-and-report.md) | Feature closed with a record; optional report with requirements, tests, checks, approvals | 03, 04, 05, 06, 14 |
 | 16 | [Bugfix profile](16-bugfix-profile.md) | Reproduce, root cause, failing test first | 04, 05, 06, 09, 12–15 |
 | 17 | [Quick profile](17-quick-profile.md) | Traceability for small changes with one approval | 04, 05, 06, 09, 13, 15 |
 | 18 | [Repository upgrade](18-upgrade.md) | Safe, all-or-nothing migration to new kit versions | 01, 02, 05, 08 |
@@ -75,37 +75,28 @@ Not in any package because the concept puts them later: MCP server, extensions (
 | `feature.json` | Engine (03, 04) |
 | `request.md` | 09 |
 | `discussions/*.md` | 09 |
-| `researches.md` | 10, 11 (format 06) |
+| `researches.md` | 10, 11, 16 (format 06) |
 | `spec.md` | 10; in `bugfix` 16, in `quick` 17 |
 | `diagnosis.md` | 16 |
 | `plan.md`, `tasks.md` | 12 (bugfix variant 16) |
 | `review.md` | 13 (also 16, 17) |
 | `verification.md` | 14 (also 17) |
-| `playbook.md` | 14 |
+| `playbook.md` | 14 (also 17, only for manual criteria) |
 | `checks/definition-of-ready.md`, `checks/definition-of-done.md` | Engine copies (05), agent fills (06) |
-| `report.md` | 15 |
+| `report.md` | 15 (optional) |
 
 ## Changes and additions to the concept that need confirmation
 
-1. `gates.json` is keyed by profile, then by target phase (05). The concept example is keyed by phase only, which cannot express `quick`'s "one approval at the end".
-2. New artifacts not in the concept tree: `discussions/` (09), `diagnosis.md` (16), `verification.md` (14), `report.md` (15).
-3. New commands: `feature show`, `feature drop` (03), `phase complete`, `phase reject` (04). `feature drop` deletes only with `--yes` or after a console confirmation in an interactive terminal (03). Re-entry and reopen are expressed through `phase start` (04).
-4. Approval off together with a checklist: the checklist is checked but only warns (05, 06).
-5. "Skipping `map`" skips the work, not the phase (11).
-6. Hooks and MCP configuration are not shipped in v1 because no v1 feature needs them (07).
-7. The integration content is packed into the engine release (07); the kit never commits (13).
-8. `data.md` from the concept tree is not used by any package (concept open question 1); v1 does not create it unless its purpose is decided.
-9. `CLAUDE.md` still lists the old v1 phases (concept §2 note) and should be updated once the concept and these packages are accepted.
-10. Concept §11.4 says "stay in refine" after a rejected gate into `plan`; with the `feature` profile the phase before `plan` is `map`. In these packages, a rejection resumes whatever phase is current (04, 06).
+None. The earlier list (keyed `gates.json`, new artifacts and commands, approval off with a checklist, skipping `map`, no hooks and MCP in v1, integration content in the engine release, `data.md` not created, `CLAUDE.md` update, obsolete "stay in refine") was confirmed on 2026-10-18 and taken over into the concept and `CLAUDE.md`.
 
 ## Open questions
 
 | Concept question | Where | State |
 |---|---|---|
-| 1 Purpose of `data.md` | README, change 8 | Open, not needed for v1 |
-| 2 Where `discuss` output is stored | 09 | Concept proposal adopted, needs confirmation |
+| 1 Purpose of `data.md` | Concept §4.1 | Open, not needed for v1; v1 does not create it |
+| 2 Where `discuss` output is stored | 09 | Decided on 2026-10-18 |
 | 3 Branch in separate spec store mode | — | Later, not v1 |
-| 4 Approval off completely or only checklist | 05 | Both switchable, concept proposal adopted |
+| 4 Approval off completely or only checklist | 05 | Decided on 2026-10-18: both switchable |
 | 5 Copilot and Codex format compatibility | 08 step 1 | Unverified, research is the first step of 08 |
 | 6 Exact CLI command names | all | Concept proposals used throughout |
 | 7 Extension ordering | — | Later, not v1 |
@@ -144,3 +135,4 @@ After each package, the whole draft was checked against the concept, ADR 0001 (n
 | All | Automated check: every dependency points to a lower number, every package reference exists, every AC id is unique. `gates.json` and templates in 02 depend on later content. | Check passed. 02 clarified: skeletons and a version-only `gates.json` until the owner package is built. |
 | Templates (2026-10-17) | First drafts of the `spec`, `plan`, `tasks`, DoR, and DoD templates (template interview) differed from the packages: `*.template.md` source names, no order of work in `plan.md`, task status as checkbox, coverage matrix, more spec sections, ten DoR and nine DoD items in a result table, quality commands planned in `plan.md`. | 02 (source names, template conventions), 05 (checklist format, default items), 06 (conventions, checklist check), 10 (`spec.md`), 12 (`plan.md`, `tasks.md`), 13 (checkboxes, commands from `plan.md`), 14 (commands, coverage matrix) aligned. |
 | Review (2026-10-18) | The entry protocol from `shade-kit-skills.md` failed on re-entry and had no rejection path; package 06 still described a router; ADR 0001 was deleted but cited; `quick` was a skill without its own phase; `feature drop` skeleton omitted `--yes`; `feature current` had no status; six vs. seven research agents; `features` vs. `feature` command group; packages 01 and 19 ignored existing code. | 04 (re-entry, `phase reject`, `quick` phase), 05 (`quick` gate), 06 (entry protocol, `shade-kit-next-phase`), 03 (drop confirmation, `status`), 17 (`quick` phase), 01 and 19 (**Implemented**), ADR decisions moved into concept §9, CLI group renamed to `feature` in the code, router references replaced in 02, 07, 08, 09, 10, 15. |
+| Findings clarification (2026-10-18) | Open findings of the 2026-10-18 review ([shade-kit-open-findings.md](../../research/shade-kit-open-findings.md)): short `bugfix` plan without test strategy, DoD in `quick`, DOR-09/DOR-10 in `bugfix`, report and review skills, no `phase next`, phase vs. workflow skills, concept behind the packages, `CLAUDE.md` scope, bare **Decided** labels, two engine rules, unverified release facts. | 02 (`report` in `config.json`), 04 (`phase next`, pending transition), 05 (DOR-10, DOD-01, `n/a` examples), 06 (`phase next`, pending transition, report and review skills, no `research/` paths), 13 (owns review skill), 15 (optional report), 16 (short plan sections, `diagnose / security`), 17 (coverage, playbook on demand, DoD items), 19 (release notes and ruleset facts); concept, `CLAUDE.md`, `shade-kit-skills.md`, skills, and templates aligned; confirmation list emptied; **Decided** labels sourced or downgraded. |

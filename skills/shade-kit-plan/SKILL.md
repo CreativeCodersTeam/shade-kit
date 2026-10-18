@@ -13,13 +13,13 @@ Decides how the spec is built and why, and binds every acceptance criterion to t
 
 | Input | Output |
 |---|---|
-| `spec.md`, `researches.md` (`bugfix`: `diagnosis.md`) | `plan.md`, `tasks.md` |
+| `spec.md`, `researches.md` (`bugfix`: `diagnosis.md` and the `diagnose / security` section) | `plan.md`, `tasks.md` |
 
 ## Flow
 
 1. **Entry protocol:**
    1. Version handshake: `shade-kit version --json`. Stop on a mismatch and name what to update.
-   2. `shade-kit phase start plan --json`. Stop if the transition is not allowed and report why. If the phase is already in progress, the CLI returns no gate: go to step 5.
+   2. `shade-kit phase start plan --json`. Stop if the transition is not allowed and report why. If the phase is already in progress, the CLI returns no gate: go to step 5. If a transition away from this phase is pending, the CLI reports it and changes nothing: ask the human whether to discard it. On a yes, call `shade-kit phase reject <pending> --note "resumed plan"` and go to step 5; on a no, hand off to `shade-kit-next-phase` and stop.
    3. If the gate has a checklist (default: Definition of Ready): load `shade-kit-gate-check` on it.
    4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve plan`. On a no, call `shade-kit phase reject plan --note "<gaps>"`, hand off to `shade-kit-next-phase`, and stop. If approval is switched off, a failed checklist is only a warning.
    5. Load the skills the CLI returned.
@@ -32,6 +32,6 @@ Decides how the spec is built and why, and binds every acceptance criterion to t
 
 ## Profile `bugfix`
 
-- Input is `spec.md` and `diagnosis.md` instead of `researches.md`.
-- Short `plan.md`: the chosen fix option and why, risks. Usually one to a few tasks.
+- Input is `spec.md`, `diagnosis.md`, and the `diagnose / security` section of `researches.md`.
+- Short `plan.md`: fill Summary (the chosen fix option and why, linking `diagnosis.md`), Test strategy (with the quality commands for build, test, lint, and coverage), Risks, and Deviations ("None."); every other section says "n/a in bugfix". Usually one to a few tasks.
 - The first task is always the regression test that reproduces the bug and fails before the fix.
