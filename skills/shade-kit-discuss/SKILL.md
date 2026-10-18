@@ -5,7 +5,7 @@ description: SHADE kit free brainstorming on any topic (an idea, a design questi
 
 # shade-kit-discuss
 
-<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/09-discuss-and-intake.md. CLI commands other than `shade-kit version` and `shade-kit feature list` are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/09-discuss-and-intake.md. CLI commands other than `shade-kit version`, `shade-kit init`, and `shade-kit feature list` are planned and do not exist yet. -->
 
 ## Purpose
 

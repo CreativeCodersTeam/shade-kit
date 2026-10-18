@@ -47,7 +47,7 @@ public class KitStore : IKitStore
 
         if (!Directory.Exists(featuresPath))
         {
-            throw new FeaturesDirectoryNotFoundException(featuresPath);
+            return [];
         }
 
         return

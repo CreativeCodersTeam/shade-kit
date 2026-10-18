@@ -1,6 +1,7 @@
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 
 namespace CreativeCoders.ShadeKit.Cli.Output;
@@ -42,11 +43,6 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 $"'{e.StartPath}' is not inside a git repository. SHADE kit works only in a git repository; run " +
                 "shade-kit inside one."),
 
-            FeaturesDirectoryNotFoundException e => new CliError(ShadeKitCliExitCodes.FeaturesDirectoryNotFound,
-                ShadeKitCliErrorCodes.FeaturesDirectoryNotFound,
-                $"The SHADE kit root directory contains no '{KitStorePaths.FeaturesDirName}' directory " +
-                $"('{e.FeaturesPath}')."),
-
             FormatTooNewException e => new CliError(ShadeKitCliExitCodes.FormatTooNew,
                 ShadeKitCliErrorCodes.FormatTooNew, CreateFormatTooNewMessage(e)),
 
@@ -56,6 +52,28 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
 
             InvalidKitFileException e => new CliError(ShadeKitCliExitCodes.InvalidFile,
                 ShadeKitCliErrorCodes.InvalidFile, $"'{e.FilePath}' is invalid: {e.Reason}"),
+
+            KitAlreadyInitializedException e => new CliError(ShadeKitCliExitCodes.KitAlreadyInitialized,
+                ShadeKitCliErrorCodes.KitAlreadyInitialized,
+                $"SHADE kit is already initialised in this repository: '{e.KitRootPath}' exists. Run " +
+                "'shade-kit upgrade' to update it."),
+
+            InvalidManagedSectionException e => new CliError(ShadeKitCliExitCodes.InvalidManagedSection,
+                ShadeKitCliErrorCodes.InvalidManagedSection,
+                $"The SHADE kit section markers in '{e.FilePath}' are invalid: {e.Reason} Fix the markers so that " +
+                $"the file contains exactly one '{ManagedInstructionSection.BeginMarkerPrefix} ... -->' line " +
+                $"followed by exactly one '{ManagedInstructionSection.EndMarker}' line, then run 'shade-kit init' " +
+                "again."),
+
+            UnsupportedFileEncodingException e => new CliError(ShadeKitCliExitCodes.UnsupportedFileEncoding,
+                ShadeKitCliErrorCodes.UnsupportedFileEncoding,
+                $"'{e.FilePath}' is encoded as {e.EncodingName}, but shade-kit can only change UTF-8 files. Convert " +
+                "the file to UTF-8, then run 'shade-kit init' again."),
+
+            PathNotAFileException e => new CliError(ShadeKitCliExitCodes.PathNotAFile,
+                ShadeKitCliErrorCodes.PathNotAFile,
+                $"'{e.Path}' is a directory, but shade-kit must write a file at this path. Move or remove the " +
+                "directory, then run 'shade-kit init' again."),
 
             _ => null
         };

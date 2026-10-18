@@ -8,11 +8,14 @@ public partial class ShadeKitCliErrorCodesTests
     [Theory]
     [Trait("Requirement", "FP01-AC8")]
     [InlineData(ShadeKitCliErrorCodes.KitRootNotFound, "kit-root-not-found")]
-    [InlineData(ShadeKitCliErrorCodes.FeaturesDirectoryNotFound, "features-dir-not-found")]
     [InlineData(ShadeKitCliErrorCodes.NotAGitRepository, "not-a-git-repository")]
+    [InlineData(ShadeKitCliErrorCodes.KitAlreadyInitialized, "already-initialized")]
+    [InlineData(ShadeKitCliErrorCodes.PathNotAFile, "path-not-a-file")]
     [InlineData(ShadeKitCliErrorCodes.FormatTooNew, "format-too-new")]
     [InlineData(ShadeKitCliErrorCodes.UpgradeNeeded, "upgrade-needed")]
     [InlineData(ShadeKitCliErrorCodes.InvalidFile, "invalid-file")]
+    [InlineData(ShadeKitCliErrorCodes.InvalidManagedSection, "invalid-managed-section")]
+    [InlineData(ShadeKitCliErrorCodes.UnsupportedFileEncoding, "unsupported-encoding")]
     [InlineData(ShadeKitCliErrorCodes.HostError, "host-error")]
     public void ErrorCodes_Contract_HaveStableValues(string errorCode, string expectedErrorCode)
     {

@@ -1,6 +1,8 @@
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
+using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
 
@@ -177,7 +179,7 @@ public class KitStoreFactoryTests
     }
 
     [Fact]
-    public void Create_ShadeKitWithoutFeaturesDirectory_ReturnsStoreThatThrowsFeaturesDirectoryNotFoundOnRead()
+    public void Create_ShadeKitWithoutFeaturesDirectory_ReturnsStoreWithoutFeatures()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -190,9 +192,76 @@ public class KitStoreFactoryTests
         var kitStore = factory.Create(tempDirectory.RootPath);
 
         // Assert
-        var act = () => kitStore.GetFeatureNames();
+        kitStore.GetFeatureNames()
+            .Should().BeEmpty();
+    }
 
-        act.Should().Throw<FeaturesDirectoryNotFoundException>();
+    [Fact]
+    public void Create_LocatorReturnsRepositoryRoot_ReturnsStoreOfShadeKitDirectoryAtThatRoot()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateDirectory(".shadekit", "features", "auth");
+        const string startPath = "/any/start/path";
+
+        var locator = A.Fake<IGitRepositoryLocator>();
+        A.CallTo(() => locator.GetRepositoryRootPath(startPath)).Returns(tempDirectory.RootPath);
+
+        var factory = CreateFactory(locator);
+
+        // Act
+        var kitStore = factory.Create(startPath);
+
+        // Assert
+        kitStore.RootPath
+            .Should().Be(Path.Combine(tempDirectory.RootPath, ".shadekit"));
+
+        kitStore.GetFeatureNames()
+            .Should().Equal("auth");
+    }
+
+    [Fact]
+    public void Create_LocatorReturnsRootWithoutShadeKit_ThrowsKitRootPathNotFoundExceptionWithLocatedRoot()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        const string startPath = "/any/start/path";
+
+        var locator = A.Fake<IGitRepositoryLocator>();
+        A.CallTo(() => locator.GetRepositoryRootPath(startPath)).Returns(tempDirectory.RootPath);
+
+        var factory = CreateFactory(locator);
+
+        // Act
+        var act = () => factory.Create(startPath);
+
+        // Assert
+        var exception = act.Should().Throw<KitRootPathNotFoundException>().Which;
+
+        exception.StartPath
+            .Should().Be(startPath);
+
+        exception.GitRootPath
+            .Should().Be(tempDirectory.RootPath);
+    }
+
+    [Fact]
+    public void Create_LocatorThrowsNotAGitRepository_PropagatesException()
+    {
+        // Arrange
+        var notAGitRepositoryException = new NotAGitRepositoryException("/outside");
+
+        var locator = A.Fake<IGitRepositoryLocator>();
+        A.CallTo(() => locator.GetRepositoryRootPath("/outside")).Throws(notAGitRepositoryException);
+
+        var factory = CreateFactory(locator);
+
+        // Act
+        var act = () => factory.Create("/outside");
+
+        // Assert
+        act.Should().Throw<NotAGitRepositoryException>()
+            .Which.Should().BeSameAs(notAGitRepositoryException);
     }
 
     [Fact]
@@ -218,16 +287,117 @@ public class KitStoreFactoryTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("  ")]
-    public void Create_NullOrWhitespacePath_ThrowsArgumentException(string? startPath)
+    public void Create_NullOrWhitespacePath_ThrowsArgumentExceptionWithoutSearching(string? startPath)
     {
         // Arrange
-        var factory = CreateFactory();
+        var locator = A.Fake<IGitRepositoryLocator>();
+        var factory = CreateFactory(locator);
 
         // Act
         var act = () => factory.Create(startPath!);
 
         // Assert
-        act.Should().Throw<ArgumentException>();
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName("path");
+
+        A.CallTo(locator).MustNotHaveHappened();
+    }
+
+    [Fact]
+    public void CreateForKitRoot_ExistingKitRoot_ReturnsStoreOfThatDirectoryWithoutSearching()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitRootPath = tempDirectory.CreateDirectory(".shadekit");
+        tempDirectory.CreateDirectory(".shadekit", "features", "auth");
+
+        var locator = A.Fake<IGitRepositoryLocator>();
+        var factory = CreateFactory(locator);
+
+        // Act
+        var kitStore = factory.CreateForKitRoot(kitRootPath);
+
+        // Assert
+        kitStore.RootPath
+            .Should().Be(kitRootPath);
+
+        kitStore.GetFeatureNames()
+            .Should().Equal("auth");
+
+        A.CallTo(locator).MustNotHaveHappened();
+    }
+
+    [Fact]
+    public void CreateForKitRoot_KitRootDoesNotExist_ReturnsStoreWithoutCreatingDirectory()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitRootPath = Path.Combine(tempDirectory.RootPath, ".shadekit");
+
+        var factory = CreateFactory();
+
+        // Act
+        var kitStore = factory.CreateForKitRoot(kitRootPath);
+
+        // Assert
+        kitStore.RootPath
+            .Should().Be(kitRootPath);
+
+        Path.Exists(kitRootPath)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateForKitRoot_KitRootDoesNotExist_StoreCreatesKitRootOnFirstWrite()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitRootPath = Path.Combine(tempDirectory.RootPath, ".shadekit");
+
+        var factory = CreateFactory();
+        var kitStore = factory.CreateForKitRoot(kitRootPath);
+
+        // Act
+        await kitStore.WriteJsonAsync(KitStorePaths.ConfigFileName, FormatIds.Config, new KitConfig(),
+            FormatAccess.Write, TestContext.Current.CancellationToken);
+
+        // Assert
+        File.Exists(Path.Combine(kitRootPath, KitStorePaths.ConfigFileName))
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void CreateForKitRoot_KitRootWithTrailingSeparator_ReturnsStoreWithRootPathWithoutTrailingSeparator()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitRootPath = tempDirectory.CreateDirectory(".shadekit");
+
+        var factory = CreateFactory();
+
+        // Act
+        var kitStore = factory.CreateForKitRoot(kitRootPath + Path.DirectorySeparatorChar);
+
+        // Assert
+        kitStore.RootPath
+            .Should().Be(kitRootPath);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void CreateForKitRoot_NullOrWhitespacePath_ThrowsArgumentException(string? kitRootPath)
+    {
+        // Arrange
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => factory.CreateForKitRoot(kitRootPath!);
+
+        // Assert
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName(nameof(kitRootPath));
     }
 
     [Fact]
@@ -249,10 +419,24 @@ public class KitStoreFactoryTests
     }
 
     [Fact]
+    public void Ctor_NullGitRepositoryLocator_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var formatRegistry = FormatRegistry.CreateDefault();
+
+        // Act
+        var act = () => new KitStoreFactory(null!, new VersionedJsonSerializer(formatRegistry), formatRegistry);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("gitRepositoryLocator");
+    }
+
+    [Fact]
     public void Ctor_NullSerializer_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new KitStoreFactory(null!, FormatRegistry.CreateDefault());
+        var act = () => new KitStoreFactory(new GitRepositoryLocator(), null!, FormatRegistry.CreateDefault());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -263,18 +447,20 @@ public class KitStoreFactoryTests
     public void Ctor_NullFormatRegistry_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new KitStoreFactory(new VersionedJsonSerializer(FormatRegistry.CreateDefault()), null!);
+        var act = () => new KitStoreFactory(new GitRepositoryLocator(),
+            new VersionedJsonSerializer(FormatRegistry.CreateDefault()), null!);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("formatRegistry");
     }
 
-    internal static KitStoreFactory CreateFactory()
+    internal static KitStoreFactory CreateFactory(IGitRepositoryLocator? gitRepositoryLocator = null)
     {
         var formatRegistry = FormatRegistry.CreateDefault();
 
-        return new KitStoreFactory(new VersionedJsonSerializer(formatRegistry), formatRegistry);
+        return new KitStoreFactory(gitRepositoryLocator ?? new GitRepositoryLocator(),
+            new VersionedJsonSerializer(formatRegistry), formatRegistry);
     }
 
     private static string[] CreateNestedPathParts(int depth)

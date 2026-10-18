@@ -5,7 +5,7 @@ description: SHADE kit phase skill for `diagnose` (bugfix profile). Reproduces t
 
 # shade-kit-diagnose
 
-<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/16-bugfix-profile.md. CLI commands other than `shade-kit version` and `shade-kit feature list` are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/16-bugfix-profile.md. CLI commands other than `shade-kit version`, `shade-kit init`, and `shade-kit feature list` are planned and do not exist yet. -->
 
 ## Purpose
 

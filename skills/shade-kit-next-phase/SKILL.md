@@ -5,7 +5,7 @@ description: SHADE kit entry point. Finds the current feature and its phase, off
 
 # shade-kit-next-phase
 
-<!-- Skeleton: purpose and flow only, details follow. Sources: research/shade-kit-skills.md, docs/feature-packages/06-skill-foundation.md. CLI commands other than `shade-kit version` and `shade-kit feature list` are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Sources: research/shade-kit-skills.md, docs/feature-packages/06-skill-foundation.md. CLI commands other than `shade-kit version`, `shade-kit init`, and `shade-kit feature list` are planned and do not exist yet. -->
 
 ## Purpose
 

@@ -64,7 +64,7 @@ SHADE kit keeps what worked (interviews, draft → approve, requirement-to-test 
 |---|---|
 | `shade-kit integrations install [--agent claude\|copilot\|codex]` | Sets up the agent integration (skills and agents; hooks and MCP configuration come later, no v1 feature needs them) at **user level**: as a plugin where the agent has one, otherwise by writing the same content to the agent's user directory. **Decided.** |
 | `shade-kit integrations update` | Updates the user-level integration to the installed kit version. |
-| `shade-kit init` | Creates `.shadekit/` in a repository: `config.json`, `gates.json`, templates, `templates.lock.json`, `.gitignore` entries, and a short SHADE kit section in `CLAUDE.md` / `AGENTS.md`. |
+| `shade-kit init` | Creates `.shadekit/` in a repository: `config.json`, `gates.json`, templates, `templates.lock.json`, `.gitignore` entries, and a short SHADE kit section in `CLAUDE.md` / `AGENTS.md`. **Implemented** (`InitCommand`). |
 | `shade-kit upgrade` | Migrates an initialised repository to the current format versions. Rules in [section 9](#9-version-drift). |
 | `shade-kit version` | Prints the engine version. **Implemented** (`VersionCommand`). Skills call it before they run (section 9.6). |
 | `shade-kit feature list` | Lists the features in the store. **Implemented** (`FeatureListCommand`, names only). |
@@ -203,7 +203,7 @@ For a product made of several code repositories. Decided: both directions are po
 
 Decided in the template interview on 2026-10-17. Details in [package 02](../docs/feature-packages/02-repository-initialisation.md) (conventions), [10](../docs/feature-packages/10-refine.md) (`spec.md`), [12](../docs/feature-packages/12-plan.md) (`plan.md`, `tasks.md`), and [05](../docs/feature-packages/05-gates-and-checklists.md) (checklists).
 
-- In the kit's source, templates are `templates/<name>.template.md`, with the checklists in `templates/checks/`. `init` writes them to the same subfolders of `.shadekit/templates/`.
+- In the kit's source, templates are `<name>.template.md` files in `src/CreativeCoders.ShadeKit.Core/Templates/Resources/`, with the checklists in `checks/`, embedded into the engine (moved from repository-root `templates/` on 2026-10-18, package 02). `init` writes them to the same subfolders of `.shadekit/templates/`. **Implemented** (`ShippedTemplates`).
 - Guidance for the agent is written in HTML comments, with at most one example per section inside the comment. Every agent reads the same file, so this stays agent-neutral.
 - Placeholders are written `{{name}}`, so leftovers can be found by a text search.
 - An artifact's header holds only the title, the feature id, and links to related artifacts. The feature state stays in `feature.json`.

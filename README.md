@@ -2,7 +2,7 @@
 
 SHADE kit runs AI coding agents through a gated feature workflow: from a raw requirement to a clarified spec, a plan, the implementation, and a verified result with a report. It is built for small teams of 2–5 developers who work on features in parallel, each on its own branch, with Claude Code, GitHub Copilot, or OpenAI Codex CLI.
 
-> **Status:** in development. Most commands described here are planned; today the CLI provides `shade-kit version` and `shade-kit feature list`.
+> **Status:** in development. Most commands described here are planned; today the CLI provides `shade-kit version`, `shade-kit init`, and `shade-kit feature list`.
 
 ## How it works
 

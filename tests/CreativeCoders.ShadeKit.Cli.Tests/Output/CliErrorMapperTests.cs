@@ -3,6 +3,7 @@ using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 using FakeItEasy;
 
@@ -53,22 +54,6 @@ public class CliErrorMapperTests
             .Should().Contain("'/tmp/work'")
             .And.Contain("not inside a git repository")
             .And.NotContain("shade-kit init", "init refuses to work outside a git repository");
-    }
-
-    [Fact]
-    public void Map_FeaturesDirectoryNotFound_ReturnsExitCode11NamingPath()
-    {
-        // Arrange
-        var mapper = CreateMapper();
-
-        // Act
-        var error = mapper.Map(new FeaturesDirectoryNotFoundException("/repo/.shadekit/features"));
-
-        // Assert
-        error
-            .Should().Be(new CliError(ShadeKitCliExitCodes.FeaturesDirectoryNotFound,
-                ShadeKitCliErrorCodes.FeaturesDirectoryNotFound,
-                "The SHADE kit root directory contains no 'features' directory ('/repo/.shadekit/features')."));
     }
 
     [Fact]
@@ -140,6 +125,76 @@ public class CliErrorMapperTests
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidFile, ShadeKitCliErrorCodes.InvalidFile,
                 "'.shadekit/config.json' is invalid: The 'schemaVersion' field is missing."));
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP02-AC6")]
+    public void Map_KitAlreadyInitialized_ReturnsExitCode13NamingKitRootWithUpgradeHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new KitAlreadyInitializedException("/repo/.shadekit"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.KitAlreadyInitialized,
+                ShadeKitCliErrorCodes.KitAlreadyInitialized,
+                "SHADE kit is already initialised in this repository: '/repo/.shadekit' exists. Run " +
+                "'shade-kit upgrade' to update it."));
+    }
+
+    [Fact]
+    public void Map_InvalidManagedSection_ReturnsExitCode23NamingFileReasonAndMarkerFix()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidManagedSectionException("/repo/CLAUDE.md",
+            "The begin marker in line 3 has no end marker."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidManagedSection,
+                ShadeKitCliErrorCodes.InvalidManagedSection,
+                "The SHADE kit section markers in '/repo/CLAUDE.md' are invalid: The begin marker in line 3 has no " +
+                "end marker. Fix the markers so that the file contains exactly one '<!-- shade-kit:begin ... -->' " +
+                "line followed by exactly one '<!-- shade-kit:end -->' line, then run 'shade-kit init' again."));
+    }
+
+    [Fact]
+    public void Map_UnsupportedFileEncoding_ReturnsExitCode24NamingFileEncodingAndConversionHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new UnsupportedFileEncodingException("/repo/.gitignore", "UTF-16 LE"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.UnsupportedFileEncoding,
+                ShadeKitCliErrorCodes.UnsupportedFileEncoding,
+                "'/repo/.gitignore' is encoded as UTF-16 LE, but shade-kit can only change UTF-8 files. Convert " +
+                "the file to UTF-8, then run 'shade-kit init' again."));
+    }
+
+    [Fact]
+    public void Map_PathNotAFile_ReturnsExitCode14NamingPath()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new PathNotAFileException("/repo/CLAUDE.md"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.PathNotAFile, ShadeKitCliErrorCodes.PathNotAFile,
+                "'/repo/CLAUDE.md' is a directory, but shade-kit must write a file at this path. Move or remove " +
+                "the directory, then run 'shade-kit init' again."));
     }
 
     [Fact]

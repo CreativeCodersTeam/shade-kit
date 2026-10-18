@@ -17,8 +17,10 @@ public interface IKitStore
     /// <summary>
     /// Gets the names of all features in the SHADE kit store.
     /// </summary>
-    /// <returns>The names of the directories in the <c>features</c> directory of the store.</returns>
-    /// <exception cref="FeaturesDirectoryNotFoundException">The store contains no <c>features</c> directory.</exception>
+    /// <returns>
+    /// The names of the directories in the <c>features</c> directory of the store, or an empty sequence if the store
+    /// contains no <c>features</c> directory.
+    /// </returns>
     IEnumerable<string> GetFeatureNames();
 
     /// <summary>

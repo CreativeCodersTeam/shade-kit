@@ -33,7 +33,7 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 | Path | Purpose |
 |---|---|
 | `skills/` | Shipped plugin content |
-| `src/` | Production .NET projects: `CreativeCoders.ShadeKit.Cli` (the `shade-kit` CLI) and `CreativeCoders.ShadeKit.Core` (engine logic) |
+| `src/` | Production .NET projects: `CreativeCoders.ShadeKit.Cli` (the `shade-kit` CLI) and `CreativeCoders.ShadeKit.Core` (engine logic). The templates that `init` writes live in `src/CreativeCoders.ShadeKit.Core/Templates/Resources/` (`<name>.template.md`, checklists in `checks/`) and are embedded into the Core assembly; their repository paths are listed in `ShippedTemplates`. |
 | `tests/` | One test project per production project (`<Project>.Tests`) |
 | `build/` | Cake Frosting build project (`CreativeCoders.CakeBuild`), run through `build.sh` / `build.ps1` / `build.cmd`. Not part of `ShadeKit.slnx`; it has its own `Directory.Build.props` and `Directory.Packages.props`. |
 | `.github/` | GitHub Actions workflows and Dependabot configuration |
@@ -59,6 +59,7 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 dotnet build                     # from repo root (.slnx)
 dotnet test
 dotnet test --coverage           # with coverage (writes TestResults/)
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- init          # initialises the git repository of the current directory
 dotnet run --project src/CreativeCoders.ShadeKit.Cli -- feature list
 dotnet pack src/CreativeCoders.ShadeKit.Cli          # dotnet global tool package (command: shade-kit)
 dotnet publish src/CreativeCoders.ShadeKit.Cli -c Release -r <rid>   # self-contained single-file binary

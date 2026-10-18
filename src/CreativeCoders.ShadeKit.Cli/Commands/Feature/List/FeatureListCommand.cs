@@ -43,17 +43,19 @@ public class FeatureListCommand(
     /// <remarks>
     /// The store is the <c>.shadekit</c> directory at the root of the git repository that contains the current
     /// directory. Plain output is one name per line, or a hint if the store has no features. JSON output is an
-    /// envelope whose <c>data</c> is a <see cref="FeatureListCommandData" />; a store without features is a result,
-    /// not an error. In JSON mode, an expected failure is written as an error envelope and the abort message is not
-    /// printed.
+    /// envelope whose <c>data</c> is a <see cref="FeatureListCommandData" />; a store without features, also one
+    /// without a <c>features</c> directory, is a result, not an error. In JSON mode, an expected failure is written as
+    /// an error envelope and the abort message is not printed.
     /// </remarks>
     /// <param name="options">The options of the command.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result is <see cref="CommandResult.Success" />.</returns>
+    /// <returns>
+    /// A task that represents the asynchronous operation. The task result is <see cref="CommandResult.Success" />.
+    /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// No SHADE kit root is found (exit code <see cref="ShadeKitCliExitCodes.KitRootNotFound" />), or the SHADE kit
-    /// root directory contains no <c>features</c> directory (exit code
-    /// <see cref="ShadeKitCliExitCodes.FeaturesDirectoryNotFound" />).
+    /// The current directory is not inside a git repository (exit code
+    /// <see cref="ShadeKitCliExitCodes.NotAGitRepository" />), or no SHADE kit root is found (exit code
+    /// <see cref="ShadeKitCliExitCodes.KitRootNotFound" />).
     /// </exception>
     public async Task<CommandResult> ExecuteAsync(FeatureListCommandOptions options)
     {
@@ -91,19 +93,7 @@ public class FeatureListCommand(
         }
         catch (Exception e) when (_errorMapper.Map(e) is { } error)
         {
-            throw CreateAbortException(error, json, e);
+            throw CliCommandAbort.Create(error, e, json, _jsonWriter);
         }
-    }
-
-    private CliCommandAbortException CreateAbortException(CliError error, bool json, Exception exception)
-    {
-        if (!json)
-        {
-            return new CliCommandAbortException(Markup.Escape(error.Message), error.ExitCode, exception);
-        }
-
-        _jsonWriter.Write(CliJsonEnvelope.Failure(error.ToJsonMessage()));
-
-        return new CliCommandAbortException(error.Message, error.ExitCode, exception) { PrintMessage = false };
     }
 }

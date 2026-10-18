@@ -113,14 +113,13 @@ public class FeatureListCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_FeaturesDirectoryNotFound_ThrowsAbortExceptionWithFeaturesDirectoryNotFoundExitCode()
+    [Trait("Requirement", "FP01-AC2")]
+    public async Task ExecuteAsync_NotAGitRepository_ThrowsAbortExceptionWithNotAGitRepositoryExitCodeAndEscapedPath()
     {
         // Arrange
-        var featuresDirectoryNotFoundException = new FeaturesDirectoryNotFoundException("/kit/[nested]/.shadekit/features");
-        var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames()).Throws(featuresDirectoryNotFoundException);
-
-        var kitStoreFactory = CreateKitStoreFactory(kitStore);
+        var notAGitRepositoryException = new NotAGitRepositoryException("/kit/[nested]/src");
+        var kitStoreFactory = A.Fake<IKitStoreFactory>();
+        A.CallTo(() => kitStoreFactory.Create()).Throws(notAGitRepositoryException);
 
         var console = new TestConsole();
         var command = CreateCommand(console, kitStoreFactory);
@@ -132,28 +131,27 @@ public class FeatureListCommandTests
         var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
 
         exception.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.FeaturesDirectoryNotFound);
+            .Should().Be(ShadeKitCliExitCodes.NotAGitRepository);
 
         exception.IsError
             .Should().BeTrue();
 
         exception.InnerException
-            .Should().BeSameAs(featuresDirectoryNotFoundException);
+            .Should().BeSameAs(notAGitRepositoryException);
 
         exception.Message
-            .Should().Contain("'features'")
-            .And.Contain("'/kit/[[nested]]/.shadekit/features'");
+            .Should().Contain("'/kit/[[nested]]/src'");
 
         console.Output
             .Should().BeEmpty();
     }
 
     [Fact]
-    public async Task ExecuteAsync_LazyFeatureNamesThrowFeaturesDirectoryNotFoundOnEnumeration_ThrowsAbortExceptionWithFeaturesDirectoryNotFoundExitCode()
+    public async Task ExecuteAsync_LazyFeatureNamesThrowMappedExceptionOnEnumeration_ThrowsAbortExceptionWithMappedExitCode()
     {
         // Arrange
         var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames()).Returns(ThrowOnEnumeration(new FeaturesDirectoryNotFoundException("/kit/.shadekit/features")));
+        A.CallTo(() => kitStore.GetFeatureNames()).Returns(ThrowOnEnumeration(new KitRootPathNotFoundException("/kit/src", "/kit")));
 
         var kitStoreFactory = CreateKitStoreFactory(kitStore);
 
@@ -167,7 +165,7 @@ public class FeatureListCommandTests
         var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
 
         exception.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.FeaturesDirectoryNotFound);
+            .Should().Be(ShadeKitCliExitCodes.KitRootNotFound);
 
         console.Output
             .Should().BeEmpty();
@@ -472,13 +470,11 @@ public class FeatureListCommandTests
 
     [Fact]
     [Trait("Requirement", "FP01-AC8")]
-    public async Task ExecuteAsync_JsonModeFeaturesDirectoryNotFound_WritesErrorEnvelopeWithFeaturesDirCode()
+    public async Task ExecuteAsync_JsonModeNotAGitRepository_WritesErrorEnvelopeWithNotAGitRepositoryCode()
     {
         // Arrange
-        var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames()).Throws(new FeaturesDirectoryNotFoundException("/repo/.shadekit/features"));
-
-        var kitStoreFactory = CreateKitStoreFactory(kitStore);
+        var kitStoreFactory = A.Fake<IKitStoreFactory>();
+        A.CallTo(() => kitStoreFactory.Create()).Throws(new NotAGitRepositoryException("/outside"));
 
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
@@ -488,12 +484,12 @@ public class FeatureListCommandTests
 
         // Assert
         (await act.Should().ThrowAsync<CliCommandAbortException>())
-            .Which.ExitCode.Should().Be(ShadeKitCliExitCodes.FeaturesDirectoryNotFound);
+            .Which.ExitCode.Should().Be(ShadeKitCliExitCodes.NotAGitRepository);
 
         using var document = JsonDocument.Parse(jsonOutput.ToString());
 
         document.RootElement.GetProperty("error").GetProperty("code").GetString()
-            .Should().Be(ShadeKitCliErrorCodes.FeaturesDirectoryNotFound);
+            .Should().Be(ShadeKitCliErrorCodes.NotAGitRepository);
     }
 
     [Fact]
@@ -598,7 +594,7 @@ public class FeatureListCommandTests
         // Arrange
         var kitStore = A.Fake<IKitStore>();
         A.CallTo(() => kitStore.GetFeatureNames())
-            .Returns(ThrowOnEnumeration(new FeaturesDirectoryNotFoundException("/repo/.shadekit/features")));
+            .Returns(ThrowOnEnumeration(new KitRootPathNotFoundException("/repo/src", "/repo")));
 
         var kitStoreFactory = CreateKitStoreFactory(kitStore);
 
@@ -641,11 +637,9 @@ public class FeatureListCommandTests
     public async Task ExecuteAsync_JsonModePathWithMarkupCharacters_KeepsRawPathInEnvelopeAndAbortMessage()
     {
         // Arrange
-        var exception = new FeaturesDirectoryNotFoundException("/kit/[nested]/.shadekit/features");
-        var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames()).Throws(exception);
-
-        var kitStoreFactory = CreateKitStoreFactory(kitStore);
+        var exception = new NotAGitRepositoryException("/kit/[nested]/src");
+        var kitStoreFactory = A.Fake<IKitStoreFactory>();
+        A.CallTo(() => kitStoreFactory.Create()).Throws(exception);
 
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
@@ -657,7 +651,7 @@ public class FeatureListCommandTests
         var abortException = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
 
         abortException.Message
-            .Should().Contain("'/kit/[nested]/.shadekit/features'");
+            .Should().Contain("'/kit/[nested]/src'");
 
         abortException.PrintMessage
             .Should().BeFalse();
@@ -672,7 +666,7 @@ public class FeatureListCommandTests
         var root = document.RootElement;
 
         root.GetProperty("error").GetProperty("message").GetString()
-            .Should().Contain("'/kit/[nested]/.shadekit/features'");
+            .Should().Contain("'/kit/[nested]/src'");
 
         root.GetProperty("warnings").GetArrayLength()
             .Should().Be(0);

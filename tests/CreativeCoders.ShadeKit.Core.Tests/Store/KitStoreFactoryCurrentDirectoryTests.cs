@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Store;
+using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
 
@@ -86,6 +87,62 @@ public class KitStoreFactoryCurrentDirectoryTests
             // Assert
             kitStore.GetFeatureNames()
                 .Should().Equal("auth");
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDirectory);
+        }
+    }
+
+    [Fact]
+    public void Create_WithoutPath_PassesCurrentDirectoryToLocator()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateDirectory(".shadekit");
+
+        var locator = A.Fake<IGitRepositoryLocator>();
+        A.CallTo(() => locator.GetRepositoryRootPath(A<string>._)).Returns(tempDirectory.RootPath);
+
+        var factory = KitStoreFactoryTests.CreateFactory(locator);
+        var originalDirectory = Directory.GetCurrentDirectory();
+
+        try
+        {
+            Directory.SetCurrentDirectory(tempDirectory.RootPath);
+
+            // Act
+            factory.Create();
+
+            // Assert
+            A.CallTo(() => locator.GetRepositoryRootPath(Directory.GetCurrentDirectory()))
+                .MustHaveHappenedOnceExactly();
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDirectory);
+        }
+    }
+
+    [Fact]
+    public void CreateForKitRoot_RelativePath_ReturnsStoreWithFullPathResolvedAgainstCurrentDirectory()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+
+        var factory = KitStoreFactoryTests.CreateFactory();
+        var originalDirectory = Directory.GetCurrentDirectory();
+
+        try
+        {
+            Directory.SetCurrentDirectory(tempDirectory.RootPath);
+
+            // Act
+            var kitStore = factory.CreateForKitRoot(".shadekit");
+
+            // Assert
+            kitStore.RootPath
+                .Should().Be(Path.Combine(Directory.GetCurrentDirectory(), ".shadekit"));
         }
         finally
         {

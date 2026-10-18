@@ -44,6 +44,16 @@ internal sealed class TempKitDirectory : IDisposable
         return path;
     }
 
+    public string WriteFileBytes(byte[] content, params string[] relativePathParts)
+    {
+        var path = Path.Combine([RootPath, .. relativePathParts]);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, content);
+
+        return path;
+    }
+
     public byte[] ReadFileBytes(params string[] relativePathParts)
     {
         return File.ReadAllBytes(Path.Combine([RootPath, .. relativePathParts]));
@@ -62,6 +72,29 @@ internal sealed class TempKitDirectory : IDisposable
     {
         Assert.SkipWhen(HasGitRootAbove(),
             $"A '.git' entry exists above '{RootPath}'; the not-in-a-repository scenario cannot be tested here.");
+    }
+
+    /// <summary>
+    /// Creates a symbolic link in the temporary directory, or skips the current test if the file system or the
+    /// process cannot create one, for example on Windows without the privilege to create symbolic links.
+    /// </summary>
+    /// <param name="linkTarget">The target of the link, relative to the directory of the link.</param>
+    /// <param name="relativePathParts">The parts of the link path, relative to the temporary directory.</param>
+    /// <returns>The full path of the link.</returns>
+    public string CreateSymbolicLinkOrSkip(string linkTarget, params string[] relativePathParts)
+    {
+        var linkPath = Path.Combine([RootPath, .. relativePathParts]);
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, linkTarget);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Assert.Skip($"A symbolic link cannot be created at '{linkPath}': {exception.Message}");
+        }
+
+        return linkPath;
     }
 
     private bool HasGitRootAbove()

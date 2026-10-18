@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (implementation state). Implemented except the integration versions in `version --json` (package 07). |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (implementation state; package 02 implementation: missing `features/` is valid, exit codes 11, 13, 23; code review rework: exit codes 14, 24). Implemented except the integration versions in `version --json` (package 07). |
 | Source | Concept §3.1, §3.2, §4.1, [§9](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | — |
 | Enables | Every later package |
@@ -34,7 +34,8 @@ Every file the kit writes into a repository is safe across branch merges and kit
 ### Kit root
 
 - The kit root is `.shadekit/` at the repository root. **Decided** (concept §4.1).
-- Commands find it by walking up from the working directory to the git repository root. A command that needs an initialised repository and finds no kit root stops with a clear message that points to `shade-kit init`. **Implemented** (`KitStoreFactory`, `KitStorePaths`).
+- Commands find it by walking up from the working directory to the git repository root. A command that needs an initialised repository and finds no kit root stops with a clear message that points to `shade-kit init`. **Implemented** (`KitStoreFactory`, `GitRepositoryLocator`, `KitStorePaths`).
+- A kit root without a `features/` directory is valid and has no features. **Decided** on 2026-10-18 (package 02 implementation clarification), because git does not keep the empty `features/` that `init` creates, so a fresh clone has none. The former exit code 11 (`features-dir-not-found`) is removed. **Implemented** (`KitStore.GetFeatureNames` returns an empty list).
 
 ### Versioned files (concept §9.1, §9.4)
 
@@ -86,16 +87,19 @@ Every file the kit writes into a repository is safe across branch merges and kit
 
   On failure, `ok` is `false`, `data` is `null`, and `error` is `{ "code": "…", "message": "…" }`. **Implemented** (`CliJsonEnvelope`, `ICliJsonWriter`, `CliErrorMapper`).
 - Every failure has a stable exit code from `ShadeKitCliExitCodes` and, in JSON mode, a stable error code string, so skills can branch on it without parsing messages. **Decided** (implemented in code). Error and warning codes are kebab-case. **Decided** (implemented in code).
-- Exit codes are grouped in ranges per area: 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, 255 host errors. **Decided** (implemented in code). Codes owned by packages 01 and 02, all **Implemented** (`ShadeKitCliExitCodes`, `ShadeKitCliErrorCodes`):
+- Exit codes are grouped in ranges per area: 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, 255 host errors. **Decided** (implemented in code). Codes owned by packages 01 and 02, all **Implemented** (`ShadeKitCliExitCodes`, `ShadeKitCliErrorCodes`, `CliErrorMapper`). Exit code 11 is free since 2026-10-18 (see [Kit root](#kit-root)):
 
   | Exit code | Error code | Owner |
   |---|---|---|
   | 10 | `kit-root-not-found` | 01 |
-  | 11 | `features-dir-not-found` | 01 |
   | 12 | `not-a-git-repository` | 02 |
+  | 13 | `already-initialized` | 02 |
+  | 14 | `path-not-a-file` | 02 |
   | 20 | `format-too-new` | 01 |
   | 21 | `upgrade-needed` | 01 |
   | 22 | `invalid-file` | 01 |
+  | 23 | `invalid-managed-section` | 02 |
+  | 24 | `unsupported-encoding` | 02 |
   | 255 | `host-error` | 01 |
 
 - "Not found" or "not resolved" answers that are part of normal flow (for example no current feature) are results, not errors. **Proposed.**

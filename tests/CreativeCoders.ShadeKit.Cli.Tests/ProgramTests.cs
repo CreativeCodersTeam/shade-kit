@@ -476,8 +476,8 @@ public sealed class ProgramTests : IDisposable
     }
 
     [Fact]
-    [Trait("Requirement", "FP01-AC8")]
-    public async Task RunAsync_FeatureListJsonWithoutFeaturesDirectory_WritesFeaturesDirEnvelopeAndReturns11()
+    [Trait("Requirement", "FP01-AC12")]
+    public async Task RunAsync_FeatureListJsonWithoutFeaturesDirectory_WritesEmptyFeatureListAndReturns0()
     {
         // Arrange
         Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
@@ -492,15 +492,40 @@ public sealed class ProgramTests : IDisposable
 
         // Assert
         exitCode
-            .Should().Be(ShadeKitCliExitCodes.FeaturesDirectoryNotFound);
+            .Should().Be(0);
 
         using var document = JsonDocument.Parse(output.ToString());
 
-        document.RootElement.GetProperty("error").GetProperty("code").GetString()
-            .Should().Be(ShadeKitCliErrorCodes.FeaturesDirectoryNotFound);
+        document.RootElement.GetProperty("ok").GetBoolean()
+            .Should().BeTrue();
+
+        document.RootElement.GetProperty("data").GetProperty("features").GetArrayLength()
+            .Should().Be(0);
 
         error.ToString()
-            .Should().BeEmpty();
+            .Should().BeNullOrWhiteSpace("the host writes only its empty footer line to standard error");
+    }
+
+    [Fact]
+    public async Task RunAsync_FeatureListPlainWithoutFeaturesDirectory_PrintsNoFeaturesHintAndReturns0()
+    {
+        // Arrange
+        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
+        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".shadekit"));
+        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "list"], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        output.ToString()
+            .Should().Contain("No features found.");
     }
 
     [Fact]

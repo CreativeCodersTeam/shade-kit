@@ -19,4 +19,21 @@ public static class KitStorePaths
     /// Represents the name of the directory that contains one directory per feature.
     /// </summary>
     public const string FeaturesDirName = "features";
+
+    /// <summary>
+    /// Represents the name of the gate configuration file in the SHADE kit root directory.
+    /// </summary>
+    public const string GatesFileName = "gates.json";
+
+    /// <summary>
+    /// Represents the name of the directory in the SHADE kit root directory that contains the templates of the
+    /// repository.
+    /// </summary>
+    public const string TemplatesDirName = "templates";
+
+    /// <summary>
+    /// Represents the name of the file in the SHADE kit root directory that records the kit version and hash of every
+    /// template written by SHADE kit.
+    /// </summary>
+    public const string TemplatesLockFileName = "templates.lock.json";
 }

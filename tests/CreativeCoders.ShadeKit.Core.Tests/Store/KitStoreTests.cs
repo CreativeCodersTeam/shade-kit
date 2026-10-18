@@ -60,7 +60,7 @@ public class KitStoreTests
     }
 
     [Fact]
-    public void GetFeatureNames_FeaturesDirectoryMissing_ThrowsFeaturesDirectoryNotFoundException()
+    public void GetFeatureNames_FeaturesDirectoryMissing_ReturnsEmpty()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -68,15 +68,15 @@ public class KitStoreTests
         var kitStore = CreateStore(tempDirectory.RootPath);
 
         // Act
-        var act = () => kitStore.GetFeatureNames();
+        var featureNames = kitStore.GetFeatureNames();
 
         // Assert
-        act.Should().Throw<FeaturesDirectoryNotFoundException>()
-            .Which.FeaturesPath.Should().Be(Path.Combine(tempDirectory.RootPath, "features"));
+        featureNames
+            .Should().BeEmpty();
     }
 
     [Fact]
-    public void GetFeatureNames_FeaturesIsAFile_ThrowsFeaturesDirectoryNotFoundException()
+    public void GetFeatureNames_FeaturesIsAFile_ReturnsEmpty()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -85,15 +85,15 @@ public class KitStoreTests
         var kitStore = CreateStore(tempDirectory.RootPath);
 
         // Act
-        var act = () => kitStore.GetFeatureNames();
+        var featureNames = kitStore.GetFeatureNames();
 
         // Assert
-        act.Should().Throw<FeaturesDirectoryNotFoundException>()
-            .Which.FeaturesPath.Should().Be(Path.Combine(tempDirectory.RootPath, "features"));
+        featureNames
+            .Should().BeEmpty();
     }
 
     [Fact]
-    public void GetFeatureNames_StorePathDoesNotExist_ThrowsFeaturesDirectoryNotFoundException()
+    public void GetFeatureNames_StorePathDoesNotExist_ReturnsEmptyWithoutCreatingDirectories()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -102,16 +102,14 @@ public class KitStoreTests
         var kitStore = CreateStore(missingStorePath);
 
         // Act
-        var act = () => kitStore.GetFeatureNames();
+        var featureNames = kitStore.GetFeatureNames();
 
         // Assert
-        var exception = act.Should().Throw<FeaturesDirectoryNotFoundException>().Which;
+        featureNames
+            .Should().BeEmpty();
 
-        exception.FeaturesPath
-            .Should().Be(Path.Combine(missingStorePath, "features"));
-
-        exception.Message
-            .Should().Contain(exception.FeaturesPath);
+        Path.Exists(missingStorePath)
+            .Should().BeFalse();
     }
 
     [Theory]

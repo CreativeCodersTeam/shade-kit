@@ -5,7 +5,7 @@ description: SHADE kit skill to drop a feature from any phase. Deletes the featu
 
 # shade-kit-drop
 
-<!-- Skeleton: purpose and flow only, details follow. Sources: research/shade-kit-skills.md, docs/feature-packages/03-feature-management.md. CLI commands other than `shade-kit version` and `shade-kit feature list` are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Sources: research/shade-kit-skills.md, docs/feature-packages/03-feature-management.md. CLI commands other than `shade-kit version`, `shade-kit init`, and `shade-kit feature list` are planned and do not exist yet. -->
 
 ## Purpose
 
