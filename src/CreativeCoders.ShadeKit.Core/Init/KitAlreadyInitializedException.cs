@@ -1,5 +1,3 @@
-using CreativeCoders.ShadeKit.Core.Store;
-
 namespace CreativeCoders.ShadeKit.Core.Init;
 
 /// <summary>
@@ -8,8 +6,7 @@ namespace CreativeCoders.ShadeKit.Core.Init;
 /// </summary>
 /// <param name="kitRootPath">The path of the existing <c>.shadekit</c> directory or file.</param>
 public class KitAlreadyInitializedException(string kitRootPath)
-    : Exception($"The repository is already initialised: '{kitRootPath}' exists. Use 'shade-kit upgrade' to update " +
-                $"the '{KitStorePaths.RootPath}' directory.")
+    : Exception($"The repository is already initialised: '{kitRootPath}' exists.")
 {
     /// <summary>
     /// Gets the path of the existing SHADE kit root.

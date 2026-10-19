@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Templates;
+using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Init;
 
@@ -12,9 +13,9 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Init;
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed partial class InitCommandEndToEndTests : IDisposable
 {
-    private readonly string _originalDirectory = Directory.GetCurrentDirectory();
+    private readonly CurrentDirectoryScope _currentDirectory = new();
 
-    private readonly DirectoryInfo _tempDirectory = Directory.CreateTempSubdirectory("shade-kit-init-tests-");
+    private readonly TempKitDirectory _tempDirectory = new("shade-kit-init-tests-");
 
     [Fact]
     [Trait("Requirement", "FP02-AC1")]
@@ -47,25 +48,28 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
             .Select(x => (Path: x.GetProperty("path").GetString(), Action: x.GetProperty("action").GetString()))
             .ToArray();
 
+        string[] expectedPaths =
+        [
+            ".shadekit/config.json",
+            ".shadekit/gates.json",
+            .. ShippedTemplates.All.Select(x => x.RepositoryPath),
+            ".shadekit/templates.lock.json",
+            ".shadekit/features/",
+            ".gitignore",
+            "CLAUDE.md",
+            "AGENTS.md"
+        ];
+
         files.Select(x => x.Path)
-            .Should().Equal([
-                ".shadekit/config.json",
-                ".shadekit/gates.json",
-                .. ShippedTemplates.All.Select(x => x.RepositoryPath),
-                ".shadekit/templates.lock.json",
-                ".shadekit/features/",
-                ".gitignore",
-                "CLAUDE.md",
-                "AGENTS.md"
-            ]);
+            .Should().Equal(expectedPaths);
 
         files.Select(x => x.Action)
             .Should().AllBe("created");
 
-        files.Select(x => Path.Combine(_tempDirectory.FullName, x.Path!))
+        files.Select(x => Path.Combine(_tempDirectory.RootPath, x.Path!))
             .Should().AllSatisfy(x => Path.Exists(x).Should().BeTrue(x));
 
-        Directory.Exists(Path.Combine(_tempDirectory.FullName, ".shadekit", "features"))
+        Directory.Exists(Path.Combine(_tempDirectory.RootPath, ".shadekit", "features"))
             .Should().BeTrue();
 
         error.ToString()
@@ -82,7 +86,7 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
         (await Program.RunAsync(["init", "--json"], TextWriter.Null, TextWriter.Null))
             .Should().Be(0);
 
-        var snapshot = TakeSnapshot();
+        var snapshot = _tempDirectory.TakeSnapshot();
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -106,7 +110,7 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
         root.GetProperty("error").GetProperty("message").GetString()
             .Should().Contain("shade-kit upgrade");
 
-        TakeSnapshot()
+        _tempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -120,7 +124,7 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
         (await Program.RunAsync(["init"], TextWriter.Null, TextWriter.Null))
             .Should().Be(0);
 
-        var snapshot = TakeSnapshot();
+        var snapshot = _tempDirectory.TakeSnapshot();
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -139,7 +143,7 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
             .And.Contain("shade-kit upgrade")
             .And.NotContain("\"ok\"");
 
-        TakeSnapshot()
+        _tempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -152,11 +156,11 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
         EnterGitRepository();
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        await File.WriteAllTextAsync(Path.Combine(_tempDirectory.FullName, ".gitignore"), "bin/\n",
+        await File.WriteAllTextAsync(Path.Combine(_tempDirectory.RootPath, ".gitignore"), "bin/\n",
             cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(_tempDirectory.FullName, "CLAUDE.md"),
+        await File.WriteAllTextAsync(Path.Combine(_tempDirectory.RootPath, "CLAUDE.md"),
             "# Project\n<!-- shade-kit:begin old -->\nold\n<!-- shade-kit:end -->\n", cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(_tempDirectory.FullName, "AGENTS.md"), "# Agents\n",
+        await File.WriteAllTextAsync(Path.Combine(_tempDirectory.RootPath, "AGENTS.md"), "# Agents\n",
             cancellationToken);
 
         using var output = new StringWriter();
@@ -211,11 +215,9 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
     public async Task RunAsync_InitJsonOutsideGitRepository_Returns12AndCreatesNothing()
     {
         // Arrange
-        Assert.SkipWhen(HasGitRootAbove(_tempDirectory),
-            $"A '.git' entry exists above '{_tempDirectory.FullName}'; the not-in-a-repository scenario cannot be " +
-            "tested here.");
+        _tempDirectory.SkipWhenGitRootExistsAbove();
 
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -232,7 +234,7 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
         document.RootElement.GetProperty("error").GetProperty("code").GetString()
             .Should().Be(ShadeKitCliErrorCodes.NotAGitRepository);
 
-        _tempDirectory.EnumerateFileSystemInfos()
+        Directory.EnumerateFileSystemEntries(_tempDirectory.RootPath)
             .Should().BeEmpty();
     }
 
@@ -241,7 +243,7 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
     {
         // Arrange
         EnterGitRepository();
-        var claudePath = Path.Combine(_tempDirectory.FullName, "CLAUDE.md");
+        var claudePath = Path.Combine(_tempDirectory.RootPath, "CLAUDE.md");
         await File.WriteAllTextAsync(claudePath, "# Project\n<!-- shade-kit:begin -->\n",
             TestContext.Current.CancellationToken);
 
@@ -263,7 +265,7 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
         document.RootElement.GetProperty("error").GetProperty("message").GetString()
             .Should().Contain("CLAUDE.md");
 
-        Path.Exists(Path.Combine(_tempDirectory.FullName, ".shadekit"))
+        Path.Exists(Path.Combine(_tempDirectory.RootPath, ".shadekit"))
             .Should().BeFalse();
     }
 
@@ -272,10 +274,10 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
     {
         // Arrange
         EnterGitRepository();
-        var gitIgnorePath = Path.Combine(_tempDirectory.FullName, ".gitignore");
+        var gitIgnorePath = Path.Combine(_tempDirectory.RootPath, ".gitignore");
         await File.WriteAllBytesAsync(gitIgnorePath, [0xFF, 0xFE, .. Encoding.Unicode.GetBytes("bin/\r\n")],
             TestContext.Current.CancellationToken);
-        var snapshot = TakeSnapshot();
+        var snapshot = _tempDirectory.TakeSnapshot();
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -299,7 +301,7 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
             .Should().Contain(".gitignore")
             .And.Contain("UTF-16 LE");
 
-        TakeSnapshot()
+        _tempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
     }
 
@@ -308,8 +310,8 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
     {
         // Arrange
         EnterGitRepository();
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, "CLAUDE.md"));
-        var snapshot = TakeSnapshot();
+        _tempDirectory.CreateDirectory("CLAUDE.md");
+        var snapshot = _tempDirectory.TakeSnapshot();
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -332,7 +334,7 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
         document.RootElement.GetProperty("error").GetProperty("message").GetString()
             .Should().Contain("CLAUDE.md");
 
-        TakeSnapshot()
+        _tempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
     }
 
@@ -393,8 +395,8 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
 
     public void Dispose()
     {
-        Directory.SetCurrentDirectory(_originalDirectory);
-        _tempDirectory.Delete(true);
+        _currentDirectory.Dispose();
+        _tempDirectory.Dispose();
     }
 
     /// <summary>
@@ -403,39 +405,12 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
     /// </summary>
     private string EnterGitRepository()
     {
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        _tempDirectory.CreateGitRoot();
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         return Directory.GetCurrentDirectory();
     }
 
-    /// <summary>
-    /// Returns every file and directory below the temporary directory, except <c>.git</c>, with the content of files.
-    /// </summary>
-    private Dictionary<string, string> TakeSnapshot()
-    {
-        return _tempDirectory.EnumerateFileSystemInfos("*", SearchOption.AllDirectories)
-            .Where(x => x.FullName != Path.Combine(_tempDirectory.FullName, ".git"))
-            .ToDictionary(
-                x => Path.GetRelativePath(_tempDirectory.FullName, x.FullName),
-                x => x is FileInfo file ? Convert.ToBase64String(File.ReadAllBytes(file.FullName)) : "<directory>");
-    }
-
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();
-
-    private static bool HasGitRootAbove(DirectoryInfo directory)
-    {
-        for (var parent = directory.Parent; parent is not null; parent = parent.Parent)
-        {
-            var gitPath = Path.Combine(parent.FullName, ".git");
-
-            if (Directory.Exists(gitPath) || File.Exists(gitPath))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

@@ -44,19 +44,11 @@ public sealed class ShippedTemplateReader : IShippedTemplateReader
 
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
-        return NormalizeLineEndings(reader.ReadToEnd());
+        return reader.ReadToEnd().ReplaceLineEndings("\n");
     }
 
     internal static string GetResourceName(ShippedTemplate shippedTemplate)
     {
         return ResourceNamePrefix + shippedTemplate.ResourcePath;
-    }
-
-    // A lone CR is replaced as well: replacing CRLF alone would turn "\r\r\n" into a new CRLF.
-    private static string NormalizeLineEndings(string content)
-    {
-        return content
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n');
     }
 }

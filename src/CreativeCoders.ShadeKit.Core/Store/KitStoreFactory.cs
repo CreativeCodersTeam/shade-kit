@@ -33,18 +33,18 @@ public class KitStoreFactory(
         Ensure.IsNotNullOrWhitespace(path);
 
         var gitRootPath = _gitRepositoryLocator.GetRepositoryRootPath(path);
-        var kitStorePath = Path.Combine(gitRootPath, KitStorePaths.RootPath);
+        var kitStore = CreateForRepositoryRoot(gitRootPath);
 
-        return Directory.Exists(kitStorePath)
-            ? CreateForKitRoot(kitStorePath)
+        return Directory.Exists(kitStore.RootPath)
+            ? kitStore
             : throw new KitRootPathNotFoundException(path, gitRootPath);
     }
 
     /// <inheritdoc />
-    public IKitStore CreateForKitRoot(string kitRootPath)
+    public IKitStore CreateForRepositoryRoot(string repositoryRootPath)
     {
-        Ensure.IsNotNullOrWhitespace(kitRootPath);
+        Ensure.IsNotNullOrWhitespace(repositoryRootPath);
 
-        return new KitStore(kitRootPath, _serializer, _formatRegistry);
+        return new KitStore(Path.Combine(repositoryRootPath, KitStorePaths.RootPath), _serializer, _formatRegistry);
     }
 }

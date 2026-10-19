@@ -1,10 +1,10 @@
 using System.Text;
 using CreativeCoders.Core;
 
-namespace CreativeCoders.ShadeKit.Core.Init;
+namespace CreativeCoders.ShadeKit.Core.Files;
 
 /// <summary>
-/// Represents the content of a text file that the initialisation changes in place, so that every byte outside the
+/// Represents the content of a text file that SHADE kit changes in place, so that every byte outside the
 /// changed part stays as it is.
 /// </summary>
 /// <remarks>
@@ -25,8 +25,6 @@ internal sealed class TextFileContent
     private const string Lf = "\n";
 
     private const string CrLf = "\r\n";
-
-    private static readonly UTF8Encoding Utf8WithoutBom = new(false);
 
     private readonly byte[] _bytes;
 
@@ -120,7 +118,7 @@ internal sealed class TextFileContent
     /// <returns>The block followed by <c>\n</c>, encoded as UTF-8 without byte order mark.</returns>
     public static byte[] CreateNew(string block)
     {
-        return Utf8WithoutBom.GetBytes(block + Lf);
+        return Encoding.UTF8.GetBytes(block + Lf);
     }
 
     /// <summary>
@@ -152,7 +150,7 @@ internal sealed class TextFileContent
 
         text.Append(ToFileLineEndings(block)).Append(NewLine);
 
-        return [.. _bytes, .. Utf8WithoutBom.GetBytes(text.ToString())];
+        return [.. _bytes, .. Encoding.UTF8.GetBytes(text.ToString())];
     }
 
     /// <summary>
@@ -168,7 +166,7 @@ internal sealed class TextFileContent
         return
         [
             .. _bytes.AsSpan(0, first.Start),
-            .. Utf8WithoutBom.GetBytes(ToFileLineEndings(block)),
+            .. Encoding.UTF8.GetBytes(ToFileLineEndings(block)),
             .. _bytes.AsSpan(last.ContentEnd)
         ];
     }
@@ -201,7 +199,7 @@ internal sealed class TextFileContent
 
     private string ToFileLineEndings(string block)
     {
-        return NewLine == Lf ? block : block.Replace(Lf, NewLine, StringComparison.Ordinal);
+        return block.ReplaceLineEndings(NewLine);
     }
 
     private static TextFileLine[] SplitLines(byte[] bytes, int textStart)

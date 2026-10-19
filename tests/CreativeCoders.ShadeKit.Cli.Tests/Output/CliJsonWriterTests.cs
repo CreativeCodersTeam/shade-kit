@@ -1,6 +1,8 @@
 using System.Text.Json;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Core.Config;
+using CreativeCoders.ShadeKit.Core.Init;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests.Output;
@@ -314,5 +316,42 @@ public class CliJsonWriterTests
     public sealed class CyclicData
     {
         public CyclicData? Self { get; set; }
+    }
+
+    [Fact]
+    public void Write_DataWithEnumValue_WritesLowerCaseKebabCaseName()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        var writer = new CliJsonWriter(output);
+
+        // Act
+        writer.Write(CliJsonEnvelope.Success(new { Policy = OutdatedFormatOnReadPolicy.MigrateAndWarn }));
+
+        // Assert
+        using var document = JsonDocument.Parse(output.ToString());
+
+        document.RootElement.GetProperty("data").GetProperty("policy").GetString()
+            .Should().Be("migrate-and-warn");
+    }
+
+    [Theory]
+    [InlineData(InitializedFileAction.Created, "created")]
+    [InlineData(InitializedFileAction.Appended, "appended")]
+    [InlineData(InitializedFileAction.Updated, "updated")]
+    public void GetEnumName_FileAction_ReturnsNameThatJsonOutputUses(InitializedFileAction action, string expectedName)
+    {
+        // Arrange
+        using var output = new StringWriter();
+        new CliJsonWriter(output).Write(CliJsonEnvelope.Success(new { Action = action }));
+        using var document = JsonDocument.Parse(output.ToString());
+
+        // Act
+        var name = CliJsonWriter.GetEnumName(action);
+
+        // Assert
+        name
+            .Should().Be(expectedName)
+            .And.Be(document.RootElement.GetProperty("data").GetProperty("action").GetString());
     }
 }

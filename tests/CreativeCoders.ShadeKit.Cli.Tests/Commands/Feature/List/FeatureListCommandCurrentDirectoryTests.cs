@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.List;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Spectre.Console;
 using Spectre.Console.Testing;
@@ -19,28 +20,19 @@ public class FeatureListCommandCurrentDirectoryTests
 
         var command = FeatureListCommandTests.CreateCommand(new TestConsole(), kitStoreFactory);
 
-        var originalDirectory = Directory.GetCurrentDirectory();
-        var markupDirectory = Directory.CreateTempSubdirectory("shade-kit-[tests]-");
+        using var markupDirectory = new TempKitDirectory("shade-kit-[tests]-");
+        using var currentDirectory = new CurrentDirectoryScope(markupDirectory.RootPath);
 
-        try
-        {
-            Directory.SetCurrentDirectory(markupDirectory.FullName);
-            A.CallTo(() => kitStoreFactory.Create())
-                .Throws(new NotAGitRepositoryException(Directory.GetCurrentDirectory()));
+        A.CallTo(() => kitStoreFactory.Create())
+            .Throws(new NotAGitRepositoryException(Directory.GetCurrentDirectory()));
 
-            // Act
-            var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
+        // Act
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
-            // Assert
-            var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
+        // Assert
+        var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
 
-            exception.Message
-                .Should().Contain(Markup.Escape(Directory.GetCurrentDirectory()));
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalDirectory);
-            markupDirectory.Delete();
-        }
+        exception.Message
+            .Should().Contain(Markup.Escape(Directory.GetCurrentDirectory()));
     }
 }

@@ -221,7 +221,7 @@ public class VersionCommandTests
         attribute
             .Should().NotBeNull();
 
-        attribute!.Commands
+        attribute.Commands
             .Should().Equal("version");
     }
 

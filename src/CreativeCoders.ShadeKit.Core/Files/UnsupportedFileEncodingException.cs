@@ -1,7 +1,7 @@
-namespace CreativeCoders.ShadeKit.Core.Init;
+namespace CreativeCoders.ShadeKit.Core.Files;
 
 /// <summary>
-/// Represents the exception that is thrown when a text file that the initialisation changes in place is not encoded
+/// Represents the exception that is thrown when a text file that SHADE kit changes in place is not encoded
 /// as UTF-8, so text cannot be inserted without mixing encodings.
 /// </summary>
 /// <remarks>

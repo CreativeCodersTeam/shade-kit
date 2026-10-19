@@ -109,4 +109,34 @@ public interface IKitStore
     Task WriteJsonAsync<T>(string relativePath, string formatId, T document, FormatAccess access,
         CancellationToken cancellationToken = default)
         where T : VersionedDocument;
+
+    /// <summary>
+    /// Writes a file of the store that is not a versioned JSON file, for example a template.
+    /// </summary>
+    /// <remarks>
+    /// The bytes are written as they are, directly, not atomically; an existing file is replaced. Missing directories
+    /// are created.
+    /// </remarks>
+    /// <param name="relativePath">
+    /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/spec.md</c>.
+    /// </param>
+    /// <param name="content">The bytes of the file.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous write operation.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="content" /> is <see langword="null" />.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
+    /// </exception>
+    Task WriteFileAsync(string relativePath, byte[] content, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a directory of the store, together with its missing parent directories.
+    /// </summary>
+    /// <param name="relativePath">
+    /// The path of the directory relative to <see cref="RootPath" />, for example <c>features</c>.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
+    /// </exception>
+    void CreateDirectory(string relativePath);
 }

@@ -209,10 +209,16 @@ public class FeatureListCommandTests
         // Assert
         act.Should().NotThrow();
 
-        task!.IsFaulted
+        task
+            .Should().NotBeNull();
+
+        task.IsFaulted
             .Should().BeTrue();
 
-        task.Exception!.InnerException
+        task.Exception
+            .Should().NotBeNull();
+
+        task.Exception.InnerException
             .Should().BeOfType<CliCommandAbortException>();
     }
 
@@ -547,7 +553,7 @@ public class FeatureListCommandTests
         attribute
             .Should().NotBeNull();
 
-        attribute!.Commands
+        attribute.Commands
             .Should().Equal("feature", "list");
     }
 

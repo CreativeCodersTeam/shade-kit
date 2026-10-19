@@ -1,7 +1,7 @@
-namespace CreativeCoders.ShadeKit.Core.Init;
+namespace CreativeCoders.ShadeKit.Core.Files;
 
 /// <summary>
-/// Represents the exception that is thrown when a path at which the initialisation reads and writes a file is an
+/// Represents the exception that is thrown when a path at which SHADE kit reads and writes a file is an
 /// existing directory.
 /// </summary>
 /// <param name="path">The path that is a directory.</param>

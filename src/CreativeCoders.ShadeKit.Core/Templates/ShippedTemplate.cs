@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Store;
+
 namespace CreativeCoders.ShadeKit.Core.Templates;
 
 /// <summary>
@@ -7,11 +9,18 @@ namespace CreativeCoders.ShadeKit.Core.Templates;
 /// The path of the template source relative to the shipped template folder, with <c>/</c> as separator, for example
 /// <c>checks/definition-of-ready.template.md</c>.
 /// </param>
-/// <param name="RepositoryPath">
-/// The path the template is written to, relative to the repository root, with <c>/</c> as separator, for example
-/// <c>.shadekit/templates/checks/definition-of-ready.md</c>.
+/// <param name="KitPath">
+/// The path the template is written to, relative to the SHADE kit root directory, with <c>/</c> as separator, for
+/// example <c>templates/checks/definition-of-ready.md</c>.
 /// </param>
-/// <param name="OwnerPackage">
-/// The number of the feature package that owns the content of the template, for example <c>05</c>.
-/// </param>
-public sealed record ShippedTemplate(string ResourcePath, string RepositoryPath, string OwnerPackage);
+public sealed record ShippedTemplate(string ResourcePath, string KitPath)
+{
+    /// <summary>
+    /// Gets the path the template is written to, relative to the repository root.
+    /// </summary>
+    /// <value>
+    /// The <see cref="KitPath" /> prefixed with the SHADE kit root directory, for example
+    /// <c>.shadekit/templates/checks/definition-of-ready.md</c>.
+    /// </value>
+    public string RepositoryPath => KitStorePaths.GetRepositoryPath(KitPath);
+}

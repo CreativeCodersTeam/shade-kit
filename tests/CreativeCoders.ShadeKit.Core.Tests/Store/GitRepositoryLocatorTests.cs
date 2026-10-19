@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
 
@@ -23,6 +24,7 @@ public class GitRepositoryLocatorTests
     }
 
     [Theory]
+    [Trait("Requirement", "FP01-AC1")]
     [InlineData(1)]
     [InlineData(3)]
     [InlineData(25)]
@@ -44,6 +46,7 @@ public class GitRepositoryLocatorTests
     }
 
     [Fact]
+    [Trait("Requirement", "FP01-AC1")]
     public void GetRepositoryRootPath_GitEntryIsAFile_ReturnsDirectoryContainingTheFile()
     {
         // Arrange

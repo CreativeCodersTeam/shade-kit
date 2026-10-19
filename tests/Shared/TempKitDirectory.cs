@@ -1,11 +1,12 @@
-namespace CreativeCoders.ShadeKit.Core.Tests.Store;
+namespace CreativeCoders.ShadeKit.Tests.Shared;
 
 /// <summary>
-/// Creates a temporary directory tree for SHADE kit store tests and deletes it on disposal.
+/// Creates a temporary directory tree for SHADE kit tests and deletes it on disposal.
 /// </summary>
-internal sealed class TempKitDirectory : IDisposable
+/// <param name="prefix">The prefix of the name of the temporary directory.</param>
+internal sealed class TempKitDirectory(string prefix = "shade-kit-tests-") : IDisposable
 {
-    private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("shade-kit-tests-");
+    private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory(prefix);
 
     public string RootPath => _directory.FullName;
 
@@ -95,6 +96,17 @@ internal sealed class TempKitDirectory : IDisposable
         }
 
         return linkPath;
+    }
+
+    /// <summary>
+    /// Captures every directory and the bytes of every file below the temporary directory, keyed by relative path.
+    /// </summary>
+    public Dictionary<string, string> TakeSnapshot()
+    {
+        return Directory.EnumerateFileSystemEntries(RootPath, "*", SearchOption.AllDirectories)
+            .ToDictionary(
+                x => Path.GetRelativePath(RootPath, x),
+                x => Directory.Exists(x) ? "<directory>" : Convert.ToBase64String(File.ReadAllBytes(x)));
     }
 
     private bool HasGitRootAbove()

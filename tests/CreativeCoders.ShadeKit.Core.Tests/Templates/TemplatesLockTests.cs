@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Formats;
@@ -64,7 +65,17 @@ public class TemplatesLockTests
         var json = serializer.Serialize(new TemplatesLock(), FormatIds.TemplatesLock);
 
         // Assert
-        JsonNode.Parse(json)!["templates"]!.AsArray()
+        var root = JsonNode.Parse(json);
+
+        root
+            .Should().NotBeNull();
+
+        var templatesNode = root["templates"];
+
+        templatesNode
+            .Should().NotBeNull();
+
+        templatesNode.AsArray()
             .Should().BeEmpty();
     }
 
@@ -196,5 +207,18 @@ public class TemplatesLockTests
 
         // Assert
         act.Should().Throw<InvalidKitFileException>();
+    }
+
+    [Theory]
+    [InlineData("", "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")]
+    [InlineData("abc", "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")]
+    public void ComputeHash_Content_ReturnsPrefixedLowercaseSha256(string content, string expectedHash)
+    {
+        // Act
+        var hash = TemplatesLockEntry.ComputeHash(Encoding.UTF8.GetBytes(content));
+
+        // Assert
+        hash
+            .Should().Be(expectedHash);
     }
 }

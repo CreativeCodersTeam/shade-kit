@@ -1,7 +1,7 @@
 using AwesomeAssertions;
-using CreativeCoders.ShadeKit.Core.Init;
+using CreativeCoders.ShadeKit.Core.Files;
 
-namespace CreativeCoders.ShadeKit.Core.Tests.Init;
+namespace CreativeCoders.ShadeKit.Core.Tests.Files;
 
 public class PathNotAFileExceptionTests
 {

@@ -10,6 +10,81 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 internal static class CliCommandAbort
 {
     /// <summary>
+    /// Runs an operation of a command and aborts the command if the operation fails with an expected failure.
+    /// </summary>
+    /// <typeparam name="T">The type of the result of the operation.</typeparam>
+    /// <param name="operation">The operation to run.</param>
+    /// <param name="errorMapper">The mapper that decides which exceptions are expected failures.</param>
+    /// <param name="json">
+    /// <see langword="true" /> if the command runs in JSON mode; otherwise, <see langword="false" />.
+    /// </param>
+    /// <param name="jsonWriter">The writer that receives the failure envelope in JSON mode.</param>
+    /// <returns>The result of <paramref name="operation" />.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="operation" />, <paramref name="errorMapper" />, or <paramref name="jsonWriter" /> is
+    /// <see langword="null" />.
+    /// </exception>
+    /// <exception cref="CliCommandAbortException">
+    /// <paramref name="operation" /> threw an exception that <paramref name="errorMapper" /> maps; it is reported as
+    /// <see cref="Create" /> describes. Any other exception escapes unchanged.
+    /// </exception>
+    public static T Run<T>(Func<T> operation, CliErrorMapper errorMapper, bool json, ICliJsonWriter jsonWriter)
+    {
+        Ensure.NotNull(operation);
+        Ensure.NotNull(errorMapper);
+        Ensure.NotNull(jsonWriter);
+
+        try
+        {
+            return operation();
+        }
+        catch (Exception e) when (errorMapper.Map(e) is { } error)
+        {
+            throw Create(error, e, json, jsonWriter);
+        }
+    }
+
+    /// <summary>
+    /// Runs an asynchronous operation of a command and aborts the command if the operation fails with an expected
+    /// failure.
+    /// </summary>
+    /// <typeparam name="T">The type of the result of the operation.</typeparam>
+    /// <param name="operation">The operation to run.</param>
+    /// <param name="errorMapper">The mapper that decides which exceptions are expected failures.</param>
+    /// <param name="json">
+    /// <see langword="true" /> if the command runs in JSON mode; otherwise, <see langword="false" />.
+    /// </param>
+    /// <param name="jsonWriter">The writer that receives the failure envelope in JSON mode.</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation. The task result contains the result of
+    /// <paramref name="operation" />.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="operation" />, <paramref name="errorMapper" />, or <paramref name="jsonWriter" /> is
+    /// <see langword="null" />.
+    /// </exception>
+    /// <exception cref="CliCommandAbortException">
+    /// <paramref name="operation" /> threw an exception that <paramref name="errorMapper" /> maps; it is reported as
+    /// <see cref="Create" /> describes. Any other exception escapes unchanged.
+    /// </exception>
+    public static async Task<T> RunAsync<T>(Func<Task<T>> operation, CliErrorMapper errorMapper, bool json,
+        ICliJsonWriter jsonWriter)
+    {
+        Ensure.NotNull(operation);
+        Ensure.NotNull(errorMapper);
+        Ensure.NotNull(jsonWriter);
+
+        try
+        {
+            return await operation().ConfigureAwait(false);
+        }
+        catch (Exception e) when (errorMapper.Map(e) is { } error)
+        {
+            throw Create(error, e, json, jsonWriter);
+        }
+    }
+
+    /// <summary>
     /// Reports the specified error and creates the exception that aborts the command with its exit code.
     /// </summary>
     /// <remarks>

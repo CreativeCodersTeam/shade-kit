@@ -9,7 +9,10 @@ public interface IShippedTemplateReader
     /// Reads the content of a shipped template.
     /// </summary>
     /// <param name="shippedTemplate">The shipped template to read.</param>
-    /// <returns>The content of the template, with every CRLF or CR line ending replaced by LF.</returns>
+    /// <returns>
+    /// The content of the template, with every line ending replaced by LF, as
+    /// <see cref="string.ReplaceLineEndings(string)" /> recognises them.
+    /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="shippedTemplate" /> is <see langword="null" />.
     /// </exception>

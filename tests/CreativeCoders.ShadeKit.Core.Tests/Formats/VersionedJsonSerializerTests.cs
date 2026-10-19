@@ -264,7 +264,10 @@ public class VersionedJsonSerializerTests
         result.Document.MinEngineVersion
             .Should().Be("0.2.0");
 
-        result.Document.ExtensionData!["futureField"].GetString()
+        result.Document.ExtensionData
+            .Should().NotBeNull();
+
+        result.Document.ExtensionData["futureField"].GetString()
             .Should().Be("kept");
 
         result.Document.ExtensionData
@@ -319,7 +322,10 @@ public class VersionedJsonSerializerTests
         result.Document.Title
             .Should().Be("Login");
 
-        result.Document.ExtensionData!["name"].GetString()
+        result.Document.ExtensionData
+            .Should().NotBeNull();
+
+        result.Document.ExtensionData["name"].GetString()
             .Should().Be("not renamed");
 
         result.Document.Mode
@@ -366,7 +372,10 @@ public class VersionedJsonSerializerTests
         result.Warnings
             .Should().BeEmpty();
 
-        result.Document.ExtensionData!["name"].GetString()
+        result.Document.ExtensionData
+            .Should().NotBeNull();
+
+        result.Document.ExtensionData["name"].GetString()
             .Should().Be("not renamed");
     }
 
@@ -550,12 +559,25 @@ public class VersionedJsonSerializerTests
         var json = serializer.Serialize(document, SampleFormat.Id);
 
         // Assert
-        var root = JsonNode.Parse(json)!;
+        var root = JsonNode.Parse(json);
 
-        root["schemaVersion"]!.GetValue<int>()
+        root
+            .Should().NotBeNull();
+
+        var schemaVersionNode = root["schemaVersion"];
+
+        schemaVersionNode
+            .Should().NotBeNull();
+
+        schemaVersionNode.GetValue<int>()
             .Should().Be(2);
 
-        root["minEngineVersion"]!.GetValue<string>()
+        var minEngineVersionNode = root["minEngineVersion"];
+
+        minEngineVersionNode
+            .Should().NotBeNull();
+
+        minEngineVersionNode.GetValue<string>()
             .Should().Be("0.2.0");
     }
 
@@ -613,7 +635,12 @@ public class VersionedJsonSerializerTests
         var json = serializer.Serialize(document, SampleFormat.Id);
 
         // Assert
-        JsonNode.Parse(json)!.AsObject().Select(x => x.Key)
+        var root = JsonNode.Parse(json);
+
+        root
+            .Should().NotBeNull();
+
+        root.AsObject().Select(x => x.Key)
             .Should().Equal("schemaVersion", "minEngineVersion", "title", "mode", "zeta", "alpha");
     }
 
@@ -656,7 +683,12 @@ public class VersionedJsonSerializerTests
         var json = serializer.Serialize(document, SampleFormat.Id);
 
         // Assert
-        JsonNode.Parse(json)!.AsObject().Select(x => x.Key)
+        var root = JsonNode.Parse(json);
+
+        root
+            .Should().NotBeNull();
+
+        root.AsObject().Select(x => x.Key)
             .Should().Equal("schemaVersion", "minEngineVersion", "mode");
     }
 
@@ -671,7 +703,17 @@ public class VersionedJsonSerializerTests
         var json = serializer.Serialize(document, SampleFormat.Id);
 
         // Assert
-        JsonNode.Parse(json)!["title"]!.GetValue<string>()
+        var root = JsonNode.Parse(json);
+
+        root
+            .Should().NotBeNull();
+
+        var titleNode = root["title"];
+
+        titleNode
+            .Should().NotBeNull();
+
+        titleNode.GetValue<string>()
             .Should().Be("Login");
     }
 

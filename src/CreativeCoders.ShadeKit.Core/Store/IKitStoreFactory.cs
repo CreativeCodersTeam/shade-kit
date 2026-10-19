@@ -7,8 +7,8 @@ namespace CreativeCoders.ShadeKit.Core.Store;
 /// <see cref="Create()" /> and <see cref="Create(string)" /> search for the root of the git repository that contains a
 /// directory with <see cref="IGitRepositoryLocator" />: the closest directory that contains a <c>.git</c> directory
 /// or file (a worktree or submodule). Only a <c>.shadekit</c> directory at that repository root is a SHADE kit root;
-/// <c>.shadekit</c> directories below it are ignored. <see cref="CreateForKitRoot" /> skips the search for callers
-/// that already know the SHADE kit root, for example while it is being created.
+/// <c>.shadekit</c> directories below it are ignored. <see cref="CreateForRepositoryRoot" /> skips the search for
+/// callers that already know the repository root, for example while the SHADE kit root is being created.
 /// </remarks>
 public interface IKitStoreFactory
 {
@@ -31,16 +31,16 @@ public interface IKitStoreFactory
     IKitStore Create(string path);
 
     /// <summary>
-    /// Creates a store for the specified SHADE kit root directory.
+    /// Creates a store for the SHADE kit root of the specified repository root directory.
     /// </summary>
     /// <remarks>
-    /// Neither searches for a git repository nor checks that <paramref name="kitRootPath" /> exists. A store for a
-    /// directory that does not exist yet creates the missing directories when it writes a file.
+    /// Neither searches for a git repository nor checks that the SHADE kit root exists. A store for a directory that
+    /// does not exist yet creates the missing directories when it writes a file.
     /// </remarks>
-    /// <param name="kitRootPath">The path of the <c>.shadekit</c> directory.</param>
-    /// <returns>The store of <paramref name="kitRootPath" />.</returns>
+    /// <param name="repositoryRootPath">The path of the root directory of the git repository.</param>
+    /// <returns>The store of the <c>.shadekit</c> directory in <paramref name="repositoryRootPath" />.</returns>
     /// <exception cref="ArgumentException">
-    /// <paramref name="kitRootPath" /> is <see langword="null" />, empty, or whitespace.
+    /// <paramref name="repositoryRootPath" /> is <see langword="null" />, empty, or whitespace.
     /// </exception>
-    IKitStore CreateForKitRoot(string kitRootPath);
+    IKitStore CreateForRepositoryRoot(string repositoryRootPath);
 }

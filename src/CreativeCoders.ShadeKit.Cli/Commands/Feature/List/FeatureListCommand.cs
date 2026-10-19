@@ -61,7 +61,9 @@ public class FeatureListCommand(
     {
         Ensure.NotNull(options);
 
-        var featureNames = GetFeatureNames(options.Json);
+        var featureNames = CliCommandAbort.Run(
+            () => _kitStoreFactory.Create().GetFeatureNames().Order(StringComparer.Ordinal).ToArray(), _errorMapper,
+            options.Json, _jsonWriter);
 
         if (options.Json)
         {
@@ -83,17 +85,5 @@ public class FeatureListCommand(
         }
 
         return CommandResult.Success;
-    }
-
-    private string[] GetFeatureNames(bool json)
-    {
-        try
-        {
-            return [.. _kitStoreFactory.Create().GetFeatureNames().Order(StringComparer.Ordinal)];
-        }
-        catch (Exception e) when (_errorMapper.Map(e) is { } error)
-        {
-            throw CliCommandAbort.Create(error, e, json, _jsonWriter);
-        }
     }
 }

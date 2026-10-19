@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Commands.Init;
 using CreativeCoders.ShadeKit.Core.Init;
+using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Spectre.Console.Testing;
 
@@ -9,9 +10,9 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Init;
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed class InitCommandCurrentDirectoryTests : IDisposable
 {
-    private readonly string _originalDirectory = Directory.GetCurrentDirectory();
+    private readonly CurrentDirectoryScope _currentDirectory = new();
 
-    private readonly DirectoryInfo _tempDirectory = Directory.CreateTempSubdirectory("shade-kit-[init]-");
+    private readonly TempKitDirectory _tempDirectory = new("shade-kit-[init]-");
 
     [Fact]
     public async Task ExecuteAsync_CurrentDirectory_PassesCurrentDirectoryToInitializer()
@@ -20,7 +21,7 @@ public sealed class InitCommandCurrentDirectoryTests : IDisposable
         var initializer = InitCommandTests.CreateInitializer(new RepositoryInitResult("/repo", []));
         var command = InitCommandTests.CreateCommand(new TestConsole(), initializer);
 
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
         var currentDirectory = Directory.GetCurrentDirectory();
 
         // Act
@@ -33,7 +34,7 @@ public sealed class InitCommandCurrentDirectoryTests : IDisposable
 
     public void Dispose()
     {
-        Directory.SetCurrentDirectory(_originalDirectory);
-        _tempDirectory.Delete(true);
+        _currentDirectory.Dispose();
+        _tempDirectory.Dispose();
     }
 }

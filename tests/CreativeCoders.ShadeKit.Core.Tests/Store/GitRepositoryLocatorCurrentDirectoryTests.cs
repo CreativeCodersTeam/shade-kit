@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
 
@@ -15,22 +16,13 @@ public class GitRepositoryLocatorCurrentDirectoryTests
         tempDirectory.CreateDirectory("src", "app");
 
         var locator = new GitRepositoryLocator();
-        var originalDirectory = Directory.GetCurrentDirectory();
+        using var currentDirectory = new CurrentDirectoryScope(tempDirectory.RootPath);
 
-        try
-        {
-            Directory.SetCurrentDirectory(tempDirectory.RootPath);
+        // Act
+        var rootPath = locator.GetRepositoryRootPath(Path.Combine("src", "app"));
 
-            // Act
-            var rootPath = locator.GetRepositoryRootPath(Path.Combine("src", "app"));
-
-            // Assert
-            rootPath
-                .Should().Be(Directory.GetCurrentDirectory());
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalDirectory);
-        }
+        // Assert
+        rootPath
+            .Should().Be(Directory.GetCurrentDirectory());
     }
 }

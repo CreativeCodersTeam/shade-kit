@@ -9,6 +9,8 @@
       package and the binaries carry the same version. Keep it in sync with GitVersion.Tool in build/Program.cs.
     -->
     <GlobalPackageReference Include="GitVersion.MsBuild" Version="6.8.2" />
+    <!-- Sonar rules run in every project of the solution; findings break the build like all other analyzer warnings. -->
+    <GlobalPackageReference Include="SonarAnalyzer.CSharp" Version="10.35.0.4138" />
   </ItemGroup>
   <ItemGroup>
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />

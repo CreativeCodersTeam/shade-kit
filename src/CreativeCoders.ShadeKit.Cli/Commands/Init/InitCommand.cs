@@ -63,7 +63,11 @@ public class InitCommand(
     {
         Ensure.NotNull(options);
 
-        var data = InitCommandData.FromResult(await InitializeAsync(options.Json).ConfigureAwait(false));
+        var result = await CliCommandAbort.RunAsync(
+                () => _repositoryInitializer.InitializeAsync(Directory.GetCurrentDirectory()), _errorMapper,
+                options.Json, _jsonWriter)
+            .ConfigureAwait(false);
+        var data = InitCommandData.FromResult(result);
 
         if (options.Json)
         {
@@ -77,26 +81,14 @@ public class InitCommand(
         return CommandResult.Success;
     }
 
-    private async Task<RepositoryInitResult> InitializeAsync(bool json)
-    {
-        try
-        {
-            return await _repositoryInitializer.InitializeAsync(Directory.GetCurrentDirectory())
-                .ConfigureAwait(false);
-        }
-        catch (Exception e) when (_errorMapper.Map(e) is { } error)
-        {
-            throw CliCommandAbort.Create(error, e, json, _jsonWriter);
-        }
-    }
-
     private void WriteSummary(InitCommandData data)
     {
         _ansiConsole.MarkupLine($"Initialised SHADE kit in {Markup.Escape(data.RepositoryRoot)}.");
 
         foreach (var file in data.Files)
         {
-            _ansiConsole.MarkupLine($"{Markup.Escape(file.Action)}  {Markup.Escape(file.Path)}");
+            _ansiConsole.MarkupLine(
+                $"{Markup.Escape(CliJsonWriter.GetEnumName(file.Action))}  {Markup.Escape(file.Path)}");
         }
 
         _ansiConsole.MarkupLine(

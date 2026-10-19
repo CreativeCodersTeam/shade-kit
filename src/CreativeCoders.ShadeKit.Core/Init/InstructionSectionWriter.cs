@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Files;
+
 namespace CreativeCoders.ShadeKit.Core.Init;
 
 /// <summary>
@@ -7,51 +9,25 @@ namespace CreativeCoders.ShadeKit.Core.Init;
 public sealed class InstructionSectionWriter : IInstructionSectionWriter
 {
     /// <inheritdoc />
-    public async Task ValidateAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        var content = await TextFileContent.ReadAsync(filePath, cancellationToken).ConfigureAwait(false);
-
-        if (content is not null)
-        {
-            FindSection(content, filePath);
-        }
-    }
-
-    /// <inheritdoc />
-    public async Task<InitializedFileAction?> ApplyAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<PlannedFileChange?> PlanAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var content = await TextFileContent.ReadAsync(filePath, cancellationToken).ConfigureAwait(false);
 
         if (content is null)
         {
-            var newFileBytes = TextFileContent.CreateNew(ManagedInstructionSection.Text);
-
-            await File.WriteAllBytesAsync(filePath, newFileBytes, cancellationToken).ConfigureAwait(false);
-
-            return InitializedFileAction.Created;
+            return new PlannedFileChange(TextFileContent.CreateNew(ManagedInstructionSection.Text),
+                InitializedFileAction.Created);
         }
 
-        var section = FindSection(content, filePath);
-
-        if (section is null)
+        if (FindSection(content, filePath) is not { } section)
         {
-            var appendedBytes = content.AppendBlock(ManagedInstructionSection.Text);
-
-            await File.WriteAllBytesAsync(filePath, appendedBytes, cancellationToken).ConfigureAwait(false);
-
-            return InitializedFileAction.Appended;
+            return new PlannedFileChange(content.AppendBlock(ManagedInstructionSection.Text),
+                InitializedFileAction.Appended);
         }
 
-        var newBytes = content.ReplaceLines(section.Value.Begin, section.Value.End, ManagedInstructionSection.Text);
+        var newBytes = content.ReplaceLines(section.Begin, section.End, ManagedInstructionSection.Text);
 
-        if (content.HasBytes(newBytes))
-        {
-            return null;
-        }
-
-        await File.WriteAllBytesAsync(filePath, newBytes, cancellationToken).ConfigureAwait(false);
-
-        return InitializedFileAction.Updated;
+        return content.HasBytes(newBytes) ? null : new PlannedFileChange(newBytes, InitializedFileAction.Updated);
     }
 
     /// <summary>

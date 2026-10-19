@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Engine;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
@@ -22,7 +23,10 @@ public class CliErrorMapperTests
         var error = mapper.Map(new KitRootPathNotFoundException("/repo/src", "/repo"));
 
         // Assert
-        error!.ExitCode
+        error
+            .Should().NotBeNull();
+
+        error.ExitCode
             .Should().Be(ShadeKitCliExitCodes.KitRootNotFound);
 
         error.Code
@@ -44,7 +48,10 @@ public class CliErrorMapperTests
         var error = mapper.Map(new NotAGitRepositoryException("/tmp/work"));
 
         // Assert
-        error!.ExitCode
+        error
+            .Should().NotBeNull();
+
+        error.ExitCode
             .Should().Be(ShadeKitCliExitCodes.NotAGitRepository);
 
         error.Code
@@ -83,7 +90,10 @@ public class CliErrorMapperTests
         var error = mapper.Map(new FormatTooNewException(".shadekit/config.json", 2, 1, null));
 
         // Assert
-        error!.ExitCode
+        error
+            .Should().NotBeNull();
+
+        error.ExitCode
             .Should().Be(ShadeKitCliExitCodes.FormatTooNew);
 
         error.Message
@@ -161,7 +171,7 @@ public class CliErrorMapperTests
                 ShadeKitCliErrorCodes.InvalidManagedSection,
                 "The SHADE kit section markers in '/repo/CLAUDE.md' are invalid: The begin marker in line 3 has no " +
                 "end marker. Fix the markers so that the file contains exactly one '<!-- shade-kit:begin ... -->' " +
-                "line followed by exactly one '<!-- shade-kit:end -->' line, then run 'shade-kit init' again."));
+                "line followed by exactly one '<!-- shade-kit:end -->' line, then run the command again."));
     }
 
     [Fact]
@@ -178,7 +188,7 @@ public class CliErrorMapperTests
             .Should().Be(new CliError(ShadeKitCliExitCodes.UnsupportedFileEncoding,
                 ShadeKitCliErrorCodes.UnsupportedFileEncoding,
                 "'/repo/.gitignore' is encoded as UTF-16 LE, but shade-kit can only change UTF-8 files. Convert " +
-                "the file to UTF-8, then run 'shade-kit init' again."));
+                "the file to UTF-8, then run the command again."));
     }
 
     [Fact]
@@ -194,7 +204,7 @@ public class CliErrorMapperTests
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.PathNotAFile, ShadeKitCliErrorCodes.PathNotAFile,
                 "'/repo/CLAUDE.md' is a directory, but shade-kit must write a file at this path. Move or remove " +
-                "the directory, then run 'shade-kit init' again."));
+                "the directory, then run the command again."));
     }
 
     [Fact]
@@ -333,7 +343,10 @@ public class CliErrorMapperTests
             new System.Text.Json.JsonException("inner")));
 
         // Assert
-        error!.ExitCode
+        error
+            .Should().NotBeNull();
+
+        error.ExitCode
             .Should().Be(ShadeKitCliExitCodes.InvalidFile);
     }
 }

@@ -4,6 +4,7 @@ using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
+using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
 
@@ -46,7 +47,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Document.Title
+        result
+            .Should().NotBeNull();
+
+        result.Document.Title
             .Should().Be("Login");
 
         result.Warnings
@@ -67,7 +71,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Warnings
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
             .Should().BeEmpty();
     }
 
@@ -86,7 +93,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Document.Title
+        result
+            .Should().NotBeNull();
+
+        result.Document.Title
             .Should().Be("Login");
     }
 
@@ -104,7 +114,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Document.Title
+        result
+            .Should().NotBeNull();
+
+        result.Document.Title
             .Should().Be("Login");
 
         result.Warnings
@@ -129,7 +142,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Document.Title
+        result
+            .Should().NotBeNull();
+
+        result.Document.Title
             .Should().Be("Login");
 
         result.Warnings
@@ -196,7 +212,10 @@ public class KitStoreJsonTests
             FormatAccess.Upgrade, TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Document.Title
+        result
+            .Should().NotBeNull();
+
+        result.Document.Title
             .Should().Be("Login");
 
         result.Warnings
@@ -216,7 +235,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Warnings
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
             .Should().Equal(new FormatWarning(FormatWarningKind.UpgradeNeeded, ConfigDisplayPath, 1, 2));
     }
 
@@ -271,7 +293,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Warnings
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
             .Should().Equal(
                 new FormatWarning(FormatWarningKind.UpgradeNeeded, SampleDisplayPath, 1, 2),
                 new FormatWarning(FormatWarningKind.UpgradeNeeded, ConfigDisplayPath, 1, 2));
@@ -339,7 +364,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Warnings
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
             .Should().Equal(new FormatWarning(FormatWarningKind.UpgradeNeeded, ConfigDisplayPath, 1, 2));
     }
 
@@ -493,15 +521,33 @@ public class KitStoreJsonTests
         bytes.Take(3)
             .Should().NotEqual(new byte[] { 0xEF, 0xBB, 0xBF });
 
-        var root = JsonNode.Parse(bytes)!;
+        var root = JsonNode.Parse(bytes);
 
-        root["schemaVersion"]!.GetValue<int>()
+        root
+            .Should().NotBeNull();
+
+        var schemaVersionNode = root["schemaVersion"];
+
+        schemaVersionNode
+            .Should().NotBeNull();
+
+        schemaVersionNode.GetValue<int>()
             .Should().Be(2);
 
-        root["minEngineVersion"]!.GetValue<string>()
+        var minEngineVersionNode = root["minEngineVersion"];
+
+        minEngineVersionNode
+            .Should().NotBeNull();
+
+        minEngineVersionNode.GetValue<string>()
             .Should().Be("0.2.0");
 
-        root["title"]!.GetValue<string>()
+        var titleNode = root["title"];
+
+        titleNode
+            .Should().NotBeNull();
+
+        titleNode.GetValue<string>()
             .Should().Be("Grüße");
     }
 
@@ -556,7 +602,17 @@ public class KitStoreJsonTests
             FormatAccess.Write, TestContext.Current.CancellationToken);
 
         // Assert
-        JsonNode.Parse(tempDirectory.ReadFileText(".shadekit", SampleFileName))!["title"]!.GetValue<string>()
+        var root = JsonNode.Parse(tempDirectory.ReadFileText(".shadekit", SampleFileName));
+
+        root
+            .Should().NotBeNull();
+
+        var titleNode = root["title"];
+
+        titleNode
+            .Should().NotBeNull();
+
+        titleNode.GetValue<string>()
             .Should().Be("Logout");
     }
 
@@ -600,16 +656,34 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        var root = JsonNode.Parse(tempDirectory.ReadFileText(".shadekit", SampleFileName))!;
+        var root = JsonNode.Parse(tempDirectory.ReadFileText(".shadekit", SampleFileName));
 
-        root["schemaVersion"]!.GetValue<int>()
+        root
+            .Should().NotBeNull();
+
+        var schemaVersionNode = root["schemaVersion"];
+
+        schemaVersionNode
+            .Should().NotBeNull();
+
+        schemaVersionNode.GetValue<int>()
             .Should().Be(2);
 
-        root["title"]!.GetValue<string>()
+        var titleNode = root["title"];
+
+        titleNode
+            .Should().NotBeNull();
+
+        titleNode.GetValue<string>()
             .Should().Be("Login");
 
-        (await kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Write,
-                TestContext.Current.CancellationToken))!.Warnings
+        var rereadResult = await kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id,
+            FormatAccess.Write, TestContext.Current.CancellationToken);
+
+        rereadResult
+            .Should().NotBeNull();
+
+        rereadResult.Warnings
             .Should().BeEmpty();
     }
 
@@ -840,7 +914,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Warnings
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
             .Should().BeEmpty();
     }
 
@@ -875,7 +952,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Warnings
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
             .Should().Equal(new FormatWarning(FormatWarningKind.UpgradeNeeded, ConfigDisplayPath, 1, 2));
     }
 
@@ -895,7 +975,10 @@ public class KitStoreJsonTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Warnings
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
             .Should().ContainSingle();
     }
 

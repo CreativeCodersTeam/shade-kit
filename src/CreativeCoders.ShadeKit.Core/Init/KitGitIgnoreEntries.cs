@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Store;
+
 namespace CreativeCoders.ShadeKit.Core.Init;
 
 /// <summary>
@@ -15,7 +17,7 @@ public static class KitGitIgnoreEntries
     /// </value>
     public static IReadOnlyList<string> All { get; } =
     [
-        ".shadekit/local.json",
-        ".shadekit/features/current-feature.json"
+        KitStorePaths.GetRepositoryPath(KitStorePaths.LocalFileName),
+        KitStorePaths.GetRepositoryPath($"{KitStorePaths.FeaturesDirName}/{KitStorePaths.CurrentFeatureFileName}")
     ];
 }

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Config;
@@ -32,13 +31,9 @@ public sealed class RepositoryInitializer(
 {
     private const string GitIgnoreFileName = ".gitignore";
 
-    private const string HashPrefix = "sha256:";
-
-    private const string DefaultProfile = "feature";
+    private const string FeaturesDir = KitStorePaths.FeaturesDirName + "/";
 
     private static readonly string[] InstructionFileNames = ["CLAUDE.md", "AGENTS.md"];
-
-    private static readonly UTF8Encoding Utf8WithoutBom = new(false);
 
     private readonly IGitRepositoryLocator _gitRepositoryLocator = Ensure.NotNull(gitRepositoryLocator);
 
@@ -59,150 +54,154 @@ public sealed class RepositoryInitializer(
         cancellationToken.ThrowIfCancellationRequested();
 
         var repositoryRootPath = _gitRepositoryLocator.GetRepositoryRootPath(path);
-        var kitRootPath = Path.Combine(repositoryRootPath, KitStorePaths.RootPath);
 
-        if (Path.Exists(kitRootPath))
+        // The store creates the kit root with its first file.
+        var kitStore = _kitStoreFactory.CreateForRepositoryRoot(repositoryRootPath);
+
+        if (Path.Exists(kitStore.RootPath))
         {
-            throw new KitAlreadyInitializedException(kitRootPath);
+            throw new KitAlreadyInitializedException(kitStore.RootPath);
         }
 
-        await ValidateRepositoryFilesAsync(repositoryRootPath, cancellationToken).ConfigureAwait(false);
+        // Planning reads and checks every repository file, so an invalid file stops the initialisation before
+        // anything is written.
+        var repositoryFileChanges = await PlanRepositoryFilesAsync(repositoryRootPath, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A cancellation after the preconditions must not leave a kit root behind that blocks the next init.
+        cancellationToken.ThrowIfCancellationRequested();
 
         var files = new List<InitializedFile>();
 
-        await WriteKitRootAsync(repositoryRootPath, kitRootPath, files, cancellationToken).ConfigureAwait(false);
-        await WriteRepositoryFilesAsync(repositoryRootPath, files, cancellationToken).ConfigureAwait(false);
+        await WriteKitRootAsync(kitStore, files, cancellationToken).ConfigureAwait(false);
+        await WriteRepositoryFilesAsync(repositoryRootPath, repositoryFileChanges, files, cancellationToken)
+            .ConfigureAwait(false);
 
         return new RepositoryInitResult(repositoryRootPath, files);
     }
 
     /// <summary>
-    /// Checks, before anything is written, that <c>.gitignore</c>, <c>CLAUDE.md</c>, and <c>AGENTS.md</c> can be
-    /// changed.
+    /// Computes the changes of <c>.gitignore</c>, <c>CLAUDE.md</c>, and <c>AGENTS.md</c>, in this order.
     /// </summary>
-    private async Task ValidateRepositoryFilesAsync(string repositoryRootPath, CancellationToken cancellationToken)
+    /// <returns>The name and change of every file that needs a change.</returns>
+    private async Task<List<(string FileName, PlannedFileChange Change)>> PlanRepositoryFilesAsync(
+        string repositoryRootPath, CancellationToken cancellationToken)
     {
-        await _gitIgnoreWriter.ValidateAsync(Path.Combine(repositoryRootPath, GitIgnoreFileName), cancellationToken)
-            .ConfigureAwait(false);
+        var changes = new List<(string FileName, PlannedFileChange Change)>();
+        var plannedFilePaths = new HashSet<string>(StringComparer.Ordinal);
+
+        await PlanFileAsync(GitIgnoreFileName, _gitIgnoreWriter.PlanAsync).ConfigureAwait(false);
 
         foreach (var fileName in InstructionFileNames)
         {
-            await _instructionSectionWriter.ValidateAsync(Path.Combine(repositoryRootPath, fileName), cancellationToken)
-                .ConfigureAwait(false);
+            await PlanFileAsync(fileName, _instructionSectionWriter.PlanAsync).ConfigureAwait(false);
+        }
+
+        return changes;
+
+        async Task PlanFileAsync(string fileName,
+            Func<string, CancellationToken, Task<PlannedFileChange?>> planAsync)
+        {
+            var filePath = Path.Combine(repositoryRootPath, fileName);
+
+            // A link to a file that is already planned, for example AGENTS.md linked to CLAUDE.md, is that file: its
+            // change is already planned and would otherwise be reported twice.
+            if (!plannedFilePaths.Add(ResolveFinalPath(filePath)))
+            {
+                return;
+            }
+
+            if (await planAsync(filePath, cancellationToken).ConfigureAwait(false) is { } change)
+            {
+                changes.Add((fileName, change));
+            }
         }
     }
 
-    private async Task WriteKitRootAsync(string repositoryRootPath, string kitRootPath, List<InitializedFile> files,
+    private static string ResolveFinalPath(string filePath)
+    {
+        // ResolveLinkTarget throws for a missing path and returns null for a path that is not a link.
+        return Path.Exists(filePath)
+            ? File.ResolveLinkTarget(filePath, returnFinalTarget: true)?.FullName ?? filePath
+            : filePath;
+    }
+
+    private async Task WriteKitRootAsync(IKitStore kitStore, List<InitializedFile> files,
         CancellationToken cancellationToken)
     {
         var kitVersion = _engineVersionProvider.Version;
 
-        // The store creates the kit root with its first file.
-        var kitStore = _kitStoreFactory.CreateForKitRoot(kitRootPath);
-
-        // A cancellation after the preconditions must not leave a kit root behind that blocks the next init.
-        cancellationToken.ThrowIfCancellationRequested();
-
-        await kitStore.WriteJsonAsync(KitStorePaths.ConfigFileName, FormatIds.Config, CreateConfig(kitVersion),
-            FormatAccess.Write, cancellationToken).ConfigureAwait(false);
-        files.Add(CreatedInKitRoot(KitStorePaths.ConfigFileName));
-
-        await kitStore.WriteJsonAsync(KitStorePaths.GatesFileName, FormatIds.Gates, new GatesConfig(),
-            FormatAccess.Write, cancellationToken).ConfigureAwait(false);
-        files.Add(CreatedInKitRoot(KitStorePaths.GatesFileName));
-
-        var templatesLock = await WriteTemplatesAsync(repositoryRootPath, kitVersion, files, cancellationToken)
-            .ConfigureAwait(false);
-
-        await kitStore.WriteJsonAsync(KitStorePaths.TemplatesLockFileName, FormatIds.TemplatesLock, templatesLock,
-            FormatAccess.Write, cancellationToken).ConfigureAwait(false);
-        files.Add(CreatedInKitRoot(KitStorePaths.TemplatesLockFileName));
-
-        Directory.CreateDirectory(Path.Combine(kitRootPath, KitStorePaths.FeaturesDirName));
-        files.Add(CreatedInKitRoot(KitStorePaths.FeaturesDirName + "/"));
-    }
-
-    private async Task WriteRepositoryFilesAsync(string repositoryRootPath, List<InitializedFile> files,
-        CancellationToken cancellationToken)
-    {
-        var gitIgnoreAction = await _gitIgnoreWriter
-            .EnsureEntriesAsync(Path.Combine(repositoryRootPath, GitIgnoreFileName), cancellationToken)
-            .ConfigureAwait(false);
-        AddIfChanged(files, GitIgnoreFileName, gitIgnoreAction);
-
-        foreach (var fileName in InstructionFileNames)
+        // Every other setting keeps the default of KitConfig.
+        var config = new KitConfig
         {
-            var action = await _instructionSectionWriter
-                .ApplyAsync(Path.Combine(repositoryRootPath, fileName), cancellationToken)
+            KitVersion = kitVersion,
+            Trackers = new Dictionary<string, string> { ["github.com"] = "gh" }
+        };
+
+        await WriteDocumentAsync(KitStorePaths.ConfigFileName, FormatIds.Config, config).ConfigureAwait(false);
+
+        await WriteDocumentAsync(KitStorePaths.GatesFileName, FormatIds.Gates, new GatesConfig())
+            .ConfigureAwait(false);
+
+        var templatesLock = await WriteTemplatesAsync(kitStore, kitVersion, files, cancellationToken)
+            .ConfigureAwait(false);
+
+        await WriteDocumentAsync(KitStorePaths.TemplatesLockFileName, FormatIds.TemplatesLock, templatesLock)
+            .ConfigureAwait(false);
+
+        kitStore.CreateDirectory(KitStorePaths.FeaturesDirName);
+        files.Add(CreatedInKitRoot(FeaturesDir));
+
+        async Task WriteDocumentAsync<T>(string relativePath, string formatId, T document)
+            where T : VersionedDocument
+        {
+            await kitStore.WriteJsonAsync(relativePath, formatId, document, FormatAccess.Write, cancellationToken)
                 .ConfigureAwait(false);
-            AddIfChanged(files, fileName, action);
+            files.Add(CreatedInKitRoot(relativePath));
         }
     }
 
     /// <summary>
-    /// Writes every shipped template to its repository path, in catalog order.
+    /// Writes every shipped template as UTF-8 without byte order mark, in catalog order.
     /// </summary>
     /// <returns>The lock with one entry per template, sorted ordinally by path.</returns>
-    private async Task<TemplatesLock> WriteTemplatesAsync(string repositoryRootPath, string kitVersion,
+    private async Task<TemplatesLock> WriteTemplatesAsync(IKitStore kitStore, string kitVersion,
         List<InitializedFile> files, CancellationToken cancellationToken)
     {
         var lockEntries = new List<TemplatesLockEntry>();
 
         foreach (var shippedTemplate in ShippedTemplates.All)
         {
-            lockEntries.Add(await WriteTemplateAsync(repositoryRootPath, shippedTemplate, kitVersion, cancellationToken)
-                .ConfigureAwait(false));
-            files.Add(new InitializedFile(shippedTemplate.RepositoryPath, InitializedFileAction.Created));
+            var content = Encoding.UTF8.GetBytes(_shippedTemplateReader.ReadContent(shippedTemplate));
+
+            await kitStore.WriteFileAsync(shippedTemplate.KitPath, content, cancellationToken).ConfigureAwait(false);
+            files.Add(CreatedInKitRoot(shippedTemplate.KitPath));
+
+            lockEntries.Add(new TemplatesLockEntry
+            {
+                Path = shippedTemplate.RepositoryPath,
+                KitVersion = kitVersion,
+                Hash = TemplatesLockEntry.ComputeHash(content)
+            });
         }
 
         return new TemplatesLock { Templates = [.. lockEntries.OrderBy(entry => entry.Path, StringComparer.Ordinal)] };
     }
 
-    /// <summary>
-    /// Writes a shipped template to its repository path as UTF-8 without byte order mark.
-    /// </summary>
-    /// <returns>The lock entry with the SHA-256 hash of the bytes written.</returns>
-    private async Task<TemplatesLockEntry> WriteTemplateAsync(string repositoryRootPath,
-        ShippedTemplate shippedTemplate, string kitVersion, CancellationToken cancellationToken)
+    private static async Task WriteRepositoryFilesAsync(string repositoryRootPath,
+        List<(string FileName, PlannedFileChange Change)> changes, List<InitializedFile> files,
+        CancellationToken cancellationToken)
     {
-        var bytes = Utf8WithoutBom.GetBytes(_shippedTemplateReader.ReadContent(shippedTemplate));
-        var fullPath = Path.Combine(repositoryRootPath,
-            shippedTemplate.RepositoryPath.Replace('/', Path.DirectorySeparatorChar));
-
-        // A repository path always has a parent directory below the repository root.
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        await File.WriteAllBytesAsync(fullPath, bytes, cancellationToken).ConfigureAwait(false);
-
-        return new TemplatesLockEntry
+        foreach (var (fileName, change) in changes)
         {
-            Path = shippedTemplate.RepositoryPath,
-            KitVersion = kitVersion,
-            Hash = HashPrefix + Convert.ToHexStringLower(SHA256.HashData(bytes))
-        };
-    }
-
-    private static KitConfig CreateConfig(string kitVersion)
-    {
-        return new KitConfig
-        {
-            KitVersion = kitVersion,
-            DefaultProfile = DefaultProfile,
-            OutdatedFormatOnRead = OutdatedFormatOnReadPolicy.MigrateAndWarn,
-            Trackers = new Dictionary<string, string> { ["github.com"] = "gh" },
-            Report = ReportPolicy.Ask
-        };
+            await File.WriteAllBytesAsync(Path.Combine(repositoryRootPath, fileName), change.Content,
+                cancellationToken).ConfigureAwait(false);
+            files.Add(new InitializedFile(fileName, change.Action));
+        }
     }
 
     private static InitializedFile CreatedInKitRoot(string relativePath)
     {
-        return new InitializedFile($"{KitStorePaths.RootPath}/{relativePath}", InitializedFileAction.Created);
-    }
-
-    private static void AddIfChanged(List<InitializedFile> files, string path, InitializedFileAction? action)
-    {
-        if (action is { } changedAction)
-        {
-            files.Add(new InitializedFile(path, changedAction));
-        }
+        return new InitializedFile(KitStorePaths.GetRepositoryPath(relativePath), InitializedFileAction.Created);
     }
 }

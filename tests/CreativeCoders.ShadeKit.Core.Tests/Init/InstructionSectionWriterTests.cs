@@ -1,7 +1,8 @@
 using System.Text;
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Init;
-using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Init;
 
@@ -14,8 +15,6 @@ public class InstructionSectionWriterTests
     private const string End = "<!-- shade-kit:end -->";
 
     private const string ExpectedSection = ManagedInstructionSection.Text;
-
-    private static readonly byte[] Bom = [0xEF, 0xBB, 0xBF];
 
     public static TheoryData<string, string> InvalidMarkerFiles { get; } = new()
     {
@@ -40,17 +39,16 @@ public class InstructionSectionWriterTests
     };
 
     [Fact]
-    public async Task ApplyAsync_FileCreatedByApply_SecondCallReturnsNullAndLeavesFileUnchanged()
+    public async Task PlanAsync_FileWrittenFromPlan_SecondCallReturnsNullAndLeavesFileUnchanged()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
-        var writer = new InstructionSectionWriter();
-        await writer.ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
         var afterFirstCall = tempDirectory.ReadFileBytes(FileName);
 
         // Act
-        var action = await writer.ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -63,16 +61,16 @@ public class InstructionSectionWriterTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ApplyAsync_SectionAtStartOfFile_ReplacesSectionAndKeepsBom(bool withBom)
+    public async Task PlanAsync_SectionAtStartOfFile_ReplacesSectionAndKeepsBom(bool withBom)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        byte[] prefix = withBom ? Bom : [];
+        byte[] prefix = withBom ? TestText.Utf8Bom : [];
         var filePath = tempDirectory.WriteFileBytes([.. prefix, .. Encoding.UTF8.GetBytes($"{Begin}\nold\n{End}\nrest\n")],
             FileName);
 
         // Act
-        var action = await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -85,17 +83,17 @@ public class InstructionSectionWriterTests
     [Theory]
     [InlineData(true, "\n")]
     [InlineData(false, "")]
-    public async Task ApplyAsync_IdenticalSectionWithBomOrWithoutTerminator_ReturnsNullAndLeavesFileUnchanged(
+    public async Task PlanAsync_IdenticalSectionWithBomOrWithoutTerminator_ReturnsNullAndLeavesFileUnchanged(
         bool withBom, string terminator)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        byte[] prefix = withBom ? Bom : [];
+        byte[] prefix = withBom ? TestText.Utf8Bom : [];
         byte[] original = [.. prefix, .. Encoding.UTF8.GetBytes($"intro\n{ExpectedSection}{terminator}")];
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var action = await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -106,16 +104,15 @@ public class InstructionSectionWriterTests
     }
 
     [Fact]
-    public async Task ApplyAsync_LfSectionInFileWithCrLf_UpdatesSectionToCrLfOnce()
+    public async Task PlanAsync_LfSectionInFileWithCrLf_UpdatesSectionToCrLfOnce()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile($"intro\r\n{ExpectedSection}\n", FileName);
-        var writer = new InstructionSectionWriter();
 
         // Act
-        var firstAction = await writer.ApplyAsync(filePath, TestContext.Current.CancellationToken);
-        var secondAction = await writer.ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var firstAction = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+        var secondAction = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         firstAction
@@ -131,15 +128,15 @@ public class InstructionSectionWriterTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ApplyAsync_EmptyFile_AppendsOnlyTheSection(bool withBom)
+    public async Task PlanAsync_EmptyFile_AppendsOnlyTheSection(bool withBom)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        byte[] prefix = withBom ? Bom : [];
+        byte[] prefix = withBom ? TestText.Utf8Bom : [];
         var filePath = tempDirectory.WriteFileBytes(prefix, FileName);
 
         // Act
-        var action = await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -150,7 +147,7 @@ public class InstructionSectionWriterTests
     }
 
     [Fact]
-    public async Task ApplyAsync_CanceledTokenWithExistingFile_ThrowsAndLeavesFileUnchanged()
+    public async Task PlanAsync_CanceledTokenWithExistingFile_ThrowsAndLeavesFileUnchanged()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -158,7 +155,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().ApplyAsync(filePath, new CancellationToken(true));
+        var act = () => new InstructionSectionWriter().PlanAsync(filePath, new CancellationToken(true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -169,14 +166,14 @@ public class InstructionSectionWriterTests
 
     [Fact]
     [Trait("Requirement", "FP02-AC5")]
-    public async Task ApplyAsync_FileMissing_CreatesFileWithOnlyTheSection()
+    public async Task PlanAsync_FileMissing_CreatesFileWithOnlyTheSection()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var action = await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -188,7 +185,7 @@ public class InstructionSectionWriterTests
 
     [Fact]
     [Trait("Requirement", "FP02-AC5")]
-    public async Task ApplyAsync_FileWithoutMarkers_AppendsSectionAndKeepsExistingContentUnchanged()
+    public async Task PlanAsync_FileWithoutMarkers_AppendsSectionAndKeepsExistingContentUnchanged()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -196,7 +193,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var action = await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -207,14 +204,14 @@ public class InstructionSectionWriterTests
     }
 
     [Fact]
-    public async Task ApplyAsync_FileWithoutTrailingNewline_AddsNewlineBeforeBlankLine()
+    public async Task PlanAsync_FileWithoutTrailingNewline_AddsNewlineBeforeBlankLine()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile("# Project", FileName);
 
         // Act
-        await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileText(FileName)
@@ -224,7 +221,7 @@ public class InstructionSectionWriterTests
     [Theory]
     [InlineData("\n")]
     [InlineData("\r\n")]
-    public async Task ApplyAsync_FileEndsWithBlankLine_AppendsSectionWithoutAnotherBlankLine(string newLine)
+    public async Task PlanAsync_FileEndsWithBlankLine_AppendsSectionWithoutAnotherBlankLine(string newLine)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -232,7 +229,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -244,7 +241,7 @@ public class InstructionSectionWriterTests
 
     [Theory]
     [MemberData(nameof(UnsupportedEncodingFiles))]
-    public async Task ApplyAsync_Utf16OrUtf32File_ThrowsUnsupportedFileEncodingExceptionAndLeavesFileUnchanged(
+    public async Task PlanAsync_Utf16OrUtf32File_ThrowsUnsupportedFileEncodingExceptionAndLeavesFileUnchanged(
         byte[] original, string expectedEncodingName)
     {
         // Arrange
@@ -252,7 +249,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UnsupportedFileEncodingException>()).Which;
@@ -267,35 +264,15 @@ public class InstructionSectionWriterTests
             .Should().Equal(original);
     }
 
-    [Theory]
-    [MemberData(nameof(UnsupportedEncodingFiles))]
-    public async Task ValidateAsync_Utf16OrUtf32File_ThrowsUnsupportedFileEncodingExceptionAndLeavesFileUnchanged(
-        byte[] original, string expectedEncodingName)
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var filePath = tempDirectory.WriteFileBytes(original, FileName);
-
-        // Act
-        var act = () => new InstructionSectionWriter().ValidateAsync(filePath, TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<UnsupportedFileEncodingException>())
-            .Which.EncodingName.Should().Be(expectedEncodingName);
-
-        tempDirectory.ReadFileBytes(FileName)
-            .Should().Equal(original);
-    }
-
     [Fact]
-    public async Task ApplyAsync_PathIsDirectory_ThrowsPathNotAFileException()
+    public async Task PlanAsync_PathIsDirectory_ThrowsPathNotAFileException()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var directoryPath = tempDirectory.CreateDirectory(FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().ApplyAsync(directoryPath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionWriter().PlanAsync(directoryPath, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<PathNotAFileException>())
@@ -306,42 +283,26 @@ public class InstructionSectionWriterTests
     }
 
     [Fact]
-    public async Task ValidateAsync_PathIsDirectory_ThrowsPathNotAFileException()
+    public async Task PlanAsync_CrLfFileWithBomWithoutMarkers_AppendsWithCrLfAndKeepsBom()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        var directoryPath = tempDirectory.CreateDirectory(FileName);
+        var filePath = tempDirectory.WriteFileBytes([.. TestText.Utf8Bom, .. "# Project\r\n"u8], FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().ValidateAsync(directoryPath,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<PathNotAFileException>())
-            .Which.Path.Should().Be(directoryPath);
-    }
-
-    [Fact]
-    public async Task ApplyAsync_CrLfFileWithBomWithoutMarkers_AppendsWithCrLfAndKeepsBom()
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var filePath = tempDirectory.WriteFileBytes([.. Bom, .. "# Project\r\n"u8], FileName);
-
-        // Act
-        await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
             .Should().Equal([
-                .. Bom,
+                .. TestText.Utf8Bom,
                 .. Encoding.UTF8.GetBytes("# Project\r\n\r\n" + ToCrLf(ExpectedSection) + "\r\n")
             ]);
     }
 
     [Fact]
     [Trait("Requirement", "FP02-AC5")]
-    public async Task ApplyAsync_SectionWithOtherContent_ReplacesSectionAndKeepsContentOutsideUnchanged()
+    public async Task PlanAsync_SectionWithOtherContent_ReplacesSectionAndKeepsContentOutsideUnchanged()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -350,7 +311,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFile($"{before}{Begin}\nold content\n{End}{after}", FileName);
 
         // Act
-        var action = await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -361,22 +322,22 @@ public class InstructionSectionWriterTests
         text
             .Should().Be(before + ExpectedSection + after);
 
-        CountLinesStartingWith(text, ManagedInstructionSection.BeginMarkerPrefix)
+        TestText.CountLinesStartingWith(text, ManagedInstructionSection.BeginMarkerPrefix)
             .Should().Be(1);
 
-        CountLinesStartingWith(text, ManagedInstructionSection.EndMarker)
+        TestText.CountLinesStartingWith(text, ManagedInstructionSection.EndMarker)
             .Should().Be(1);
     }
 
     [Fact]
-    public async Task ApplyAsync_IndentedMarkers_ReplacesWholeMarkerLines()
+    public async Task PlanAsync_IndentedMarkers_ReplacesWholeMarkerLines()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile($"intro\n  {Begin}  \nold\n\t{End}\t\noutro\n", FileName);
 
         // Act
-        var action = await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -387,14 +348,14 @@ public class InstructionSectionWriterTests
     }
 
     [Fact]
-    public async Task ApplyAsync_SectionIsLastLineWithoutTerminator_ReplacesSectionWithoutAddingTerminator()
+    public async Task PlanAsync_SectionIsLastLineWithoutTerminator_ReplacesSectionWithoutAddingTerminator()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile($"intro\n{Begin}\nold\n{End}", FileName);
 
         // Act
-        await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileText(FileName)
@@ -402,20 +363,20 @@ public class InstructionSectionWriterTests
     }
 
     [Fact]
-    public async Task ApplyAsync_CrLfFileWithBomAndOtherSection_ReplacesWithCrLfAndKeepsBom()
+    public async Task PlanAsync_CrLfFileWithBomAndOtherSection_ReplacesWithCrLfAndKeepsBom()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFileBytes(
-            [.. Bom, .. Encoding.UTF8.GetBytes($"intro\r\n{Begin}\r\nold\r\n{End}\r\noutro\r\n")], FileName);
+            [.. TestText.Utf8Bom, .. Encoding.UTF8.GetBytes($"intro\r\n{Begin}\r\nold\r\n{End}\r\noutro\r\n")], FileName);
 
         // Act
-        await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
             .Should().Equal([
-                .. Bom,
+                .. TestText.Utf8Bom,
                 .. Encoding.UTF8.GetBytes($"intro\r\n{ToCrLf(ExpectedSection)}\r\noutro\r\n")
             ]);
     }
@@ -423,7 +384,7 @@ public class InstructionSectionWriterTests
     [Theory]
     [InlineData("\n")]
     [InlineData("\r\n")]
-    public async Task ApplyAsync_SectionIdentical_ReturnsNullAndLeavesFileUnchanged(string newLine)
+    public async Task PlanAsync_SectionIdentical_ReturnsNullAndLeavesFileUnchanged(string newLine)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -433,7 +394,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var action = await new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -445,17 +406,16 @@ public class InstructionSectionWriterTests
 
     [Fact]
     [Trait("Requirement", "FP02-AC5")]
-    public async Task ApplyAsync_CalledTwice_FileContainsExactlyOneSection()
+    public async Task PlanAsync_CalledTwice_FileContainsExactlyOneSection()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile("# Project\n", FileName);
-        var writer = new InstructionSectionWriter();
-        await writer.ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
         var afterFirstCall = tempDirectory.ReadFileBytes(FileName);
 
         // Act
-        var action = await writer.ApplyAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -464,13 +424,13 @@ public class InstructionSectionWriterTests
         tempDirectory.ReadFileBytes(FileName)
             .Should().Equal(afterFirstCall);
 
-        CountLinesStartingWith(tempDirectory.ReadFileText(FileName), ManagedInstructionSection.BeginMarkerPrefix)
+        TestText.CountLinesStartingWith(tempDirectory.ReadFileText(FileName), ManagedInstructionSection.BeginMarkerPrefix)
             .Should().Be(1);
     }
 
     [Theory]
     [MemberData(nameof(InvalidMarkerFiles))]
-    public async Task ApplyAsync_InvalidMarkers_ThrowsInvalidManagedSectionExceptionAndLeavesFileUnchanged(
+    public async Task PlanAsync_InvalidMarkers_ThrowsInvalidManagedSectionExceptionAndLeavesFileUnchanged(
         string text, string expectedReason)
     {
         // Arrange
@@ -479,33 +439,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().ApplyAsync(filePath, TestContext.Current.CancellationToken);
-
-        // Assert
-        var exception = (await act.Should().ThrowAsync<InvalidManagedSectionException>()).Which;
-
-        exception.FilePath
-            .Should().Be(filePath);
-
-        exception.Reason
-            .Should().Be(expectedReason);
-
-        tempDirectory.ReadFileBytes(FileName)
-            .Should().Equal(original);
-    }
-
-    [Theory]
-    [MemberData(nameof(InvalidMarkerFiles))]
-    public async Task ValidateAsync_InvalidMarkers_ThrowsInvalidManagedSectionExceptionAndLeavesFileUnchanged(
-        string text, string expectedReason)
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var original = Encoding.UTF8.GetBytes(text);
-        var filePath = tempDirectory.WriteFileBytes(original, FileName);
-
-        // Act
-        var act = () => new InstructionSectionWriter().ValidateAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<InvalidManagedSectionException>()).Which;
@@ -526,7 +460,7 @@ public class InstructionSectionWriterTests
     [InlineData($"intro\n  {Begin}\n\t{End}  ")]
     [InlineData("<!-- shade-kit:end --> trailing text\n<!-- shade-kit:ending -->\n")]
     [InlineData("<!-- SHADE-KIT:begin -->\n<!-- SHADE-KIT:end -->\n")]
-    public async Task ValidateAsync_ValidFile_DoesNotThrowAndLeavesFileUnchanged(string text)
+    public async Task PlanAsync_ValidFile_DoesNotThrowAndLeavesFileUnchanged(string text)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -534,7 +468,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().ValidateAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().NotThrowAsync();
@@ -544,14 +478,14 @@ public class InstructionSectionWriterTests
     }
 
     [Fact]
-    public async Task ValidateAsync_FileMissing_DoesNotThrowAndCreatesNoFile()
+    public async Task PlanAsync_FileMissing_DoesNotThrowAndCreatesNoFile()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().ValidateAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().NotThrowAsync();
@@ -565,38 +499,24 @@ public class InstructionSectionWriterTests
     [InlineData("")]
     [InlineData("  ")]
     [InlineData("CLAUDE.md")]
-    public async Task ApplyAsync_PathNotAbsolute_ThrowsArgumentException(string? filePath)
+    public async Task PlanAsync_PathNotAbsolute_ThrowsArgumentException(string? filePath)
     {
         // Act
-        var act = () => new InstructionSectionWriter().ApplyAsync(filePath!, TestContext.Current.CancellationToken);
-
-        // Assert
-        await act.Should().ThrowAsync<ArgumentException>();
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("  ")]
-    [InlineData("CLAUDE.md")]
-    public async Task ValidateAsync_PathNotAbsolute_ThrowsArgumentException(string? filePath)
-    {
-        // Act
-        var act = () => new InstructionSectionWriter().ValidateAsync(filePath!, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionWriter().PlanAsync(filePath!, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
     [Fact]
-    public async Task ApplyAsync_CanceledToken_ThrowsAndCreatesNoFile()
+    public async Task PlanAsync_CanceledToken_ThrowsAndCreatesNoFile()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().ApplyAsync(filePath, new CancellationToken(true));
+        var act = () => new InstructionSectionWriter().PlanAsync(filePath, new CancellationToken(true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -605,27 +525,25 @@ public class InstructionSectionWriterTests
             .Should().BeFalse();
     }
 
-    [Fact]
-    public async Task ValidateAsync_CanceledToken_ThrowsOperationCanceledException()
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var filePath = tempDirectory.WriteFile("# Project\n", FileName);
-
-        // Act
-        var act = () => new InstructionSectionWriter().ValidateAsync(filePath, new CancellationToken(true));
-
-        // Assert
-        await act.Should().ThrowAsync<OperationCanceledException>();
-    }
-
     private static string ToCrLf(string text)
     {
         return text.Replace("\n", "\r\n", StringComparison.Ordinal);
     }
 
-    private static int CountLinesStartingWith(string text, string prefix)
+    /// <summary>
+    /// Plans the change of an instruction file and writes it, as the initialisation does.
+    /// </summary>
+    /// <returns>The action of the planned change, or <see langword="null" /> if the file needs no change.</returns>
+    private static async Task<InitializedFileAction?> PlanAndWriteAsync(string filePath,
+        CancellationToken cancellationToken)
     {
-        return text.Split('\n').Count(line => line.Trim().StartsWith(prefix, StringComparison.Ordinal));
+        var change = await new InstructionSectionWriter().PlanAsync(filePath, cancellationToken);
+
+        if (change is not null)
+        {
+            await File.WriteAllBytesAsync(filePath, change.Content, cancellationToken);
+        }
+
+        return change?.Action;
     }
 }

@@ -24,16 +24,18 @@ public sealed class FormatRegistry : IFormatRegistry
         Ensure.NotNull(formats);
 
         Formats = [.. formats.Select(format => Ensure.NotNull(format))];
-        _formatsById = new Dictionary<string, FormatDefinition>(StringComparer.Ordinal);
 
-        foreach (var format in Formats)
+        var duplicateId = Formats
+            .GroupBy(format => format.Id, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Skip(1).Any())?.Key;
+
+        if (duplicateId is not null)
         {
-            if (!_formatsById.TryAdd(format.Id, format))
-            {
-                throw new ArgumentException($"File type '{format.Id}' is registered more than once.",
-                    nameof(formats));
-            }
+            throw new ArgumentException($"File type '{duplicateId}' is registered more than once.",
+                nameof(formats));
         }
+
+        _formatsById = Formats.ToDictionary(format => format.Id, StringComparer.Ordinal);
     }
 
     /// <inheritdoc />

@@ -122,6 +122,26 @@ public class KitStore : IKitStore
         await File.WriteAllTextAsync(fullPath, json, Utf8WithoutBom, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    public async Task WriteFileAsync(string relativePath, byte[] content,
+        CancellationToken cancellationToken = default)
+    {
+        Ensure.NotNull(content);
+
+        var fullPath = GetFullPath(relativePath);
+
+        // GetFullPath only returns paths below RootPath, so the file always has a parent directory.
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+
+        await File.WriteAllBytesAsync(fullPath, content, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public void CreateDirectory(string relativePath)
+    {
+        Directory.CreateDirectory(GetFullPath(relativePath));
+    }
+
     private async Task<VersionedReadResult<T>?> ReadFileAsync<T>(string relativePath, string formatId,
         bool migrateOutdated, CancellationToken cancellationToken)
         where T : VersionedDocument
@@ -184,7 +204,7 @@ public class KitStore : IKitStore
 
     private string GetDisplayPath(string relativePath)
     {
-        return $"{KitStorePaths.RootPath}/{Path.GetRelativePath(RootPath, GetFullPath(relativePath))}"
-            .Replace(Path.DirectorySeparatorChar, '/');
+        return KitStorePaths.GetRepositoryPath(Path.GetRelativePath(RootPath, GetFullPath(relativePath))
+            .Replace(Path.DirectorySeparatorChar, '/'));
     }
 }

@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,6 +14,8 @@ namespace CreativeCoders.ShadeKit.Core.Templates;
 /// </remarks>
 public sealed class TemplatesLockEntry
 {
+    private const string HashPrefix = "sha256:";
+
     /// <summary>
     /// Gets the path of the installed template.
     /// </summary>
@@ -44,4 +47,17 @@ public sealed class TemplatesLockEntry
     /// </value>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
+    /// <summary>
+    /// Computes the <see cref="Hash" /> of the content of a template.
+    /// </summary>
+    /// <param name="content">The bytes of the template as written to the repository.</param>
+    /// <returns>
+    /// The SHA-256 hash of <paramref name="content" />, in the form <c>sha256:</c> followed by 64 lowercase
+    /// hexadecimal digits.
+    /// </returns>
+    public static string ComputeHash(ReadOnlySpan<byte> content)
+    {
+        return HashPrefix + Convert.ToHexStringLower(SHA256.HashData(content));
+    }
 }

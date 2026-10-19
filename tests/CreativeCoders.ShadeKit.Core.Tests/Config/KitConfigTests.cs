@@ -107,12 +107,25 @@ public class KitConfigTests
         var json = serializer.Serialize(config, FormatIds.Config);
 
         // Assert
-        var written = JsonNode.Parse(json)!;
+        var written = JsonNode.Parse(json);
 
-        written["kitVersion"]!.GetValue<string>()
+        written
+            .Should().NotBeNull();
+
+        var kitVersionNode = written["kitVersion"];
+
+        kitVersionNode
+            .Should().NotBeNull();
+
+        kitVersionNode.GetValue<string>()
             .Should().Be("2.0.0");
 
-        written["report"]!.GetValue<string>()
+        var reportNode = written["report"];
+
+        reportNode
+            .Should().NotBeNull();
+
+        reportNode.GetValue<string>()
             .Should().Be("never");
 
         json.Should().Contain("\"laterPackageSettings\": {\n    \"mode\": \"strict\",\n    \"limit\": 1.50\n  }");
@@ -129,7 +142,17 @@ public class KitConfigTests
         var json = serializer.Serialize(config, FormatIds.Config);
 
         // Assert
-        JsonNode.Parse(json)!["outdatedFormatOnRead"]!.GetValue<string>()
+        var root = JsonNode.Parse(json);
+
+        root
+            .Should().NotBeNull();
+
+        var outdatedFormatOnReadNode = root["outdatedFormatOnRead"];
+
+        outdatedFormatOnReadNode
+            .Should().NotBeNull();
+
+        outdatedFormatOnReadNode.GetValue<string>()
             .Should().Be("stop");
     }
 
@@ -186,7 +209,12 @@ public class KitConfigTests
         var json = serializer.Serialize(config, FormatIds.Config);
 
         // Assert
-        JsonNode.Parse(json)!.AsObject().Select(field => field.Key)
+        var root = JsonNode.Parse(json);
+
+        root
+            .Should().NotBeNull();
+
+        root.AsObject().Select(field => field.Key)
             .Should().Equal("schemaVersion", "minEngineVersion", "kitVersion", "defaultProfile",
                 "outdatedFormatOnRead", "trackers", "report", "coverageThreshold");
     }
@@ -202,7 +230,12 @@ public class KitConfigTests
         var json = serializer.Serialize(config, FormatIds.Config);
 
         // Assert
-        JsonNode.Parse(json)!.AsObject().Select(field => field.Key)
+        var root = JsonNode.Parse(json);
+
+        root
+            .Should().NotBeNull();
+
+        root.AsObject().Select(field => field.Key)
             .Should().Equal("schemaVersion", "minEngineVersion", "defaultProfile", "outdatedFormatOnRead", "report");
     }
 
@@ -306,7 +339,17 @@ public class KitConfigTests
         var json = serializer.Serialize(config, FormatIds.Config);
 
         // Assert
-        JsonNode.Parse(json)!["trackers"]!.AsObject().Select(tracker => tracker.Key)
+        var root = JsonNode.Parse(json);
+
+        root
+            .Should().NotBeNull();
+
+        var trackersNode = root["trackers"];
+
+        trackersNode
+            .Should().NotBeNull();
+
+        trackersNode.AsObject().Select(tracker => tracker.Key)
             .Should().Equal("GitHub.com", "Jira.Example.com");
     }
 
@@ -346,7 +389,17 @@ public class KitConfigTests
         var json = serializer.Serialize(config, FormatIds.Config);
 
         // Assert
-        JsonNode.Parse(json)!["report"]!.GetValue<string>()
+        var root = JsonNode.Parse(json);
+
+        root
+            .Should().NotBeNull();
+
+        var reportNode = root["report"];
+
+        reportNode
+            .Should().NotBeNull();
+
+        reportNode.GetValue<string>()
             .Should().Be(expected);
     }
 

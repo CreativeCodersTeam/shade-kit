@@ -1,15 +1,15 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Engine;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
-using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Init;
@@ -165,12 +165,25 @@ public class RepositoryInitializerTests
 
         foreach (var jsonFile in jsonFiles)
         {
-            var root = JsonNode.Parse(await File.ReadAllTextAsync(jsonFile, TestContext.Current.CancellationToken))!;
+            var root = JsonNode.Parse(await File.ReadAllTextAsync(jsonFile, TestContext.Current.CancellationToken));
 
-            root["schemaVersion"]!.GetValue<int>()
+            root
+                .Should().NotBeNull(jsonFile);
+
+            var schemaVersionNode = root["schemaVersion"];
+
+            schemaVersionNode
+                .Should().NotBeNull(jsonFile);
+
+            schemaVersionNode.GetValue<int>()
                 .Should().Be(1, jsonFile);
 
-            root["minEngineVersion"]!.GetValue<string>()
+            var minEngineVersionNode = root["minEngineVersion"];
+
+            minEngineVersionNode
+                .Should().NotBeNull(jsonFile);
+
+            minEngineVersionNode.GetValue<string>()
                 .Should().NotBeNullOrWhiteSpace(jsonFile);
         }
     }
@@ -232,25 +245,49 @@ public class RepositoryInitializerTests
         await CreateInitializer().InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
 
         // Assert
-        var root = JsonNode.Parse(tempDirectory.ReadFileText(KitRoot, "templates.lock.json"))!;
-        var entries = root["templates"]!.AsArray().Select(x => x!.AsObject()).ToArray();
+        var root = JsonNode.Parse(tempDirectory.ReadFileText(KitRoot, "templates.lock.json"));
+
+        root
+            .Should().NotBeNull();
+
+        var templatesNode = root["templates"];
+
+        templatesNode
+            .Should().NotBeNull();
+
+        var entries = templatesNode.AsArray().Select(x => x!.AsObject()).ToArray();
 
         entries.Select(x => x["path"]!.GetValue<string>())
             .Should().Equal(ShippedTemplates.All.Select(x => x.RepositoryPath).Order(StringComparer.Ordinal));
 
         foreach (var entry in entries)
         {
-            var path = entry["path"]!.GetValue<string>();
+            var pathNode = entry["path"];
+
+            pathNode
+                .Should().NotBeNull();
+
+            var path = pathNode.GetValue<string>();
             var writtenBytes = tempDirectory.ReadFileBytes(path.Split('/'));
 
             entry.Select(x => x.Key)
                 .Should().Equal("path", "kitVersion", "hash");
 
-            entry["kitVersion"]!.GetValue<string>()
+            var kitVersionNode = entry["kitVersion"];
+
+            kitVersionNode
+                .Should().NotBeNull();
+
+            kitVersionNode.GetValue<string>()
                 .Should().Be(EngineVersion, path);
 
-            entry["hash"]!.GetValue<string>()
-                .Should().Be("sha256:" + Convert.ToHexStringLower(SHA256.HashData(writtenBytes)), path)
+            var hashNode = entry["hash"];
+
+            hashNode
+                .Should().NotBeNull();
+
+            hashNode.GetValue<string>()
+                .Should().Be(TemplatesLockEntry.ComputeHash(writtenBytes), path)
                 .And.MatchRegex("^sha256:[0-9a-f]{64}$");
         }
     }
@@ -352,10 +389,10 @@ public class RepositoryInitializerTests
         text
             .Should().Be(existingText + "\n\n" + ExpectedSectionFile);
 
-        CountLinesStartingWith(text, ManagedInstructionSection.BeginMarkerPrefix)
+        TestText.CountLinesStartingWith(text, ManagedInstructionSection.BeginMarkerPrefix)
             .Should().Be(1);
 
-        CountLinesStartingWith(text, ManagedInstructionSection.EndMarker)
+        TestText.CountLinesStartingWith(text, ManagedInstructionSection.EndMarker)
             .Should().Be(1);
     }
 
@@ -438,7 +475,7 @@ public class RepositoryInitializerTests
         tempDirectory.CreateGitRoot();
         var initializer = CreateInitializer();
         await initializer.InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
-        var snapshot = TakeSnapshot(tempDirectory.RootPath);
+        var snapshot = tempDirectory.TakeSnapshot();
 
         // Act
         var act = () => initializer.InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
@@ -450,9 +487,10 @@ public class RepositoryInitializerTests
             .Should().Be(Path.Combine(tempDirectory.RootPath, KitRoot));
 
         exception.Message
-            .Should().Contain("shade-kit upgrade");
+            .Should().Contain(exception.KitRootPath)
+            .And.NotContain("shade-kit upgrade");
 
-        TakeSnapshot(tempDirectory.RootPath)
+        tempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
     }
 
@@ -476,7 +514,7 @@ public class RepositoryInitializerTests
             tempDirectory.CreateDirectory(KitRoot);
         }
 
-        var snapshot = TakeSnapshot(tempDirectory.RootPath);
+        var snapshot = tempDirectory.TakeSnapshot();
 
         // Act
         var act = () => CreateInitializer()
@@ -486,7 +524,7 @@ public class RepositoryInitializerTests
         (await act.Should().ThrowAsync<KitAlreadyInitializedException>())
             .Which.KitRootPath.Should().Be(Path.Combine(tempDirectory.RootPath, KitRoot));
 
-        TakeSnapshot(tempDirectory.RootPath)
+        tempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
     }
 
@@ -595,7 +633,7 @@ public class RepositoryInitializerTests
         tempDirectory.WriteFile("# Valid file\n", ClaudeMd);
         tempDirectory.WriteFile("# Valid file\n", AgentsMd);
         tempDirectory.WriteFile("# Broken\n<!-- shade-kit:begin -->\nno end marker\n", invalidFileName);
-        var snapshot = TakeSnapshot(tempDirectory.RootPath);
+        var snapshot = tempDirectory.TakeSnapshot();
 
         // Act
         var act = () => CreateInitializer()
@@ -605,7 +643,7 @@ public class RepositoryInitializerTests
         (await act.Should().ThrowAsync<InvalidManagedSectionException>())
             .Which.FilePath.Should().Be(Path.Combine(tempDirectory.RootPath, invalidFileName));
 
-        TakeSnapshot(tempDirectory.RootPath)
+        tempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
 
         Path.Exists(Path.Combine(tempDirectory.RootPath, KitRoot))
@@ -623,7 +661,7 @@ public class RepositoryInitializerTests
         tempDirectory.WriteFile("# Valid file\n", ClaudeMd);
         tempDirectory.WriteFile("# Valid file\n", AgentsMd);
         tempDirectory.WriteFileBytes([0xFF, 0xFE, .. Encoding.Unicode.GetBytes("text\r\n")], utf16FileName);
-        var snapshot = TakeSnapshot(tempDirectory.RootPath);
+        var snapshot = tempDirectory.TakeSnapshot();
 
         // Act
         var act = () => CreateInitializer()
@@ -638,7 +676,7 @@ public class RepositoryInitializerTests
         exception.EncodingName
             .Should().Be("UTF-16 LE");
 
-        TakeSnapshot(tempDirectory.RootPath)
+        tempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
 
         Path.Exists(Path.Combine(tempDirectory.RootPath, KitRoot))
@@ -681,7 +719,7 @@ public class RepositoryInitializerTests
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateGitRoot();
         tempDirectory.CreateDirectory(directoryName);
-        var snapshot = TakeSnapshot(tempDirectory.RootPath);
+        var snapshot = tempDirectory.TakeSnapshot();
 
         // Act
         var act = () => CreateInitializer()
@@ -691,7 +729,7 @@ public class RepositoryInitializerTests
         (await act.Should().ThrowAsync<PathNotAFileException>())
             .Which.Path.Should().Be(Path.Combine(tempDirectory.RootPath, directoryName));
 
-        TakeSnapshot(tempDirectory.RootPath)
+        tempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
 
         Path.Exists(Path.Combine(tempDirectory.RootPath, KitRoot))
@@ -719,7 +757,10 @@ public class RepositoryInitializerTests
         var templatesLock = await kitStore.ReadJsonAsync<TemplatesLock>(KitStorePaths.TemplatesLockFileName,
             FormatIds.TemplatesLock, FormatAccess.Read, cancellationToken);
 
-        config!.Warnings
+        config
+            .Should().NotBeNull();
+
+        config.Warnings
             .Should().BeEmpty();
 
         config.Document.KitVersion
@@ -731,10 +772,16 @@ public class RepositoryInitializerTests
         config.Document.CoverageThreshold
             .Should().BeNull();
 
-        gates!.Warnings
+        gates
+            .Should().NotBeNull();
+
+        gates.Warnings
             .Should().BeEmpty();
 
-        templatesLock!.Warnings
+        templatesLock
+            .Should().NotBeNull();
+
+        templatesLock.Warnings
             .Should().BeEmpty();
 
         templatesLock.Document.Templates
@@ -769,7 +816,7 @@ public class RepositoryInitializerTests
         tempDirectory.CreateGitRoot();
         using var cancellationTokenSource = new CancellationTokenSource();
         await cancellationTokenSource.CancelAsync();
-        var snapshot = TakeSnapshot(tempDirectory.RootPath);
+        var snapshot = tempDirectory.TakeSnapshot();
 
         // Act
         var act = () => CreateInitializer().InitializeAsync(tempDirectory.RootPath, cancellationTokenSource.Token);
@@ -777,7 +824,7 @@ public class RepositoryInitializerTests
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
 
-        TakeSnapshot(tempDirectory.RootPath)
+        tempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
     }
 
@@ -788,20 +835,19 @@ public class RepositoryInitializerTests
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateGitRoot();
         using var cancellationTokenSource = new CancellationTokenSource();
-        var snapshot = TakeSnapshot(tempDirectory.RootPath);
+        var snapshot = tempDirectory.TakeSnapshot();
 
-        // Every validation passes and cancels the token without observing it, so the preconditions complete and
-        // the cancellation must stop the initialisation before its first write, whichever validation runs last.
-        var gitIgnoreWriter = A.Fake<IGitIgnoreWriter>(x => x.Wrapping(new GitIgnoreWriter()));
-        A.CallTo(() => gitIgnoreWriter.ValidateAsync(A<string>._, A<CancellationToken>._))
+        // Every plan passes and cancels the token without observing it, so the preconditions complete and the
+        // cancellation must stop the initialisation before its first write, whichever plan runs last.
+        var gitIgnoreWriter = A.Fake<IGitIgnoreWriter>();
+        A.CallTo(() => gitIgnoreWriter.PlanAsync(A<string>._, A<CancellationToken>._))
             .Invokes(() => cancellationTokenSource.Cancel())
-            .Returns(Task.CompletedTask);
+            .Returns(Task.FromResult<PlannedFileChange?>(null));
 
-        var instructionSectionWriter =
-            A.Fake<IInstructionSectionWriter>(x => x.Wrapping(new InstructionSectionWriter()));
-        A.CallTo(() => instructionSectionWriter.ValidateAsync(A<string>._, A<CancellationToken>._))
+        var instructionSectionWriter = A.Fake<IInstructionSectionWriter>();
+        A.CallTo(() => instructionSectionWriter.PlanAsync(A<string>._, A<CancellationToken>._))
             .Invokes(() => cancellationTokenSource.Cancel())
-            .Returns(Task.CompletedTask);
+            .Returns(Task.FromResult<PlannedFileChange?>(null));
 
         var initializer = CreateInitializer(gitIgnoreWriter, instructionSectionWriter);
 
@@ -814,7 +860,7 @@ public class RepositoryInitializerTests
         Path.Exists(Path.Combine(tempDirectory.RootPath, KitRoot))
             .Should().BeFalse();
 
-        TakeSnapshot(tempDirectory.RootPath)
+        tempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
     }
 
@@ -825,30 +871,36 @@ public class RepositoryInitializerTests
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateGitRoot();
 
-        var agentsPath = Path.Combine(tempDirectory.RootPath, AgentsMd);
-
-        // The real writer validates and writes CLAUDE.md; only the write of AGENTS.md, the last write, fails.
-        var instructionSectionWriter =
-            A.Fake<IInstructionSectionWriter>(x => x.Wrapping(new InstructionSectionWriter()));
-        A.CallTo(() => instructionSectionWriter.ApplyAsync(agentsPath, A<CancellationToken>._))
-            .ThrowsAsync(new IOException("The disk is full."));
-
-        var initializer = CreateInitializer(new GitIgnoreWriter(), instructionSectionWriter);
+        // AGENTS.md is written last; a read-only file can be planned but not written.
+        var agentsPath = tempDirectory.WriteFile("# Agents\n", AgentsMd);
+        File.SetAttributes(agentsPath, FileAttributes.ReadOnly);
+        SkipWhenWritable(agentsPath);
 
         // Act
-        var act = () => initializer.InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
+        var act = () => CreateInitializer().InitializeAsync(tempDirectory.RootPath,
+            TestContext.Current.CancellationToken);
 
         // Assert
-        await act.Should().ThrowAsync<IOException>();
+        try
+        {
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
 
-        File.Exists(Path.Combine(tempDirectory.RootPath, KitRoot, "templates.lock.json"))
-            .Should().BeTrue();
+            File.Exists(Path.Combine(tempDirectory.RootPath, KitRoot, "templates.lock.json"))
+                .Should().BeTrue();
 
-        File.Exists(Path.Combine(tempDirectory.RootPath, GitIgnore))
-            .Should().BeTrue();
+            File.Exists(Path.Combine(tempDirectory.RootPath, GitIgnore))
+                .Should().BeTrue();
 
-        tempDirectory.ReadFileText(ClaudeMd)
-            .Should().Be(ExpectedSectionFile);
+            tempDirectory.ReadFileText(ClaudeMd)
+                .Should().Be(ExpectedSectionFile);
+
+            tempDirectory.ReadFileText(AgentsMd)
+                .Should().Be("# Agents\n");
+        }
+        finally
+        {
+            File.SetAttributes(agentsPath, FileAttributes.Normal);
+        }
     }
 
     [Theory]
@@ -885,6 +937,24 @@ public class RepositoryInitializerTests
         act.Should().Throw<ArgumentNullException>();
     }
 
+    /// <summary>
+    /// Skips the current test if the process can still write a read-only file, for example when it runs as root.
+    /// </summary>
+    private static void SkipWhenWritable(string filePath)
+    {
+        try
+        {
+            File.OpenWrite(filePath).Dispose();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        File.SetAttributes(filePath, FileAttributes.Normal);
+        Assert.Skip($"The read-only file '{filePath}' is writable by this process; a failing write cannot be tested.");
+    }
+
     private static RepositoryInitializer CreateInitializer()
     {
         return CreateInitializer(new GitIgnoreWriter(), new InstructionSectionWriter());
@@ -917,25 +987,9 @@ public class RepositoryInitializerTests
         return new InitializedFile(path, InitializedFileAction.Created);
     }
 
-    private static int CountLinesStartingWith(string text, string prefix)
-    {
-        return text.Split('\n').Count(x => x.Trim().StartsWith(prefix, StringComparison.Ordinal));
-    }
-
     private static IEnumerable<string> GetRelativeFilePaths(string rootPath, string directoryPath)
     {
         return Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
             .Select(x => Path.GetRelativePath(rootPath, x).Replace(Path.DirectorySeparatorChar, '/'));
-    }
-
-    /// <summary>
-    /// Captures every directory and the bytes of every file below a root directory, keyed by relative path.
-    /// </summary>
-    private static Dictionary<string, string> TakeSnapshot(string rootPath)
-    {
-        return Directory.EnumerateFileSystemEntries(rootPath, "*", SearchOption.AllDirectories)
-            .ToDictionary(
-                x => Path.GetRelativePath(rootPath, x),
-                x => Directory.Exists(x) ? "<directory>" : Convert.ToBase64String(File.ReadAllBytes(x)));
     }
 }

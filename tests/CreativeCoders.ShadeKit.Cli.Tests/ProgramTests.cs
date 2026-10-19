@@ -2,15 +2,16 @@ using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests;
 
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed class ProgramTests : IDisposable
 {
-    private readonly string _originalDirectory = Directory.GetCurrentDirectory();
+    private readonly CurrentDirectoryScope _currentDirectory = new();
 
-    private readonly DirectoryInfo _tempDirectory = Directory.CreateTempSubdirectory("shade-kit-program-tests-");
+    private readonly TempKitDirectory _tempDirectory = new("shade-kit-program-tests-");
 
     [Fact]
     [Trait("Requirement", "FP01-AC7")]
@@ -257,11 +258,10 @@ public sealed class ProgramTests : IDisposable
         Assert.SkipWhen(Environment.IsPrivilegedProcess,
             "A privileged process (root) can read a directory with file mode 000.");
 
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
-        var featuresPath = Directory.CreateDirectory(
-            Path.Combine(_tempDirectory.FullName, ".shadekit", "features")).FullName;
+        _tempDirectory.CreateGitRoot();
+        var featuresPath = _tempDirectory.CreateDirectory(".shadekit", "features");
         File.SetUnixFileMode(featuresPath, UnixFileMode.None);
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -318,8 +318,8 @@ public sealed class ProgramTests : IDisposable
     public async Task RunAsync_FeatureListJsonInRepositoryWithoutKitRoot_WritesKitRootNotFoundEnvelopeAndReturns10()
     {
         // Arrange
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        _tempDirectory.CreateGitRoot();
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -348,9 +348,9 @@ public sealed class ProgramTests : IDisposable
     public async Task RunAsync_FeatureListJsonInSubdirectoryOfInitialisedRepository_ListsFeaturesOfRepositoryRoot()
     {
         // Arrange
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".shadekit", "features", "auth"));
-        var nestedPath = Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, "src", "app")).FullName;
+        _tempDirectory.CreateGitRoot();
+        _tempDirectory.CreateDirectory(".shadekit", "features", "auth");
+        var nestedPath = _tempDirectory.CreateDirectory("src", "app");
         Directory.SetCurrentDirectory(nestedPath);
 
         using var output = new StringWriter();
@@ -374,8 +374,8 @@ public sealed class ProgramTests : IDisposable
     public async Task RunAsync_FeatureListPlainInRepositoryWithoutKitRoot_PrintsInitHintAndReturns10()
     {
         // Arrange
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        _tempDirectory.CreateGitRoot();
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -480,9 +480,9 @@ public sealed class ProgramTests : IDisposable
     public async Task RunAsync_FeatureListJsonWithoutFeaturesDirectory_WritesEmptyFeatureListAndReturns0()
     {
         // Arrange
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".shadekit"));
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        _tempDirectory.CreateGitRoot();
+        _tempDirectory.CreateDirectory(".shadekit");
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -510,9 +510,9 @@ public sealed class ProgramTests : IDisposable
     public async Task RunAsync_FeatureListPlainWithoutFeaturesDirectory_PrintsNoFeaturesHintAndReturns0()
     {
         // Arrange
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".shadekit"));
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        _tempDirectory.CreateGitRoot();
+        _tempDirectory.CreateDirectory(".shadekit");
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -532,10 +532,10 @@ public sealed class ProgramTests : IDisposable
     public async Task RunAsync_FeatureListPlainInInitialisedRepository_PrintsNamesInOrdinalOrder()
     {
         // Arrange
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".shadekit", "features", "login"));
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".shadekit", "features", "Billing"));
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        _tempDirectory.CreateGitRoot();
+        _tempDirectory.CreateDirectory(".shadekit", "features", "login");
+        _tempDirectory.CreateDirectory(".shadekit", "features", "Billing");
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -560,11 +560,10 @@ public sealed class ProgramTests : IDisposable
         Assert.SkipWhen(Environment.IsPrivilegedProcess,
             "A privileged process (root) can read a directory with file mode 000.");
 
-        Directory.CreateDirectory(Path.Combine(_tempDirectory.FullName, ".git"));
-        var featuresPath = Directory.CreateDirectory(
-            Path.Combine(_tempDirectory.FullName, ".shadekit", "features")).FullName;
+        _tempDirectory.CreateGitRoot();
+        var featuresPath = _tempDirectory.CreateDirectory(".shadekit", "features");
         File.SetUnixFileMode(featuresPath, UnixFileMode.None);
-        Directory.SetCurrentDirectory(_tempDirectory.FullName);
+        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -650,8 +649,8 @@ public sealed class ProgramTests : IDisposable
 
     public void Dispose()
     {
-        Directory.SetCurrentDirectory(_originalDirectory);
-        _tempDirectory.Delete(true);
+        _currentDirectory.Dispose();
+        _tempDirectory.Dispose();
     }
 
     /// <summary>

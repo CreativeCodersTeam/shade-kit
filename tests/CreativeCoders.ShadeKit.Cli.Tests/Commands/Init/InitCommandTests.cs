@@ -213,46 +213,6 @@ public class InitCommandTests
     }
 
     [Fact]
-    public void FromResult_UndefinedFileAction_ThrowsArgumentOutOfRangeException()
-    {
-        // Arrange
-        var result = new RepositoryInitResult("/repo", [new InitializedFile("CLAUDE.md", (InitializedFileAction)99)]);
-
-        // Act
-        var act = () => InitCommandData.FromResult(result);
-
-        // Assert
-        act.Should().Throw<ArgumentOutOfRangeException>()
-            .WithParameterName("action");
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ExecuteAsync_UndefinedFileAction_ThrowsArgumentOutOfRangeExceptionWithoutOutput(bool json)
-    {
-        // Arrange
-        var console = new TestConsole();
-        using var jsonOutput = new StringWriter();
-        var initializer = CreateInitializer(new RepositoryInitResult("/repo",
-            [new InitializedFile("CLAUDE.md", (InitializedFileAction)99)]));
-
-        var command = CreateCommand(console, initializer, jsonOutput);
-
-        // Act
-        var act = () => command.ExecuteAsync(new InitCommandOptions { Json = json });
-
-        // Assert
-        await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
-
-        jsonOutput.ToString()
-            .Should().BeEmpty();
-
-        console.Output
-            .Should().BeEmpty();
-    }
-
-    [Fact]
     [Trait("Requirement", "FP02-AC7")]
     public async Task ExecuteAsync_NotAGitRepository_ThrowsAbortExceptionWithExitCode12AndEscapedPath()
     {
@@ -462,10 +422,16 @@ public class InitCommandTests
         // Assert
         act.Should().NotThrow();
 
-        task!.IsFaulted
+        task
+            .Should().NotBeNull();
+
+        task.IsFaulted
             .Should().BeTrue();
 
-        task.Exception!.InnerException
+        task.Exception
+            .Should().NotBeNull();
+
+        task.Exception.InnerException
             .Should().BeOfType<CliCommandAbortException>();
     }
 
@@ -549,7 +515,7 @@ public class InitCommandTests
         attribute
             .Should().NotBeNull();
 
-        attribute!.Commands
+        attribute.Commands
             .Should().Equal("init");
     }
 

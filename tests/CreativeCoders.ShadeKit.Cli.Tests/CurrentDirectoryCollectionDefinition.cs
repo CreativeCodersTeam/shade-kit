@@ -7,4 +7,8 @@ namespace CreativeCoders.ShadeKit.Cli.Tests;
 public sealed class CurrentDirectoryCollectionDefinition
 {
     public const string Name = "CurrentDirectory";
+
+    private CurrentDirectoryCollectionDefinition()
+    {
+    }
 }

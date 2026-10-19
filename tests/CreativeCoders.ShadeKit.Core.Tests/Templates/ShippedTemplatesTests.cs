@@ -29,29 +29,29 @@ public class ShippedTemplatesTests
     public void All_Catalog_MatchesTemplateTable()
     {
         // Arrange
-        ShippedTemplate[] templateTable =
+        (string ResourcePath, string RepositoryPath)[] templateTable =
         [
-            new("request.template.md", ".shadekit/templates/request.md", "09"),
-            new("discussion.template.md", ".shadekit/templates/discussion.md", "09"),
-            new("spec.template.md", ".shadekit/templates/spec.md", "10"),
-            new("researches.template.md", ".shadekit/templates/researches.md", "06"),
-            new("plan.template.md", ".shadekit/templates/plan.md", "12"),
-            new("tasks.template.md", ".shadekit/templates/tasks.md", "12"),
-            new("review.template.md", ".shadekit/templates/review.md", "13"),
-            new("verification.template.md", ".shadekit/templates/verification.md", "14"),
-            new("playbook.template.md", ".shadekit/templates/playbook.md", "14"),
-            new("report.template.md", ".shadekit/templates/report.md", "15"),
-            new("diagnosis.template.md", ".shadekit/templates/diagnosis.md", "16"),
-            new("checks/definition-of-ready.template.md", ".shadekit/templates/checks/definition-of-ready.md", "05"),
-            new("checks/definition-of-done.template.md", ".shadekit/templates/checks/definition-of-done.md", "05")
+            ("request.template.md", ".shadekit/templates/request.md"),
+            ("discussion.template.md", ".shadekit/templates/discussion.md"),
+            ("spec.template.md", ".shadekit/templates/spec.md"),
+            ("researches.template.md", ".shadekit/templates/researches.md"),
+            ("plan.template.md", ".shadekit/templates/plan.md"),
+            ("tasks.template.md", ".shadekit/templates/tasks.md"),
+            ("review.template.md", ".shadekit/templates/review.md"),
+            ("verification.template.md", ".shadekit/templates/verification.md"),
+            ("playbook.template.md", ".shadekit/templates/playbook.md"),
+            ("report.template.md", ".shadekit/templates/report.md"),
+            ("diagnosis.template.md", ".shadekit/templates/diagnosis.md"),
+            ("checks/definition-of-ready.template.md", ".shadekit/templates/checks/definition-of-ready.md"),
+            ("checks/definition-of-done.template.md", ".shadekit/templates/checks/definition-of-done.md")
         ];
 
         // Act
-        var catalog = ShippedTemplates.All;
+        var catalog = ShippedTemplates.All.Select(x => (x.ResourcePath, x.RepositoryPath));
 
         // Assert
         catalog
-            .Should().BeEquivalentTo(templateTable);
+            .Should().Equal(templateTable);
     }
 
     [Theory]
@@ -76,6 +76,18 @@ public class ShippedTemplatesTests
         // Assert
         repositoryPaths
             .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void All_KitPaths_AreTheRepositoryPathsRelativeToTheKitRoot()
+    {
+        // Act
+        var templates = ShippedTemplates.All;
+
+        // Assert
+        templates
+            .Should().AllSatisfy(template => template.RepositoryPath
+                .Should().Be(".shadekit/" + template.KitPath));
     }
 
     [Fact]

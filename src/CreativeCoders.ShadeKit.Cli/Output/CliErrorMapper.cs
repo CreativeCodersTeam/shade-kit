@@ -1,5 +1,6 @@
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Engine;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
@@ -62,18 +63,17 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 ShadeKitCliErrorCodes.InvalidManagedSection,
                 $"The SHADE kit section markers in '{e.FilePath}' are invalid: {e.Reason} Fix the markers so that " +
                 $"the file contains exactly one '{ManagedInstructionSection.BeginMarkerPrefix} ... -->' line " +
-                $"followed by exactly one '{ManagedInstructionSection.EndMarker}' line, then run 'shade-kit init' " +
-                "again."),
+                $"followed by exactly one '{ManagedInstructionSection.EndMarker}' line, then run the command again."),
 
             UnsupportedFileEncodingException e => new CliError(ShadeKitCliExitCodes.UnsupportedFileEncoding,
                 ShadeKitCliErrorCodes.UnsupportedFileEncoding,
                 $"'{e.FilePath}' is encoded as {e.EncodingName}, but shade-kit can only change UTF-8 files. Convert " +
-                "the file to UTF-8, then run 'shade-kit init' again."),
+                "the file to UTF-8, then run the command again."),
 
             PathNotAFileException e => new CliError(ShadeKitCliExitCodes.PathNotAFile,
                 ShadeKitCliErrorCodes.PathNotAFile,
                 $"'{e.Path}' is a directory, but shade-kit must write a file at this path. Move or remove the " +
-                "directory, then run 'shade-kit init' again."),
+                "directory, then run the command again."),
 
             _ => null
         };

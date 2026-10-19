@@ -1,7 +1,8 @@
 using System.Text;
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Init;
-using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Init;
 
@@ -15,18 +16,16 @@ public class GitIgnoreWriterTests
 
     private const string CurrentFeatureEntry = ".shadekit/features/current-feature.json";
 
-    private static readonly byte[] Bom = [0xEF, 0xBB, 0xBF];
-
     [Fact]
     [Trait("Requirement", "FP02-AC4")]
-    public async Task EnsureEntriesAsync_FileMissing_CreatesFileWithCommentAndBothEntries()
+    public async Task PlanAsync_FileMissing_CreatesFileWithCommentAndBothEntries()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var action = await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -45,7 +44,7 @@ public class GitIgnoreWriterTests
     [InlineData(".shadekit/local.json\r\n/.shadekit/features/current-feature.json\r\n")]
     [InlineData(".shadekit/local.json   \r\n.shadekit/features/current-feature.json \r\n")]
     [InlineData(".shadekit/features/current-feature.json\n.shadekit/local.json  ")]
-    public async Task EnsureEntriesAsync_BothEntriesPresent_ReturnsNullAndLeavesFileUnchanged(string text)
+    public async Task PlanAsync_BothEntriesPresent_ReturnsNullAndLeavesFileUnchanged(string text)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -53,7 +52,7 @@ public class GitIgnoreWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var action = await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -64,14 +63,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_OneEntryMissing_AppendsOnlyMissingEntryUnderComment()
+    public async Task PlanAsync_OneEntryMissing_AppendsOnlyMissingEntryUnderComment()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile("bin/\n/.shadekit/local.json\n", FileName);
 
         // Act
-        var action = await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -82,14 +81,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_NoEntryPresent_AppendsBothEntriesAfterBlankLine()
+    public async Task PlanAsync_NoEntryPresent_AppendsBothEntriesAfterBlankLine()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile("bin/\nobj/\n", FileName);
 
         // Act
-        var action = await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -106,14 +105,14 @@ public class GitIgnoreWriterTests
     [InlineData(".shadekit/\n")]
     [InlineData(".shadekit/local.json\\ \n")]
     [InlineData(".ShadeKit/Local.json\n")]
-    public async Task EnsureEntriesAsync_LineSimilarToEntry_DoesNotCountAsEntry(string text)
+    public async Task PlanAsync_LineSimilarToEntry_DoesNotCountAsEntry(string text)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -126,14 +125,14 @@ public class GitIgnoreWriterTests
     [Theory]
     [InlineData("  .shadekit/local.json\n.shadekit/features/current-feature.json\n")]
     [InlineData("\t/.shadekit/local.json\n.shadekit/features/current-feature.json\n")]
-    public async Task EnsureEntriesAsync_EntryWithLeadingWhitespace_DoesNotCountAndAppendsEntry(string text)
+    public async Task PlanAsync_EntryWithLeadingWhitespace_DoesNotCountAndAppendsEntry(string text)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -147,14 +146,14 @@ public class GitIgnoreWriterTests
     [InlineData(".shadekit/local.json\t\n.shadekit/features/current-feature.json\n", "\n")]
     [InlineData("/.shadekit/local.json \t\n.shadekit/features/current-feature.json\n", "\n")]
     [InlineData(".shadekit/local.json\t\r\n.shadekit/features/current-feature.json\r\n", "\r\n")]
-    public async Task EnsureEntriesAsync_EntryWithTrailingTab_DoesNotCountAndAppendsEntry(string text, string newLine)
+    public async Task PlanAsync_EntryWithTrailingTab_DoesNotCountAndAppendsEntry(string text, string newLine)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -165,14 +164,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_NoTrailingNewline_AddsNewlineBeforeBlankLine()
+    public async Task PlanAsync_NoTrailingNewline_AddsNewlineBeforeBlankLine()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile("bin/", FileName);
 
         // Act
-        await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileText(FileName)
@@ -180,14 +179,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_EmptyFile_AppendsWithoutBlankLine()
+    public async Task PlanAsync_EmptyFile_AppendsWithoutBlankLine()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile(string.Empty, FileName);
 
         // Act
-        var action = await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -198,14 +197,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_CrLfFile_AppendsWithCrLf()
+    public async Task PlanAsync_CrLfFile_AppendsWithCrLf()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile("bin/\r\nobj/", FileName);
 
         // Act
-        await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileText(FileName)
@@ -213,36 +212,35 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_FileWithBom_KeepsBom()
+    public async Task PlanAsync_FileWithBom_KeepsBom()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        var filePath = tempDirectory.WriteFileBytes([.. Bom, .. "bin/\n"u8], FileName);
+        var filePath = tempDirectory.WriteFileBytes([.. TestText.Utf8Bom, .. "bin/\n"u8], FileName);
 
         // Act
-        await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
             .Should().Equal([
-                .. Bom,
+                .. TestText.Utf8Bom,
                 .. Encoding.UTF8.GetBytes($"bin/\n\n{Comment}\n{LocalEntry}\n{CurrentFeatureEntry}\n")
             ]);
     }
 
     [Fact]
     [Trait("Requirement", "FP02-AC4")]
-    public async Task EnsureEntriesAsync_CalledTwice_ContainsEachEntryExactlyOnce()
+    public async Task PlanAsync_CalledTwice_ContainsEachEntryExactlyOnce()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile("bin/\n", FileName);
-        var writer = new GitIgnoreWriter();
-        await writer.EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
         var afterFirstCall = tempDirectory.ReadFileBytes(FileName);
 
         // Act
-        var action = await writer.EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -262,17 +260,16 @@ public class GitIgnoreWriterTests
 
     [Fact]
     [Trait("Requirement", "FP02-AC4")]
-    public async Task EnsureEntriesAsync_FileCreatedByWriter_SecondCallReturnsNullAndLeavesFileUnchanged()
+    public async Task PlanAsync_FileWrittenFromPlan_SecondCallReturnsNullAndLeavesFileUnchanged()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
-        var writer = new GitIgnoreWriter();
-        await writer.EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
         var afterFirstCall = tempDirectory.ReadFileBytes(FileName);
 
         // Act
-        var action = await writer.EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -283,15 +280,15 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_BomFileWithEntryOnFirstLine_CountsEntryAsPresent()
+    public async Task PlanAsync_BomFileWithEntryOnFirstLine_CountsEntryAsPresent()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        byte[] original = [.. Bom, .. Encoding.UTF8.GetBytes($"{LocalEntry}\n")];
+        byte[] original = [.. TestText.Utf8Bom, .. Encoding.UTF8.GetBytes($"{LocalEntry}\n")];
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
@@ -299,14 +296,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_FirstEntryMissing_AppendsOnlyFirstEntry()
+    public async Task PlanAsync_FirstEntryMissing_AppendsOnlyFirstEntry()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile($"{CurrentFeatureEntry}\n", FileName);
 
         // Act
-        await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileText(FileName)
@@ -314,14 +311,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_CommentPresentButEntryRemoved_AppendsEntryUnderNewComment()
+    public async Task PlanAsync_CommentPresentButEntryRemoved_AppendsEntryUnderNewComment()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile($"{Comment}\n{LocalEntry}\n", FileName);
 
         // Act
-        await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileText(FileName)
@@ -329,14 +326,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_FileWithOnlyNewline_AppendsWithoutAnotherBlankLine()
+    public async Task PlanAsync_FileWithOnlyNewline_AppendsWithoutAnotherBlankLine()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile("\n", FileName);
 
         // Act
-        await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileText(FileName)
@@ -346,7 +343,7 @@ public class GitIgnoreWriterTests
     [Theory]
     [InlineData("bin/\n\n", "\n")]
     [InlineData("bin/\r\n\r\n", "\r\n")]
-    public async Task EnsureEntriesAsync_FileEndsWithBlankLine_AppendsWithoutAnotherBlankLine(string text,
+    public async Task PlanAsync_FileEndsWithBlankLine_AppendsWithoutAnotherBlankLine(string text,
         string newLine)
     {
         // Arrange
@@ -354,7 +351,7 @@ public class GitIgnoreWriterTests
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         action
@@ -365,7 +362,7 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_Utf16File_ThrowsUnsupportedFileEncodingExceptionAndLeavesFileUnchanged()
+    public async Task PlanAsync_Utf16File_ThrowsUnsupportedFileEncodingExceptionAndLeavesFileUnchanged()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -373,7 +370,7 @@ public class GitIgnoreWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().EnsureEntriesAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnoreWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UnsupportedFileEncodingException>()).Which;
@@ -389,14 +386,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_PathIsDirectory_ThrowsPathNotAFileException()
+    public async Task PlanAsync_PathIsDirectory_ThrowsPathNotAFileException()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var directoryPath = tempDirectory.CreateDirectory(FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().EnsureEntriesAsync(directoryPath, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnoreWriter().PlanAsync(directoryPath, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<PathNotAFileException>())
@@ -409,7 +406,7 @@ public class GitIgnoreWriterTests
     [Theory]
     [InlineData("bin/\n")]
     [InlineData("")]
-    public async Task ValidateAsync_Utf8File_DoesNotThrowAndLeavesFileUnchanged(string text)
+    public async Task PlanAsync_Utf8File_DoesNotThrowAndLeavesFileUnchanged(string text)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -417,7 +414,7 @@ public class GitIgnoreWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().ValidateAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnoreWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().NotThrowAsync();
@@ -427,14 +424,14 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task ValidateAsync_FileMissing_DoesNotThrowAndCreatesNoFile()
+    public async Task PlanAsync_FileMissing_DoesNotThrowAndCreatesNoFile()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().ValidateAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnoreWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().NotThrowAsync();
@@ -444,69 +441,7 @@ public class GitIgnoreWriterTests
     }
 
     [Fact]
-    public async Task ValidateAsync_Utf16File_ThrowsUnsupportedFileEncodingExceptionAndLeavesFileUnchanged()
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        byte[] original = [0xFE, 0xFF, .. Encoding.BigEndianUnicode.GetBytes("bin/\n")];
-        var filePath = tempDirectory.WriteFileBytes(original, FileName);
-
-        // Act
-        var act = () => new GitIgnoreWriter().ValidateAsync(filePath, TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<UnsupportedFileEncodingException>())
-            .Which.EncodingName.Should().Be("UTF-16 BE");
-
-        tempDirectory.ReadFileBytes(FileName)
-            .Should().Equal(original);
-    }
-
-    [Fact]
-    public async Task ValidateAsync_PathIsDirectory_ThrowsPathNotAFileException()
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var directoryPath = tempDirectory.CreateDirectory(FileName);
-
-        // Act
-        var act = () => new GitIgnoreWriter().ValidateAsync(directoryPath, TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<PathNotAFileException>())
-            .Which.Path.Should().Be(directoryPath);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("  ")]
-    [InlineData(".gitignore")]
-    public async Task ValidateAsync_PathNotAbsolute_ThrowsArgumentException(string? filePath)
-    {
-        // Act
-        var act = () => new GitIgnoreWriter().ValidateAsync(filePath!, TestContext.Current.CancellationToken);
-
-        // Assert
-        await act.Should().ThrowAsync<ArgumentException>();
-    }
-
-    [Fact]
-    public async Task ValidateAsync_CanceledToken_ThrowsOperationCanceledException()
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var filePath = tempDirectory.WriteFile("bin/\n", FileName);
-
-        // Act
-        var act = () => new GitIgnoreWriter().ValidateAsync(filePath, new CancellationToken(true));
-
-        // Assert
-        await act.Should().ThrowAsync<OperationCanceledException>();
-    }
-
-    [Fact]
-    public async Task EnsureEntriesAsync_CanceledTokenWithExistingFile_ThrowsAndLeavesFileUnchanged()
+    public async Task PlanAsync_CanceledTokenWithExistingFile_ThrowsAndLeavesFileUnchanged()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -514,7 +449,7 @@ public class GitIgnoreWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().EnsureEntriesAsync(filePath, new CancellationToken(true));
+        var act = () => new GitIgnoreWriter().PlanAsync(filePath, new CancellationToken(true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -528,29 +463,46 @@ public class GitIgnoreWriterTests
     [InlineData("")]
     [InlineData("  ")]
     [InlineData(".gitignore")]
-    public async Task EnsureEntriesAsync_PathNotAbsolute_ThrowsArgumentException(string? filePath)
+    public async Task PlanAsync_PathNotAbsolute_ThrowsArgumentException(string? filePath)
     {
         // Act
-        var act = () => new GitIgnoreWriter().EnsureEntriesAsync(filePath!, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnoreWriter().PlanAsync(filePath!, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
     [Fact]
-    public async Task EnsureEntriesAsync_CanceledToken_ThrowsAndCreatesNoFile()
+    public async Task PlanAsync_CanceledToken_ThrowsAndCreatesNoFile()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().EnsureEntriesAsync(filePath, new CancellationToken(true));
+        var act = () => new GitIgnoreWriter().PlanAsync(filePath, new CancellationToken(true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
 
         File.Exists(filePath)
             .Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Plans the change of a <c>.gitignore</c> file and writes it, as the initialisation does.
+    /// </summary>
+    /// <returns>The action of the planned change, or <see langword="null" /> if the file needs no change.</returns>
+    private static async Task<InitializedFileAction?> PlanAndWriteAsync(string filePath,
+        CancellationToken cancellationToken)
+    {
+        var change = await new GitIgnoreWriter().PlanAsync(filePath, cancellationToken);
+
+        if (change is not null)
+        {
+            await File.WriteAllBytesAsync(filePath, change.Content, cancellationToken);
+        }
+
+        return change?.Action;
     }
 }

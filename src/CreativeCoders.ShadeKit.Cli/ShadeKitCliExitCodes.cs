@@ -32,7 +32,7 @@ public static class ShadeKitCliExitCodes
     public const int KitAlreadyInitialized = 13;
 
     /// <summary>
-    /// Represents the exit code returned when a path at which <c>shade-kit init</c> must write a file, such as
+    /// Represents the exit code returned when a path at which a command must write a file, such as
     /// <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root, is a directory. The error code
     /// is <see cref="ShadeKitCliErrorCodes.PathNotAFile" />.
     /// </summary>
@@ -65,7 +65,7 @@ public static class ShadeKitCliExitCodes
     public const int InvalidManagedSection = 23;
 
     /// <summary>
-    /// Represents the exit code returned when a file that <c>shade-kit init</c> changes in place, such as
+    /// Represents the exit code returned when a file that a command changes in place, such as
     /// <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c>, is not encoded as UTF-8 because it starts with a
     /// UTF-16 or UTF-32 byte order mark. The error code is <see cref="ShadeKitCliErrorCodes.UnsupportedFileEncoding" />.
     /// </summary>

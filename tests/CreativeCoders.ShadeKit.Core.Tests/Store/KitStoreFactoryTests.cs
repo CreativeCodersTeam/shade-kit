@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
@@ -29,49 +30,6 @@ public class KitStoreFactoryTests
 
         kitStore.GetFeatureNames()
             .Should().BeEquivalentTo("auth", "billing");
-    }
-
-    [Theory]
-    [Trait("Requirement", "FP01-AC1")]
-    [InlineData(1)]
-    [InlineData(3)]
-    [InlineData(25)]
-    public void Create_PathNestedBelowGitRoot_ReturnsStoreOfRepositoryRoot(int depth)
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        tempDirectory.CreateGitRoot();
-        tempDirectory.CreateDirectory(".shadekit", "features", "auth");
-        var nestedPath = tempDirectory.CreateDirectory(CreateNestedPathParts(depth));
-
-        var factory = CreateFactory();
-
-        // Act
-        var kitStore = factory.Create(nestedPath);
-
-        // Assert
-        kitStore.GetFeatureNames()
-            .Should().Equal("auth");
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP01-AC1")]
-    public void Create_GitEntryIsAFile_TreatsDirectoryAsRepositoryRoot()
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        tempDirectory.WriteFile("gitdir: ../main/.git/worktrees/feature", ".git");
-        tempDirectory.CreateDirectory(".shadekit", "features", "auth");
-        var nestedPath = tempDirectory.CreateDirectory("src");
-
-        var factory = CreateFactory();
-
-        // Act
-        var kitStore = factory.Create(nestedPath);
-
-        // Assert
-        kitStore.GetFeatureNames()
-            .Should().Equal("auth");
     }
 
     [Fact]
@@ -157,25 +115,6 @@ public class KitStoreFactoryTests
         // Assert
         act.Should().Throw<KitRootPathNotFoundException>()
             .Which.GitRootPath.Should().Be(submodulePath);
-    }
-
-    [Fact]
-    public void Create_NotInsideGitRepository_ThrowsNotAGitRepositoryException()
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        tempDirectory.SkipWhenGitRootExistsAbove();
-        tempDirectory.CreateDirectory(".shadekit", "features", "auth");
-        var nestedPath = tempDirectory.CreateDirectory("src");
-
-        var factory = CreateFactory();
-
-        // Act
-        var act = () => factory.Create(nestedPath);
-
-        // Assert
-        act.Should().Throw<NotAGitRepositoryException>()
-            .Which.StartPath.Should().Be(nestedPath);
     }
 
     [Fact]
@@ -304,7 +243,7 @@ public class KitStoreFactoryTests
     }
 
     [Fact]
-    public void CreateForKitRoot_ExistingKitRoot_ReturnsStoreOfThatDirectoryWithoutSearching()
+    public void CreateForRepositoryRoot_ExistingKitRoot_ReturnsStoreOfShadeKitDirectoryWithoutSearching()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -315,7 +254,7 @@ public class KitStoreFactoryTests
         var factory = CreateFactory(locator);
 
         // Act
-        var kitStore = factory.CreateForKitRoot(kitRootPath);
+        var kitStore = factory.CreateForRepositoryRoot(tempDirectory.RootPath);
 
         // Assert
         kitStore.RootPath
@@ -328,7 +267,7 @@ public class KitStoreFactoryTests
     }
 
     [Fact]
-    public void CreateForKitRoot_KitRootDoesNotExist_ReturnsStoreWithoutCreatingDirectory()
+    public void CreateForRepositoryRoot_KitRootDoesNotExist_ReturnsStoreWithoutCreatingDirectory()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -337,7 +276,7 @@ public class KitStoreFactoryTests
         var factory = CreateFactory();
 
         // Act
-        var kitStore = factory.CreateForKitRoot(kitRootPath);
+        var kitStore = factory.CreateForRepositoryRoot(tempDirectory.RootPath);
 
         // Assert
         kitStore.RootPath
@@ -348,14 +287,14 @@ public class KitStoreFactoryTests
     }
 
     [Fact]
-    public async Task CreateForKitRoot_KitRootDoesNotExist_StoreCreatesKitRootOnFirstWrite()
+    public async Task CreateForRepositoryRoot_KitRootDoesNotExist_StoreCreatesKitRootOnFirstWrite()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var kitRootPath = Path.Combine(tempDirectory.RootPath, ".shadekit");
 
         var factory = CreateFactory();
-        var kitStore = factory.CreateForKitRoot(kitRootPath);
+        var kitStore = factory.CreateForRepositoryRoot(tempDirectory.RootPath);
 
         // Act
         await kitStore.WriteJsonAsync(KitStorePaths.ConfigFileName, FormatIds.Config, new KitConfig(),
@@ -367,7 +306,7 @@ public class KitStoreFactoryTests
     }
 
     [Fact]
-    public void CreateForKitRoot_KitRootWithTrailingSeparator_ReturnsStoreWithRootPathWithoutTrailingSeparator()
+    public void CreateForRepositoryRoot_RootWithTrailingSeparator_ReturnsStoreWithRootPathWithoutTrailingSeparator()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -376,7 +315,7 @@ public class KitStoreFactoryTests
         var factory = CreateFactory();
 
         // Act
-        var kitStore = factory.CreateForKitRoot(kitRootPath + Path.DirectorySeparatorChar);
+        var kitStore = factory.CreateForRepositoryRoot(tempDirectory.RootPath + Path.DirectorySeparatorChar);
 
         // Assert
         kitStore.RootPath
@@ -387,17 +326,17 @@ public class KitStoreFactoryTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("  ")]
-    public void CreateForKitRoot_NullOrWhitespacePath_ThrowsArgumentException(string? kitRootPath)
+    public void CreateForRepositoryRoot_NullOrWhitespacePath_ThrowsArgumentException(string? repositoryRootPath)
     {
         // Arrange
         var factory = CreateFactory();
 
         // Act
-        var act = () => factory.CreateForKitRoot(kitRootPath!);
+        var act = () => factory.CreateForRepositoryRoot(repositoryRootPath!);
 
         // Assert
         act.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(kitRootPath));
+            .WithParameterName(nameof(repositoryRootPath));
     }
 
     [Fact]
@@ -461,10 +400,5 @@ public class KitStoreFactoryTests
 
         return new KitStoreFactory(gitRepositoryLocator ?? new GitRepositoryLocator(),
             new VersionedJsonSerializer(formatRegistry), formatRegistry);
-    }
-
-    private static string[] CreateNestedPathParts(int depth)
-    {
-        return [.. Enumerable.Range(1, depth).Select(level => $"d{level}")];
     }
 }

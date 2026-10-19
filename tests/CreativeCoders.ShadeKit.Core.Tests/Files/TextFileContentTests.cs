@@ -1,15 +1,13 @@
 using System.Text;
 using AwesomeAssertions;
-using CreativeCoders.ShadeKit.Core.Init;
-using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Tests.Shared;
 
-namespace CreativeCoders.ShadeKit.Core.Tests.Init;
+namespace CreativeCoders.ShadeKit.Core.Tests.Files;
 
 public class TextFileContentTests
 {
     private const string FileName = "notes.txt";
-
-    private static readonly byte[] Bom = [0xEF, 0xBB, 0xBF];
 
     public static TheoryData<byte[], string> UnsupportedEncodingFiles { get; } = new()
     {
@@ -111,7 +109,10 @@ public class TextFileContentTests
         var content = await TextFileContent.ReadAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
-        content!.HasBytes(bytes)
+        content
+            .Should().NotBeNull();
+
+        content.HasBytes(bytes)
             .Should().BeTrue();
     }
 
@@ -168,7 +169,7 @@ public class TextFileContentTests
     public async Task Lines_FileWithBom_FirstLineStartsAfterBom()
     {
         // Arrange
-        var content = await ReadAsync([.. Bom, .. "a\n"u8]);
+        var content = await ReadAsync([.. TestText.Utf8Bom, .. "a\n"u8]);
 
         // Act
         var lines = content.Lines;
@@ -184,7 +185,7 @@ public class TextFileContentTests
     public async Task Lines_FileStartsWithNewline_FirstLineIsEmpty(bool withBom, int expectedStart)
     {
         // Arrange
-        byte[] prefix = withBom ? Bom : [];
+        byte[] prefix = withBom ? TestText.Utf8Bom : [];
         var content = await ReadAsync([.. prefix, .. "\nb"u8]);
 
         // Act
@@ -216,7 +217,7 @@ public class TextFileContentTests
     public async Task Lines_EmptyFile_IsEmpty(bool withBom)
     {
         // Arrange
-        var content = await ReadAsync(withBom ? Bom : []);
+        var content = await ReadAsync(withBom ? TestText.Utf8Bom : []);
 
         // Act
         var lines = content.Lines;
@@ -312,14 +313,14 @@ public class TextFileContentTests
     public async Task AppendBlock_FileWithOnlyBom_KeepsBomWithoutBlankLine()
     {
         // Arrange
-        var content = await ReadAsync(Bom);
+        var content = await ReadAsync(TestText.Utf8Bom);
 
         // Act
         var bytes = content.AppendBlock("x");
 
         // Assert
         bytes
-            .Should().Equal([.. Bom, .. "x\n"u8]);
+            .Should().Equal([.. TestText.Utf8Bom, .. "x\n"u8]);
     }
 
     [Theory]
@@ -329,14 +330,14 @@ public class TextFileContentTests
     public async Task AppendBlock_FileWithBom_KeepsBomAndAddsBlankLineOnlyIfMissing(string text, string expectedText)
     {
         // Arrange
-        var content = await ReadAsync([.. Bom, .. Encoding.UTF8.GetBytes(text)]);
+        var content = await ReadAsync([.. TestText.Utf8Bom, .. Encoding.UTF8.GetBytes(text)]);
 
         // Act
         var bytes = content.AppendBlock("x");
 
         // Assert
         bytes
-            .Should().Equal([.. Bom, .. Encoding.UTF8.GetBytes(expectedText)]);
+            .Should().Equal([.. TestText.Utf8Bom, .. Encoding.UTF8.GetBytes(expectedText)]);
     }
 
     [Fact]

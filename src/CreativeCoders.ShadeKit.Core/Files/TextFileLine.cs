@@ -1,4 +1,4 @@
-namespace CreativeCoders.ShadeKit.Core.Init;
+namespace CreativeCoders.ShadeKit.Core.Files;
 
 /// <summary>
 /// Represents one line of a <see cref="TextFileContent" /> together with its position in the bytes of the file.
