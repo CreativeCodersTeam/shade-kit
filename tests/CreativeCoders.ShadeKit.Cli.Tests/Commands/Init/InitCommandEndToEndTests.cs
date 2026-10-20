@@ -305,6 +305,39 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
             .Should().BeEquivalentTo(snapshot);
     }
 
+    [Theory]
+    [InlineData("init")]
+    [InlineData("feature list")]
+    public async Task RunAsync_KitRootIsFile_Returns15AndChangesNoFile(string command)
+    {
+        // Arrange
+        EnterGitRepository();
+        _tempDirectory.WriteFile("not a directory", ".shadekit");
+        var snapshot = _tempDirectory.TakeSnapshot();
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync([.. command.Split(' '), "--json"], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.KitRootNotADirectory);
+
+        using var document = JsonDocument.Parse(output.ToString());
+
+        document.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.KitRootNotADirectory);
+
+        document.RootElement.GetProperty("error").GetProperty("message").GetString()
+            .Should().Contain("shade-kit init")
+            .And.NotContain("upgrade");
+
+        _tempDirectory.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
     [Fact]
     public async Task RunAsync_InitJsonWithClaudeMdDirectory_Returns14AndChangesNoFile()
     {

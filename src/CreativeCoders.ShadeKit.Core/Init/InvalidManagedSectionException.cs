@@ -12,7 +12,7 @@ public class InvalidManagedSectionException(string filePath, string reason)
     /// <summary>
     /// Gets the path of the instruction file whose markers are invalid.
     /// </summary>
-    /// <value>The path of the file as it was passed to the writer.</value>
+    /// <value>The path of the file as it was passed to the planner.</value>
     public string FilePath { get; } = filePath;
 
     /// <summary>

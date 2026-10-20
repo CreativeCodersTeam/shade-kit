@@ -114,12 +114,8 @@ public class KitStore : IKitStore
             .ConfigureAwait(false);
 
         var json = _serializer.Serialize(document, formatId);
-        var fullPath = GetFullPath(relativePath);
 
-        // GetFullPath only returns paths below RootPath, so the file always has a parent directory.
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-
-        await File.WriteAllTextAsync(fullPath, json, Utf8WithoutBom, cancellationToken).ConfigureAwait(false);
+        await WriteFileAsync(relativePath, Utf8WithoutBom.GetBytes(json), cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

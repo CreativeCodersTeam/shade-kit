@@ -46,11 +46,11 @@ public sealed class KitConfig : VersionedDocument, IJsonOnDeserialized
     /// Gets or sets the mapping from issue URL host to the id prefix of feature ids created from such an issue.
     /// </summary>
     /// <value>
-    /// The id prefixes keyed by host name, for example <c>gh</c> for <c>github.com</c>, or <see langword="null" /> if
-    /// the field is missing. Host names are written exactly as given. A <see langword="null" /> value is not written; a
-    /// host with a <see langword="null" /> id prefix makes the file invalid.
+    /// The id prefixes keyed by host name. The default maps <c>github.com</c> to <c>gh</c>, which also applies when the
+    /// field is missing; an empty mapping turns issue-based ids off. Host names are written exactly as given. A
+    /// <see langword="null" /> field or a host with a <see langword="null" /> id prefix makes the file invalid.
     /// </value>
-    public Dictionary<string, string>? Trackers { get; set; }
+    public Dictionary<string, string> Trackers { get; set; } = new() { ["github.com"] = "gh" };
 
     /// <summary>
     /// Gets or sets whether the <c>finish</c> phase writes a <c>report.md</c> for a feature.
@@ -74,7 +74,7 @@ public sealed class KitConfig : VersionedDocument, IJsonOnDeserialized
     void IJsonOnDeserialized.OnDeserialized()
     {
         // RespectNullableAnnotations does not cover dictionary values, so a null id prefix is rejected here.
-        if (Trackers?.Values.Any(prefix => prefix is null) == true)
+        if (Trackers.Values.Any(prefix => prefix is null))
         {
             throw new JsonException("The 'trackers' field contains a null id prefix.");
         }

@@ -6,7 +6,7 @@ using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Init;
 
-public class GitIgnoreWriterTests
+public class GitIgnorePlannerTests
 {
     private const string FileName = ".gitignore";
 
@@ -370,7 +370,7 @@ public class GitIgnoreWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnorePlanner().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UnsupportedFileEncodingException>()).Which;
@@ -393,7 +393,7 @@ public class GitIgnoreWriterTests
         var directoryPath = tempDirectory.CreateDirectory(FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().PlanAsync(directoryPath, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnorePlanner().PlanAsync(directoryPath, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<PathNotAFileException>())
@@ -414,7 +414,7 @@ public class GitIgnoreWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnorePlanner().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().NotThrowAsync();
@@ -431,7 +431,7 @@ public class GitIgnoreWriterTests
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnorePlanner().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().NotThrowAsync();
@@ -449,7 +449,7 @@ public class GitIgnoreWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().PlanAsync(filePath, new CancellationToken(true));
+        var act = () => new GitIgnorePlanner().PlanAsync(filePath, new CancellationToken(true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -466,7 +466,7 @@ public class GitIgnoreWriterTests
     public async Task PlanAsync_PathNotAbsolute_ThrowsArgumentException(string? filePath)
     {
         // Act
-        var act = () => new GitIgnoreWriter().PlanAsync(filePath!, TestContext.Current.CancellationToken);
+        var act = () => new GitIgnorePlanner().PlanAsync(filePath!, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>();
@@ -480,7 +480,7 @@ public class GitIgnoreWriterTests
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var act = () => new GitIgnoreWriter().PlanAsync(filePath, new CancellationToken(true));
+        var act = () => new GitIgnorePlanner().PlanAsync(filePath, new CancellationToken(true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -496,7 +496,7 @@ public class GitIgnoreWriterTests
     private static async Task<InitializedFileAction?> PlanAndWriteAsync(string filePath,
         CancellationToken cancellationToken)
     {
-        var change = await new GitIgnoreWriter().PlanAsync(filePath, cancellationToken);
+        var change = await new GitIgnorePlanner().PlanAsync(filePath, cancellationToken);
 
         if (change is not null)
         {

@@ -18,6 +18,7 @@ public interface IKitStoreFactory
     /// <returns>The store of the <c>.shadekit</c> directory at the repository root.</returns>
     /// <exception cref="NotAGitRepositoryException">The current directory is not inside a git repository.</exception>
     /// <exception cref="KitRootPathNotFoundException">The repository root contains no <c>.shadekit</c> directory.</exception>
+    /// <exception cref="KitRootNotADirectoryException">The repository root contains a <c>.shadekit</c> file.</exception>
     IKitStore Create();
 
     /// <summary>
@@ -28,6 +29,7 @@ public interface IKitStoreFactory
     /// <exception cref="ArgumentException"><paramref name="path" /> is <see langword="null" />, empty, or whitespace.</exception>
     /// <exception cref="NotAGitRepositoryException"><paramref name="path" /> is not inside a git repository.</exception>
     /// <exception cref="KitRootPathNotFoundException">The repository root contains no <c>.shadekit</c> directory.</exception>
+    /// <exception cref="KitRootNotADirectoryException">The repository root contains a <c>.shadekit</c> file.</exception>
     IKitStore Create(string path);
 
     /// <summary>

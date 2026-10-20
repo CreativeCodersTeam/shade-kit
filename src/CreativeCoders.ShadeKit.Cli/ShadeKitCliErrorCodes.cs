@@ -31,6 +31,11 @@ public static class ShadeKitCliErrorCodes
     public const string PathNotAFile = "path-not-a-file";
 
     /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />.
+    /// </summary>
+    public const string KitRootNotADirectory = "kit-root-not-a-directory";
+
+    /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.FormatTooNew" />.
     /// </summary>
     public const string FormatTooNew = "format-too-new";

@@ -11,8 +11,8 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// <para>
 /// The content is kept as bytes. Lines are decoded only to match them; they are never encoded again, so a file with
 /// any encoding that is compatible with ASCII line terminators keeps its bytes outside the changed part. A file that
-/// starts with a UTF-16 or UTF-32 byte order mark is refused when it is read, because UTF-8 text inserted into it
-/// would mix two encodings.
+/// starts with a UTF-16 or UTF-32 byte order mark, or that contains a NUL byte, which UTF-16 and UTF-32 without byte
+/// order mark do, is refused when it is read, because UTF-8 text inserted into it would mix two encodings.
 /// </para>
 /// <para>
 /// Inserted text is passed as a block of lines separated by <c>\n</c>, without a final line terminator. It is written
@@ -25,6 +25,8 @@ internal sealed class TextFileContent
     private const string Lf = "\n";
 
     private const string CrLf = "\r\n";
+
+    private const string UnmarkedWideEncodingName = "UTF-16 or UTF-32 without byte order mark";
 
     private readonly byte[] _bytes;
 
@@ -77,7 +79,7 @@ internal sealed class TextFileContent
     /// </exception>
     /// <exception cref="PathNotAFileException"><paramref name="filePath" /> is an existing directory.</exception>
     /// <exception cref="UnsupportedFileEncodingException">
-    /// The file starts with a UTF-16 or UTF-32 byte order mark.
+    /// The file starts with a UTF-16 or UTF-32 byte order mark or contains a NUL byte.
     /// </exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
     public static async Task<TextFileContent?> ReadAsync(string filePath, CancellationToken cancellationToken)
@@ -194,7 +196,9 @@ internal sealed class TextFileContent
             }
         }
 
-        return null;
+        // UTF-8 text practically never contains a NUL character, but UTF-16 and UTF-32 encode every ASCII character
+        // with NUL bytes.
+        return bytes.Contains((byte)0) ? UnmarkedWideEncodingName : null;
     }
 
     private string ToFileLineEndings(string block)

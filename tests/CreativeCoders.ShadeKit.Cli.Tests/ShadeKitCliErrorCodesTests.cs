@@ -11,6 +11,7 @@ public partial class ShadeKitCliErrorCodesTests
     [InlineData(ShadeKitCliErrorCodes.NotAGitRepository, "not-a-git-repository")]
     [InlineData(ShadeKitCliErrorCodes.KitAlreadyInitialized, "already-initialized")]
     [InlineData(ShadeKitCliErrorCodes.PathNotAFile, "path-not-a-file")]
+    [InlineData(ShadeKitCliErrorCodes.KitRootNotADirectory, "kit-root-not-a-directory")]
     [InlineData(ShadeKitCliErrorCodes.FormatTooNew, "format-too-new")]
     [InlineData(ShadeKitCliErrorCodes.UpgradeNeeded, "upgrade-needed")]
     [InlineData(ShadeKitCliErrorCodes.InvalidFile, "invalid-file")]

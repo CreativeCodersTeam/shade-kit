@@ -26,7 +26,7 @@ public static class ShadeKitCliExitCodes
 
     /// <summary>
     /// Represents the exit code returned when <c>shade-kit init</c> runs in a git repository whose root already
-    /// contains a SHADE kit root (<c>.shadekit</c> directory or file). The error code is
+    /// contains a SHADE kit root directory (<c>.shadekit</c>). The error code is
     /// <see cref="ShadeKitCliErrorCodes.KitAlreadyInitialized" />.
     /// </summary>
     public const int KitAlreadyInitialized = 13;
@@ -37,6 +37,13 @@ public static class ShadeKitCliExitCodes
     /// is <see cref="ShadeKitCliErrorCodes.PathNotAFile" />.
     /// </summary>
     public const int PathNotAFile = 14;
+
+    /// <summary>
+    /// Represents the exit code returned when the SHADE kit root path (<c>.shadekit</c>) at the root of the git
+    /// repository is a file instead of a directory. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.KitRootNotADirectory" />.
+    /// </summary>
+    public const int KitRootNotADirectory = 15;
 
     /// <summary>
     /// Represents the exit code returned when a file uses a format version that is newer than the engine supports.

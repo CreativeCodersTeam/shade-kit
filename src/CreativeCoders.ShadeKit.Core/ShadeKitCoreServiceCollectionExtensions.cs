@@ -22,8 +22,8 @@ public static class ShadeKitCoreServiceCollectionExtensions
     /// <see cref="IKitStoreFactory" />, <see cref="IGitRepositoryLocator" />, <see cref="IFormatRegistry" /> (with the
     /// file types of <see cref="FormatRegistry.CreateDefault" />), <see cref="IVersionedJsonSerializer" />,
     /// <see cref="IEngineVersionProvider" />, <see cref="IRepositoryInitializer" />,
-    /// <see cref="IShippedTemplateReader" />, <see cref="IGitIgnoreWriter" />, and
-    /// <see cref="IInstructionSectionWriter" /> are registered as singletons. Existing registrations are kept, so
+    /// <see cref="IShippedTemplateReader" />, <see cref="IGitIgnorePlanner" />, and
+    /// <see cref="IInstructionSectionPlanner" /> are registered as singletons. Existing registrations are kept, so
     /// calling this method more than once has no additional effect, and a registration made before the call replaces
     /// the default.
     /// </remarks>
@@ -41,8 +41,8 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IEngineVersionProvider, EngineVersionProvider>();
         services.TryAddSingleton<IRepositoryInitializer, RepositoryInitializer>();
         services.TryAddSingleton<IShippedTemplateReader, ShippedTemplateReader>();
-        services.TryAddSingleton<IGitIgnoreWriter, GitIgnoreWriter>();
-        services.TryAddSingleton<IInstructionSectionWriter, InstructionSectionWriter>();
+        services.TryAddSingleton<IGitIgnorePlanner, GitIgnorePlanner>();
+        services.TryAddSingleton<IInstructionSectionPlanner, InstructionSectionPlanner>();
 
         return services;
     }

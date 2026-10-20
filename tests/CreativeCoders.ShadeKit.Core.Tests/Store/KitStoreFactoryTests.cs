@@ -205,7 +205,7 @@ public class KitStoreFactoryTests
 
     [Fact]
     [Trait("Requirement", "FP01-AC2")]
-    public void Create_ShadeKitIsAFile_ThrowsKitRootPathNotFoundException()
+    public void Create_ShadeKitIsAFile_ThrowsKitRootNotADirectoryException()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -218,8 +218,8 @@ public class KitStoreFactoryTests
         var act = () => factory.Create(tempDirectory.RootPath);
 
         // Assert
-        act.Should().Throw<KitRootPathNotFoundException>()
-            .Which.GitRootPath.Should().Be(tempDirectory.RootPath);
+        act.Should().Throw<KitRootNotADirectoryException>()
+            .Which.KitRootPath.Should().Be(Path.Combine(tempDirectory.RootPath, ".shadekit"));
     }
 
     [Theory]

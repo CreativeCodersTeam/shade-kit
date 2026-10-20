@@ -3,9 +3,9 @@ using CreativeCoders.ShadeKit.Core.Files;
 namespace CreativeCoders.ShadeKit.Core.Init;
 
 /// <summary>
-/// Ensures that a <c>.gitignore</c> file ignores the local-only files of SHADE kit.
+/// Plans the change that makes a <c>.gitignore</c> file ignore the local-only files of SHADE kit.
 /// </summary>
-public sealed class GitIgnoreWriter : IGitIgnoreWriter
+public sealed class GitIgnorePlanner : IGitIgnorePlanner
 {
     private const string CommentLine = "# SHADE kit: local-only files";
 

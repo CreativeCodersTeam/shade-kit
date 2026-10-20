@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Formats;
@@ -52,8 +53,8 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IEngineVersionProvider), typeof(EngineVersionProvider))]
     [InlineData(typeof(IRepositoryInitializer), typeof(RepositoryInitializer))]
     [InlineData(typeof(IShippedTemplateReader), typeof(ShippedTemplateReader))]
-    [InlineData(typeof(IGitIgnoreWriter), typeof(GitIgnoreWriter))]
-    [InlineData(typeof(IInstructionSectionWriter), typeof(InstructionSectionWriter))]
+    [InlineData(typeof(IGitIgnorePlanner), typeof(GitIgnorePlanner))]
+    [InlineData(typeof(IInstructionSectionPlanner), typeof(InstructionSectionPlanner))]
     public void AddShadeKitCore_ServiceCollection_RegistersServiceAsSingleton(Type serviceType, Type implementationType)
     {
         // Arrange
@@ -136,8 +137,8 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IEngineVersionProvider))]
     [InlineData(typeof(IRepositoryInitializer))]
     [InlineData(typeof(IShippedTemplateReader))]
-    [InlineData(typeof(IGitIgnoreWriter))]
-    [InlineData(typeof(IInstructionSectionWriter))]
+    [InlineData(typeof(IGitIgnorePlanner))]
+    [InlineData(typeof(IInstructionSectionPlanner))]
     public void AddShadeKitCore_ExistingServiceRegistration_KeepsExistingRegistration(Type serviceType)
     {
         // Arrange
@@ -162,8 +163,8 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IEngineVersionProvider))]
     [InlineData(typeof(IRepositoryInitializer))]
     [InlineData(typeof(IShippedTemplateReader))]
-    [InlineData(typeof(IGitIgnoreWriter))]
-    [InlineData(typeof(IInstructionSectionWriter))]
+    [InlineData(typeof(IGitIgnorePlanner))]
+    [InlineData(typeof(IInstructionSectionPlanner))]
     public void AddShadeKitCore_CalledTwice_RegistersServiceOnlyOnce(Type serviceType)
     {
         // Arrange
@@ -263,5 +264,6 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
             .WithParameterName("services");
     }
 
+    [SuppressMessage("csharpsquid", "S2094", Justification = "Test class for serialization")]
     public sealed class TestDocument : VersionedDocument;
 }

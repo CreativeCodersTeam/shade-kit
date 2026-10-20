@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
@@ -494,25 +495,14 @@ public class RepositoryInitializerTests
             .Should().BeEquivalentTo(snapshot);
     }
 
-    [Theory]
+    [Fact]
     [Trait("Requirement", "FP02-AC6")]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task InitializeAsync_KitRootIsFileOrEmptyDirectory_ThrowsKitAlreadyInitializedException(
-        bool kitRootIsFile)
+    public async Task InitializeAsync_KitRootIsEmptyDirectory_ThrowsKitAlreadyInitializedException()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateGitRoot();
-
-        if (kitRootIsFile)
-        {
-            tempDirectory.WriteFile("not a directory", KitRoot);
-        }
-        else
-        {
-            tempDirectory.CreateDirectory(KitRoot);
-        }
+        tempDirectory.CreateDirectory(KitRoot);
 
         var snapshot = tempDirectory.TakeSnapshot();
 
@@ -522,6 +512,28 @@ public class RepositoryInitializerTests
 
         // Assert
         (await act.Should().ThrowAsync<KitAlreadyInitializedException>())
+            .Which.KitRootPath.Should().Be(Path.Combine(tempDirectory.RootPath, KitRoot));
+
+        tempDirectory.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_KitRootIsFile_ThrowsKitRootNotADirectoryExceptionAndChangesNothing()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+        tempDirectory.WriteFile("not a directory", KitRoot);
+
+        var snapshot = tempDirectory.TakeSnapshot();
+
+        // Act
+        var act = () => CreateInitializer()
+            .InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<KitRootNotADirectoryException>())
             .Which.KitRootPath.Should().Be(Path.Combine(tempDirectory.RootPath, KitRoot));
 
         tempDirectory.TakeSnapshot()
@@ -839,17 +851,17 @@ public class RepositoryInitializerTests
 
         // Every plan passes and cancels the token without observing it, so the preconditions complete and the
         // cancellation must stop the initialisation before its first write, whichever plan runs last.
-        var gitIgnoreWriter = A.Fake<IGitIgnoreWriter>();
-        A.CallTo(() => gitIgnoreWriter.PlanAsync(A<string>._, A<CancellationToken>._))
+        var gitIgnorePlanner = A.Fake<IGitIgnorePlanner>();
+        A.CallTo(() => gitIgnorePlanner.PlanAsync(A<string>._, A<CancellationToken>._))
             .Invokes(() => cancellationTokenSource.Cancel())
             .Returns(Task.FromResult<PlannedFileChange?>(null));
 
-        var instructionSectionWriter = A.Fake<IInstructionSectionWriter>();
-        A.CallTo(() => instructionSectionWriter.PlanAsync(A<string>._, A<CancellationToken>._))
+        var instructionSectionPlanner = A.Fake<IInstructionSectionPlanner>();
+        A.CallTo(() => instructionSectionPlanner.PlanAsync(A<string>._, A<CancellationToken>._))
             .Invokes(() => cancellationTokenSource.Cancel())
             .Returns(Task.FromResult<PlannedFileChange?>(null));
 
-        var initializer = CreateInitializer(gitIgnoreWriter, instructionSectionWriter);
+        var initializer = CreateInitializer(gitIgnorePlanner, instructionSectionPlanner);
 
         // Act
         var act = () => initializer.InitializeAsync(tempDirectory.RootPath, cancellationTokenSource.Token);
@@ -865,7 +877,7 @@ public class RepositoryInitializerTests
     }
 
     [Fact]
-    public async Task InitializeAsync_LastWriteFails_KeepsFilesWrittenBefore()
+    public async Task InitializeAsync_LastWriteFails_RemovesKitRootAndKeepsRepositoryFilesWrittenBefore()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -885,8 +897,8 @@ public class RepositoryInitializerTests
         {
             await act.Should().ThrowAsync<UnauthorizedAccessException>();
 
-            File.Exists(Path.Combine(tempDirectory.RootPath, KitRoot, "templates.lock.json"))
-                .Should().BeTrue();
+            Path.Exists(Path.Combine(tempDirectory.RootPath, KitRoot))
+                .Should().BeFalse();
 
             File.Exists(Path.Combine(tempDirectory.RootPath, GitIgnore))
                 .Should().BeTrue();
@@ -901,6 +913,162 @@ public class RepositoryInitializerTests
         {
             File.SetAttributes(agentsPath, FileAttributes.Normal);
         }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_AfterLastWriteFailed_SecondRunCompletesOnlyTheMissingChanges()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+
+        var agentsPath = tempDirectory.WriteFile("# Agents\n", AgentsMd);
+        File.SetAttributes(agentsPath, FileAttributes.ReadOnly);
+        SkipWhenWritable(agentsPath);
+
+        try
+        {
+            var firstRun = () => CreateInitializer().InitializeAsync(tempDirectory.RootPath,
+                TestContext.Current.CancellationToken);
+            await firstRun.Should().ThrowAsync<UnauthorizedAccessException>();
+        }
+        finally
+        {
+            File.SetAttributes(agentsPath, FileAttributes.Normal);
+        }
+
+        // Act
+        var result = await CreateInitializer().InitializeAsync(tempDirectory.RootPath,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Files.Where(file => !file.Path.StartsWith(KitRoot + "/", StringComparison.Ordinal))
+            .Should().Equal(new InitializedFile(AgentsMd, InitializedFileAction.Appended));
+
+        File.Exists(Path.Combine(tempDirectory.RootPath, KitRoot, "templates.lock.json"))
+            .Should().BeTrue();
+
+        tempDirectory.ReadFileText(ClaudeMd)
+            .Should().Be(ExpectedSectionFile);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WriteInKitRootFails_RemovesKitRootAndWritesNoRepositoryFile()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+
+        var shippedTemplateReader = A.Fake<IShippedTemplateReader>();
+        A.CallTo(() => shippedTemplateReader.ReadContent(A<ShippedTemplate>._)).Throws(new IOException("disk full"));
+
+        var initializer = CreateInitializer(shippedTemplateReader);
+        var snapshot = tempDirectory.TakeSnapshot();
+
+        // Act
+        var act = () => initializer.InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<IOException>())
+            .WithMessage("disk full");
+
+        tempDirectory.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_FailsBeforeKitRootIsCreated_RethrowsOriginalExceptionAndWritesNothing()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+
+        var engineVersionProvider = A.Fake<IEngineVersionProvider>();
+        A.CallTo(() => engineVersionProvider.Version).Throws(new InvalidOperationException("no version"));
+
+        var initializer = new RepositoryInitializer(new GitRepositoryLocator(), CreateKitStoreFactory(),
+            new ShippedTemplateReader(), new GitIgnorePlanner(), new InstructionSectionPlanner(), engineVersionProvider);
+        var snapshot = tempDirectory.TakeSnapshot();
+
+        // Act
+        var act = () => initializer.InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .WithMessage("no version");
+
+        tempDirectory.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task InitializeAsync_RollbackFails_RethrowsWriteErrorAndNextRunReportsAlreadyInitialized()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes are needed to make the kit root read-only.");
+        Assert.SkipWhen(Environment.UserName == "root", "root can write to a read-only directory.");
+
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+        var kitRootPath = Path.Combine(tempDirectory.RootPath, KitRoot);
+
+        // The first template is read after config.json and gates.json are written. A read-only kit root makes the
+        // template write fail and keeps the rollback from removing the files in it.
+        var shippedTemplateReader = A.Fake<IShippedTemplateReader>();
+        A.CallTo(() => shippedTemplateReader.ReadContent(A<ShippedTemplate>._))
+            .Invokes(() => File.SetUnixFileMode(kitRootPath, UnixFileMode.UserRead | UnixFileMode.UserExecute))
+            .Returns("template");
+
+        try
+        {
+            // Act
+            var act = () => CreateInitializer(shippedTemplateReader).InitializeAsync(tempDirectory.RootPath,
+                TestContext.Current.CancellationToken);
+
+            // Assert
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+
+            Directory.Exists(kitRootPath)
+                .Should().BeTrue();
+
+            var secondRun = () => CreateInitializer().InitializeAsync(tempDirectory.RootPath,
+                TestContext.Current.CancellationToken);
+
+            await secondRun.Should().ThrowAsync<KitAlreadyInitializedException>();
+        }
+        finally
+        {
+            File.SetUnixFileMode(kitRootPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_CanceledWhileWritingKitRoot_RemovesKitRoot()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        // The first template is read after config.json and gates.json are written; the cancellation stops the write
+        // of the template.
+        var shippedTemplateReader = A.Fake<IShippedTemplateReader>();
+        A.CallTo(() => shippedTemplateReader.ReadContent(A<ShippedTemplate>._))
+            .Invokes(() => cancellationTokenSource.Cancel())
+            .Returns("template");
+
+        var initializer = CreateInitializer(shippedTemplateReader);
+        var snapshot = tempDirectory.TakeSnapshot();
+
+        // Act
+        var act = () => initializer.InitializeAsync(tempDirectory.RootPath, cancellationTokenSource.Token);
+
+        // Assert
+        await act.Should().ThrowAsync<OperationCanceledException>();
+
+        tempDirectory.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
     }
 
     [Theory]
@@ -918,8 +1086,8 @@ public class RepositoryInitializerTests
             A.Fake<IGitRepositoryLocator>(),
             A.Fake<IKitStoreFactory>(),
             A.Fake<IShippedTemplateReader>(),
-            A.Fake<IGitIgnoreWriter>(),
-            A.Fake<IInstructionSectionWriter>(),
+            A.Fake<IGitIgnorePlanner>(),
+            A.Fake<IInstructionSectionPlanner>(),
             A.Fake<IEngineVersionProvider>()
         ];
         dependencies[nullIndex] = null;
@@ -929,8 +1097,8 @@ public class RepositoryInitializerTests
             (IGitRepositoryLocator)dependencies[0]!,
             (IKitStoreFactory)dependencies[1]!,
             (IShippedTemplateReader)dependencies[2]!,
-            (IGitIgnoreWriter)dependencies[3]!,
-            (IInstructionSectionWriter)dependencies[4]!,
+            (IGitIgnorePlanner)dependencies[3]!,
+            (IInstructionSectionPlanner)dependencies[4]!,
             (IEngineVersionProvider)dependencies[5]!);
 
         // Assert
@@ -957,17 +1125,28 @@ public class RepositoryInitializerTests
 
     private static RepositoryInitializer CreateInitializer()
     {
-        return CreateInitializer(new GitIgnoreWriter(), new InstructionSectionWriter());
+        return CreateInitializer(new GitIgnorePlanner(), new InstructionSectionPlanner());
     }
 
-    private static RepositoryInitializer CreateInitializer(IGitIgnoreWriter gitIgnoreWriter,
-        IInstructionSectionWriter instructionSectionWriter)
+    private static RepositoryInitializer CreateInitializer(IGitIgnorePlanner gitIgnorePlanner,
+        IInstructionSectionPlanner instructionSectionPlanner)
+    {
+        return CreateInitializer(new ShippedTemplateReader(), gitIgnorePlanner, instructionSectionPlanner);
+    }
+
+    private static RepositoryInitializer CreateInitializer(IShippedTemplateReader shippedTemplateReader)
+    {
+        return CreateInitializer(shippedTemplateReader, new GitIgnorePlanner(), new InstructionSectionPlanner());
+    }
+
+    private static RepositoryInitializer CreateInitializer(IShippedTemplateReader shippedTemplateReader,
+        IGitIgnorePlanner gitIgnorePlanner, IInstructionSectionPlanner instructionSectionPlanner)
     {
         var engineVersionProvider = A.Fake<IEngineVersionProvider>();
         A.CallTo(() => engineVersionProvider.Version).Returns(EngineVersion);
 
         return new RepositoryInitializer(new GitRepositoryLocator(), CreateKitStoreFactory(),
-            new ShippedTemplateReader(), gitIgnoreWriter, instructionSectionWriter, engineVersionProvider);
+            shippedTemplateReader, gitIgnorePlanner, instructionSectionPlanner, engineVersionProvider);
     }
 
     private static KitStoreFactory CreateKitStoreFactory()

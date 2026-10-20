@@ -54,8 +54,9 @@ public class FeatureListCommand(
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
     /// The current directory is not inside a git repository (exit code
-    /// <see cref="ShadeKitCliExitCodes.NotAGitRepository" />), or no SHADE kit root is found (exit code
-    /// <see cref="ShadeKitCliExitCodes.KitRootNotFound" />).
+    /// <see cref="ShadeKitCliExitCodes.NotAGitRepository" />), no SHADE kit root is found (exit code
+    /// <see cref="ShadeKitCliExitCodes.KitRootNotFound" />), or <c>.shadekit</c> at the repository root is a file (exit
+    /// code <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />).
     /// </exception>
     public async Task<CommandResult> ExecuteAsync(FeatureListCommandOptions options)
     {

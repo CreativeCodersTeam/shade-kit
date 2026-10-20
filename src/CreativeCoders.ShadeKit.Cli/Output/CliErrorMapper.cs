@@ -39,6 +39,11 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 $"No SHADE kit root directory '{KitStorePaths.RootPath}' found at the repository root " +
                 $"'{e.GitRootPath}'. Run 'shade-kit init' to set up SHADE kit."),
 
+            KitRootNotADirectoryException e => new CliError(ShadeKitCliExitCodes.KitRootNotADirectory,
+                ShadeKitCliErrorCodes.KitRootNotADirectory,
+                $"'{e.KitRootPath}' is a file, but SHADE kit needs a '{KitStorePaths.RootPath}' directory at the " +
+                "repository root. Move or remove the file, then run 'shade-kit init'."),
+
             NotAGitRepositoryException e => new CliError(ShadeKitCliExitCodes.NotAGitRepository,
                 ShadeKitCliErrorCodes.NotAGitRepository,
                 $"'{e.StartPath}' is not inside a git repository. SHADE kit works only in a git repository; run " +
@@ -61,9 +66,10 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
 
             InvalidManagedSectionException e => new CliError(ShadeKitCliExitCodes.InvalidManagedSection,
                 ShadeKitCliErrorCodes.InvalidManagedSection,
-                $"The SHADE kit section markers in '{e.FilePath}' are invalid: {e.Reason} Fix the markers so that " +
-                $"the file contains exactly one '{ManagedInstructionSection.BeginMarkerPrefix} ... -->' line " +
-                $"followed by exactly one '{ManagedInstructionSection.EndMarker}' line, then run the command again."),
+                $"The SHADE kit section markers in '{e.FilePath}' are invalid: {e.Reason} Fix the file so that " +
+                $"every code block is closed and the file contains exactly one " +
+                $"'{ManagedInstructionSection.BeginMarkerPrefix} ... -->' line followed by exactly one " +
+                $"'{ManagedInstructionSection.EndMarker}' line outside code blocks, then run the command again."),
 
             UnsupportedFileEncodingException e => new CliError(ShadeKitCliExitCodes.UnsupportedFileEncoding,
                 ShadeKitCliErrorCodes.UnsupportedFileEncoding,

@@ -3,9 +3,9 @@ using CreativeCoders.ShadeKit.Core.Files;
 namespace CreativeCoders.ShadeKit.Core.Init;
 
 /// <summary>
-/// Ensures that a <c>.gitignore</c> file ignores the local-only files of SHADE kit.
+/// Plans the change that makes a <c>.gitignore</c> file ignore the local-only files of SHADE kit.
 /// </summary>
-public interface IGitIgnoreWriter
+public interface IGitIgnorePlanner
 {
     /// <summary>
     /// Computes the change that makes a <c>.gitignore</c> file contain every entry of
@@ -39,7 +39,7 @@ public interface IGitIgnoreWriter
     /// </exception>
     /// <exception cref="PathNotAFileException"><paramref name="filePath" /> is an existing directory.</exception>
     /// <exception cref="UnsupportedFileEncodingException">
-    /// The file starts with a UTF-16 or UTF-32 byte order mark.
+    /// The file starts with a UTF-16 or UTF-32 byte order mark or contains a NUL byte.
     /// </exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
     Task<PlannedFileChange?> PlanAsync(string filePath, CancellationToken cancellationToken = default);

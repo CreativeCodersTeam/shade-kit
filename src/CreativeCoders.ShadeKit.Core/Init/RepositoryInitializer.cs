@@ -15,17 +15,17 @@ namespace CreativeCoders.ShadeKit.Core.Init;
 /// <param name="gitRepositoryLocator">The locator that finds the root of the git repository.</param>
 /// <param name="kitStoreFactory">The factory that creates the store of the new <c>.shadekit</c> directory.</param>
 /// <param name="shippedTemplateReader">The reader that provides the content of the shipped templates.</param>
-/// <param name="gitIgnoreWriter">The writer that adds the local-only files to <c>.gitignore</c>.</param>
-/// <param name="instructionSectionWriter">
-/// The writer that adds the managed section to <c>CLAUDE.md</c> and <c>AGENTS.md</c>.
+/// <param name="gitIgnorePlanner">The planner that computes the local-only entries to add to <c>.gitignore</c>.</param>
+/// <param name="instructionSectionPlanner">
+/// The planner that computes the managed section to add to <c>CLAUDE.md</c> and <c>AGENTS.md</c>.
 /// </param>
 /// <param name="engineVersionProvider">The provider of the engine version recorded as kit version.</param>
 public sealed class RepositoryInitializer(
     IGitRepositoryLocator gitRepositoryLocator,
     IKitStoreFactory kitStoreFactory,
     IShippedTemplateReader shippedTemplateReader,
-    IGitIgnoreWriter gitIgnoreWriter,
-    IInstructionSectionWriter instructionSectionWriter,
+    IGitIgnorePlanner gitIgnorePlanner,
+    IInstructionSectionPlanner instructionSectionPlanner,
     IEngineVersionProvider engineVersionProvider)
     : IRepositoryInitializer
 {
@@ -41,9 +41,9 @@ public sealed class RepositoryInitializer(
 
     private readonly IShippedTemplateReader _shippedTemplateReader = Ensure.NotNull(shippedTemplateReader);
 
-    private readonly IGitIgnoreWriter _gitIgnoreWriter = Ensure.NotNull(gitIgnoreWriter);
+    private readonly IGitIgnorePlanner _gitIgnorePlanner = Ensure.NotNull(gitIgnorePlanner);
 
-    private readonly IInstructionSectionWriter _instructionSectionWriter = Ensure.NotNull(instructionSectionWriter);
+    private readonly IInstructionSectionPlanner _instructionSectionPlanner = Ensure.NotNull(instructionSectionPlanner);
 
     private readonly IEngineVersionProvider _engineVersionProvider = Ensure.NotNull(engineVersionProvider);
 
@@ -58,7 +58,12 @@ public sealed class RepositoryInitializer(
         // The store creates the kit root with its first file.
         var kitStore = _kitStoreFactory.CreateForRepositoryRoot(repositoryRootPath);
 
-        if (Path.Exists(kitStore.RootPath))
+        if (File.Exists(kitStore.RootPath))
+        {
+            throw new KitRootNotADirectoryException(kitStore.RootPath);
+        }
+
+        if (Directory.Exists(kitStore.RootPath))
         {
             throw new KitAlreadyInitializedException(kitStore.RootPath);
         }
@@ -68,16 +73,37 @@ public sealed class RepositoryInitializer(
         var repositoryFileChanges = await PlanRepositoryFilesAsync(repositoryRootPath, cancellationToken)
             .ConfigureAwait(false);
 
-        // A cancellation after the preconditions must not leave a kit root behind that blocks the next init.
         cancellationToken.ThrowIfCancellationRequested();
 
         var files = new List<InitializedFile>();
 
-        await WriteKitRootAsync(kitStore, files, cancellationToken).ConfigureAwait(false);
-        await WriteRepositoryFilesAsync(repositoryRootPath, repositoryFileChanges, files, cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            await WriteKitRootAsync(kitStore, files, cancellationToken).ConfigureAwait(false);
+            await WriteRepositoryFilesAsync(repositoryRootPath, repositoryFileChanges, files, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            // A kit root left behind would block the next init. It did not exist before this run, so removing it
+            // loses nothing; the repository files that are already written are recognised by the next planning.
+            DeleteKitRoot(kitStore.RootPath);
+            throw;
+        }
 
         return new RepositoryInitResult(repositoryRootPath, files);
+    }
+
+    private static void DeleteKitRoot(string kitRootPath)
+    {
+        try
+        {
+            Directory.Delete(kitRootPath, recursive: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The kit root stays in place; the next init then reports it as already initialised.
+        }
     }
 
     /// <summary>
@@ -90,11 +116,11 @@ public sealed class RepositoryInitializer(
         var changes = new List<(string FileName, PlannedFileChange Change)>();
         var plannedFilePaths = new HashSet<string>(StringComparer.Ordinal);
 
-        await PlanFileAsync(GitIgnoreFileName, _gitIgnoreWriter.PlanAsync).ConfigureAwait(false);
+        await PlanFileAsync(GitIgnoreFileName, _gitIgnorePlanner.PlanAsync).ConfigureAwait(false);
 
         foreach (var fileName in InstructionFileNames)
         {
-            await PlanFileAsync(fileName, _instructionSectionWriter.PlanAsync).ConfigureAwait(false);
+            await PlanFileAsync(fileName, _instructionSectionPlanner.PlanAsync).ConfigureAwait(false);
         }
 
         return changes;
@@ -132,11 +158,7 @@ public sealed class RepositoryInitializer(
         var kitVersion = _engineVersionProvider.Version;
 
         // Every other setting keeps the default of KitConfig.
-        var config = new KitConfig
-        {
-            KitVersion = kitVersion,
-            Trackers = new Dictionary<string, string> { ["github.com"] = "gh" }
-        };
+        var config = new KitConfig { KitVersion = kitVersion };
 
         await WriteDocumentAsync(KitStorePaths.ConfigFileName, FormatIds.Config, config).ConfigureAwait(false);
 

@@ -3,17 +3,21 @@ using CreativeCoders.ShadeKit.Core.Files;
 namespace CreativeCoders.ShadeKit.Core.Init;
 
 /// <summary>
-/// Writes the managed SHADE kit section into an agent instruction file such as <c>CLAUDE.md</c> or
+/// Plans the managed SHADE kit section of an agent instruction file such as <c>CLAUDE.md</c> or
 /// <c>AGENTS.md</c>.
 /// </summary>
 /// <remarks>
 /// The section starts with a line whose text, without leading and trailing whitespace, starts with
-/// <see cref="ManagedInstructionSection.BeginMarkerPrefix" />, and ends with a line whose text, without leading and
-/// trailing whitespace, is <see cref="ManagedInstructionSection.EndMarker" />. The markers are invalid if a file
+/// <see cref="ManagedInstructionSection.BeginMarkerPrefix" /> followed by whitespace or <c>--&gt;</c>, and ends with a
+/// line whose text, without leading and trailing whitespace, is <see cref="ManagedInstructionSection.EndMarker" />.
+/// Lines in a fenced code block (opened by at least three backticks or tildes, indented by at most three spaces) are
+/// no markers, so the markers can be documented in a code example. A code block that is still open at the end of the
+/// file makes the file invalid, because a section appended after it would be part of the block. The markers are
+/// invalid if a file
 /// contains more than one begin or end marker, a begin marker without an end marker, an end marker without a begin
 /// marker, or an end marker before the begin marker.
 /// </remarks>
-public interface IInstructionSectionWriter
+public interface IInstructionSectionPlanner
 {
     /// <summary>
     /// Computes the change that writes the managed section <see cref="ManagedInstructionSection.Text" /> into an
@@ -46,7 +50,7 @@ public interface IInstructionSectionWriter
     /// </exception>
     /// <exception cref="PathNotAFileException"><paramref name="filePath" /> is an existing directory.</exception>
     /// <exception cref="UnsupportedFileEncodingException">
-    /// The file starts with a UTF-16 or UTF-32 byte order mark.
+    /// The file starts with a UTF-16 or UTF-32 byte order mark or contains a NUL byte.
     /// </exception>
     /// <exception cref="InvalidManagedSectionException">The markers in the file are invalid.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>

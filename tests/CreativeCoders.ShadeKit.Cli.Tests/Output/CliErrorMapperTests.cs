@@ -170,8 +170,9 @@ public class CliErrorMapperTests
             .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidManagedSection,
                 ShadeKitCliErrorCodes.InvalidManagedSection,
                 "The SHADE kit section markers in '/repo/CLAUDE.md' are invalid: The begin marker in line 3 has no " +
-                "end marker. Fix the markers so that the file contains exactly one '<!-- shade-kit:begin ... -->' " +
-                "line followed by exactly one '<!-- shade-kit:end -->' line, then run the command again."));
+                "end marker. Fix the file so that every code block is closed and the file contains exactly one " +
+                "'<!-- shade-kit:begin ... -->' line followed by exactly one '<!-- shade-kit:end -->' line outside " +
+                "code blocks, then run the command again."));
     }
 
     [Fact]
@@ -205,6 +206,23 @@ public class CliErrorMapperTests
             .Should().Be(new CliError(ShadeKitCliExitCodes.PathNotAFile, ShadeKitCliErrorCodes.PathNotAFile,
                 "'/repo/CLAUDE.md' is a directory, but shade-kit must write a file at this path. Move or remove " +
                 "the directory, then run the command again."));
+    }
+
+    [Fact]
+    public void Map_KitRootNotADirectory_ReturnsExitCode15NamingPathWithInitHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new KitRootNotADirectoryException("/repo/.shadekit"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.KitRootNotADirectory,
+                ShadeKitCliErrorCodes.KitRootNotADirectory,
+                "'/repo/.shadekit' is a file, but SHADE kit needs a '.shadekit' directory at the repository root. " +
+                "Move or remove the file, then run 'shade-kit init'."));
     }
 
     [Fact]

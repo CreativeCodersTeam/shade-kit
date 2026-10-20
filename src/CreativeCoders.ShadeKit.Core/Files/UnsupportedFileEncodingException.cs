@@ -6,7 +6,8 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// </summary>
 /// <remarks>
 /// The encoding is recognised by the byte order mark at the start of the file: UTF-16 or UTF-32, each in little- or
-/// big-endian byte order.
+/// big-endian byte order. A file without byte order mark that contains a NUL byte is taken as UTF-16 or UTF-32 without
+/// byte order mark.
 /// </remarks>
 /// <param name="filePath">The path of the file.</param>
 /// <param name="encodingName">The name of the encoding of the file, for example <c>UTF-16 LE</c>.</param>
@@ -24,7 +25,7 @@ public class UnsupportedFileEncodingException(string filePath, string encodingNa
     /// </summary>
     /// <value>
     /// One of <c>UTF-16 LE</c>, <c>UTF-16 BE</c>, <c>UTF-32 LE</c>, or <c>UTF-32 BE</c>, after the byte order mark at
-    /// the start of the file.
+    /// the start of the file, or <c>UTF-16 or UTF-32 without byte order mark</c> for a file with a NUL byte.
     /// </value>
     public string EncodingName { get; } = encodingName;
 }

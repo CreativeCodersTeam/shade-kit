@@ -3,7 +3,7 @@ using CreativeCoders.ShadeKit.Core.Store;
 namespace CreativeCoders.ShadeKit.Core.Init;
 
 /// <summary>
-/// Defines the <c>.gitignore</c> entries that an <see cref="IGitIgnoreWriter" /> ensures for the local-only files of
+/// Defines the <c>.gitignore</c> entries that an <see cref="IGitIgnorePlanner" /> plans for the local-only files of
 /// SHADE kit.
 /// </summary>
 public static class KitGitIgnoreEntries

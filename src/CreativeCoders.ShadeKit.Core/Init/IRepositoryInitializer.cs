@@ -21,7 +21,9 @@ public interface IRepositoryInitializer
     /// It then creates <c>.shadekit/</c> with <c>config.json</c>, <c>gates.json</c>, every shipped template,
     /// <c>templates.lock.json</c>, and an empty <c>features/</c> directory; adds the local-only files to
     /// <c>.gitignore</c>; and writes the managed section into <c>CLAUDE.md</c> and <c>AGENTS.md</c>, in this order.
-    /// Files that are already written stay in place if a later write fails.
+    /// If a write fails or the operation is canceled after <c>.shadekit/</c> was created, <c>.shadekit/</c> is
+    /// removed again, so that the next initialisation can start over. Repository files that are already written stay
+    /// in place; the next initialisation recognises their changes and does not repeat them.
     /// </para>
     /// </remarks>
     /// <param name="path">The directory at which the search for the repository root starts.</param>
@@ -37,14 +39,17 @@ public interface IRepositoryInitializer
     /// <paramref name="path" /> is not inside a git repository.
     /// </exception>
     /// <exception cref="KitAlreadyInitializedException">
-    /// The repository root already contains a <c>.shadekit</c> directory or file.
+    /// The repository root already contains a <c>.shadekit</c> directory.
+    /// </exception>
+    /// <exception cref="KitRootNotADirectoryException">
+    /// The repository root contains a <c>.shadekit</c> file.
     /// </exception>
     /// <exception cref="PathNotAFileException">
     /// <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root is a directory.
     /// </exception>
     /// <exception cref="UnsupportedFileEncodingException">
     /// <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root starts with a UTF-16 or UTF-32
-    /// byte order mark.
+    /// byte order mark or contains a NUL byte.
     /// </exception>
     /// <exception cref="InvalidManagedSectionException">
     /// The managed section markers in <c>CLAUDE.md</c> or <c>AGENTS.md</c> are invalid.

@@ -9,6 +9,8 @@ public class TextFileContentTests
 {
     private const string FileName = "notes.txt";
 
+    private const string UnmarkedWideEncodingName = "UTF-16 or UTF-32 without byte order mark";
+
     public static TheoryData<byte[], string> UnsupportedEncodingFiles { get; } = new()
     {
         { [0xFF, 0xFE, (byte)'a', 0x00, (byte)'\n', 0x00], "UTF-16 LE" },
@@ -20,7 +22,15 @@ public class TextFileContentTests
         { [0xFF, 0xFE, 0x00, 0x00], "UTF-32 LE" },
         { [0x00, 0x00, 0xFE, 0xFF], "UTF-32 BE" },
         { [0xFF, 0xFE, 0x00], "UTF-16 LE" },
-        { [0xFF, 0xFE, 0x00, 0x01], "UTF-16 LE" }
+        { [0xFF, 0xFE, 0x00, 0x01], "UTF-16 LE" },
+        { [.. Encoding.Unicode.GetBytes("# Project\r\n")], UnmarkedWideEncodingName },
+        { [.. Encoding.BigEndianUnicode.GetBytes("# Project\n")], UnmarkedWideEncodingName },
+        { [.. new UTF32Encoding(false, false).GetBytes("# Project\n")], UnmarkedWideEncodingName },
+        { [(byte)'a', (byte)'\n', 0x00, (byte)'b', (byte)'\n'], UnmarkedWideEncodingName },
+        { [0x00, 0x00, 0xFE], UnmarkedWideEncodingName },
+        { [0x00, 0xFE, 0xFF], UnmarkedWideEncodingName },
+        { [0xEF, 0xBB, 0xBF, 0x00], UnmarkedWideEncodingName },
+        { [0x00], UnmarkedWideEncodingName }
     };
 
     public static TheoryData<byte[]> AcceptedPrefixFiles { get; } = new()
@@ -28,9 +38,9 @@ public class TextFileContentTests
         new byte[] { 0xFF },
         new byte[] { 0xFE },
         new byte[] { 0xFF, 0xC3, (byte)'\n' },
-        new byte[] { 0x00, 0x00, 0xFE },
-        new byte[] { 0x00, 0xFE, 0xFF },
-        new byte[] { 0xEF, 0xBB, 0xBF, 0xFF, 0xFE, (byte)'\n' }
+        new byte[] { 0xFE, 0xFE, 0xFF },
+        new byte[] { 0xEF, 0xBB, 0xBF, 0xFF, 0xFE, (byte)'\n' },
+        Encoding.UTF8.GetBytes("# Grüße 漢字\n")
     };
 
     [Fact]
@@ -77,7 +87,7 @@ public class TextFileContentTests
 
     [Theory]
     [MemberData(nameof(UnsupportedEncodingFiles))]
-    public async Task ReadAsync_FileWithUtf16OrUtf32Bom_ThrowsUnsupportedFileEncodingException(byte[] bytes,
+    public async Task ReadAsync_FileInUtf16OrUtf32_ThrowsUnsupportedFileEncodingException(byte[] bytes,
         string expectedEncodingName)
     {
         // Arrange
@@ -99,7 +109,7 @@ public class TextFileContentTests
 
     [Theory]
     [MemberData(nameof(AcceptedPrefixFiles))]
-    public async Task ReadAsync_FileWithoutUtf16OrUtf32Bom_ReturnsContent(byte[] bytes)
+    public async Task ReadAsync_FileWithoutUtf16OrUtf32BomOrNulByte_ReturnsContent(byte[] bytes)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -412,6 +422,6 @@ public class TextFileContentTests
 
         var content = await TextFileContent.ReadAsync(filePath, TestContext.Current.CancellationToken);
 
-        return content!;
+        return content ?? throw new InvalidOperationException("File content is null");
     }
 }

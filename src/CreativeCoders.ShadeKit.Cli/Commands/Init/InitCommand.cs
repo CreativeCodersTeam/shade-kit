@@ -55,9 +55,13 @@ public class InitCommand(
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
     /// The current directory is not inside a git repository (exit code
-    /// <see cref="ShadeKitCliExitCodes.NotAGitRepository" />), the repository is already initialised (exit code
-    /// <see cref="ShadeKitCliExitCodes.KitAlreadyInitialized" />), or the managed section markers in <c>CLAUDE.md</c>
-    /// or <c>AGENTS.md</c> are invalid (exit code <see cref="ShadeKitCliExitCodes.InvalidManagedSection" />).
+    /// <see cref="ShadeKitCliExitCodes.NotAGitRepository" />); the repository is already initialised (exit code
+    /// <see cref="ShadeKitCliExitCodes.KitAlreadyInitialized" />); <c>.shadekit</c> at the repository root is a file
+    /// (exit code <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />); <c>.gitignore</c>, <c>CLAUDE.md</c>, or
+    /// <c>AGENTS.md</c> is a directory (exit code <see cref="ShadeKitCliExitCodes.PathNotAFile" />) or not UTF-8
+    /// (exit code <see cref="ShadeKitCliExitCodes.UnsupportedFileEncoding" />); or the managed section markers in
+    /// <c>CLAUDE.md</c> or <c>AGENTS.md</c> are invalid (exit code
+    /// <see cref="ShadeKitCliExitCodes.InvalidManagedSection" />).
     /// </exception>
     public async Task<CommandResult> ExecuteAsync(InitCommandOptions options)
     {

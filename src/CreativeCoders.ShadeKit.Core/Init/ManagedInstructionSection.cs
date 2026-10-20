@@ -1,7 +1,7 @@
 namespace CreativeCoders.ShadeKit.Core.Init;
 
 /// <summary>
-/// Defines the managed SHADE kit section that an <see cref="IInstructionSectionWriter" /> writes into an agent
+/// Defines the managed SHADE kit section that an <see cref="IInstructionSectionPlanner" /> plans for an agent
 /// instruction file such as <c>CLAUDE.md</c> or <c>AGENTS.md</c>.
 /// </summary>
 public static class ManagedInstructionSection

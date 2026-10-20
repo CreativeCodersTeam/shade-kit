@@ -35,6 +35,11 @@ public class KitStoreFactory(
         var gitRootPath = _gitRepositoryLocator.GetRepositoryRootPath(path);
         var kitStore = CreateForRepositoryRoot(gitRootPath);
 
+        if (File.Exists(kitStore.RootPath))
+        {
+            throw new KitRootNotADirectoryException(kitStore.RootPath);
+        }
+
         return Directory.Exists(kitStore.RootPath)
             ? kitStore
             : throw new KitRootPathNotFoundException(path, gitRootPath);

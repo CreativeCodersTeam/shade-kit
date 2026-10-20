@@ -6,7 +6,7 @@ using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Init;
 
-public class InstructionSectionWriterTests
+public class InstructionSectionPlannerTests
 {
     private const string FileName = "CLAUDE.md";
 
@@ -27,7 +27,48 @@ public class InstructionSectionWriterTests
         { $"  {Begin}\r\n\t{Begin} again\r\n{End}\r\n", "The file contains more than one begin marker (lines 1, 2)." },
         { $"{End}\n{End}\n", "The file contains more than one end marker (lines 1, 2)." },
         { $"{Begin}\n{Begin}\n", "The file contains more than one begin marker (lines 1, 2)." },
-        { $"<!-- shade-kit:beginning -->\n{Begin}\n{End}\n", "The file contains more than one begin marker (lines 1, 2)." }
+        { $"    ```\n{Begin}\n{End}\n    ```\n{Begin}\n{End}\n", "The file contains more than one begin marker (lines 2, 5)." },
+        { $"```\n{Begin}\n```\n{End}\n", "The end marker in line 4 has no begin marker." },
+        { $"{Begin}\n```\n{End}\n```\n", "The begin marker in line 1 has no end marker." },
+        { $"<!-- shade-kit:begin\n{End}\n", "The end marker in line 2 has no begin marker." },
+        { $"```\n{Begin}\n```js\n{End}\n```\n{End}\n", "The end marker in line 6 has no begin marker." },
+        { $"```\n{Begin}\n    ```\n{End}\n```\n{End}\n", "The end marker in line 6 has no begin marker." },
+        { $"\t```\n{Begin}\n{End}\n\t```\n{Begin}\n{End}\n", "The file contains more than one begin marker (lines 2, 5)." },
+        { $"# Docs\n```\n{Begin}\nnever closed\n{End}\n", "The code block opened in line 2 is never closed, so the section cannot be placed after it." },
+        { "# Docs\n\n~~~~\ncode\n~~~\n", "The code block opened in line 3 is never closed, so the section cannot be placed after it." },
+        { $"{Begin}\n```\nopen\n{End}\n", "The code block opened in line 2 is never closed, so the section cannot be placed after it." }
+    };
+
+    // Files whose marker lines are no markers: examples in a fenced code block, or lines that only look like one.
+    public static TheoryData<string> FilesWithoutMarkers { get; } = new()
+    {
+        $"# Docs\n```\n{Begin}\nexample\n{End}\n```\n",
+        $"~~~ markdown\n{Begin}\n{End}\n~~~\n",
+        $"```\n{Begin}\n{End}\n```\ntext\n```markdown\n{Begin}\n{End}\n```\n",
+        $"   ```\n{Begin}\n{End}\n   ```\n",
+        $"````\n```\n{Begin}\n{End}\n```\n````\n",
+        $"~~~\n{Begin}\n```\n{End}\n~~~\n",
+        $"```\r\n{Begin}\r\n{End}\r\n```\r\n",
+        $"```\n{Begin}\n{End}\n````\n",
+        $"~~~\n{Begin}\n{End}\n~~~~~\n",
+        $"```\n{Begin}\n{End}\n```  \n",
+        $"~~~ a`b\n{Begin}\n{End}\n~~~\n",
+        "<!-- shade-kit:beginning -->\n",
+        "<!-- shade-kit:begin_x -->\n"
+    };
+
+    // Files with one section outside any fenced code block, and the expected file after the update.
+    public static TheoryData<string, string> FilesWithSection { get; } = new()
+    {
+        { $"```\n{Begin}\nexample\n{End}\n```\n{Begin}\nold\n{End}\n", $"```\n{Begin}\nexample\n{End}\n```\n{ExpectedSection}\n" },
+        { $"<!-- shade-kit:beginning -->\n{Begin}\nold\n{End}\n", $"<!-- shade-kit:beginning -->\n{ExpectedSection}\n" },
+        { $"<!-- shade-kit:begin-->\nold\n{End}\n", $"{ExpectedSection}\n" },
+        { $"<!-- shade-kit:begin\tlegacy -->\nold\n{End}\n", $"{ExpectedSection}\n" },
+        { $"    ```\n{Begin}\nold\n{End}\n", $"    ```\n{ExpectedSection}\n" },
+        { $"```a`b\n{Begin}\nold\n{End}\n", $"```a`b\n{ExpectedSection}\n" },
+        { $"``\n{Begin}\nold\n{End}\n", $"``\n{ExpectedSection}\n" },
+        { $"```\ncode\n```\n{Begin}\nold\n{End}\n", $"```\ncode\n```\n{ExpectedSection}\n" },
+        { $"{Begin}\nold\n```\n{End}\n```\n{End}\nrest\n", $"{ExpectedSection}\nrest\n" }
     };
 
     public static TheoryData<byte[], string> UnsupportedEncodingFiles { get; } = new()
@@ -155,7 +196,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().PlanAsync(filePath, new CancellationToken(true));
+        var act = () => new InstructionSectionPlanner().PlanAsync(filePath, new CancellationToken(true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -249,7 +290,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionPlanner().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UnsupportedFileEncodingException>()).Which;
@@ -272,7 +313,7 @@ public class InstructionSectionWriterTests
         var directoryPath = tempDirectory.CreateDirectory(FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().PlanAsync(directoryPath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionPlanner().PlanAsync(directoryPath, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<PathNotAFileException>())
@@ -429,6 +470,45 @@ public class InstructionSectionWriterTests
     }
 
     [Theory]
+    [MemberData(nameof(FilesWithoutMarkers))]
+    public async Task PlanAsync_MarkerLinesInCodeFenceOrNotMarkers_AppendsSectionAndKeepsThem(string text)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var filePath = tempDirectory.WriteFile(text, FileName);
+        var newLine = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+
+        // Act
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+
+        // Assert
+        action
+            .Should().Be(InitializedFileAction.Appended);
+
+        tempDirectory.ReadFileText(FileName)
+            .Should().Be(text + newLine + ExpectedSection.ReplaceLineEndings(newLine) + newLine);
+    }
+
+    [Theory]
+    [MemberData(nameof(FilesWithSection))]
+    public async Task PlanAsync_SectionOutsideCodeFences_ReplacesOnlyThatSection(string text, string expected)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var filePath = tempDirectory.WriteFile(text, FileName);
+
+        // Act
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+
+        // Assert
+        action
+            .Should().Be(InitializedFileAction.Updated);
+
+        tempDirectory.ReadFileText(FileName)
+            .Should().Be(expected);
+    }
+
+    [Theory]
     [MemberData(nameof(InvalidMarkerFiles))]
     public async Task PlanAsync_InvalidMarkers_ThrowsInvalidManagedSectionExceptionAndLeavesFileUnchanged(
         string text, string expectedReason)
@@ -439,7 +519,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionPlanner().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<InvalidManagedSectionException>()).Which;
@@ -468,7 +548,7 @@ public class InstructionSectionWriterTests
         var filePath = tempDirectory.WriteFileBytes(original, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionPlanner().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().NotThrowAsync();
@@ -485,7 +565,7 @@ public class InstructionSectionWriterTests
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().PlanAsync(filePath, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionPlanner().PlanAsync(filePath, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().NotThrowAsync();
@@ -502,7 +582,7 @@ public class InstructionSectionWriterTests
     public async Task PlanAsync_PathNotAbsolute_ThrowsArgumentException(string? filePath)
     {
         // Act
-        var act = () => new InstructionSectionWriter().PlanAsync(filePath!, TestContext.Current.CancellationToken);
+        var act = () => new InstructionSectionPlanner().PlanAsync(filePath!, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>();
@@ -516,7 +596,7 @@ public class InstructionSectionWriterTests
         var filePath = Path.Combine(tempDirectory.RootPath, FileName);
 
         // Act
-        var act = () => new InstructionSectionWriter().PlanAsync(filePath, new CancellationToken(true));
+        var act = () => new InstructionSectionPlanner().PlanAsync(filePath, new CancellationToken(true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -537,7 +617,7 @@ public class InstructionSectionWriterTests
     private static async Task<InitializedFileAction?> PlanAndWriteAsync(string filePath,
         CancellationToken cancellationToken)
     {
-        var change = await new InstructionSectionWriter().PlanAsync(filePath, cancellationToken);
+        var change = await new InstructionSectionPlanner().PlanAsync(filePath, cancellationToken);
 
         if (change is not null)
         {

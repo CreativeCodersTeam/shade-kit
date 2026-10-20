@@ -63,6 +63,7 @@ public class KitConfigTests
               "minEngineVersion": "0.1.0",
               "defaultProfile": "feature",
               "outdatedFormatOnRead": "stop",
+              "trackers": { "github.com": "gh" },
               "report": "ask",
               "laterPackageThreshold": 80.0,
               "laterPackageSettings": { "github.com": [ "gh", null, true ] }
@@ -220,7 +221,7 @@ public class KitConfigTests
     }
 
     [Fact]
-    public void Serialize_OptionalFieldsNull_OmitsThem()
+    public void Serialize_DefaultConfig_WritesDefaultsAndOmitsOptionalFields()
     {
         // Arrange
         var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
@@ -236,7 +237,8 @@ public class KitConfigTests
             .Should().NotBeNull();
 
         root.AsObject().Select(field => field.Key)
-            .Should().Equal("schemaVersion", "minEngineVersion", "defaultProfile", "outdatedFormatOnRead", "report");
+            .Should().Equal("schemaVersion", "minEngineVersion", "defaultProfile", "outdatedFormatOnRead", "trackers",
+                "report");
     }
 
     [Fact]
@@ -257,7 +259,7 @@ public class KitConfigTests
             .Should().Be("feature");
 
         config.Trackers
-            .Should().BeNull();
+            .Should().Equal(new Dictionary<string, string> { ["github.com"] = "gh" });
 
         config.Report
             .Should().Be(ReportPolicy.Ask);
@@ -426,6 +428,7 @@ public class KitConfigTests
 
     [Theory]
     [InlineData(""" "defaultProfile": null """)]
+    [InlineData(""" "trackers": null """)]
     [InlineData(""" "defaultProfile": 1 """)]
     [InlineData(""" "kitVersion": 1 """)]
     [InlineData(""" "trackers": [ "github.com" ] """)]
@@ -450,7 +453,6 @@ public class KitConfigTests
 
     [Theory]
     [InlineData(""" "kitVersion": null """)]
-    [InlineData(""" "trackers": null """)]
     [InlineData(""" "coverageThreshold": null """)]
     public void Deserialize_OptionalFieldNull_ReadsNull(string field)
     {
@@ -463,7 +465,7 @@ public class KitConfigTests
             false).Document;
 
         // Assert
-        new object?[] { config.KitVersion, config.Trackers, config.CoverageThreshold }
+        new object?[] { config.KitVersion, config.CoverageThreshold }
             .Should().AllSatisfy(value => value.Should().BeNull());
     }
 
@@ -480,5 +482,52 @@ public class KitConfigTests
 
         // Assert
         act.Should().Throw<InvalidKitFileException>();
+    }
+
+    [Fact]
+    public void Deserialize_EmptyTrackers_ReadsEmptyMapping()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var config = serializer.Deserialize<KitConfig>(
+            """{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "trackers": {} }""", FormatIds.Config, FilePath,
+            false).Document;
+
+        // Assert
+        config.Trackers
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Deserialize_TrackersWithoutGitHub_ReadsOnlyTheGivenHosts()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var config = serializer.Deserialize<KitConfig>(
+            """{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "trackers": { "jira.example.com": "jira" } }""",
+            FormatIds.Config, FilePath, false).Document;
+
+        // Assert
+        config.Trackers
+            .Should().Equal(new Dictionary<string, string> { ["jira.example.com"] = "jira" });
+    }
+
+    [Fact]
+    public void Constructor_TwoInstances_DoNotShareTheDefaultTrackers()
+    {
+        // Arrange
+        var first = new KitConfig();
+        var second = new KitConfig();
+
+        // Act
+        first.Trackers["jira.example.com"] = "jira";
+
+        // Assert
+        second.Trackers
+            .Should().Equal(new Dictionary<string, string> { ["github.com"] = "gh" });
     }
 }
