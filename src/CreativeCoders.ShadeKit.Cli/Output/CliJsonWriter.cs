@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CreativeCoders.Core;
 
 namespace CreativeCoders.ShadeKit.Cli.Output;
@@ -8,14 +9,16 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// Writes the JSON output of a command to a text writer, usually standard output.
 /// </summary>
 /// <remarks>
-/// The document is indented with two spaces, uses camel-case property names and LF line endings, keeps non-ASCII
-/// characters unescaped, and ends with a line break. The writer is flushed after every document. The output does not
+/// The document is indented with two spaces, uses camel-case property names, lower-case kebab-case enumeration values,
+/// and LF line endings, keeps non-ASCII characters unescaped, and ends with a line break. The writer is flushed after every document. The output does not
 /// go through Spectre.Console, which could wrap long lines. The writer records whether a document was written, so
 /// that a run in JSON mode never writes a second one.
 /// </remarks>
 /// <param name="output">The text writer that receives the JSON documents.</param>
 public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
 {
+    private static readonly JsonNamingPolicy EnumNamingPolicy = JsonNamingPolicy.KebabCaseLower;
+
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -23,7 +26,8 @@ public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
         WriteIndented = true,
         IndentSize = 2,
         NewLine = "\n",
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Converters = { new JsonStringEnumConverter(EnumNamingPolicy, allowIntegerValues: false) }
     };
 
     private readonly TextWriter _output = Ensure.NotNull(output);
@@ -62,5 +66,18 @@ public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
         {
             Write(envelope);
         }
+    }
+
+    /// <summary>
+    /// Gets the name with which the JSON output writes an enumeration value, so that plain output can use the same
+    /// name.
+    /// </summary>
+    /// <typeparam name="TEnum">The type of the enumeration.</typeparam>
+    /// <param name="value">The enumeration value.</param>
+    /// <returns>The name of <paramref name="value" /> in lower-case kebab case, for example <c>created</c>.</returns>
+    public static string GetEnumName<TEnum>(TEnum value)
+        where TEnum : struct, Enum
+    {
+        return EnumNamingPolicy.ConvertName(value.ToString());
     }
 }

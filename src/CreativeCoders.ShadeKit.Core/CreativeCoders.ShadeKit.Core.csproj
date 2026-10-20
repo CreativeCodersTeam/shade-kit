@@ -9,4 +9,15 @@
       <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     </ItemGroup>
 
+    <!--
+      Shipped templates. The logical name is "templates/<subfolder>/<name>.template.md" on every OS:
+      RecursiveDir uses '\' on Windows, so it is normalised to '/'.
+    -->
+    <ItemGroup>
+      <None Remove="Templates/Resources/**/*.template.md" />
+      <EmbeddedResource Include="Templates/Resources/**/*.template.md">
+        <LogicalName>templates/$([System.String]::Copy('%(RecursiveDir)').Replace('\', '/'))%(Filename)%(Extension)</LogicalName>
+      </EmbeddedResource>
+    </ItemGroup>
+
 </Project>

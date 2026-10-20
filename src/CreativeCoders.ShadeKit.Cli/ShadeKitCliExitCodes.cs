@@ -19,16 +19,31 @@ public static class ShadeKitCliExitCodes
     public const int KitRootNotFound = 10;
 
     /// <summary>
-    /// Represents the exit code returned when the SHADE kit root directory exists but contains no
-    /// <c>features</c> directory. The error code is <see cref="ShadeKitCliErrorCodes.FeaturesDirectoryNotFound" />.
-    /// </summary>
-    public const int FeaturesDirectoryNotFound = 11;
-
-    /// <summary>
     /// Represents the exit code returned when the current directory is not inside a git repository. The error code is
     /// <see cref="ShadeKitCliErrorCodes.NotAGitRepository" />.
     /// </summary>
     public const int NotAGitRepository = 12;
+
+    /// <summary>
+    /// Represents the exit code returned when <c>shade-kit init</c> runs in a git repository whose root already
+    /// contains a SHADE kit root directory (<c>.shadekit</c>). The error code is
+    /// <see cref="ShadeKitCliErrorCodes.KitAlreadyInitialized" />.
+    /// </summary>
+    public const int KitAlreadyInitialized = 13;
+
+    /// <summary>
+    /// Represents the exit code returned when a path at which a command must write a file, such as
+    /// <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root, is a directory. The error code
+    /// is <see cref="ShadeKitCliErrorCodes.PathNotAFile" />.
+    /// </summary>
+    public const int PathNotAFile = 14;
+
+    /// <summary>
+    /// Represents the exit code returned when the SHADE kit root path (<c>.shadekit</c>) at the root of the git
+    /// repository is a file instead of a directory. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.KitRootNotADirectory" />.
+    /// </summary>
+    public const int KitRootNotADirectory = 15;
 
     /// <summary>
     /// Represents the exit code returned when a file uses a format version that is newer than the engine supports.
@@ -48,6 +63,20 @@ public static class ShadeKitCliExitCodes
     /// no <c>schemaVersion</c>. The error code is <see cref="ShadeKitCliErrorCodes.InvalidFile" />.
     /// </summary>
     public const int InvalidFile = 22;
+
+    /// <summary>
+    /// Represents the exit code returned when the markers of the managed SHADE kit section in <c>CLAUDE.md</c> or
+    /// <c>AGENTS.md</c> are invalid, so the section cannot be located safely. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.InvalidManagedSection" />.
+    /// </summary>
+    public const int InvalidManagedSection = 23;
+
+    /// <summary>
+    /// Represents the exit code returned when a file that a command changes in place, such as
+    /// <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c>, is not encoded as UTF-8 because it starts with a
+    /// UTF-16 or UTF-32 byte order mark. The error code is <see cref="ShadeKitCliErrorCodes.UnsupportedFileEncoding" />.
+    /// </summary>
+    public const int UnsupportedFileEncoding = 24;
 
     /// <summary>
     /// Represents the exit code returned when the CLI host itself fails, for example because the command is unknown,

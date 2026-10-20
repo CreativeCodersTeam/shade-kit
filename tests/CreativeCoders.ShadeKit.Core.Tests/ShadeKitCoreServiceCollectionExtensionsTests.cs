@@ -1,7 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Templates;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -44,9 +47,14 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     }
 
     [Theory]
+    [InlineData(typeof(IGitRepositoryLocator), typeof(GitRepositoryLocator))]
     [InlineData(typeof(IFormatRegistry), typeof(FormatRegistry))]
     [InlineData(typeof(IVersionedJsonSerializer), typeof(VersionedJsonSerializer))]
     [InlineData(typeof(IEngineVersionProvider), typeof(EngineVersionProvider))]
+    [InlineData(typeof(IRepositoryInitializer), typeof(RepositoryInitializer))]
+    [InlineData(typeof(IShippedTemplateReader), typeof(ShippedTemplateReader))]
+    [InlineData(typeof(IGitIgnorePlanner), typeof(GitIgnorePlanner))]
+    [InlineData(typeof(IInstructionSectionPlanner), typeof(InstructionSectionPlanner))]
     public void AddShadeKitCore_ServiceCollection_RegistersServiceAsSingleton(Type serviceType, Type implementationType)
     {
         // Arrange
@@ -124,8 +132,13 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     }
 
     [Theory]
+    [InlineData(typeof(IGitRepositoryLocator))]
     [InlineData(typeof(IVersionedJsonSerializer))]
     [InlineData(typeof(IEngineVersionProvider))]
+    [InlineData(typeof(IRepositoryInitializer))]
+    [InlineData(typeof(IShippedTemplateReader))]
+    [InlineData(typeof(IGitIgnorePlanner))]
+    [InlineData(typeof(IInstructionSectionPlanner))]
     public void AddShadeKitCore_ExistingServiceRegistration_KeepsExistingRegistration(Type serviceType)
     {
         // Arrange
@@ -144,9 +157,14 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     }
 
     [Theory]
+    [InlineData(typeof(IGitRepositoryLocator))]
     [InlineData(typeof(IFormatRegistry))]
     [InlineData(typeof(IVersionedJsonSerializer))]
     [InlineData(typeof(IEngineVersionProvider))]
+    [InlineData(typeof(IRepositoryInitializer))]
+    [InlineData(typeof(IShippedTemplateReader))]
+    [InlineData(typeof(IGitIgnorePlanner))]
+    [InlineData(typeof(IInstructionSectionPlanner))]
     public void AddShadeKitCore_CalledTwice_RegistersServiceOnlyOnce(Type serviceType)
     {
         // Arrange
@@ -208,6 +226,31 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddShadeKitCore_ExistingGitRepositoryLocatorRegistration_KitStoreFactoryUsesExistingLocator()
+    {
+        // Arrange
+        var existingLocator = A.Fake<IGitRepositoryLocator>();
+        A.CallTo(() => existingLocator.GetRepositoryRootPath("/start"))
+            .Throws(new NotAGitRepositoryException("/start"));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingLocator);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var act = () => serviceProvider.GetRequiredService<IKitStoreFactory>().Create("/start");
+
+        act.Should().Throw<NotAGitRepositoryException>();
+
+        A.CallTo(() => existingLocator.GetRepositoryRootPath("/start"))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
     public void AddShadeKitCore_NullServiceCollection_ThrowsArgumentNullException()
     {
         // Arrange
@@ -221,5 +264,6 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
             .WithParameterName("services");
     }
 
+    [SuppressMessage("csharpsquid", "S2094", Justification = "Test class for serialization")]
     public sealed class TestDocument : VersionedDocument;
 }

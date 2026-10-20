@@ -1,13 +1,14 @@
 namespace CreativeCoders.ShadeKit.Core.Store;
 
 /// <summary>
-/// Creates <see cref="IKitStore" /> instances for the SHADE kit root of the git repository that contains a given
-/// directory.
+/// Creates <see cref="IKitStore" /> instances for the SHADE kit root of a git repository.
 /// </summary>
 /// <remarks>
-/// The search walks up from the given directory to the root of the git repository, the closest directory that
-/// contains a <c>.git</c> directory or file (a worktree or submodule). Only a <c>.shadekit</c> directory at that
-/// repository root is a SHADE kit root; <c>.shadekit</c> directories below it are ignored.
+/// <see cref="Create()" /> and <see cref="Create(string)" /> search for the root of the git repository that contains a
+/// directory with <see cref="IGitRepositoryLocator" />: the closest directory that contains a <c>.git</c> directory
+/// or file (a worktree or submodule). Only a <c>.shadekit</c> directory at that repository root is a SHADE kit root;
+/// <c>.shadekit</c> directories below it are ignored. <see cref="CreateForRepositoryRoot" /> skips the search for
+/// callers that already know the repository root, for example while the SHADE kit root is being created.
 /// </remarks>
 public interface IKitStoreFactory
 {
@@ -17,6 +18,7 @@ public interface IKitStoreFactory
     /// <returns>The store of the <c>.shadekit</c> directory at the repository root.</returns>
     /// <exception cref="NotAGitRepositoryException">The current directory is not inside a git repository.</exception>
     /// <exception cref="KitRootPathNotFoundException">The repository root contains no <c>.shadekit</c> directory.</exception>
+    /// <exception cref="KitRootNotADirectoryException">The repository root contains a <c>.shadekit</c> file.</exception>
     IKitStore Create();
 
     /// <summary>
@@ -27,5 +29,20 @@ public interface IKitStoreFactory
     /// <exception cref="ArgumentException"><paramref name="path" /> is <see langword="null" />, empty, or whitespace.</exception>
     /// <exception cref="NotAGitRepositoryException"><paramref name="path" /> is not inside a git repository.</exception>
     /// <exception cref="KitRootPathNotFoundException">The repository root contains no <c>.shadekit</c> directory.</exception>
+    /// <exception cref="KitRootNotADirectoryException">The repository root contains a <c>.shadekit</c> file.</exception>
     IKitStore Create(string path);
+
+    /// <summary>
+    /// Creates a store for the SHADE kit root of the specified repository root directory.
+    /// </summary>
+    /// <remarks>
+    /// Neither searches for a git repository nor checks that the SHADE kit root exists. A store for a directory that
+    /// does not exist yet creates the missing directories when it writes a file.
+    /// </remarks>
+    /// <param name="repositoryRootPath">The path of the root directory of the git repository.</param>
+    /// <returns>The store of the <c>.shadekit</c> directory in <paramref name="repositoryRootPath" />.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="repositoryRootPath" /> is <see langword="null" />, empty, or whitespace.
+    /// </exception>
+    IKitStore CreateForRepositoryRoot(string repositoryRootPath);
 }

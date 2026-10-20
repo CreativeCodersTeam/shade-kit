@@ -47,7 +47,7 @@ public class KitStore : IKitStore
 
         if (!Directory.Exists(featuresPath))
         {
-            throw new FeaturesDirectoryNotFoundException(featuresPath);
+            return [];
         }
 
         return
@@ -114,12 +114,28 @@ public class KitStore : IKitStore
             .ConfigureAwait(false);
 
         var json = _serializer.Serialize(document, formatId);
+
+        await WriteFileAsync(relativePath, Utf8WithoutBom.GetBytes(json), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task WriteFileAsync(string relativePath, byte[] content,
+        CancellationToken cancellationToken = default)
+    {
+        Ensure.NotNull(content);
+
         var fullPath = GetFullPath(relativePath);
 
         // GetFullPath only returns paths below RootPath, so the file always has a parent directory.
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
 
-        await File.WriteAllTextAsync(fullPath, json, Utf8WithoutBom, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(fullPath, content, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public void CreateDirectory(string relativePath)
+    {
+        Directory.CreateDirectory(GetFullPath(relativePath));
     }
 
     private async Task<VersionedReadResult<T>?> ReadFileAsync<T>(string relativePath, string formatId,
@@ -184,7 +200,7 @@ public class KitStore : IKitStore
 
     private string GetDisplayPath(string relativePath)
     {
-        return $"{KitStorePaths.RootPath}/{Path.GetRelativePath(RootPath, GetFullPath(relativePath))}"
-            .Replace(Path.DirectorySeparatorChar, '/');
+        return KitStorePaths.GetRepositoryPath(Path.GetRelativePath(RootPath, GetFullPath(relativePath))
+            .Replace(Path.DirectorySeparatorChar, '/'));
     }
 }

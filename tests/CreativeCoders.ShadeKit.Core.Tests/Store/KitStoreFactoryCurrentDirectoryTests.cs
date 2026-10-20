@@ -1,5 +1,7 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Tests.Shared;
+using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
 
@@ -17,23 +19,14 @@ public class KitStoreFactoryCurrentDirectoryTests
         var nestedPath = tempDirectory.CreateDirectory("src");
 
         var factory = KitStoreFactoryTests.CreateFactory();
-        var originalDirectory = Directory.GetCurrentDirectory();
+        using var currentDirectory = new CurrentDirectoryScope(nestedPath);
 
-        try
-        {
-            Directory.SetCurrentDirectory(nestedPath);
+        // Act
+        var kitStore = factory.Create();
 
-            // Act
-            var kitStore = factory.Create();
-
-            // Assert
-            kitStore.GetFeatureNames()
-                .Should().Equal("auth");
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalDirectory);
-        }
+        // Assert
+        kitStore.GetFeatureNames()
+            .Should().Equal("auth");
     }
 
     [Fact]
@@ -45,23 +38,14 @@ public class KitStoreFactoryCurrentDirectoryTests
         tempDirectory.CreateGitRoot();
 
         var factory = KitStoreFactoryTests.CreateFactory();
-        var originalDirectory = Directory.GetCurrentDirectory();
+        using var currentDirectory = new CurrentDirectoryScope(tempDirectory.RootPath);
 
-        try
-        {
-            Directory.SetCurrentDirectory(tempDirectory.RootPath);
+        // Act
+        var act = () => factory.Create();
 
-            // Act
-            var act = () => factory.Create();
-
-            // Assert
-            act.Should().Throw<KitRootPathNotFoundException>()
-                .Which.StartPath.Should().Be(Directory.GetCurrentDirectory());
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalDirectory);
-        }
+        // Assert
+        act.Should().Throw<KitRootPathNotFoundException>()
+            .Which.StartPath.Should().Be(Directory.GetCurrentDirectory());
     }
 
     [Fact]
@@ -74,22 +58,51 @@ public class KitStoreFactoryCurrentDirectoryTests
         tempDirectory.CreateDirectory("src", "app");
 
         var factory = KitStoreFactoryTests.CreateFactory();
-        var originalDirectory = Directory.GetCurrentDirectory();
+        using var currentDirectory = new CurrentDirectoryScope(tempDirectory.RootPath);
 
-        try
-        {
-            Directory.SetCurrentDirectory(tempDirectory.RootPath);
+        // Act
+        var kitStore = factory.Create(Path.Combine("src", "app"));
 
-            // Act
-            var kitStore = factory.Create(Path.Combine("src", "app"));
+        // Assert
+        kitStore.GetFeatureNames()
+            .Should().Equal("auth");
+    }
 
-            // Assert
-            kitStore.GetFeatureNames()
-                .Should().Equal("auth");
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalDirectory);
-        }
+    [Fact]
+    public void Create_WithoutPath_PassesCurrentDirectoryToLocator()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateDirectory(".shadekit");
+
+        var locator = A.Fake<IGitRepositoryLocator>();
+        A.CallTo(() => locator.GetRepositoryRootPath(A<string>._)).Returns(tempDirectory.RootPath);
+
+        var factory = KitStoreFactoryTests.CreateFactory(locator);
+        using var currentDirectory = new CurrentDirectoryScope(tempDirectory.RootPath);
+
+        // Act
+        factory.Create();
+
+        // Assert
+        A.CallTo(() => locator.GetRepositoryRootPath(Directory.GetCurrentDirectory()))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public void CreateForRepositoryRoot_RelativePath_ReturnsStoreWithFullPathResolvedAgainstCurrentDirectory()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+
+        var factory = KitStoreFactoryTests.CreateFactory();
+        using var currentDirectory = new CurrentDirectoryScope(tempDirectory.RootPath);
+
+        // Act
+        var kitStore = factory.CreateForRepositoryRoot(".");
+
+        // Assert
+        kitStore.RootPath
+            .Should().Be(Path.Combine(Directory.GetCurrentDirectory(), ".shadekit"));
     }
 }

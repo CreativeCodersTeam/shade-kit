@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14 |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (`feature drop` confirmation, `status` in `feature current`, `feature list` implemented) |
 | Source | Concept §3.1, §3.2, §4.1–4.3, §5.1 (`new`, `drop`), §11.4 |
 | Depends on | 01, 02 |
 | Enables | 04 and every phase package |
@@ -30,9 +30,9 @@ Several developers can create features in parallel on their own branches without
 
 ### Feature ids
 
-- No sequential numbers. **Decided.**
-- With an issue: `<tracker prefix>-<number>-<slug>`, for example `gh-142-login-sso`. The prefix comes from the `trackers` mapping in `config.json` (package 02). **Decided** (format), **Proposed** (mapping).
-- Without an issue: `<yyyymmdd>-<hhmm>-<slug>`, for example `20261013-1530-login-sso`. **Decided.**
+- No sequential numbers. **Decided** (concept §4.2).
+- With an issue: `<tracker prefix>-<number>-<slug>`, for example `gh-142-login-sso`. The prefix comes from the `trackers` mapping in `config.json` (package 02). **Decided** (format, concept §4.2), **Proposed** (mapping).
+- Without an issue: `<yyyymmdd>-<hhmm>-<slug>`, for example `20261013-1530-login-sso`. **Decided** (concept §4.2).
 - The slug is built from the title: lower case, ASCII, words joined by `-`, limited to a short length. **Proposed.**
 - If the id already exists, `new` stops with an exit code. It does not add a suffix silently, because an existing id usually means the feature was already created on another branch. **Proposed.**
 
@@ -52,15 +52,15 @@ Feature `status`: `active` or `done`. **Proposed.** A dropped feature has no sta
 | Command | Behaviour |
 |---|---|
 | `feature new --profile <p> --source <text\|url\|file> [--title <t>]` | Creates the folder, `feature.json`, and `request.md`. The profile defaults to `defaultProfile` from `config.json`. A URL whose host is in `trackers` gives an issue-based id; the number comes from the URL, the slug from `--title`. Any other source gives a time-based id. For a file source, the file content is copied into `request.md`. Writes the local override so the new feature is current right away. Returns the id and paths with `--json`. **Proposed** details. |
-| `feature list [--json]` | Lists features with id, title, profile, status, and (once package 04 exists) the current phase. Exists already; extended with the new fields. |
-| `feature current [--json]` | Returns the current feature: id, profile, artifact paths, and (once package 04 exists) current phase and phase status. If none can be resolved, returns "not resolved" as a result, not as an error (package 01 contract). |
+| `feature list [--json]` | Lists features with id, title, profile, status, and (once package 04 exists) the current phase. **Implemented** with feature names only (`FeatureListCommand`); extended with the new fields. |
+| `feature current [--json]` | Returns the current feature: id, profile, feature `status` (`active` or `done`), artifact paths, and (once package 04 exists) current phase and phase status. If none can be resolved, returns "not resolved" as a result, not as an error (package 01 contract). |
 | `feature set <id>` | Writes `features/current-feature.json`. Stops if the id does not exist. |
 | `feature show <id> [--json]` | Returns the complete state of a feature, including the approval history from package 04. Needed by the report in package 15. **Proposed.** |
-| `feature drop <id> --yes` | Deletes the feature folder and clears the local override if it points to this feature. Possible in every phase. Without `--yes` it only describes what it would delete. The agent asks the human before it passes `--yes`. **Proposed** (confirmation). |
+| `feature drop <id> [--yes]` | Deletes the feature folder and clears the local override if it points to this feature. Possible in every phase. With `--yes` it deletes at once. Without `--yes` it first describes what it would delete; then, only in plain mode (no `--json`) with an interactive standard input, it asks for a confirmation in the console and deletes after a yes. In JSON mode or with redirected standard input it stops after the description and deletes nothing, so an agent can never hang on the question. An agent calls it with `--json`: first without `--yes` to get the description it shows the human, and after the human's yes in the conversation with `--yes`. **Decided** on 2026-10-18. |
 
 ### Resolving the current feature
 
-Order (**Decided**):
+Order (**Decided**, concept §4.3):
 
 1. The current branch name. The id is the part after the last `/` (`feature/gh-142-login-sso` → `gh-142-login-sso`). It counts only if a feature folder with that id exists. **Proposed** (matching rule).
 2. The local override `features/current-feature.json`.
@@ -83,8 +83,10 @@ The engine does not create or switch branches in v1. `feature new` returns the s
 - **FP03-AC5** On branch `feature/<id>` with an existing folder `<id>`, `feature current` returns `<id>`, also when the local override points to another feature; the output then contains a warning.
 - **FP03-AC6** Without a matching branch and without an override, `feature current --json` returns "not resolved" with exit code 0.
 - **FP03-AC7** `feature set` with an unknown id stops with an exit code.
-- **FP03-AC8** `feature drop <id>` without `--yes` deletes nothing; with `--yes` it deletes the folder and clears an override that points to it.
+- **FP03-AC8** `feature drop <id> --json` without `--yes` deletes nothing and returns what it would delete; with `--yes` it deletes the folder and clears an override that points to it.
 - **FP03-AC9** `feature.json` records the git user as `createdBy`.
+- **FP03-AC10** `feature drop <id>` in plain mode with an interactive standard input and without `--yes` asks for a confirmation and deletes only after a yes; with redirected standard input it deletes nothing and does not wait for input.
+- **FP03-AC11** `feature current --json` returns the feature `status`, and `done` after `phase complete` (package 04).
 
 ## Open points
 

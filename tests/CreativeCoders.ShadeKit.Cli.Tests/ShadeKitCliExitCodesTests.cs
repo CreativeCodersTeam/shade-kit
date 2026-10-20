@@ -27,11 +27,15 @@ public class ShadeKitCliExitCodesTests
     [Theory]
     [InlineData(CliExitCodes.Success)]
     [InlineData(ShadeKitCliExitCodes.KitRootNotFound)]
-    [InlineData(ShadeKitCliExitCodes.FeaturesDirectoryNotFound)]
     [InlineData(ShadeKitCliExitCodes.NotAGitRepository)]
+    [InlineData(ShadeKitCliExitCodes.KitAlreadyInitialized)]
+    [InlineData(ShadeKitCliExitCodes.PathNotAFile)]
+    [InlineData(ShadeKitCliExitCodes.KitRootNotADirectory)]
     [InlineData(ShadeKitCliExitCodes.FormatTooNew)]
     [InlineData(ShadeKitCliExitCodes.UpgradeNeeded)]
     [InlineData(ShadeKitCliExitCodes.InvalidFile)]
+    [InlineData(ShadeKitCliExitCodes.InvalidManagedSection)]
+    [InlineData(ShadeKitCliExitCodes.UnsupportedFileEncoding)]
     [InlineData(ShadeKitCliExitCodes.HostError)]
     public void ToProcessExitCode_NonNegativeExitCode_ReturnsExitCodeUnchanged(int exitCode)
     {
@@ -46,11 +50,15 @@ public class ShadeKitCliExitCodesTests
     [Theory]
     [Trait("Requirement", "FP01-AC8")]
     [InlineData(ShadeKitCliExitCodes.KitRootNotFound, 10)]
-    [InlineData(ShadeKitCliExitCodes.FeaturesDirectoryNotFound, 11)]
     [InlineData(ShadeKitCliExitCodes.NotAGitRepository, 12)]
+    [InlineData(ShadeKitCliExitCodes.KitAlreadyInitialized, 13)]
+    [InlineData(ShadeKitCliExitCodes.PathNotAFile, 14)]
+    [InlineData(ShadeKitCliExitCodes.KitRootNotADirectory, 15)]
     [InlineData(ShadeKitCliExitCodes.FormatTooNew, 20)]
     [InlineData(ShadeKitCliExitCodes.UpgradeNeeded, 21)]
     [InlineData(ShadeKitCliExitCodes.InvalidFile, 22)]
+    [InlineData(ShadeKitCliExitCodes.InvalidManagedSection, 23)]
+    [InlineData(ShadeKitCliExitCodes.UnsupportedFileEncoding, 24)]
     [InlineData(ShadeKitCliExitCodes.HostError, 255)]
     public void ExitCodes_Contract_HaveStableValues(int exitCode, int expectedExitCode)
     {

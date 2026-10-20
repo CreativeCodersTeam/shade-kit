@@ -10,17 +10,17 @@ Repository language is always English. The kit is designed to be used by English
 
 It has two deliverables:
 
-1. **Plugin** (`skills/`): skills, agents, hooks, and commands in the Claude Code plugin layout.
+1. **Plugin** (`skills/`): skills and research agent definitions in the Claude Code plugin layout. Hooks and commands come later.
 2. **Engine** (`src/`): a .NET 10 CLI, shipped two ways:
    - as a `dotnet` global tool
    - as self-contained single-file binaries (no .NET install needed) for `osx-arm64`, `linux-x64`, `linux-arm64`, `win-x64`, `win-arm64`
 
 ### v1 scope
 
-- **Gated workflow phases:** spec → plan → implement → verify → review, with an explicit approval gate between phases.
-- **Quality gates:** build, test, lint, and coverage checks must pass before a phase can complete.
-- **State & traceability:** workflow state is saved, requirements are mapped to the tests that cover them, and reports are generated.
-- **Install/sync:** the engine installs and updates the kit's skills in a target repository, for each supported agent.
+- **Gated workflow profiles:** `feature` (new → refine → map → plan → implement → verify → finish), `bugfix` (new → diagnose → plan → implement → verify → finish), and `quick` (new → quick → finish). The agent checks each gate when the next phase starts; the human approves the transition. Each gate's approval and checklist can be switched off in `gates.json`.
+- **Quality gates:** the Definition of Ready (gate into `plan`) and Definition of Done (gate into `finish`) are checklists. In v1 the agent runs build, test, lint, and coverage with the commands approved in `plan.md` and records the results; the CLI enforcing and running them comes later.
+- **State & traceability:** workflow state and approval history are saved in `.shadekit/`, requirements are mapped to the tests that prove them, and `finish` can write a report (`report` in `config.json`).
+- **Install/sync:** the engine installs and updates the kit's skills at user level for each supported agent (`integrations install/update`) and initialises and upgrades a repository's `.shadekit/` (`init`, `upgrade`). Nothing is installed into a repository.
 
 ## Target agents
 
@@ -33,7 +33,7 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 | Path | Purpose |
 |---|---|
 | `skills/` | Shipped plugin content |
-| `src/` | Production .NET projects: `CreativeCoders.ShadeKit.Cli` (the `shade-kit` CLI) and `CreativeCoders.ShadeKit.Core` (engine logic) |
+| `src/` | Production .NET projects: `CreativeCoders.ShadeKit.Cli` (the `shade-kit` CLI) and `CreativeCoders.ShadeKit.Core` (engine logic). The templates that `init` writes live in `src/CreativeCoders.ShadeKit.Core/Templates/Resources/` (`<name>.template.md`, checklists in `checks/`) and are embedded into the Core assembly; their repository paths are listed in `ShippedTemplates`. |
 | `tests/` | One test project per production project (`<Project>.Tests`) |
 | `build/` | Cake Frosting build project (`CreativeCoders.CakeBuild`), run through `build.sh` / `build.ps1` / `build.cmd`. Not part of `ShadeKit.slnx`; it has its own `Directory.Build.props` and `Directory.Packages.props`. |
 | `.github/` | GitHub Actions workflows and Dependabot configuration |
@@ -45,7 +45,7 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 - Target `net10.0`. The SDK is pinned in `global.json` (`sdk.version`, `rollForward: patch`); CI installs exactly that version with `actions/setup-dotnet`.
 - Use one `.slnx` solution at the repository root (`ShadeKit.slnx`).
 - Use Central Package Management: all NuGet versions go in `Directory.Packages.props`. Never put `Version=` on a `PackageReference`.
-- Put shared build settings (nullable, implicit usings, analyzers) in `Directory.Build.props`, not in individual `.csproj` files. Analyzers run with `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild`, and `TreatWarningsAsErrors`, so every warning breaks the build. `tests/.editorconfig` turns off CA1707 because test method names use underscores (`Method_Scenario_ExpectedResult`).
+- Put shared build settings (nullable, implicit usings, analyzers) in `Directory.Build.props`, not in individual `.csproj` files. Analyzers run with `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild`, and `TreatWarningsAsErrors`, so every warning breaks the build. SonarAnalyzer.CSharp runs in every solution project as a `GlobalPackageReference` in `Directory.Packages.props`; a Sonar finding that is not fixed is suppressed with `[SuppressMessage(..., Justification = "...")]` on the class or method, not in `.editorconfig`. `tests/.editorconfig` turns off CA1707 because test method names use underscores (`Method_Scenario_ExpectedResult`).
 - Files are UTF-8 without BOM with LF line endings (`.editorconfig`).
 - Tests use xUnit v3, FakeItEasy, and AwesomeAssertions. They run on Microsoft.Testing.Platform (enabled in `global.json`) with `Microsoft.Testing.Extensions.TrxReport` and `Microsoft.Testing.Extensions.CodeCoverage` (`dotnet test --coverage`), which is what the Cake test task drives.
 - Versioning: GitVersion (`GitVersion.yml`, `GitVersion.MsBuild` as `GlobalPackageReference`) derives one version from the git history for every project, the tool package, and the binaries. Never put a version in a `.csproj` or `.props` file. Builds need the full history (`fetch-depth: 0`). A release is a tag `v<SemVer>` on `main`.
@@ -59,7 +59,8 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 dotnet build                     # from repo root (.slnx)
 dotnet test
 dotnet test --coverage           # with coverage (writes TestResults/)
-dotnet run --project src/CreativeCoders.ShadeKit.Cli -- features list
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- init          # initialises the git repository of the current directory
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- feature list
 dotnet pack src/CreativeCoders.ShadeKit.Cli          # dotnet global tool package (command: shade-kit)
 dotnet publish src/CreativeCoders.ShadeKit.Cli -c Release -r <rid>   # self-contained single-file binary
 ```

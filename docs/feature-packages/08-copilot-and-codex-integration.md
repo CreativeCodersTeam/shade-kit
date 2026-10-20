@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | Draft, 2026-10-14 |
-| Source | Concept §1 (Success, Constraint), §2 (Agents), §3.4, §10 open question 5; [ADR 0001](../adr/0001-shadekit-version-drift.md) |
+| Source | Concept §1 (Success, Constraint), §2 (Agents), §3.4, §10 open question 5, [concept §9](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 02, 06, 07 |
 | Enables | Phase packages 09–17 are built and accepted on all three agents |
 
@@ -34,7 +34,7 @@ Before any integration work, check for GitHub Copilot and OpenAI Codex CLI (**Un
 | Question | Why it matters |
 |---|---|
 | Can it load the `SKILL.md` format and the plugin layout unchanged? | Decides whether one skill source serves all agents. |
-| Does it have a plugin mechanism, and how is it installed at user level? | Decides between plugin install and writing to the user directory. **Decided** fallback: user directory. |
+| Does it have a plugin mechanism, and how is it installed at user level? | Decides between plugin install and writing to the user directory. **Decided** fallback (concept §3.1): user directory. |
 | Does it support subagents, and can they run in parallel? | The research skill (package 06) runs one subagent per focus; without subagents it runs the focuses one after another in the main session. The independent review in `implement` (package 13) runs in a subagent; without one, the fallback (for example a fresh session) has to be decided in the ADR. |
 | Does it have a structured question tool? | The interview skill (package 06) falls back to plain questions. |
 | Which instruction file does it read (`AGENTS.md`, `.github/copilot-instructions.md`, other)? | Decides which files package 02 writes the managed section into. |
@@ -43,7 +43,7 @@ The result is an ADR in `docs/adr/` with a table per agent: supported, supported
 
 ### Step 2: install and update
 
-- `integrations install --agent copilot|codex` installs the same content as for Claude Code at user level, as a plugin where the agent has one, otherwise in the agent's user directory. **Decided.**
+- `integrations install --agent copilot|codex` installs the same content as for Claude Code at user level, as a plugin where the agent has one, otherwise in the agent's user directory. **Decided** (concept §3.1).
 - If the research shows a format difference, the engine transforms the content at install time from the one skill source. There is no second copy of the skill text in the kit repository. **Proposed.**
 - Version recording and `integrations update` work as in package 07.
 
@@ -62,8 +62,8 @@ From this package on, every phase package (09–17) counts as done only when its
 ## Acceptance criteria
 
 - **FP08-AC1** An ADR answers every research question for both agents, with sources.
-- **FP08-AC2** After `integrations install --agent copilot`, a Copilot session can load the router skill and run the version handshake.
-- **FP08-AC3** After `integrations install --agent codex`, a Codex CLI session can load the router skill and run the version handshake.
+- **FP08-AC2** After `integrations install --agent copilot`, a Copilot session can load `shade-kit-next-phase` and run the version handshake.
+- **FP08-AC3** After `integrations install --agent codex`, a Codex CLI session can load `shade-kit-next-phase` and run the version handshake.
 - **FP08-AC4** The kit repository holds one source per skill; agent-specific differences are produced at install time.
 - **FP08-AC5** The research skill (package 06) produces the same `researches.md` structure on every agent, also where it runs sequentially.
 - **FP08-AC6** `init` writes the managed section into every instruction file the ADR names.

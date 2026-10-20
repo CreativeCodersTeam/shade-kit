@@ -16,14 +16,24 @@ public static class ShadeKitCliErrorCodes
     public const string KitRootNotFound = "kit-root-not-found";
 
     /// <summary>
-    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.FeaturesDirectoryNotFound" />.
-    /// </summary>
-    public const string FeaturesDirectoryNotFound = "features-dir-not-found";
-
-    /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.NotAGitRepository" />.
     /// </summary>
     public const string NotAGitRepository = "not-a-git-repository";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.KitAlreadyInitialized" />.
+    /// </summary>
+    public const string KitAlreadyInitialized = "already-initialized";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.PathNotAFile" />.
+    /// </summary>
+    public const string PathNotAFile = "path-not-a-file";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />.
+    /// </summary>
+    public const string KitRootNotADirectory = "kit-root-not-a-directory";
 
     /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.FormatTooNew" />.
@@ -40,6 +50,16 @@ public static class ShadeKitCliErrorCodes
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.InvalidFile" />.
     /// </summary>
     public const string InvalidFile = "invalid-file";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.InvalidManagedSection" />.
+    /// </summary>
+    public const string InvalidManagedSection = "invalid-managed-section";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.UnsupportedFileEncoding" />.
+    /// </summary>
+    public const string UnsupportedFileEncoding = "unsupported-encoding";
 
     /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.HostError" />.
