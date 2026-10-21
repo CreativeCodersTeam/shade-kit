@@ -1,3 +1,4 @@
+using System.IO.Enumeration;
 using System.Text;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Config;
@@ -11,6 +12,14 @@ namespace CreativeCoders.ShadeKit.Core.Store;
 public class KitStore : IKitStore
 {
     private static readonly UTF8Encoding Utf8WithoutBom = new(false);
+
+    // Every entry below the directory, hidden and system files included; inaccessible entries are not skipped silently.
+    private static readonly EnumerationOptions AllFilesEnumerationOptions = new()
+    {
+        RecurseSubdirectories = true,
+        AttributesToSkip = 0,
+        IgnoreInaccessible = false
+    };
 
     private readonly IVersionedJsonSerializer _serializer;
 
@@ -70,8 +79,8 @@ public class KitStore : IKitStore
             throw new ArgumentOutOfRangeException(nameof(access), access, "The access is not defined.");
         }
 
-        var result = await ReadFileAsync<T>(relativePath, formatId, access != FormatAccess.Write, cancellationToken)
-            .ConfigureAwait(false);
+        var result = await ReadVersionedFileAsync<T>(relativePath, formatId, access != FormatAccess.Write,
+            cancellationToken).ConfigureAwait(false);
 
         if (result is null || result.Warnings.Count == 0 || access == FormatAccess.Upgrade)
         {
@@ -110,7 +119,7 @@ public class KitStore : IKitStore
                 "access.");
         }
 
-        await ReadFileAsync<T>(relativePath, formatId, access == FormatAccess.Upgrade, cancellationToken)
+        await ReadVersionedFileAsync<T>(relativePath, formatId, access == FormatAccess.Upgrade, cancellationToken)
             .ConfigureAwait(false);
 
         var json = _serializer.Serialize(document, formatId);
@@ -138,7 +147,104 @@ public class KitStore : IKitStore
         Directory.CreateDirectory(GetFullPath(relativePath));
     }
 
-    private async Task<VersionedReadResult<T>?> ReadFileAsync<T>(string relativePath, string formatId,
+    /// <inheritdoc />
+    public async Task<byte[]?> ReadFileAsync(string relativePath, CancellationToken cancellationToken = default)
+    {
+        var fullPath = GetFullPath(relativePath);
+
+        return File.Exists(fullPath)
+            ? await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false)
+            : null;
+    }
+
+    /// <inheritdoc />
+    public bool FileExists(string relativePath)
+    {
+        return File.Exists(GetFullPath(relativePath));
+    }
+
+    /// <inheritdoc />
+    public bool DirectoryExists(string relativePath)
+    {
+        return Directory.Exists(GetFullPath(relativePath));
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> GetFiles(string relativePath)
+    {
+        var fullPath = GetFullPath(relativePath);
+
+        if (!Directory.Exists(fullPath))
+        {
+            return [];
+        }
+
+        // Directory links are neither listed nor followed, so the result never leaves the store and a link loop
+        // cannot recurse endlessly. Directory.EnumerateFiles would follow them.
+        var files = new FileSystemEnumerable<string>(fullPath,
+            (ref entry) => Path.GetRelativePath(RootPath, entry.ToFullPath()), AllFilesEnumerationOptions)
+        {
+            ShouldIncludePredicate = (ref entry) => !entry.IsDirectory,
+            ShouldRecursePredicate = (ref entry) => (entry.Attributes & FileAttributes.ReparsePoint) == 0
+        };
+
+        return
+        [
+            .. files
+                .Select(file => file.Replace(Path.DirectorySeparatorChar, '/'))
+                .Order(StringComparer.Ordinal)
+        ];
+    }
+
+    /// <inheritdoc />
+    public void DeleteFile(string relativePath)
+    {
+        var fullPath = GetFullPath(relativePath);
+
+        if (File.Exists(fullPath))
+        {
+            File.Delete(fullPath);
+        }
+    }
+
+    /// <inheritdoc />
+    public void DeleteDirectory(string relativePath)
+    {
+        var fullPath = GetFullPath(relativePath);
+
+        if (Directory.Exists(fullPath))
+        {
+            Directory.Delete(fullPath, true);
+        }
+    }
+
+    /// <inheritdoc />
+    public void MoveDirectory(string sourceRelativePath, string destinationRelativePath)
+    {
+        var sourceFullPath = GetFullPath(sourceRelativePath);
+        var destinationFullPath = GetFullPath(destinationRelativePath);
+
+        // Directory.Move also moves files, so a file at the source counts as a missing directory.
+        if (!Directory.Exists(sourceFullPath))
+        {
+            throw new DirectoryNotFoundException(
+                $"The directory '{GetDisplayPath(sourceRelativePath)}' does not exist.");
+        }
+
+        // Checked explicitly, because some platforms would replace an existing empty directory. The rename itself
+        // refuses a destination that another process creates with content after this check.
+        if (File.Exists(destinationFullPath) || Directory.Exists(destinationFullPath))
+        {
+            throw new IOException($"'{GetDisplayPath(destinationRelativePath)}' already exists.");
+        }
+
+        // GetFullPath only returns paths below RootPath, so the destination always has a parent directory.
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationFullPath)!);
+
+        Directory.Move(sourceFullPath, destinationFullPath);
+    }
+
+    private async Task<VersionedReadResult<T>?> ReadVersionedFileAsync<T>(string relativePath, string formatId,
         bool migrateOutdated, CancellationToken cancellationToken)
         where T : VersionedDocument
     {
@@ -157,7 +263,7 @@ public class KitStore : IKitStore
     private async Task<(OutdatedFormatOnReadPolicy Policy, IReadOnlyList<FormatWarning> Warnings)>
         ReadOutdatedFormatPolicyAsync(CancellationToken cancellationToken)
     {
-        var config = await ReadFileAsync<KitConfig>(KitStorePaths.ConfigFileName, FormatIds.Config, true,
+        var config = await ReadVersionedFileAsync<KitConfig>(KitStorePaths.ConfigFileName, FormatIds.Config, true,
             cancellationToken).ConfigureAwait(false);
 
         if (config is null)

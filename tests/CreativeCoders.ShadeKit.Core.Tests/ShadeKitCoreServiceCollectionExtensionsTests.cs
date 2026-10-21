@@ -1,12 +1,15 @@
 using System.Diagnostics.CodeAnalysis;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Engine;
+using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 
 namespace CreativeCoders.ShadeKit.Core.Tests;
 
@@ -55,6 +58,12 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IShippedTemplateReader), typeof(ShippedTemplateReader))]
     [InlineData(typeof(IGitIgnorePlanner), typeof(GitIgnorePlanner))]
     [InlineData(typeof(IInstructionSectionPlanner), typeof(InstructionSectionPlanner))]
+    [InlineData(typeof(IGitExecutableLocator), typeof(GitExecutableLocator))]
+    [InlineData(typeof(IGitCommandRunner), typeof(GitCommandRunner))]
+    [InlineData(typeof(IGitRepositoryInfo), typeof(GitRepositoryInfo))]
+    [InlineData(typeof(IFeatureIdFactory), typeof(FeatureIdFactory))]
+    [InlineData(typeof(ICurrentFeatureResolver), typeof(CurrentFeatureResolver))]
+    [InlineData(typeof(IFeatureStore), typeof(FeatureStore))]
     public void AddShadeKitCore_ServiceCollection_RegistersServiceAsSingleton(Type serviceType, Type implementationType)
     {
         // Arrange
@@ -139,6 +148,13 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IShippedTemplateReader))]
     [InlineData(typeof(IGitIgnorePlanner))]
     [InlineData(typeof(IInstructionSectionPlanner))]
+    [InlineData(typeof(IGitExecutableLocator))]
+    [InlineData(typeof(IGitCommandRunner))]
+    [InlineData(typeof(IGitRepositoryInfo))]
+    [InlineData(typeof(IFeatureIdFactory))]
+    [InlineData(typeof(ICurrentFeatureResolver))]
+    [InlineData(typeof(IFeatureStore))]
+    [InlineData(typeof(TimeProvider))]
     public void AddShadeKitCore_ExistingServiceRegistration_KeepsExistingRegistration(Type serviceType)
     {
         // Arrange
@@ -165,6 +181,13 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IShippedTemplateReader))]
     [InlineData(typeof(IGitIgnorePlanner))]
     [InlineData(typeof(IInstructionSectionPlanner))]
+    [InlineData(typeof(IGitExecutableLocator))]
+    [InlineData(typeof(IGitCommandRunner))]
+    [InlineData(typeof(IGitRepositoryInfo))]
+    [InlineData(typeof(IFeatureIdFactory))]
+    [InlineData(typeof(ICurrentFeatureResolver))]
+    [InlineData(typeof(IFeatureStore))]
+    [InlineData(typeof(TimeProvider))]
     public void AddShadeKitCore_CalledTwice_RegistersServiceOnlyOnce(Type serviceType)
     {
         // Arrange
@@ -248,6 +271,123 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         A.CallTo(() => existingLocator.GetRepositoryRootPath("/start"))
             .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_ExistingGitCommandRunnerRegistration_GitRepositoryInfoUsesExistingRunner()
+    {
+        // Arrange
+        var existingRunner = A.Fake<IGitCommandRunner>();
+        A.CallTo(() => existingRunner.RunAsync("/repo", A<IReadOnlyList<string>>._, A<CancellationToken>._))
+            .Returns(new GitCommandResult(0, "main\n", ""));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingRunner);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        var branch = await serviceProvider.GetRequiredService<IGitRepositoryInfo>()
+            .GetCurrentBranchAsync("/repo", TestContext.Current.CancellationToken);
+
+        branch
+            .Should().Be("main");
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_ExistingGitExecutableLocatorRegistration_GitCommandRunnerUsesExistingLocator()
+    {
+        // Arrange
+        var existingLocator = A.Fake<IGitExecutableLocator>();
+        A.CallTo(() => existingLocator.FindGitExecutable()).Returns(null);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingLocator);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        var act = () => serviceProvider.GetRequiredService<IGitCommandRunner>()
+            .RunAsync("/repo", ["config", "user.name"], TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<GitUnavailableException>();
+
+        A.CallTo(() => existingLocator.FindGitExecutable())
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_ExistingGitRepositoryInfoRegistration_CurrentFeatureResolverUsesExistingInfo()
+    {
+        // Arrange
+        var existingInfo = A.Fake<IGitRepositoryInfo>();
+        A.CallTo(() => existingInfo.GetCurrentBranchAsync(A<string>._, A<CancellationToken>._))
+            .Returns("feature/login");
+
+        var store = A.Fake<IKitStore>();
+        A.CallTo(() => store.RootPath).Returns("/repo/.shadekit");
+        A.CallTo(() => store.DirectoryExists("features/login")).Returns(true);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingInfo);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        var featureId = await serviceProvider.GetRequiredService<ICurrentFeatureResolver>()
+            .ResolveBranchFeatureIdAsync(store, TestContext.Current.CancellationToken);
+
+        featureId
+            .Should().Be("login");
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_RegistersSystemTimeProvider()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        serviceProvider.GetRequiredService<TimeProvider>()
+            .Should().BeSameAs(TimeProvider.System);
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_ExistingTimeProviderRegistration_FeatureIdFactoryUsesExistingTimeProvider()
+    {
+        // Arrange
+        var existingTimeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 10, 20, 15, 30, 0, TimeSpan.Zero));
+        existingTimeProvider.SetLocalTimeZone(TimeZoneInfo.Utc);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<TimeProvider>(existingTimeProvider);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        var identity = await serviceProvider.GetRequiredService<IFeatureIdFactory>()
+            .CreateAsync("Login SSO", null, "/repo", new Dictionary<string, string>(), "/repo",
+                TestContext.Current.CancellationToken);
+
+        identity.Id
+            .Should().Be("20261020-1530-login-sso");
     }
 
     [Fact]

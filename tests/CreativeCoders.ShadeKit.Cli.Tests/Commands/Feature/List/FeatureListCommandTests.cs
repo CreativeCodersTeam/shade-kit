@@ -7,6 +7,8 @@ using CreativeCoders.ShadeKit.Cli.Commands;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.List;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
+using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
 using FakeItEasy;
 using Spectre.Console;
@@ -17,25 +19,33 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Feature.List;
 public class FeatureListCommandTests
 {
     [Fact]
-    public async Task ExecuteAsync_FeaturesExist_WritesFeatureNamesInOrdinalOrder()
+    public async Task ExecuteAsync_FeaturesExist_WritesOneLinePerFeatureInStoreOrder()
     {
         // Arrange
         var console = new TestConsole();
-        var command = CreateCommand(console, CreateKitStoreFactory("login", "Billing", "auth"));
+        var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore(
+                new FeatureSummary("Billing", "Billing run", "quick", FeatureStatus.Done),
+                new FeatureSummary("auth", "Auth", "bugfix", FeatureStatus.Active),
+                new FeatureSummary("login", "Login SSO", "feature", FeatureStatus.Active)));
 
         // Act
         await command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         console.Lines
-            .Should().Equal("Billing", "auth", "login");
+            .Should().Equal(
+                "Billing  done  quick  Billing run",
+                "auth  active  bugfix  Auth",
+                "login  active  feature  Login SSO");
     }
 
     [Fact]
     public async Task ExecuteAsync_FeaturesExist_ReturnsSuccess()
     {
         // Arrange
-        var command = CreateCommand(new TestConsole(), CreateKitStoreFactory("auth"));
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore(new FeatureSummary("auth", "Auth", "feature", FeatureStatus.Active)));
 
         // Act
         var result = await command.ExecuteAsync(new FeatureListCommandOptions());
@@ -46,18 +56,19 @@ public class FeatureListCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_FeatureNameContainsMarkupCharacters_WritesNameVerbatim()
+    public async Task ExecuteAsync_TitleContainsMarkupCharacters_WritesTitleVerbatim()
     {
         // Arrange
         var console = new TestConsole();
-        var command = CreateCommand(console, CreateKitStoreFactory("[red]feature[/]"));
+        var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore(new FeatureSummary("login", "[red]feature[/]", "feature", FeatureStatus.Active)));
 
         // Act
         await command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         console.Lines
-            .Should().Equal("[red]feature[/]");
+            .Should().Equal("login  active  feature  [red]feature[/]");
     }
 
     [Fact]
@@ -65,7 +76,7 @@ public class FeatureListCommandTests
     {
         // Arrange
         var console = new TestConsole();
-        var command = CreateCommand(console, CreateKitStoreFactory());
+        var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(), CreateFeatureStore());
 
         // Act
         var result = await command.ExecuteAsync(new FeatureListCommandOptions());
@@ -79,16 +90,74 @@ public class FeatureListCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_RunToken_IsPassedToFeatureStore()
+    {
+        // Arrange
+        using var cancellationSource = new CancellationTokenSource();
+        var featureStore = CreateFeatureStore();
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
+            featureStore, cancellation: new TestCliCancellation(cancellationSource.Token));
+
+        // Act
+        await command.ExecuteAsync(new FeatureListCommandOptions());
+
+        // Assert
+        A.CallTo(() => featureStore.ListAsync(A<IKitStore>._, cancellationSource.Token))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PassesStoreOfFactoryToFeatureStore()
+    {
+        // Arrange
+        var kitStore = A.Fake<IKitStore>();
+        var featureStore = CreateFeatureStore();
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(kitStore),
+            featureStore);
+
+        // Act
+        await command.ExecuteAsync(new FeatureListCommandOptions());
+
+        // Assert
+        A.CallTo(() => featureStore.ListAsync(kitStore, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeWithWarnings_WritesWarningLinesBeforeFeatures()
+    {
+        // Arrange
+        var console = FeatureCommandTestHelper.CreateWideConsole();
+        var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore([new FeatureSummary("login", "Login", "feature", FeatureStatus.Active)],
+                [FeatureWarning.FeatureFileMissing("broken")], [FeatureCommandTestHelper.UpgradeWarning]));
+
+        // Act
+        await command.ExecuteAsync(new FeatureListCommandOptions());
+
+        // Assert
+        console.Lines.Count
+            .Should().Be(3);
+
+        console.Lines[0]
+            .Should().StartWith("Warning: ").And.Contain("shade-kit upgrade");
+
+        console.Lines[1]
+            .Should().StartWith("Warning: ").And.Contain(".shadekit/features/broken/");
+
+        console.Lines[2]
+            .Should().Be("login  active  feature  Login");
+    }
+
+    [Fact]
     [Trait("Requirement", "FP01-AC2")]
     public async Task ExecuteAsync_KitRootNotFound_ThrowsAbortExceptionWithKitRootNotFoundExitCodeAndInitHint()
     {
         // Arrange
         var rootNotFoundException = new KitRootPathNotFoundException("/repo/src", "/repo");
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(rootNotFoundException);
-
         var console = new TestConsole();
-        var command = CreateCommand(console, kitStoreFactory);
+        var command = CreateCommand(console,
+            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(rootNotFoundException));
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
@@ -118,11 +187,9 @@ public class FeatureListCommandTests
     {
         // Arrange
         var notAGitRepositoryException = new NotAGitRepositoryException("/kit/[nested]/src");
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(notAGitRepositoryException);
-
         var console = new TestConsole();
-        var command = CreateCommand(console, kitStoreFactory);
+        var command = CreateCommand(console,
+            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(notAGitRepositoryException));
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
@@ -147,28 +214,44 @@ public class FeatureListCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_LazyFeatureNamesThrowMappedExceptionOnEnumeration_ThrowsAbortExceptionWithMappedExitCode()
+    public async Task ExecuteAsync_FeatureStoreThrowsInvalidKitFile_ThrowsAbortExceptionWithInvalidFileExitCode()
     {
         // Arrange
-        var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames()).Returns(ThrowOnEnumeration(new KitRootPathNotFoundException("/kit/src", "/kit")));
-
-        var kitStoreFactory = CreateKitStoreFactory(kitStore);
+        var featureStore = A.Fake<IFeatureStore>();
+        A.CallTo(() => featureStore.ListAsync(A<IKitStore>._, A<CancellationToken>._))
+            .ThrowsAsync(new InvalidKitFileException(".shadekit/features/login/feature.json", "broken"));
 
         var console = new TestConsole();
-        var command = CreateCommand(console, kitStoreFactory);
+        var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(), featureStore);
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
-        var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
-
-        exception.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.KitRootNotFound);
+        (await act.Should().ThrowAsync<CliCommandAbortException>())
+            .Which.ExitCode.Should().Be(ShadeKitCliExitCodes.InvalidFile);
 
         console.Output
             .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_FeatureStoreThrowsFormatTooNew_ThrowsAbortExceptionWithFormatTooNewExitCode()
+    {
+        // Arrange
+        var featureStore = A.Fake<IFeatureStore>();
+        A.CallTo(() => featureStore.ListAsync(A<IKitStore>._, A<CancellationToken>._))
+            .ThrowsAsync(new FormatTooNewException(".shadekit/features/login/feature.json", 9, 1, "9.0.0"));
+
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
+            featureStore);
+
+        // Act
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
+
+        // Assert
+        (await act.Should().ThrowAsync<CliCommandAbortException>())
+            .Which.ExitCode.Should().Be(ShadeKitCliExitCodes.FormatTooNew);
     }
 
     [Fact]
@@ -176,11 +259,9 @@ public class FeatureListCommandTests
     {
         // Arrange
         var directoryNotFoundException = new DirectoryNotFoundException("current directory deleted");
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(directoryNotFoundException);
-
         var console = new TestConsole();
-        var command = CreateCommand(console, kitStoreFactory);
+        var command = CreateCommand(console,
+            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(directoryNotFoundException));
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
@@ -197,10 +278,9 @@ public class FeatureListCommandTests
     public void ExecuteAsync_KitRootNotFound_ReturnsFaultedTaskInsteadOfThrowingSynchronously()
     {
         // Arrange
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(new KitRootPathNotFoundException("/repo/src", "/repo"));
-
-        var command = CreateCommand(new TestConsole(), kitStoreFactory);
+        var command = CreateCommand(new TestConsole(),
+            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
+                new KitRootPathNotFoundException("/repo/src", "/repo")));
         Task<CommandResult>? task = null;
 
         // Act
@@ -223,79 +303,15 @@ public class FeatureListCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_LazyFeatureNamesThrowBclDirectoryNotFoundOnEnumeration_PropagatesExceptionUnwrapped()
-    {
-        // Arrange
-        var directoryNotFoundException = new DirectoryNotFoundException("kit root removed during enumeration");
-        var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames()).Returns(ThrowOnEnumeration(directoryNotFoundException));
-
-        var kitStoreFactory = CreateKitStoreFactory(kitStore);
-
-        var console = new TestConsole();
-        var command = CreateCommand(console, kitStoreFactory);
-
-        // Act
-        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
-
-        // Assert
-        (await act.Should().ThrowAsync<DirectoryNotFoundException>())
-            .Which.Should().BeSameAs(directoryNotFoundException);
-
-        console.Output
-            .Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_StoreThrowsBclDirectoryNotFound_PropagatesExceptionUnwrapped()
-    {
-        // Arrange
-        var directoryNotFoundException = new DirectoryNotFoundException("kit root removed during read");
-        var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames()).Throws(directoryNotFoundException);
-
-        var kitStoreFactory = CreateKitStoreFactory(kitStore);
-
-        var command = CreateCommand(new TestConsole(), kitStoreFactory);
-
-        // Act
-        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
-
-        // Assert
-        (await act.Should().ThrowAsync<DirectoryNotFoundException>())
-            .Which.Should().BeSameAs(directoryNotFoundException);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_FactoryThrowsUnexpectedIoException_PropagatesExceptionUnwrapped()
-    {
-        // Arrange
-        var accessException = new UnauthorizedAccessException("access denied");
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(accessException);
-
-        var command = CreateCommand(new TestConsole(), kitStoreFactory);
-
-        // Act
-        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
-
-        // Assert
-        (await act.Should().ThrowAsync<UnauthorizedAccessException>())
-            .Which.Should().BeSameAs(accessException);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_StoreThrowsUnexpectedIoException_PropagatesExceptionUnwrappedWithoutOutput()
+    public async Task ExecuteAsync_FeatureStoreThrowsUnexpectedIoException_PropagatesExceptionUnwrappedWithoutOutput()
     {
         // Arrange
         var ioException = new IOException("disk error");
-        var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames()).Throws(ioException);
-
-        var kitStoreFactory = CreateKitStoreFactory(kitStore);
+        var featureStore = A.Fake<IFeatureStore>();
+        A.CallTo(() => featureStore.ListAsync(A<IKitStore>._, A<CancellationToken>._)).ThrowsAsync(ioException);
 
         var console = new TestConsole();
-        var command = CreateCommand(console, kitStoreFactory);
+        var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(), featureStore);
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
@@ -309,11 +325,27 @@ public class FeatureListCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_FactoryThrowsUnexpectedAccessException_PropagatesExceptionUnwrapped()
+    {
+        // Arrange
+        var accessException = new UnauthorizedAccessException("access denied");
+        var command = CreateCommand(new TestConsole(),
+            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(accessException));
+
+        // Act
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions());
+
+        // Assert
+        (await act.Should().ThrowAsync<UnauthorizedAccessException>())
+            .Which.Should().BeSameAs(accessException);
+    }
+
+    [Fact]
     public void Ctor_NullConsole_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeatureListCommand(null!, A.Fake<IKitStoreFactory>(), A.Fake<ICliJsonWriter>(),
-            CliErrorMapperTests.CreateMapper());
+        var act = () => new FeatureListCommand(null!, A.Fake<IKitStoreFactory>(), A.Fake<IFeatureStore>(),
+            A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -324,8 +356,8 @@ public class FeatureListCommandTests
     public void Ctor_NullKitStoreFactory_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeatureListCommand(new TestConsole(), null!, A.Fake<ICliJsonWriter>(),
-            CliErrorMapperTests.CreateMapper());
+        var act = () => new FeatureListCommand(new TestConsole(), null!, A.Fake<IFeatureStore>(),
+            A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -333,11 +365,23 @@ public class FeatureListCommandTests
     }
 
     [Fact]
-    public void Ctor_NullJsonWriter_ThrowsArgumentNullException()
+    public void Ctor_NullFeatureStore_ThrowsArgumentNullException()
     {
         // Act
         var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(), null!,
-            CliErrorMapperTests.CreateMapper());
+            A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("featureStore");
+    }
+
+    [Fact]
+    public void Ctor_NullJsonWriter_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(),
+            A.Fake<IFeatureStore>(), null!, CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -349,7 +393,7 @@ public class FeatureListCommandTests
     {
         // Act
         var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(),
-            A.Fake<ICliJsonWriter>(), null!);
+            A.Fake<IFeatureStore>(), A.Fake<ICliJsonWriter>(), null!, TestCliCancellation.None);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -357,10 +401,23 @@ public class FeatureListCommandTests
     }
 
     [Fact]
+    public void Ctor_NullCancellation_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(),
+            A.Fake<IFeatureStore>(), A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), null!);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("cancellation");
+    }
+
+    [Fact]
     public async Task ExecuteAsync_NullOptions_ThrowsArgumentNullException()
     {
         // Arrange
-        var command = CreateCommand(new TestConsole(), CreateKitStoreFactory());
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore());
 
         // Act
         var act = () => command.ExecuteAsync(null!);
@@ -372,28 +429,49 @@ public class FeatureListCommandTests
 
     [Fact]
     [Trait("Requirement", "FP01-AC12")]
-    public async Task ExecuteAsync_JsonModeWithFeatures_WritesEnvelopeWithFeatureNamesInOrdinalOrder()
+    public async Task ExecuteAsync_JsonModeWithFeatures_WritesEnvelopeWithFeaturesInStoreOrder()
     {
         // Arrange
         var console = new TestConsole();
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, CreateKitStoreFactory("login", "Billing", "auth"), jsonOutput);
+        var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore(
+                new FeatureSummary("Billing", "Billing run", "quick", FeatureStatus.Done),
+                new FeatureSummary("auth", "Auth", "bugfix", FeatureStatus.Active)),
+            jsonOutput);
 
         // Act
         var result = await command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
         var root = document.RootElement;
 
-        root.EnumerateObject().Select(x => x.Name)
+        FeatureCommandTestHelper.GetPropertyNames(root)
             .Should().Equal("ok", "data", "warnings", "error");
 
         root.GetProperty("ok").GetBoolean()
             .Should().BeTrue();
 
-        root.GetProperty("data").GetProperty("features").EnumerateArray().Select(x => x.GetString())
-            .Should().Equal("Billing", "auth", "login");
+        var features = root.GetProperty("data").GetProperty("features").EnumerateArray().ToArray();
+
+        features.Select(FeatureCommandTestHelper.GetPropertyNames)
+            .Should().AllSatisfy(x => x.Should().Equal("id", "title", "profile", "status"));
+
+        features.Select(x => x.GetProperty("id").GetString())
+            .Should().Equal("Billing", "auth");
+
+        features[0].GetProperty("title").GetString()
+            .Should().Be("Billing run");
+
+        features[0].GetProperty("profile").GetString()
+            .Should().Be("quick");
+
+        features.Select(x => x.GetProperty("status").GetString())
+            .Should().Equal("done", "active");
+
+        root.GetProperty("warnings").GetArrayLength()
+            .Should().Be(0);
 
         result.ExitCode
             .Should().Be(0);
@@ -408,13 +486,14 @@ public class FeatureListCommandTests
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), CreateKitStoreFactory(), jsonOutput);
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore(), jsonOutput);
 
         // Act
         var result = await command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
 
         // Assert
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
 
         document.RootElement.GetProperty("ok").GetBoolean()
             .Should().BeTrue();
@@ -427,18 +506,42 @@ public class FeatureListCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_JsonModeWithWarnings_WritesFormatThenFeatureWarningsIntoEnvelope()
+    {
+        // Arrange
+        var console = new TestConsole();
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore([], [FeatureWarning.FeatureFileMissing("broken")],
+                [FeatureCommandTestHelper.UpgradeWarning]),
+            jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
+
+        // Assert
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+
+        FeatureCommandTestHelper.GetWarningCodes(document.RootElement)
+            .Should().Equal(ShadeKitCliErrorCodes.UpgradeNeeded, ShadeKitCliWarningCodes.FeatureFileMissing);
+
+        console.Output
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     [Trait("Requirement", "FP01-AC2")]
     [Trait("Requirement", "FP01-AC8")]
     [Trait("Requirement", "FP01-AC12")]
     public async Task ExecuteAsync_JsonModeKitRootNotFound_WritesErrorEnvelopeAndAbortsWithoutPrintedMessage()
     {
         // Arrange
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(new KitRootPathNotFoundException("/repo/src", "/repo"));
-
         var console = new TestConsole();
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, kitStoreFactory, jsonOutput);
+        var command = CreateCommand(console,
+            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
+                new KitRootPathNotFoundException("/repo/src", "/repo")),
+            jsonOutput: jsonOutput);
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
@@ -452,10 +555,10 @@ public class FeatureListCommandTests
         exception.PrintMessage
             .Should().BeFalse();
 
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
         var root = document.RootElement;
 
-        root.EnumerateObject().Select(x => x.Name)
+        FeatureCommandTestHelper.GetPropertyNames(root)
             .Should().Equal("ok", "data", "warnings", "error");
 
         root.GetProperty("ok").GetBoolean()
@@ -479,11 +582,10 @@ public class FeatureListCommandTests
     public async Task ExecuteAsync_JsonModeNotAGitRepository_WritesErrorEnvelopeWithNotAGitRepositoryCode()
     {
         // Arrange
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(new NotAGitRepositoryException("/outside"));
-
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
+        var command = CreateCommand(new TestConsole(),
+            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(new NotAGitRepositoryException("/outside")),
+            jsonOutput: jsonOutput);
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
@@ -492,7 +594,7 @@ public class FeatureListCommandTests
         (await act.Should().ThrowAsync<CliCommandAbortException>())
             .Which.ExitCode.Should().Be(ShadeKitCliExitCodes.NotAGitRepository);
 
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
 
         document.RootElement.GetProperty("error").GetProperty("code").GetString()
             .Should().Be(ShadeKitCliErrorCodes.NotAGitRepository);
@@ -503,11 +605,9 @@ public class FeatureListCommandTests
     {
         // Arrange
         var ioException = new IOException("disk error");
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(ioException);
-
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
+        var command = CreateCommand(new TestConsole(),
+            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(ioException), jsonOutput: jsonOutput);
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
@@ -525,7 +625,8 @@ public class FeatureListCommandTests
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), CreateKitStoreFactory("auth"), jsonOutput);
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore(new FeatureSummary("auth", "Auth", "feature", FeatureStatus.Active)), jsonOutput);
 
         // Act
         await command.ExecuteAsync(new FeatureListCommandOptions());
@@ -533,6 +634,65 @@ public class FeatureListCommandTests
         // Assert
         jsonOutput.ToString()
             .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeTitleWithMarkupCharacters_WritesTitleVerbatim()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
+            CreateFeatureStore(new FeatureSummary("login", "[red]feature[/]", "feature", FeatureStatus.Active)),
+            jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
+
+        // Assert
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+
+        document.RootElement.GetProperty("data").GetProperty("features")[0].GetProperty("title").GetString()
+            .Should().Be("[red]feature[/]");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModePathWithMarkupCharacters_KeepsRawPathInEnvelopeAndAbortMessage()
+    {
+        // Arrange
+        var exception = new NotAGitRepositoryException("/kit/[nested]/src");
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateThrowingKitStoreFactory(exception),
+            jsonOutput: jsonOutput);
+
+        // Act
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
+
+        // Assert
+        var abortException = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
+
+        abortException.Message
+            .Should().Contain("'/kit/[nested]/src'");
+
+        abortException.PrintMessage
+            .Should().BeFalse();
+
+        abortException.IsError
+            .Should().BeTrue();
+
+        abortException.InnerException
+            .Should().BeSameAs(exception);
+
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+        var root = document.RootElement;
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().Contain("'/kit/[nested]/src'");
+
+        root.GetProperty("warnings").GetArrayLength()
+            .Should().Be(0);
+
+        FeatureCommandTestHelper.GetPropertyNames(root.GetProperty("error"))
+            .Should().Equal("code", "message");
     }
 
     [Fact]
@@ -570,121 +730,26 @@ public class FeatureListCommandTests
             .Should().ContainSingle();
     }
 
-    private static IEnumerable<string> ThrowOnEnumeration(Exception exception)
+    private static IFeatureStore CreateFeatureStore(params FeatureSummary[] features)
     {
-        yield return "never-listed";
-
-        throw exception;
+        return CreateFeatureStore(features, [], []);
     }
 
-    private static IKitStoreFactory CreateKitStoreFactory(params string[] featureNames)
+    private static IFeatureStore CreateFeatureStore(IReadOnlyList<FeatureSummary> features,
+        IReadOnlyList<FeatureWarning> warnings, IReadOnlyList<FormatWarning> formatWarnings)
     {
-        var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames()).Returns(featureNames);
+        var featureStore = A.Fake<IFeatureStore>();
+        A.CallTo(() => featureStore.ListAsync(A<IKitStore>._, A<CancellationToken>._))
+            .Returns(new FeatureListResult(features, warnings, formatWarnings));
 
-        return CreateKitStoreFactory(kitStore);
-    }
-
-    private static IKitStoreFactory CreateKitStoreFactory(IKitStore kitStore)
-    {
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Returns(kitStore);
-
-        return kitStoreFactory;
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP01-AC8")]
-    public async Task ExecuteAsync_JsonModeEnumerationFailsMidway_WritesOnlyErrorEnvelope()
-    {
-        // Arrange
-        var kitStore = A.Fake<IKitStore>();
-        A.CallTo(() => kitStore.GetFeatureNames())
-            .Returns(ThrowOnEnumeration(new KitRootPathNotFoundException("/repo/src", "/repo")));
-
-        var kitStoreFactory = CreateKitStoreFactory(kitStore);
-
-        using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
-
-        // Act
-        var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
-
-        // Assert
-        await act.Should().ThrowAsync<CliCommandAbortException>();
-
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
-
-        document.RootElement.GetProperty("ok").GetBoolean()
-            .Should().BeFalse();
-
-        jsonOutput.ToString()
-            .Should().NotContain("never-listed");
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_JsonModeFeatureNameWithMarkupCharacters_WritesNameVerbatim()
-    {
-        // Arrange
-        using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), CreateKitStoreFactory("[red]feature[/]"), jsonOutput);
-
-        // Act
-        await command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
-
-        // Assert
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
-
-        document.RootElement.GetProperty("data").GetProperty("features")[0].GetString()
-            .Should().Be("[red]feature[/]");
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_JsonModePathWithMarkupCharacters_KeepsRawPathInEnvelopeAndAbortMessage()
-    {
-        // Arrange
-        var exception = new NotAGitRepositoryException("/kit/[nested]/src");
-        var kitStoreFactory = A.Fake<IKitStoreFactory>();
-        A.CallTo(() => kitStoreFactory.Create()).Throws(exception);
-
-        using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), kitStoreFactory, jsonOutput);
-
-        // Act
-        var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
-
-        // Assert
-        var abortException = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
-
-        abortException.Message
-            .Should().Contain("'/kit/[nested]/src'");
-
-        abortException.PrintMessage
-            .Should().BeFalse();
-
-        abortException.IsError
-            .Should().BeTrue();
-
-        abortException.InnerException
-            .Should().BeSameAs(exception);
-
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
-        var root = document.RootElement;
-
-        root.GetProperty("error").GetProperty("message").GetString()
-            .Should().Contain("'/kit/[nested]/src'");
-
-        root.GetProperty("warnings").GetArrayLength()
-            .Should().Be(0);
-
-        root.GetProperty("error").EnumerateObject().Select(x => x.Name)
-            .Should().Equal("code", "message");
+        return featureStore;
     }
 
     internal static FeatureListCommand CreateCommand(IAnsiConsole console, IKitStoreFactory kitStoreFactory,
-        TextWriter? jsonOutput = null)
+        IFeatureStore? featureStore = null, TextWriter? jsonOutput = null, ICliCancellation? cancellation = null)
     {
-        return new FeatureListCommand(console, kitStoreFactory, new CliJsonWriter(jsonOutput ?? TextWriter.Null),
-            CliErrorMapperTests.CreateMapper());
+        return new FeatureListCommand(console, kitStoreFactory, featureStore ?? CreateFeatureStore(),
+            new CliJsonWriter(jsonOutput ?? TextWriter.Null), CliErrorMapperTests.CreateMapper(),
+            cancellation ?? TestCliCancellation.None);
     }
 }

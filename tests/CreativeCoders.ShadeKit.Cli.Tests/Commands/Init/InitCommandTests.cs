@@ -51,6 +51,23 @@ public class InitCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_RunToken_IsPassedToRepositoryInitializer()
+    {
+        // Arrange
+        using var cancellationSource = new CancellationTokenSource();
+        var initializer = CreateInitializer(Result);
+        var command = CreateCommand(new TestConsole(), initializer,
+            cancellation: new TestCliCancellation(cancellationSource.Token));
+
+        // Act
+        await command.ExecuteAsync(new InitCommandOptions());
+
+        // Assert
+        A.CallTo(() => initializer.InitializeAsync(A<string>._, cancellationSource.Token))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
     public async Task ExecuteAsync_PlainMode_WritesNoJson()
     {
         // Arrange
@@ -454,7 +471,7 @@ public class InitCommandTests
     {
         // Act
         var act = () => new InitCommand(null!, A.Fake<IRepositoryInitializer>(), A.Fake<ICliJsonWriter>(),
-            CliErrorMapperTests.CreateMapper());
+            CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -466,7 +483,7 @@ public class InitCommandTests
     {
         // Act
         var act = () => new InitCommand(new TestConsole(), null!, A.Fake<ICliJsonWriter>(),
-            CliErrorMapperTests.CreateMapper());
+            CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -478,7 +495,7 @@ public class InitCommandTests
     {
         // Act
         var act = () => new InitCommand(new TestConsole(), A.Fake<IRepositoryInitializer>(), null!,
-            CliErrorMapperTests.CreateMapper());
+            CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -490,11 +507,23 @@ public class InitCommandTests
     {
         // Act
         var act = () => new InitCommand(new TestConsole(), A.Fake<IRepositoryInitializer>(),
-            A.Fake<ICliJsonWriter>(), null!);
+            A.Fake<ICliJsonWriter>(), null!, TestCliCancellation.None);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("errorMapper");
+    }
+
+    [Fact]
+    public void Ctor_NullCancellation_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => new InitCommand(new TestConsole(), A.Fake<IRepositoryInitializer>(),
+            A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), null!);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("cancellation");
     }
 
     [Fact]
@@ -531,10 +560,10 @@ public class InitCommandTests
     }
 
     internal static InitCommand CreateCommand(IAnsiConsole console, IRepositoryInitializer repositoryInitializer,
-        TextWriter? jsonOutput = null)
+        TextWriter? jsonOutput = null, ICliCancellation? cancellation = null)
     {
         return new InitCommand(console, repositoryInitializer, new CliJsonWriter(jsonOutput ?? TextWriter.Null),
-            CliErrorMapperTests.CreateMapper());
+            CliErrorMapperTests.CreateMapper(), cancellation ?? TestCliCancellation.None);
     }
 
     internal static IRepositoryInitializer CreateInitializer(RepositoryInitResult result)

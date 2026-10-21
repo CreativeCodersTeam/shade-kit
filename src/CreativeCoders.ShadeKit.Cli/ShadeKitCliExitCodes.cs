@@ -6,11 +6,27 @@ namespace CreativeCoders.ShadeKit.Cli;
 /// <remarks>
 /// A successful run returns <c>0</c>, also when warnings were reported. The codes are grouped in ranges per area:
 /// 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, and 255 for failures
-/// of the CLI host itself. In JSON mode, every exit code comes with the matching error code from
+/// of the CLI host itself. <see cref="InvalidArguments" /> (<c>2</c>), the conventional usage error code of
+/// command-line tools, stands outside these ranges because it belongs to no area: it reports command-line arguments
+/// that the option parser rejects before any command runs. <see cref="Canceled" /> (<c>130</c>), the conventional exit
+/// code of a process interrupted by <c>SIGINT</c>, stands outside them for the same reason: any command can be
+/// canceled. In JSON mode, every exit code comes with the matching error code from
 /// <see cref="ShadeKitCliErrorCodes" />.
 /// </remarks>
 public static class ShadeKitCliExitCodes
 {
+    /// <summary>
+    /// Represents the exit code returned when the option parser rejects the command-line arguments of a command, for
+    /// example because a required argument such as the feature id of <c>shade-kit feature show</c> or the
+    /// <c>--source</c> of <c>shade-kit feature new</c> is missing. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.InvalidArguments" />.
+    /// </summary>
+    /// <remarks>
+    /// This is the usage error code. It is outside the area ranges because no command has run when the arguments
+    /// are rejected.
+    /// </remarks>
+    public const int InvalidArguments = 2;
+
     /// <summary>
     /// Represents the exit code returned when the root of the git repository that contains the current directory
     /// contains no SHADE kit root directory (<c>.shadekit</c>). The error code is
@@ -46,6 +62,12 @@ public static class ShadeKitCliExitCodes
     public const int KitRootNotADirectory = 15;
 
     /// <summary>
+    /// Represents the exit code returned when the <c>git</c> executable cannot be started or a <c>git</c> command
+    /// fails with an unexpected exit code. The error code is <see cref="ShadeKitCliErrorCodes.GitUnavailable" />.
+    /// </summary>
+    public const int GitUnavailable = 16;
+
+    /// <summary>
     /// Represents the exit code returned when a file uses a format version that is newer than the engine supports.
     /// The error code is <see cref="ShadeKitCliErrorCodes.FormatTooNew" />.
     /// </summary>
@@ -77,6 +99,69 @@ public static class ShadeKitCliExitCodes
     /// UTF-16 or UTF-32 byte order mark. The error code is <see cref="ShadeKitCliErrorCodes.UnsupportedFileEncoding" />.
     /// </summary>
     public const int UnsupportedFileEncoding = 24;
+
+    /// <summary>
+    /// Represents the exit code returned when <c>shade-kit feature new</c> builds an id whose feature folder already
+    /// exists, usually because the feature was created on another branch; nothing is changed. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.FeatureAlreadyExists" />.
+    /// </summary>
+    public const int FeatureAlreadyExists = 30;
+
+    /// <summary>
+    /// Represents the exit code returned when a command names a feature whose feature folder does not exist. The
+    /// error code is <see cref="ShadeKitCliErrorCodes.FeatureNotFound" />.
+    /// </summary>
+    public const int FeatureNotFound = 31;
+
+    /// <summary>
+    /// Represents the exit code returned when a feature id does not consist of groups of lowercase letters
+    /// <c>a</c>–<c>z</c> and digits joined by single hyphens. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.InvalidFeatureId" />.
+    /// </summary>
+    public const int InvalidFeatureId = 32;
+
+    /// <summary>
+    /// Represents the exit code returned when the source of a new feature cannot be used, because it is empty or is a
+    /// URL of a tracker in <c>config.json</c> without an issue number. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.InvalidFeatureSource" />.
+    /// </summary>
+    public const int InvalidFeatureSource = 33;
+
+    /// <summary>
+    /// Represents the exit code returned when no usable title of a new feature is available, because a URL source has
+    /// no <c>--title</c> or the title contains no letter or digit for the slug of the id. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.InvalidFeatureTitle" />.
+    /// </summary>
+    public const int InvalidFeatureTitle = 34;
+
+    /// <summary>
+    /// Represents the exit code returned when the folder of a feature cannot be created or renamed, for example
+    /// because the process may not write to <c>.shadekit/features/</c> or another program holds a file in it open;
+    /// nothing is changed. The error code is <see cref="ShadeKitCliErrorCodes.FeatureIoFailed" />.
+    /// </summary>
+    public const int FeatureIoFailed = 35;
+
+    /// <summary>
+    /// Represents the exit code returned when the git identity (<c>user.name</c>, <c>user.email</c>, or both) that a
+    /// command records is not configured. The error code is <see cref="ShadeKitCliErrorCodes.GitIdentityMissing" />.
+    /// </summary>
+    public const int GitIdentityMissing = 36;
+
+    /// <summary>
+    /// Represents the exit code returned when a workflow profile is not <c>feature</c>, <c>bugfix</c>, or
+    /// <c>quick</c>. The error code is <see cref="ShadeKitCliErrorCodes.UnknownProfile" />.
+    /// </summary>
+    public const int UnknownProfile = 40;
+
+    /// <summary>
+    /// Represents the exit code returned when the user cancels a running command, for example by pressing Ctrl+C. The
+    /// error code is <see cref="ShadeKitCliErrorCodes.Canceled" />.
+    /// </summary>
+    /// <remarks>
+    /// This is the conventional exit code of a process that ends because of <c>SIGINT</c> (128 + 2). It is outside
+    /// the area ranges because a command of any area can be canceled.
+    /// </remarks>
+    public const int Canceled = 130;
 
     /// <summary>
     /// Represents the exit code returned when the CLI host itself fails, for example because the command is unknown,

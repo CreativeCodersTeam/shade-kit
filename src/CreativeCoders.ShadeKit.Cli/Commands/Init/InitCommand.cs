@@ -18,13 +18,15 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Init;
 /// <param name="errorMapper">
 /// The mapper that turns initialisation failures into exit codes, error codes, and messages.
 /// </param>
+/// <param name="cancellation">The cancellation of the run, whose token the command passes to the core.</param>
 [UsedImplicitly]
 [CliCommand([Name], Description = "Initialises SHADE kit in the current git repository")]
 public class InitCommand(
     IAnsiConsole ansiConsole,
     IRepositoryInitializer repositoryInitializer,
     ICliJsonWriter jsonWriter,
-    CliErrorMapper errorMapper)
+    CliErrorMapper errorMapper,
+    ICliCancellation cancellation)
     : ICliCommand<InitCommandOptions>
 {
     /// <summary>
@@ -39,6 +41,8 @@ public class InitCommand(
     private readonly ICliJsonWriter _jsonWriter = Ensure.NotNull(jsonWriter);
 
     private readonly CliErrorMapper _errorMapper = Ensure.NotNull(errorMapper);
+
+    private readonly ICliCancellation _cancellation = Ensure.NotNull(cancellation);
 
     /// <summary>
     /// Initialises the repository and writes what was created or changed, as plain text or as a JSON envelope.
@@ -63,13 +67,14 @@ public class InitCommand(
     /// <c>CLAUDE.md</c> or <c>AGENTS.md</c> are invalid (exit code
     /// <see cref="ShadeKitCliExitCodes.InvalidManagedSection" />).
     /// </exception>
+    /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(InitCommandOptions options)
     {
         Ensure.NotNull(options);
 
         var result = await CliCommandAbort.RunAsync(
-                () => _repositoryInitializer.InitializeAsync(Directory.GetCurrentDirectory()), _errorMapper,
-                options.Json, _jsonWriter)
+                () => _repositoryInitializer.InitializeAsync(Directory.GetCurrentDirectory(), _cancellation.Token),
+                _errorMapper, options.Json, _jsonWriter)
             .ConfigureAwait(false);
         var data = InitCommandData.FromResult(result);
 

@@ -1,14 +1,27 @@
+using System.Reflection;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
+using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Core.Engine;
+using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Tests.Shared;
+using CreativeCoders.SysConsole.Cli.Parsing;
+using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
+using FakeItEasy;
+using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
+using Spectre.Console.Testing;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests;
 
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed class ProgramTests : IDisposable
 {
+    private const string StackTraceLinePrefix = "   at ";
+
     private readonly CurrentDirectoryScope _currentDirectory = new();
 
     private readonly TempKitDirectory _tempDirectory = new("shade-kit-program-tests-");
@@ -57,6 +70,128 @@ public sealed class ProgramTests : IDisposable
 
         output.ToString()
             .Should().StartWith("shade-kit ");
+    }
+
+    [Fact]
+    public async Task RunAsync_ServiceRegisteredByHook_ReplacesDefaultService()
+    {
+        // Arrange
+        var engineVersionProvider = A.Fake<IEngineVersionProvider>();
+        A.CallTo(() => engineVersionProvider.Version).Returns("9.8.7-test");
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--json"], output, error,
+            x => x.AddSingleton(engineVersionProvider));
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        using var document = JsonDocument.Parse(output.ToString());
+
+        document.RootElement.GetProperty("data").GetProperty("engineVersion").GetString()
+            .Should().Be("9.8.7-test");
+    }
+
+    [Fact]
+    public async Task RunAsync_HookWithoutRegistrations_UsesDefaultServices()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var hookCalls = 0;
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--json"], output, error, _ => hookCalls++);
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        hookCalls
+            .Should().Be(1);
+
+        using var document = JsonDocument.Parse(output.ToString());
+
+        document.RootElement.GetProperty("data").GetProperty("engineVersion").GetString()
+            .Should().Be(new EngineVersionProvider().Version);
+    }
+
+    [Fact]
+    public async Task RunAsync_HookRegistersConsole_KeepsConsoleOfTheRun()
+    {
+        // Arrange
+        using var hookConsole = new TestConsole();
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version"], output, error,
+            x => x.AddSingleton<IAnsiConsole>(hookConsole));
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        output.ToString()
+            .Should().StartWith("shade-kit ");
+
+        hookConsole.Output
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP01-AC12")]
+    public async Task RunAsync_HookRegistersJsonWriter_KeepsJsonWriterOfTheRunAndWritesOneEnvelope()
+    {
+        // Arrange
+        var hookJsonWriter = A.Fake<ICliJsonWriter>();
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--json"], output, error,
+            x => x.AddSingleton(hookJsonWriter));
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        using var document = JsonDocument.Parse(output.ToString());
+
+        document.RootElement.GetProperty("ok").GetBoolean()
+            .Should().BeTrue();
+
+        A.CallTo(hookJsonWriter)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP01-AC8")]
+    public async Task RunAsync_HookThrowsInJsonMode_WritesHostErrorEnvelopeAndDetailsToStandardError()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--json"], output, error,
+            _ => throw new InvalidOperationException("hook failed"));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.HostError);
+
+        using var document = JsonDocument.Parse(output.ToString());
+
+        document.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.HostError);
+
+        error.ToString()
+            .Should().Contain("hook failed");
     }
 
     [Fact]
@@ -349,7 +484,7 @@ public sealed class ProgramTests : IDisposable
     {
         // Arrange
         _tempDirectory.CreateGitRoot();
-        _tempDirectory.CreateDirectory(".shadekit", "features", "auth");
+        WriteFeatureFile("auth");
         var nestedPath = _tempDirectory.CreateDirectory("src", "app");
         Directory.SetCurrentDirectory(nestedPath);
 
@@ -365,7 +500,8 @@ public sealed class ProgramTests : IDisposable
 
         using var document = JsonDocument.Parse(output.ToString());
 
-        document.RootElement.GetProperty("data").GetProperty("features").EnumerateArray().Select(x => x.GetString())
+        document.RootElement.GetProperty("data").GetProperty("features").EnumerateArray()
+            .Select(x => x.GetProperty("id").GetString())
             .Should().Equal("auth");
     }
 
@@ -529,12 +665,15 @@ public sealed class ProgramTests : IDisposable
     }
 
     [Fact]
-    public async Task RunAsync_FeatureListPlainInInitialisedRepository_PrintsNamesInOrdinalOrder()
+    public async Task RunAsync_FeatureListPlainInInitialisedRepository_PrintsFeaturesInOrdinalOrder()
     {
         // Arrange
         _tempDirectory.CreateGitRoot();
-        _tempDirectory.CreateDirectory(".shadekit", "features", "login");
-        _tempDirectory.CreateDirectory(".shadekit", "features", "Billing");
+        WriteFeatureFile("login");
+        WriteFeatureFile("9-billing");
+        WriteFeatureFile("10-billing");
+        WriteFeatureFile("Billing");
+        _tempDirectory.CreateDirectory(".shadekit", "features", ".login.1a2b3c4d.tmp");
         Directory.SetCurrentDirectory(_tempDirectory.RootPath);
 
         using var output = new StringWriter();
@@ -547,8 +686,18 @@ public sealed class ProgramTests : IDisposable
         exitCode
             .Should().Be(0);
 
-        output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
-            .Should().Equal("Billing", "login");
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+        // The console wraps the long warning line, so its parts are joined again with single spaces.
+        string.Join(' ', lines[..^3].Select(x => x.Trim()))
+            .Should().Be(
+                "Warning: The folder '.shadekit/features/Billing/' is not a valid feature id and was skipped.");
+
+        lines[^3..]
+            .Should().Equal(
+                "10-billing  active  feature  Title of 10-billing",
+                "9-billing  active  feature  Title of 9-billing",
+                "login  active  feature  Title of login");
     }
 
     [Fact]
@@ -647,10 +796,310 @@ public sealed class ProgramTests : IDisposable
             .Should().Be(ShadeKitCliExitCodes.HostError);
     }
 
+    [Fact]
+    public async Task RunAsync_FeatureShowWithoutIdPlain_WritesOneUsageLineToStandardErrorAndReturns2()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "show"], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        error.ToString()
+            .Should().Be("Invalid arguments: the required argument <FeatureId> is missing. Run 'shade-kit feature " +
+                         "show --help' for usage." + Environment.NewLine);
+
+        output.ToString()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP01-AC12")]
+    public async Task RunAsync_FeatureShowWithoutIdJson_WritesOneInvalidArgumentsEnvelopeAndReturns2()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "show", "--json"], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        AssertOnlyInvalidArgumentsEnvelope(output.ToString(), "<FeatureId>", "shade-kit feature show --help");
+
+        error.ToString()
+            .Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData]
+    [InlineData("--title", "Login")]
+    public async Task RunAsync_FeatureNewWithoutSourcePlain_WritesOneUsageLineToStandardErrorAndReturns2(
+        params string[] extraArgs)
+    {
+        // Arrange
+        var gitCommandRunner = A.Fake<IGitCommandRunner>();
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "new", ..extraArgs], output, error,
+            x => x.AddSingleton(gitCommandRunner));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        error.ToString()
+            .Should().Be("Invalid arguments: the required option '--source' is missing. Run 'shade-kit feature new " +
+                         "--help' for usage." + Environment.NewLine);
+
+        output.ToString()
+            .Should().BeEmpty();
+
+        A.CallTo(gitCommandRunner)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP01-AC12")]
+    public async Task RunAsync_FeatureNewWithoutSourceJson_WritesOneInvalidArgumentsEnvelopeAndReturns2()
+    {
+        // Arrange
+        var gitCommandRunner = A.Fake<IGitCommandRunner>();
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "new", "--title", "Login", "--json"], output, error,
+            x => x.AddSingleton(gitCommandRunner));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        AssertOnlyInvalidArgumentsEnvelope(output.ToString(), "'--source'", "shade-kit feature new --help");
+
+        error.ToString()
+            .Should().BeEmpty();
+
+        A.CallTo(gitCommandRunner)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP01-AC12")]
+    public async Task RunAsync_ArgumentsMatchNoOptionJson_WritesOneInvalidArgumentsEnvelopeAndReturns2()
+    {
+        // Arrange
+        // No options type of the CLI sets AllArgsMustMatch, so the parser does not report unmatched arguments of the
+        // real commands; the hook throws its exception inside the run instead.
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "list", "--bogus", "--json"], output, error,
+            _ => throw new NotAllArgumentsMatchException(
+                [new OptionArgument { Kind = OptionArgumentKind.LongName, OptionName = "bogus" }]));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        AssertOnlyInvalidArgumentsEnvelope(output.ToString(), "'--bogus'", "shade-kit feature list --help");
+
+        error.ToString()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RunAsync_ArgumentsMatchNoOptionPlain_WritesOneUsageLineToStandardErrorAndReturns2()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "list", "extra"], output, error,
+            _ => throw new NotAllArgumentsMatchException(
+                [new OptionArgument { Kind = OptionArgumentKind.Value, Value = "extra" }]));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        error.ToString()
+            .Should().Be("Invalid arguments: the argument 'extra' matches no option. Run 'shade-kit feature list " +
+                         "--help' for usage." + Environment.NewLine);
+
+        output.ToString()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RunAsync_ParserExceptionWrappedInTargetInvocationPlain_WritesUsageLineWithoutStackTrace()
+    {
+        // Arrange
+        var property = typeof(FeatureShowCommandOptions).GetProperty(nameof(FeatureShowCommandOptions.FeatureId))!;
+        var parserException = new RequiredArgumentMissingException(property,
+            property.GetCustomAttribute<OptionBaseAttribute>()!);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "show"], output, error,
+            _ => throw new TargetInvocationException(parserException));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        error.ToString()
+            .Should().StartWith("Invalid arguments: the required argument <FeatureId> is missing.")
+            .And.NotContain(StackTraceLinePrefix)
+            .And.NotContain(nameof(TargetInvocationException));
+    }
+
+    [Theory]
+    [InlineData("--json=true")]
+    [InlineData("--json", "true")]
+    public async Task RunAsync_ArgumentErrorWithJsonSwitchValue_WritesOneInvalidArgumentsEnvelope(
+        params string[] jsonArgs)
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "show", ..jsonArgs], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        AssertOnlyInvalidArgumentsEnvelope(output.ToString(), "<FeatureId>", "shade-kit feature show --help");
+    }
+
+    [Fact]
+    public async Task RunAsync_ArgumentErrorWithJsonSwitchFalse_WritesUsageLineToStandardErrorOnly()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "show", "--json", "false"], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        error.ToString()
+            .Should().StartWith("Invalid arguments: the required argument <FeatureId> is missing.")
+            .And.NotContain(StackTraceLinePrefix);
+
+        output.ToString()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP01-AC8")]
+    public async Task RunAsync_ArgumentErrorJsonWithBrokenStandardOutput_ReturnsHostError()
+    {
+        // Arrange
+        await using var output = new BrokenTextWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "show", "--json"], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.HostError);
+
+        error.ToString()
+            .Should().Be($"The JSON result could not be written: {BrokenTextWriter.Message}" + Environment.NewLine);
+    }
+
+    [Fact]
+    public async Task RunAsync_ArgumentErrorPlainWithBrokenStandardError_StillReturns2()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        await using var error = new BrokenTextWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "show"], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+    }
+
+    [Fact]
+    public async Task RunAsync_OptionCreationFailedJson_StaysHostErrorWithDetailsOnStandardError()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["feature", "show", "--json"], output, error,
+            _ => throw new OptionCreationFailedException(typeof(FeatureShowCommandOptions)));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.HostError);
+
+        using var document = JsonDocument.Parse(output.ToString());
+
+        document.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.HostError);
+
+        error.ToString()
+            .Should().Contain(nameof(OptionCreationFailedException));
+    }
+
     public void Dispose()
     {
         _currentDirectory.Dispose();
         _tempDirectory.Dispose();
+    }
+
+    private static void AssertOnlyInvalidArgumentsEnvelope(string output, string argumentText, string helpCommand)
+    {
+        output
+            .Should().EndWith("}" + Environment.NewLine)
+            .And.NotContain(StackTraceLinePrefix);
+
+        // JsonDocument.Parse rejects a second top-level value, so this also proves that only one envelope was written.
+        using var document = JsonDocument.Parse(output);
+        var root = document.RootElement;
+
+        root.EnumerateObject().Select(x => x.Name)
+            .Should().Equal("ok", "data", "warnings", "error");
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeFalse();
+
+        root.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.InvalidArguments);
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().StartWith("Invalid arguments: ")
+            .And.Contain(argumentText)
+            .And.EndWith($"Run '{helpCommand}' for usage.");
     }
 
     /// <summary>
@@ -681,5 +1130,24 @@ public sealed class ProgramTests : IDisposable
         {
             throw new IOException(Message);
         }
+    }
+
+    private void WriteFeatureFile(string featureId)
+    {
+        _tempDirectory.WriteFile(
+            $$"""
+              {
+                "schemaVersion": 1,
+                "minEngineVersion": "0.1.0",
+                "id": "{{featureId}}",
+                "title": "Title of {{featureId}}",
+                "profile": "feature",
+                "source": { "kind": "text" },
+                "createdAt": "2026-10-20T15:30:00+02:00",
+                "createdBy": { "name": "Jane Doe", "email": "jane@example.com" },
+                "status": "active"
+              }
+              """,
+            ".shadekit", "features", featureId, "feature.json");
     }
 }

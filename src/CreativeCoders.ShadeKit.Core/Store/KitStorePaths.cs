@@ -27,6 +27,23 @@ public static class KitStorePaths
     public const string CurrentFeatureFileName = "current-feature.json";
 
     /// <summary>
+    /// Represents the path of the local override <see cref="CurrentFeatureFileName" /> relative to the SHADE kit root
+    /// directory, with <c>/</c> as separator.
+    /// </summary>
+    public const string CurrentFeatureFilePath = $"{FeaturesDirName}/{CurrentFeatureFileName}";
+
+    /// <summary>
+    /// Represents the name of the file in a feature directory that records the id, title, workflow profile, source,
+    /// creation, and status of the feature.
+    /// </summary>
+    public const string FeatureFileName = "feature.json";
+
+    /// <summary>
+    /// Represents the name of the file in a feature directory that records the original request of the feature.
+    /// </summary>
+    public const string RequestFileName = "request.md";
+
+    /// <summary>
     /// Represents the name of the gate configuration file in the SHADE kit root directory.
     /// </summary>
     public const string GatesFileName = "gates.json";
@@ -62,5 +79,22 @@ public static class KitStorePaths
     public static string GetRepositoryPath(string kitRelativePath)
     {
         return $"{RootPath}/{kitRelativePath}";
+    }
+
+    /// <summary>
+    /// Gets the path of the folder of a feature relative to the SHADE kit root directory.
+    /// </summary>
+    /// <remarks>
+    /// The name is not checked. Callers that build the path from user input check the name first, for example with
+    /// <c>FeatureIds.EnsureValid</c>, so that it is a single path segment.
+    /// </remarks>
+    /// <param name="featureName">The name of the feature folder, which is the feature id for a valid feature.</param>
+    /// <returns>
+    /// The path <c>features/&lt;name&gt;</c> with <c>/</c> as separator and without a trailing separator, for example
+    /// <c>features/gh-142-login-sso</c>.
+    /// </returns>
+    public static string GetFeatureDirPath(string featureName)
+    {
+        return $"{FeaturesDirName}/{featureName}";
     }
 }

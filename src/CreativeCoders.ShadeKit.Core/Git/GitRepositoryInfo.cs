@@ -1,0 +1,95 @@
+using CreativeCoders.Core;
+
+namespace CreativeCoders.ShadeKit.Core.Git;
+
+/// <summary>
+/// Reads information about a git repository and its configuration by running <c>git</c> through an
+/// <see cref="IGitCommandRunner" />.
+/// </summary>
+/// <param name="gitCommandRunner">The runner that runs the <c>git</c> commands.</param>
+public sealed class GitRepositoryInfo(IGitCommandRunner gitCommandRunner) : IGitRepositoryInfo
+{
+    private const int SuccessExitCode = 0;
+
+    private const int NotFoundExitCode = 1;
+
+    private const string UserNameKey = "user.name";
+
+    private const string UserEmailKey = "user.email";
+
+    private static readonly string[] CurrentBranchArguments = ["symbolic-ref", "--short", "-q", "HEAD"];
+
+    private readonly IGitCommandRunner _gitCommandRunner = Ensure.NotNull(gitCommandRunner);
+
+    /// <inheritdoc />
+    public async Task<string?> GetCurrentBranchAsync(string repositoryRootPath,
+        CancellationToken cancellationToken = default)
+    {
+        Ensure.IsNotNullOrWhitespace(repositoryRootPath);
+
+        return await RunForOptionalValueAsync(repositoryRootPath, CurrentBranchArguments, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<GitIdentity> GetIdentityAsync(string repositoryRootPath,
+        CancellationToken cancellationToken = default)
+    {
+        Ensure.IsNotNullOrWhitespace(repositoryRootPath);
+
+        var name = await RunForOptionalValueAsync(repositoryRootPath, ["config", UserNameKey], cancellationToken)
+            .ConfigureAwait(false);
+
+        var email = await RunForOptionalValueAsync(repositoryRootPath, ["config", UserEmailKey], cancellationToken)
+            .ConfigureAwait(false);
+
+        if (name is not null && email is not null)
+        {
+            return new GitIdentity(name, email);
+        }
+
+        List<string> missingKeys = [];
+
+        if (name is null)
+        {
+            missingKeys.Add(UserNameKey);
+        }
+
+        if (email is null)
+        {
+            missingKeys.Add(UserEmailKey);
+        }
+
+        throw new GitIdentityNotConfiguredException(repositoryRootPath, missingKeys);
+    }
+
+    private async Task<string?> RunForOptionalValueAsync(string repositoryRootPath, IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        var result = await _gitCommandRunner.RunAsync(repositoryRootPath, arguments, cancellationToken)
+            .ConfigureAwait(false);
+
+        switch (result.ExitCode)
+        {
+            case SuccessExitCode:
+                var value = result.StandardOutput.Trim();
+
+                return value.Length == 0 ? null : value;
+
+            case NotFoundExitCode:
+                return null;
+
+            default:
+                throw new GitUnavailableException(arguments, CreateUnexpectedExitCodeReason(result));
+        }
+    }
+
+    private static string CreateUnexpectedExitCodeReason(GitCommandResult result)
+    {
+        var standardError = result.StandardError.Trim();
+
+        return standardError.Length == 0
+            ? $"git exited with the unexpected exit code {result.ExitCode}."
+            : $"git exited with the unexpected exit code {result.ExitCode}: {standardError}";
+    }
+}

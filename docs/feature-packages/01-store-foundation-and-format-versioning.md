@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (implementation state; package 02 implementation: missing `features/` is valid, exit codes 11, 13, 23; code review rework: exit codes 14, 24). Implemented except the integration versions in `version --json` (package 07). |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (implementation state; package 02 implementation: missing `features/` is valid, exit codes 11, 13, 23; code review rework: exit codes 14, 24) and 2026-10-21 (package 03 implementation: exit codes 15, 16, 30–34, 36, 40, warning codes, store file operations; code review rework: exit codes 2 and 130, warning codes `feature-folder-invalid`, `feature-id-mismatch`, `current-feature-invalid`, `MoveDirectory`; second code review: exit code 35). Implemented except the integration versions in `version --json` (package 07). |
 | Source | Concept §3.1, §3.2, §4.1, [§9](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | — |
 | Enables | Every later package |
@@ -36,6 +36,7 @@ Every file the kit writes into a repository is safe across branch merges and kit
 - The kit root is `.shadekit/` at the repository root. **Decided** (concept §4.1).
 - Commands find it by walking up from the working directory to the git repository root. A command that needs an initialised repository and finds no kit root stops with a clear message that points to `shade-kit init`. **Implemented** (`KitStoreFactory`, `GitRepositoryLocator`, `KitStorePaths`).
 - A kit root without a `features/` directory is valid and has no features. **Decided** on 2026-10-18 (package 02 implementation clarification), because git does not keep the empty `features/` that `init` creates, so a fresh clone has none. The former exit code 11 (`features-dir-not-found`) is removed. **Implemented** (`KitStore.GetFeatureNames` returns an empty list).
+- Besides the versioned JSON files, the store reads and writes plain files and directories inside the kit root (`ReadFileAsync`, `WriteFileAsync`, `FileExists`, `DirectoryExists`, `GetFiles`, `DeleteFile`, `DeleteDirectory`, `MoveDirectory`); a path that points outside the kit root is rejected. All except `WriteFileAsync` were added for package 03 on 2026-10-21. `MoveDirectory` is a single rename that refuses an existing file or directory at the destination (on some systems, an empty directory created at the destination between the check and the rename can still be replaced); package 03 uses it to move a new feature into place and to hide a feature before it deletes it. **Decided** on 2026-10-21 (package 03 code review rework). **Implemented** (`IKitStore`, `KitStore`).
 
 ### Versioned files (concept §9.1, §9.4)
 
@@ -86,20 +87,32 @@ Every file the kit writes into a repository is safe across branch merges and kit
   ```
 
   On failure, `ok` is `false`, `data` is `null`, and `error` is `{ "code": "…", "message": "…" }`. **Implemented** (`CliJsonEnvelope`, `ICliJsonWriter`, `CliErrorMapper`).
-- Every failure has a stable exit code from `ShadeKitCliExitCodes` and, in JSON mode, a stable error code string, so skills can branch on it without parsing messages. **Decided** (implemented in code). Error and warning codes are kebab-case. **Decided** (implemented in code).
-- Exit codes are grouped in ranges per area: 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, 255 host errors. **Decided** (implemented in code). Codes owned by packages 01 and 02, all **Implemented** (`ShadeKitCliExitCodes`, `ShadeKitCliErrorCodes`, `CliErrorMapper`). Exit code 11 is free since 2026-10-18 (see [Kit root](#kit-root)):
+- Every failure has a stable exit code from `ShadeKitCliExitCodes` and, in JSON mode, a stable error code string, so skills can branch on it without parsing messages. **Decided** (implemented in code). Error and warning codes are kebab-case. **Decided** (implemented in code). Codes that only appear as warnings are in `ShadeKitCliWarningCodes`: `current-feature-mismatch`, `current-feature-missing`, `current-feature-invalid`, `feature-file-missing`, `feature-folder-invalid`, and `feature-id-mismatch`, all from package 03; `upgrade-needed` is both an error code and a warning code. **Implemented** (`ShadeKitCliWarningCodes`, since 2026-10-21).
+- Exit codes are grouped in ranges per area: 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, 255 host errors. **Decided** (implemented in code). Two codes are outside the area ranges, because they apply to every command: 2 (`invalid-arguments`) is the usage code for arguments the option parser rejects, for example a missing required argument; the message names the problem and points to `shade-kit <command> --help`, and there is no stack trace. **Decided** on 2026-10-21 (package 03 code review rework). 130 (`canceled`, 128 + SIGINT) ends a run canceled with Ctrl+C. **Decided** on 2026-10-21 (package 03 code review rework). Both are **Implemented** (`CliErrorMapper.MapArgumentError`, `CliErrorMapper.MapCancellation`, `Program`); in JSON mode each writes one failure envelope. An option class the parser cannot create is a defect of the CLI and stays 255 (`host-error`). Codes owned by packages 01, 02, and 03, all **Implemented** (`ShadeKitCliExitCodes`, `ShadeKitCliErrorCodes`, `CliErrorMapper`). Exit code 11 is free since 2026-10-18 (see [Kit root](#kit-root)). Exit code 35 (`feature-io-failed`) was added on 2026-10-21 after the second code review of package 03. Exit code 40 is in the range of package 04, because profiles belong to it; package 03 owns the profile check until package 04 exists:
 
   | Exit code | Error code | Owner |
   |---|---|---|
+  | 2 | `invalid-arguments` | 03 (usage, every command) |
   | 10 | `kit-root-not-found` | 01 |
   | 12 | `not-a-git-repository` | 02 |
   | 13 | `already-initialized` | 02 |
   | 14 | `path-not-a-file` | 02 |
+  | 15 | `kit-root-not-a-directory` | 02 |
+  | 16 | `git-unavailable` | 03 |
   | 20 | `format-too-new` | 01 |
   | 21 | `upgrade-needed` | 01 |
   | 22 | `invalid-file` | 01 |
   | 23 | `invalid-managed-section` | 02 |
   | 24 | `unsupported-encoding` | 02 |
+  | 30 | `feature-already-exists` | 03 |
+  | 31 | `feature-not-found` | 03 |
+  | 32 | `invalid-feature-id` | 03 |
+  | 33 | `invalid-source` | 03 |
+  | 34 | `invalid-title` | 03 |
+  | 35 | `feature-io-failed` | 03 |
+  | 36 | `git-identity-missing` | 03 |
+  | 40 | `unknown-profile` | 03 (until 04) |
+  | 130 | `canceled` | 03 (every command) |
   | 255 | `host-error` | 01 |
 
 - "Not found" or "not resolved" answers that are part of normal flow (for example no current feature) are results, not errors. **Proposed.**

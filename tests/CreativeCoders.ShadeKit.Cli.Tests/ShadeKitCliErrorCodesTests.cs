@@ -7,6 +7,7 @@ public partial class ShadeKitCliErrorCodesTests
 {
     [Theory]
     [Trait("Requirement", "FP01-AC8")]
+    [InlineData(ShadeKitCliErrorCodes.InvalidArguments, "invalid-arguments")]
     [InlineData(ShadeKitCliErrorCodes.KitRootNotFound, "kit-root-not-found")]
     [InlineData(ShadeKitCliErrorCodes.NotAGitRepository, "not-a-git-repository")]
     [InlineData(ShadeKitCliErrorCodes.KitAlreadyInitialized, "already-initialized")]
@@ -17,6 +18,16 @@ public partial class ShadeKitCliErrorCodesTests
     [InlineData(ShadeKitCliErrorCodes.InvalidFile, "invalid-file")]
     [InlineData(ShadeKitCliErrorCodes.InvalidManagedSection, "invalid-managed-section")]
     [InlineData(ShadeKitCliErrorCodes.UnsupportedFileEncoding, "unsupported-encoding")]
+    [InlineData(ShadeKitCliErrorCodes.GitUnavailable, "git-unavailable")]
+    [InlineData(ShadeKitCliErrorCodes.GitIdentityMissing, "git-identity-missing")]
+    [InlineData(ShadeKitCliErrorCodes.FeatureAlreadyExists, "feature-already-exists")]
+    [InlineData(ShadeKitCliErrorCodes.FeatureNotFound, "feature-not-found")]
+    [InlineData(ShadeKitCliErrorCodes.InvalidFeatureId, "invalid-feature-id")]
+    [InlineData(ShadeKitCliErrorCodes.InvalidFeatureSource, "invalid-source")]
+    [InlineData(ShadeKitCliErrorCodes.InvalidFeatureTitle, "invalid-title")]
+    [InlineData(ShadeKitCliErrorCodes.FeatureIoFailed, "feature-io-failed")]
+    [InlineData(ShadeKitCliErrorCodes.UnknownProfile, "unknown-profile")]
+    [InlineData(ShadeKitCliErrorCodes.Canceled, "canceled")]
     [InlineData(ShadeKitCliErrorCodes.HostError, "host-error")]
     public void ErrorCodes_Contract_HaveStableValues(string errorCode, string expectedErrorCode)
     {

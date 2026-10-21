@@ -26,6 +26,7 @@ public class ShadeKitCliExitCodesTests
 
     [Theory]
     [InlineData(CliExitCodes.Success)]
+    [InlineData(ShadeKitCliExitCodes.InvalidArguments)]
     [InlineData(ShadeKitCliExitCodes.KitRootNotFound)]
     [InlineData(ShadeKitCliExitCodes.NotAGitRepository)]
     [InlineData(ShadeKitCliExitCodes.KitAlreadyInitialized)]
@@ -36,6 +37,16 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.InvalidFile)]
     [InlineData(ShadeKitCliExitCodes.InvalidManagedSection)]
     [InlineData(ShadeKitCliExitCodes.UnsupportedFileEncoding)]
+    [InlineData(ShadeKitCliExitCodes.GitUnavailable)]
+    [InlineData(ShadeKitCliExitCodes.GitIdentityMissing)]
+    [InlineData(ShadeKitCliExitCodes.FeatureAlreadyExists)]
+    [InlineData(ShadeKitCliExitCodes.FeatureNotFound)]
+    [InlineData(ShadeKitCliExitCodes.InvalidFeatureId)]
+    [InlineData(ShadeKitCliExitCodes.InvalidFeatureSource)]
+    [InlineData(ShadeKitCliExitCodes.InvalidFeatureTitle)]
+    [InlineData(ShadeKitCliExitCodes.FeatureIoFailed)]
+    [InlineData(ShadeKitCliExitCodes.UnknownProfile)]
+    [InlineData(ShadeKitCliExitCodes.Canceled)]
     [InlineData(ShadeKitCliExitCodes.HostError)]
     public void ToProcessExitCode_NonNegativeExitCode_ReturnsExitCodeUnchanged(int exitCode)
     {
@@ -49,6 +60,7 @@ public class ShadeKitCliExitCodesTests
 
     [Theory]
     [Trait("Requirement", "FP01-AC8")]
+    [InlineData(ShadeKitCliExitCodes.InvalidArguments, 2)]
     [InlineData(ShadeKitCliExitCodes.KitRootNotFound, 10)]
     [InlineData(ShadeKitCliExitCodes.NotAGitRepository, 12)]
     [InlineData(ShadeKitCliExitCodes.KitAlreadyInitialized, 13)]
@@ -59,6 +71,16 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.InvalidFile, 22)]
     [InlineData(ShadeKitCliExitCodes.InvalidManagedSection, 23)]
     [InlineData(ShadeKitCliExitCodes.UnsupportedFileEncoding, 24)]
+    [InlineData(ShadeKitCliExitCodes.GitUnavailable, 16)]
+    [InlineData(ShadeKitCliExitCodes.GitIdentityMissing, 36)]
+    [InlineData(ShadeKitCliExitCodes.FeatureAlreadyExists, 30)]
+    [InlineData(ShadeKitCliExitCodes.FeatureNotFound, 31)]
+    [InlineData(ShadeKitCliExitCodes.InvalidFeatureId, 32)]
+    [InlineData(ShadeKitCliExitCodes.InvalidFeatureSource, 33)]
+    [InlineData(ShadeKitCliExitCodes.InvalidFeatureTitle, 34)]
+    [InlineData(ShadeKitCliExitCodes.FeatureIoFailed, 35)]
+    [InlineData(ShadeKitCliExitCodes.UnknownProfile, 40)]
+    [InlineData(ShadeKitCliExitCodes.Canceled, 130)]
     [InlineData(ShadeKitCliExitCodes.HostError, 255)]
     public void ExitCodes_Contract_HaveStableValues(int exitCode, int expectedExitCode)
     {
@@ -76,7 +98,8 @@ public class ShadeKitCliExitCodesTests
         // Assert
         exitCodes
             .Should().OnlyHaveUniqueItems()
-            .And.AllSatisfy(code => (code is >= 10 and <= 49 or 255).Should().BeTrue($"{code} is outside the ranges"));
+            .And.AllSatisfy(code =>
+                (code is 2 or >= 10 and <= 49 or 130 or 255).Should().BeTrue($"{code} is outside the ranges"));
     }
 
     [Fact]
