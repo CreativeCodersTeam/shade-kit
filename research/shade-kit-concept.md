@@ -1,6 +1,6 @@
 # SHADE kit concept
 
-Status: draft, 2026-10-13, updated 2026-10-17 (template interview) and 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-13, updated 2026-10-17 (template interview) and 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over) and 2026-10-21 (feature commands implemented, package 03). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
 
 Labels used in this document:
 
@@ -67,7 +67,7 @@ SHADE kit keeps what worked (interviews, draft → approve, requirement-to-test 
 | `shade-kit init` | Creates `.shadekit/` in a repository: `config.json`, `gates.json`, templates, `templates.lock.json`, `.gitignore` entries, and a short SHADE kit section in `CLAUDE.md` / `AGENTS.md`. **Implemented** (`InitCommand`). |
 | `shade-kit upgrade` | Migrates an initialised repository to the current format versions. Rules in [section 9](#9-version-drift). |
 | `shade-kit version` | Prints the engine version. **Implemented** (`VersionCommand`). Skills call it before they run (section 9.6). |
-| `shade-kit feature list` | Lists the features in the store. **Implemented** (`FeatureListCommand`, names only). |
+| `shade-kit feature list` | Lists the features in the store with id, title, profile, and status. **Implemented** (`FeatureListCommand`). |
 
 Skills and agent files are not written into the repository (section 9.6, confirmed in the interview). The repository only holds kit data and the short instruction section.
 
@@ -77,11 +77,11 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 
 | Command (proposed name) | Returns / does |
 |---|---|
-| `shade-kit feature current --json` | The current feature: id, profile, feature status (`active` or `done`), phase, phase status, artifact paths. Resolution in section 4.3. |
-| `shade-kit feature show <id> --json` | The full state of a feature: profile, phases, approval history. |
-| `shade-kit feature set <id>` | Writes the local override (`current-feature.json`). |
-| `shade-kit feature new --profile <p> --source <text\|url\|file>` | Creates the feature folder and `request.md`. |
-| `shade-kit feature drop <id> [--yes]` | Deletes the feature folder. Without `--yes` it only shows what it would delete, or asks in an interactive terminal. |
+| `shade-kit feature current --json` | The current feature: id, profile, feature status (`active` or `done`), phase, phase status, artifact paths. Resolution in section 4.3. **Implemented** without phase and phase status (`FeatureCurrentCommand`). |
+| `shade-kit feature show <id> --json` | The full state of a feature: profile, phases, approval history. **Implemented** without phases and approval history (`FeatureShowCommand`). |
+| `shade-kit feature set <id>` | Writes the local override (`current-feature.json`). **Implemented** (`FeatureSetCommand`). |
+| `shade-kit feature new --source <text\|url\|file> [--profile <p>] [--title <t>]` | Creates the feature folder and `request.md`. **Implemented** (`FeatureNewCommand`). |
+| `shade-kit feature drop <id> [--yes]` | Deletes the feature folder. Without `--yes` it only shows what it would delete, or asks in an interactive terminal. **Implemented** (`FeatureDropCommand`). |
 | `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate. If a transition away from the phase is pending, it changes nothing and reports the pending transition; the skill asks the human whether to discard it. The same command reopens an earlier phase. |
 | `shade-kit phase approve <phase>` | Records the human approval in `feature.json` (who, when). |
 | `shade-kit phase reject <phase> [--note <text>]` | Cancels the pending transition after a "no"; the previous phase is in progress again. Recorded in the history with the note. |
@@ -168,6 +168,8 @@ Decided: no sequential numbers, because two developers on different branches wou
 - With an issue: `gh-142-login-sso` (prefix per tracker, slug from the title).
 - Without an issue: a time-based id, for example `20261013-1530-login-sso`.
 
+The time is local time and the slug has at most 40 characters (decided on 2026-10-20, package 03). **Implemented** (`FeatureIdFactory`).
+
 ### 4.3 Current feature
 
 Decided: resolved in this order:
@@ -177,6 +179,8 @@ Decided: resolved in this order:
 3. Ask the user.
 
 **Proposed:** if 1 and 2 disagree, the branch wins and the CLI warns.
+
+The branch counts only if the part after its last `/` is a valid feature id with an existing feature folder; the warning is `current-feature-mismatch` (package 03). **Implemented** (`CurrentFeatureResolver`).
 
 ### 4.4 Separate spec store (later)
 
@@ -223,7 +227,7 @@ Decided in the template interview on 2026-10-17. Details in [package 02](../docs
 | `implement` | Implement, simplify, and review in a loop until the review has no blockers. | `plan.md`, `tasks.md` | Code and tests, `review.md` |
 | `verify` | AI verification (quality checks, every acceptance criterion covered by a passing test) plus a playbook for manual tests by a developer or user. | Code, `spec.md`, `tasks.md` | `verification.md`, `playbook.md` |
 | `finish` | Mark the feature as done. Later: distill memory. | Everything | `feature.json` status `done`, optional `report.md` |
-| `drop` | Delete the feature and clear the current feature. Possible from any phase. | | |
+| `drop` | Delete the feature and clear the local override if it points to it. Possible from any phase. | | |
 
 ### 5.2 Gates
 

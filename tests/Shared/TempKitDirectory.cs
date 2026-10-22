@@ -99,6 +99,30 @@ internal sealed class TempKitDirectory(string prefix = "shade-kit-tests-") : IDi
     }
 
     /// <summary>
+    /// Creates a symbolic link to a directory in the temporary directory, or skips the current test if the file
+    /// system or the process cannot create one, for example on Windows without the privilege to create symbolic
+    /// links.
+    /// </summary>
+    /// <param name="linkTarget">The full path of the directory the link points to.</param>
+    /// <param name="relativePathParts">The parts of the link path, relative to the temporary directory.</param>
+    /// <returns>The full path of the link.</returns>
+    public string CreateDirectorySymbolicLinkOrSkip(string linkTarget, params string[] relativePathParts)
+    {
+        var linkPath = Path.Combine([RootPath, .. relativePathParts]);
+
+        try
+        {
+            Directory.CreateSymbolicLink(linkPath, linkTarget);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Assert.Skip($"A symbolic link cannot be created at '{linkPath}': {exception.Message}");
+        }
+
+        return linkPath;
+    }
+
+    /// <summary>
     /// Captures every directory and the bytes of every file below the temporary directory, keyed by relative path.
     /// </summary>
     public Dictionary<string, string> TakeSnapshot()

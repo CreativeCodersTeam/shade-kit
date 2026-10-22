@@ -2,6 +2,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Formats;
 
 namespace CreativeCoders.ShadeKit.Cli.Output;
 
@@ -17,8 +18,6 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// <param name="output">The text writer that receives the JSON documents.</param>
 public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
 {
-    private static readonly JsonNamingPolicy EnumNamingPolicy = JsonNamingPolicy.KebabCaseLower;
-
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -27,7 +26,7 @@ public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
         IndentSize = 2,
         NewLine = "\n",
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(EnumNamingPolicy, allowIntegerValues: false) }
+        Converters = { new JsonStringEnumConverter(JsonEnumNames.NamingPolicy, allowIntegerValues: false) }
     };
 
     private readonly TextWriter _output = Ensure.NotNull(output);
@@ -66,18 +65,5 @@ public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
         {
             Write(envelope);
         }
-    }
-
-    /// <summary>
-    /// Gets the name with which the JSON output writes an enumeration value, so that plain output can use the same
-    /// name.
-    /// </summary>
-    /// <typeparam name="TEnum">The type of the enumeration.</typeparam>
-    /// <param name="value">The enumeration value.</param>
-    /// <returns>The name of <paramref name="value" /> in lower-case kebab case, for example <c>created</c>.</returns>
-    public static string GetEnumName<TEnum>(TEnum value)
-        where TEnum : struct, Enum
-    {
-        return EnumNamingPolicy.ConvertName(value.ToString());
     }
 }

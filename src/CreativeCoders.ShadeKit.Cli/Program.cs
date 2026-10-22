@@ -5,6 +5,7 @@ using CreativeCoders.ShadeKit.Cli.Commands;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Spectre.Console;
 
 namespace CreativeCoders.ShadeKit.Cli;
@@ -46,30 +47,99 @@ internal static class Program
     /// with the envelope.
     /// </para>
     /// <para>
+    /// When the option parser rejects the arguments of a command, for example because a required argument is missing,
+    /// the run returns <see cref="ShadeKitCliExitCodes.InvalidArguments" /> with the error that
+    /// <see cref="CliErrorMapper.MapArgumentError" /> builds, also when the exception is wrapped in a
+    /// <see cref="TargetInvocationException" />. In plain mode, its message, which names the argument and the
+    /// <c>--help</c> of the command, is written to <paramref name="error" /> as one line without exception details.
+    /// In JSON mode, an <c>invalid-arguments</c> envelope is written instead and nothing else.
+    /// </para>
+    /// <para>
+    /// For the duration of the run, a <see cref="ConsoleCancellation" /> handles <see cref="Console.CancelKeyPress" />
+    /// and is registered as the <see cref="ICliCancellation" /> whose token the commands pass to the core. The first
+    /// Ctrl+C cancels the token and keeps the process alive; a second Ctrl+C ends the process with the default handling
+    /// of the runtime. The handler is removed when the run ends. A run that stops because of the token returns
+    /// <see cref="ShadeKitCliExitCodes.Canceled" /> with the error that <see cref="CliErrorMapper.MapCancellation" />
+    /// builds: in plain mode, its message <c>The command was canceled.</c> is written to <paramref name="error" /> as
+    /// one line without exception details; in JSON mode, a <c>canceled</c> envelope is written instead and nothing
+    /// else.
+    /// </para>
+    /// <para>
     /// Failures to write to <paramref name="output" /> or <paramref name="error" /> while reporting a failure, for
-    /// example because the reading end of a pipe was closed, do not escape; the run then returns
-    /// <see cref="ShadeKitCliExitCodes.HostError" />.
+    /// example because the reading end of a pipe was closed, do not escape. If the JSON envelope cannot be written,
+    /// the run returns <see cref="ShadeKitCliExitCodes.HostError" />; a failure to write to <paramref name="error" />
+    /// does not change the exit code.
     /// </para>
     /// </remarks>
     /// <param name="args">The command-line arguments.</param>
     /// <param name="output">The writer for standard output.</param>
     /// <param name="error">The writer for standard error.</param>
     /// <returns>A task that represents the run. The task result contains the process exit code.</returns>
-    internal static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error)
+    internal static Task<int> RunAsync(string[] args, TextWriter output, TextWriter error)
+    {
+        return RunAsync(args, output, error, null);
+    }
+
+    /// <summary>
+    /// Runs the SHADE kit CLI with the specified arguments and output writers, and lets the caller register services
+    /// that replace the default ones.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The run behaves exactly like <see cref="RunAsync(string[], TextWriter, TextWriter)" />.
+    /// </para>
+    /// <para>
+    /// <paramref name="configureServices" /> is the seam for end-to-end tests, for example to register a fake
+    /// <see cref="CreativeCoders.ShadeKit.Core.Git.IGitCommandRunner" />, <see cref="IConsoleConfirmation" />, or an
+    /// <see cref="ICliCancellation" /> whose token is canceled already.
+    /// It is called before the default services are added. Because
+    /// <see cref="ShadeKitCoreServiceCollectionExtensions.AddShadeKitCore" /> and
+    /// <see cref="ShadeKitCliServiceCollectionExtensions.AddShadeKitCli" /> keep existing registrations, the services
+    /// it registers take precedence over the defaults. The <see cref="IAnsiConsole" /> and the
+    /// <see cref="ICliJsonWriter" /> belong to the run and cannot be replaced: registrations of them made by the
+    /// action are removed, so that output still reaches <paramref name="output" /> and <paramref name="error" /> and
+    /// JSON mode still writes exactly one envelope. An exception thrown by the action is handled like any other
+    /// unexpected exception of the run.
+    /// </para>
+    /// </remarks>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="output">The writer for standard output.</param>
+    /// <param name="error">The writer for standard error.</param>
+    /// <param name="configureServices">
+    /// An action that registers services before the defaults, or <see langword="null" /> to use only the defaults.
+    /// </param>
+    /// <returns>A task that represents the run. The task result contains the process exit code.</returns>
+    internal static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error,
+        Action<IServiceCollection>? configureServices)
     {
         var jsonMode = IsJsonMode(args);
         var jsonWriter = new CliJsonWriter(output);
+        using var cancellation = new ConsoleCancellation();
         int exitCode;
+
+        cancellation.ListenToCancelKeyPress();
 
         try
         {
-            exitCode = await CreateHost(jsonWriter, jsonMode ? error : output).RunMainAsync(args)
+            exitCode = await CreateHost(jsonWriter, jsonMode ? error : output, cancellation, configureServices)
+                .RunMainAsync(args)
                 .ConfigureAwait(false);
+        }
+        catch (Exception e) when ((CliErrorMapper.MapArgumentError(e, args) ??
+                                   CliErrorMapper.MapCancellation(e, cancellation.Token)) is { } expectedError)
+        {
+            if (jsonMode)
+            {
+                return await CompleteFailedJsonRunAsync(jsonWriter, error, expectedError).ConfigureAwait(false);
+            }
+
+            await TryWriteErrorAsync(error, expectedError.Message).ConfigureAwait(false);
+
+            return expectedError.ExitCode;
         }
         catch (Exception e)
         {
-            // The host calls commands with options through reflection, which wraps exceptions of synchronous commands.
-            var cause = e is TargetInvocationException { InnerException: { } innerException } ? innerException : e;
+            var cause = CliErrorMapper.Unwrap(e);
 
             await TryWriteErrorAsync(error, $"The command failed unexpectedly: {cause.Message}", cause.ToString())
                 .ConfigureAwait(false);
@@ -131,15 +201,23 @@ internal static class Program
         return bool.TryParse(value, out var flag) && !flag;
     }
 
-    private static ICliHost CreateHost(ICliJsonWriter jsonWriter, TextWriter consoleOutput)
+    private static ICliHost CreateHost(ICliJsonWriter jsonWriter, TextWriter consoleOutput,
+        ICliCancellation cancellation, Action<IServiceCollection>? configureServices)
     {
         var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(consoleOutput) });
 
+        // The host runs the ConfigureServices actions in the order they were added, so the overrides come first and
+        // the TryAdd registrations of AddShadeKitCore and AddShadeKitCli keep them. The console and the JSON writer
+        // belong to the run: Program reads the writer to keep the one-envelope contract, so overrides of them are
+        // removed.
         return CliHostBuilder.Create()
+            .ConfigureServices(x => configureServices?.Invoke(x))
             .ConfigureServices(x => x
+                .RemoveAll<IAnsiConsole>()
+                .RemoveAll<ICliJsonWriter>()
                 .AddSingleton(console)
                 .AddShadeKitCore()
-                .AddShadeKitCli(jsonWriter))
+                .AddShadeKitCli(jsonWriter, cancellation))
             .ScanAssemblies(typeof(Program).Assembly)
             .SkipScanEntryAssembly()
             .UseValidation()
@@ -148,26 +226,38 @@ internal static class Program
             .Build();
     }
 
-    private static async Task<int> CompleteFailedJsonRunAsync(CliJsonWriter jsonWriter, TextWriter error,
+    private static Task<int> CompleteFailedJsonRunAsync(CliJsonWriter jsonWriter, TextWriter error,
         string message)
     {
-        if (jsonWriter.WrittenEnvelope is { Ok: true })
+        return CompleteFailedJsonRunAsync(jsonWriter, error,
+            CliError.Create(ShadeKitCliExitCodes.HostError, message));
+    }
+
+    private static async Task<int> CompleteFailedJsonRunAsync(CliJsonWriter jsonWriter, TextWriter error,
+        CliError failure)
+    {
+        switch (jsonWriter.WrittenEnvelope)
         {
-            return CliExitCodes.Success;
+            case { Ok: true }:
+                return CliExitCodes.Success;
+            case not null:
+                // A failure envelope was already written; it stays the result, so the failure is not reported again.
+                return ShadeKitCliExitCodes.HostError;
         }
 
         try
         {
-            jsonWriter.WriteIfNothingWritten(
-                CliJsonEnvelope.Failure(new CliJsonMessage(ShadeKitCliErrorCodes.HostError, message)));
+            jsonWriter.WriteIfNothingWritten(CliJsonEnvelope.Failure(failure.ToJsonMessage()));
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException)
         {
             await TryWriteErrorAsync(error, $"The JSON result could not be written: {e.Message}")
                 .ConfigureAwait(false);
+
+            return ShadeKitCliExitCodes.HostError;
         }
 
-        return ShadeKitCliExitCodes.HostError;
+        return failure.ExitCode;
     }
 
     private static async Task TryWriteErrorAsync(TextWriter error, params string[] lines)

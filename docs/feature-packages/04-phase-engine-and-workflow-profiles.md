@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (`phase reject`, re-entry, `quick` phase; `phase next`, pending transition on `phase start <current>`) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (`phase reject`, re-entry, `quick` phase; `phase next`, pending transition on `phase start <current>`) and 2026-10-21 (package 03 implemented: `feature new` checks the profile names) |
 | Source | Concept §3.2, §5.1, §5.3, §5.4, §11.2–11.4 |
 | Depends on | 01, 03 |
 | Enables | 05 and every phase package |
@@ -42,7 +42,7 @@ A profile is an ordered list of phases plus its gate defaults. One phase engine 
 
 - `quick` is a phase of its own: clarification, compact spec, implementation, and review in one run (package 17). **Decided** on 2026-10-18.
 - Every phase runs through the skill named after it (`shade-kit-<phase>`, **Proposed** names); with the `quick` phase this holds for every phase of every profile. Skills adapt their behaviour to the profile they read from `feature current` (for example `plan` is short in `bugfix`).
-- The profile of a feature is fixed at `feature new` and cannot change in v1. **Proposed.**
+- The profile of a feature is fixed at `feature new` and cannot change in v1. **Proposed.** `feature new` (package 03) already exists: it records the profile in `feature.json` and accepts only `feature`, `bugfix`, and `quick`, else it stops with exit code 40 (`unknown-profile`), which is in this package's range. **Implemented** in package 03 (`WorkflowProfiles`, `UnknownProfileException`); this package takes over the profile definitions.
 - `discuss` and `drop` are not phases of any profile. `discuss` needs no feature state (package 09), `drop` is `feature drop` (package 03). **Decided** (findings clarification, 2026-10-18).
 
 ### Phase states
@@ -58,7 +58,7 @@ States per phase (**Proposed** in the concept, adopted): `pending` → `in-progr
 | `pendingTransition` | Target phase while the current phase is `awaiting-approval`, otherwise absent. |
 | `history` | List of entries: time, git user, action (`start`, `approve`, `reject`, `reopen`, `complete`), from phase, to phase, optional note. |
 
-`feature new` sets `new` to `in-progress` and every other phase to `pending`.
+`feature new` sets `new` to `in-progress` and every other phase to `pending`. Until this package is built, `feature new` (package 03) writes no phase fields.
 
 ### Transitions
 

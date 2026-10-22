@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
@@ -214,6 +215,25 @@ public class TemplatesLockTests
     [InlineData("abc", "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")]
     public void ComputeHash_Content_ReturnsPrefixedLowercaseSha256(string content, string expectedHash)
     {
+        // Act
+        var hash = TemplatesLockEntry.ComputeHash(Encoding.UTF8.GetBytes(content));
+
+        // Assert
+        hash
+            .Should().Be(expectedHash);
+    }
+
+    [Theory]
+    [InlineData("a\r\nb\r\n", "a\nb\n")]
+    [InlineData("a\r\nb\nc", "a\nb\nc")]
+    [InlineData("\r\n\r\n", "\n\n")]
+    [InlineData("a\rb\r", "a\rb\r")]
+    [InlineData("a\r\r\nb", "a\r\nb")]
+    public void ComputeHash_ContentWithCarriageReturns_HashesCrLfAsLf(string content, string hashedContent)
+    {
+        // Arrange
+        var expectedHash = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(hashedContent)));
+
         // Act
         var hash = TemplatesLockEntry.ComputeHash(Encoding.UTF8.GetBytes(content));
 

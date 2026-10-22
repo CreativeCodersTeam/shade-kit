@@ -10,10 +10,6 @@ public sealed class InstructionSectionPlanner : IInstructionSectionPlanner
 {
     private const string CommentEnd = "-->";
 
-    private const int MaxFenceIndent = 3;
-
-    private const int MinFenceLength = 3;
-
     /// <inheritdoc />
     public async Task<PlannedFileChange?> PlanAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -100,9 +96,7 @@ public sealed class InstructionSectionPlanner : IInstructionSectionPlanner
     }
 
     /// <summary>
-    /// Gets the lines that are not part of a fenced code block, as CommonMark defines it: a block that starts with a
-    /// line of at least three backticks or tildes, indented by at most three spaces, and ends with a line of only the
-    /// same character, at least as many times, or at the end of the file.
+    /// Gets the lines that are not part of a fenced code block, as <see cref="MarkdownCodeFences" /> detects them.
     /// </summary>
     /// <returns>
     /// The text without leading and trailing whitespace and the index of every line outside a block, and the index of
@@ -112,59 +106,10 @@ public sealed class InstructionSectionPlanner : IInstructionSectionPlanner
     private static (List<(string Text, int Index)> Lines, int? UnclosedFenceIndex) GetTrimmedLinesOutsideCodeFences(
         TextFileContent content)
     {
-        var lines = new List<(string Text, int Index)>();
-        string? openFence = null;
-        var openFenceIndex = 0;
+        var (lineIndexes, unclosedFenceIndex) =
+            MarkdownCodeFences.FindLinesOutsideCodeFences([.. content.Lines.Select(line => line.Text)]);
 
-        for (var index = 0; index < content.Lines.Count; index++)
-        {
-            var text = content.Lines[index].Text;
-            var fence = ReadCodeFence(text);
-
-            if (openFence is null)
-            {
-                if (fence is null)
-                {
-                    lines.Add((text.Trim(), index));
-                }
-                else
-                {
-                    openFence = fence;
-                    openFenceIndex = index;
-                }
-            }
-            else if (fence is not null && fence[0] == openFence[0] && fence.Length >= openFence.Length &&
-                     text.Trim().Length == fence.Length)
-            {
-                openFence = null;
-            }
-        }
-
-        return (lines, openFence is null ? null : openFenceIndex);
-    }
-
-    /// <summary>
-    /// Reads the fence characters at the start of a line that opens or closes a fenced code block.
-    /// </summary>
-    /// <returns>The run of backticks or tildes, or <see langword="null" /> if the line is no code fence.</returns>
-    private static string? ReadCodeFence(string text)
-    {
-        var indent = text.Length - text.TrimStart(' ').Length;
-
-        if (indent > MaxFenceIndent || text.Length - indent < MinFenceLength || text[indent] is not ('`' or '~'))
-        {
-            return null;
-        }
-
-        var fenceChar = text[indent];
-        var fenceEnd = text.AsSpan(indent).IndexOfAnyExcept(fenceChar);
-        var length = fenceEnd < 0 ? text.Length - indent : fenceEnd;
-
-        // The info string after a backtick fence must not contain a backtick, so "```code```" is inline code.
-        var isFence = length >= MinFenceLength &&
-                      (fenceChar == '~' || text.AsSpan(indent + length).IndexOf('`') < 0);
-
-        return isFence ? text.Substring(indent, length) : null;
+        return ([.. lineIndexes.Select(index => (content.Lines[index].Text.Trim(), index))], unclosedFenceIndex);
     }
 
     private static string FormatLineNumbers(IEnumerable<int> lineIndexes)

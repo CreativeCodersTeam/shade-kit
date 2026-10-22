@@ -283,7 +283,7 @@ public class KitConfigTests
               "kitVersion": "1.4.0",
               "defaultProfile": "bugfix",
               "outdatedFormatOnRead": "stop",
-              "trackers": { "github.com": "gh", "jira.example.com": "PROJ" },
+              "trackers": { "github.com": "gh", "jira.example.com": "proj" },
               "report": "always",
               "coverageThreshold": 75.5
             }
@@ -308,7 +308,7 @@ public class KitConfigTests
             .Should().BeEquivalentTo(new Dictionary<string, string>
             {
                 ["github.com"] = "gh",
-                ["jira.example.com"] = "PROJ"
+                ["jira.example.com"] = "proj"
             });
 
         config.Report
@@ -330,7 +330,7 @@ public class KitConfigTests
             {
               "schemaVersion": 1,
               "minEngineVersion": "0.1.0",
-              "trackers": { "GitHub.com": "gh", "Jira.Example.com": "PROJ" }
+              "trackers": { "GitHub.com": "gh", "Jira.Example.com": "proj" }
             }
             """;
 
@@ -482,6 +482,76 @@ public class KitConfigTests
 
         // Assert
         act.Should().Throw<InvalidKitFileException>();
+    }
+
+    [Theory]
+    [InlineData("GH")]
+    [InlineData("gh_")]
+    [InlineData("")]
+    [InlineData("-gh")]
+    [InlineData("gh-")]
+    [InlineData("g--h")]
+    [InlineData(" gh")]
+    public void Deserialize_TrackerWithInvalidPrefix_ThrowsInvalidKitFileExceptionNamingHostAndPrefix(string prefix)
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var act = () => serializer.Deserialize<KitConfig>(
+            $$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "trackers": { "github.com": "{{prefix}}" } }""",
+            FormatIds.Config, FilePath, false);
+
+        // Assert
+        var exception = act.Should().Throw<InvalidKitFileException>().Which;
+
+        exception.FilePath
+            .Should().Be(FilePath);
+
+        exception.Reason
+            .Should().Contain(
+                $"The id prefix '{prefix}' of host 'github.com' in the 'trackers' field must consist of lowercase " +
+                "letters a-z and digits joined by single hyphens.");
+    }
+
+    [Fact]
+    public void Deserialize_InvalidPrefixAfterValidPrefix_ThrowsInvalidKitFileExceptionNamingInvalidHost()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var act = () => serializer.Deserialize<KitConfig>(
+            """
+            { "schemaVersion": 1, "minEngineVersion": "0.1.0",
+              "trackers": { "github.com": "gh", "jira.example.com": "PROJ" } }
+            """,
+            FormatIds.Config, FilePath, false);
+
+        // Assert
+        act.Should().Throw<InvalidKitFileException>()
+            .Which.Reason
+            .Should().Contain("The id prefix 'PROJ' of host 'jira.example.com'");
+    }
+
+    [Theory]
+    [InlineData("gh")]
+    [InlineData("gl")]
+    [InlineData("jira-1")]
+    [InlineData("a1")]
+    public void Deserialize_TrackerWithValidPrefix_ReadsPrefix(string prefix)
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var config = serializer.Deserialize<KitConfig>(
+            $$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "trackers": { "github.com": "{{prefix}}" } }""",
+            FormatIds.Config, FilePath, false).Document;
+
+        // Assert
+        config.Trackers
+            .Should().Equal(new Dictionary<string, string> { ["github.com"] = prefix });
     }
 
     [Fact]

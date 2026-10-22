@@ -9,8 +9,7 @@ namespace CreativeCoders.ShadeKit.Core.Formats;
 /// <param name="currentVersion">The current format version of the file type.</param>
 public class UpgradeNeededException(string filePath, int fileVersion, int currentVersion)
     : KitFileFormatException(filePath,
-        $"The file '{filePath}' uses format version {fileVersion}, but the current version is {currentVersion}. " +
-        "Run 'shade-kit upgrade'.")
+        $"The file '{filePath}' uses format version {fileVersion}, but the current version is {currentVersion}.")
 {
     /// <summary>
     /// Gets the format version of the file.

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions) and 2026-10-18 (implementation state; code review rework: exit codes 14 and 24, `.gitignore` rule, separator line). Implemented except the final content of the templates owned by later packages (skeletons until then), the `gates.json` defaults (package 05), and a possible Copilot instruction file (package 08). |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions), 2026-10-18 (implementation state; code review rework: exit codes 14 and 24, `.gitignore` rule, separator line), and 2026-10-22 (code review verification of package 03: `trackers` id prefixes validated). Implemented except the final content of the templates owned by later packages (skeletons until then), the `gates.json` defaults (package 05), and a possible Copilot instruction file (package 08). |
 | Source | Concept §3.1 (`init`), §4.1, [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.5) |
 | Depends on | 01 |
 | Enables | 03, 05, 18 and every phase package (they ship templates through this mechanism) |
@@ -62,7 +62,7 @@ A team can turn any git repository into a SHADE kit repository with one command.
 3. `.gitignore`.
 4. `CLAUDE.md`, then `AGENTS.md`.
 
-The first failing precondition stops `init`; nothing is written. A cancellation is checked again right before the first write, and `.shadekit/` is created only with its first file (`config.json`), so a cancelled `init` leaves no `.shadekit/` behind that would block the next run. **Implemented** (`RepositoryInitializer`, `InitializeAsync_TokenCanceledDuringPreconditions_ThrowsOperationCanceledExceptionAndWritesNothing`).
+The first failing precondition stops `init`; nothing is written. A cancellation is checked again right before the first write, and `.shadekit/` is created only with its first file (`config.json`), so a cancelled `init` leaves no `.shadekit/` behind that would block the next run. **Implemented** (`RepositoryInitializer`, `InitializeAsync_TokenCanceledDuringPreconditions_ThrowsOperationCanceledExceptionAndWritesNothing`). Since the code review rework of package 03 on 2026-10-21, the first Ctrl+C cancels this token, and a canceled `init` ends with exit code 130 (`canceled`, **Decided** on 2026-10-21; package 03, [Cancellation](03-feature-management.md#cancellation)).
 
 If a write fails after the preconditions, for example because of an IO error, or `init` is cancelled while it writes, `init` removes the `.shadekit/` it created in this run and fails (a host error, exit code 255, for an IO error). `.shadekit/` did not exist before, so nothing is lost. `.gitignore`, `CLAUDE.md`, or `AGENTS.md` written before the failure stay in place; a second `init` recognises their changes (entries present, section identical) and does not repeat them, so running `init` again after fixing the cause completes the initialisation. Removing `.shadekit/` is best effort: if it fails, `.shadekit/` stays and a second `init` stops with exit code 13. **Decided** on 2026-10-19 by the user (code review rework), replacing "no rollback" from 2026-10-18, which left a `.shadekit/` behind that blocked every later `init` and pointed to the not yet existing `shade-kit upgrade`. **Implemented** (`RepositoryInitializer`, `InitializeAsync_LastWriteFails_RemovesKitRootAndKeepsRepositoryFilesWrittenBefore`, `InitializeAsync_AfterLastWriteFailed_SecondRunCompletesOnlyTheMissingChanges`, `InitializeAsync_WriteInKitRootFails_RemovesKitRootAndWritesNoRepositoryFile`, `InitializeAsync_CanceledWhileWritingKitRoot_RemovesKitRoot`). Known failures that the preconditions do not catch are listed in the [open points](#open-points).
 
@@ -115,9 +115,9 @@ The team owns the values; the engine owns the schema. **Decided** (concept §9.1
 | `schemaVersion` | Format version (package 01). |
 | `minEngineVersion` | First engine version that supports this format version, stamped by the engine on every write (package 01). |
 | `kitVersion` | Kit version that initialised or last upgraded the repository. Informational only; format checks use `schemaVersion`. `init` writes the engine version. |
-| `defaultProfile` | Profile used by `feature new` when none is given. Default `feature`. |
+| `defaultProfile` | Profile used by `feature new` when none is given. Default `feature`. `feature new` stops with exit code 40 (`unknown-profile`) if it is not `feature`, `bugfix`, or `quick` (package 03). **Implemented** (`KitConfig.DefaultProfile`, `FeatureStore`). |
 | `outdatedFormatOnRead` | What read commands do with a file in an older format (package 01): `migrate-and-warn` (default) or `stop`. |
-| `trackers` | Mapping from issue URL host to id prefix for feature ids. Default: `github.com` → `gh` (package 03), which also applies when the field is missing; `{}` turns issue-based ids off, `null` makes the file invalid. **Decided** on 2026-10-19 (code review rework). **Implemented** (`KitConfig.Trackers`). |
+| `trackers` | Mapping from issue URL host to id prefix for feature ids. Default: `github.com` → `gh`, which also applies when the field is missing; `{}` turns issue-based ids off, `null` makes the file invalid. **Decided** on 2026-10-19 (code review rework). Every id prefix must consist of lowercase letters a-z and digits joined by single hyphens (`^[a-z0-9]+(-[a-z0-9]+)*$`, the pattern of a feature id), for example `gh` or `jira-1`; otherwise the file is invalid (exit code 22, `invalid-file`), and the message names the host and the prefix. **Decided** on 2026-10-22 (code review verification of package 03, finding 2); before, a prefix such as `GH` or `""` only failed in `feature new` with a misleading `invalid-feature-id`. **Implemented** (`KitConfig.Trackers`); `feature new` uses it for issue-based ids (package 03, **Implemented**). |
 | `coverageThreshold` | Optional. Minimum coverage that `verify` requires (package 14). Not written by `init`; absent means "measure and record only". |
 | `report` | Whether `finish` writes `report.md` (package 15): `ask` (default, `finish` asks the human), `always`, or `never`. Absent means `ask`. **Decided** on 2026-10-18 (findings clarification). |
 
@@ -190,7 +190,7 @@ Every template follows the same conventions. **Decided** in the template intervi
 
   - `path` is the repository path with `/` as separator. Entries are sorted ordinally by `path`.
   - `kitVersion` is the engine version that wrote the template.
-  - `hash` is `sha256:` followed by the SHA-256 of the exact bytes written to the file (UTF-8 without byte order mark, LF line endings), as 64 lowercase hex digits.
+  - `hash` is `sha256:` followed by the SHA-256 of the exact bytes written to the file (UTF-8 without byte order mark, LF line endings), as 64 lowercase hex digits. CRLF line endings count as LF when a hash is computed, so a template that Git checks out with CRLF on Windows (`core.autocrlf`) still matches its entry.
   - Unknown fields are kept at the top level and in every entry (package 01).
 
 ### `.gitignore`

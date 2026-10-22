@@ -18,6 +18,6 @@ public static class KitGitIgnoreEntries
     public static IReadOnlyList<string> All { get; } =
     [
         KitStorePaths.GetRepositoryPath(KitStorePaths.LocalFileName),
-        KitStorePaths.GetRepositoryPath($"{KitStorePaths.FeaturesDirName}/{KitStorePaths.CurrentFeatureFileName}")
+        KitStorePaths.GetRepositoryPath(KitStorePaths.CurrentFeatureFilePath)
     ];
 }

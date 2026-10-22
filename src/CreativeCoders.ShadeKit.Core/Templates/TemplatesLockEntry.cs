@@ -35,7 +35,8 @@ public sealed class TemplatesLockEntry
     /// Gets the hash of the template content as installed.
     /// </summary>
     /// <value>
-    /// The SHA-256 hash of the bytes written, in the form <c>sha256:</c> followed by 64 lowercase hexadecimal digits.
+    /// The SHA-256 hash of the bytes written with CRLF line endings counted as LF, in the form <c>sha256:</c> followed
+    /// by 64 lowercase hexadecimal digits.
     /// </value>
     public required string Hash { get; init; }
 
@@ -51,13 +52,33 @@ public sealed class TemplatesLockEntry
     /// <summary>
     /// Computes the <see cref="Hash" /> of the content of a template.
     /// </summary>
+    /// <remarks>
+    /// Every CRLF line ending counts as LF, because Git checks a template out with CRLF on Windows when
+    /// <c>core.autocrlf</c> is set; an unchanged template then still has the hash of its lock entry. A carriage return
+    /// that is not followed by a line feed is hashed as it is.
+    /// </remarks>
     /// <param name="content">The bytes of the template as written to the repository.</param>
     /// <returns>
-    /// The SHA-256 hash of <paramref name="content" />, in the form <c>sha256:</c> followed by 64 lowercase
-    /// hexadecimal digits.
+    /// The SHA-256 hash of <paramref name="content" /> with LF line endings, in the form <c>sha256:</c> followed by 64
+    /// lowercase hexadecimal digits.
     /// </returns>
     public static string ComputeHash(ReadOnlySpan<byte> content)
     {
-        return HashPrefix + Convert.ToHexStringLower(SHA256.HashData(content));
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+
+        var remaining = content;
+        var crLfIndex = remaining.IndexOf("\r\n"u8);
+
+        while (crLfIndex >= 0)
+        {
+            // The carriage return is skipped; the line feed starts the next part.
+            hash.AppendData(remaining[..crLfIndex]);
+            remaining = remaining[(crLfIndex + 1)..];
+            crLfIndex = remaining.IndexOf("\r\n"u8);
+        }
+
+        hash.AppendData(remaining);
+
+        return HashPrefix + Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 }

@@ -26,29 +26,15 @@ internal sealed class TextFileContent
 
     private const string CrLf = "\r\n";
 
-    private const string UnmarkedWideEncodingName = "UTF-16 or UTF-32 without byte order mark";
-
     private readonly byte[] _bytes;
 
     // The offset at which the text starts, after a leading UTF-8 byte order mark.
     private readonly int _textStart;
 
-    // The byte order marks of the encodings that are not compatible with ASCII line terminators. UTF-32 LE starts
-    // with the UTF-16 LE mark, so it must be checked first.
-    private static readonly (byte[] Bom, string EncodingName)[] UnsupportedBoms =
-    [
-        ([0xFF, 0xFE, 0x00, 0x00], "UTF-32 LE"),
-        ([0x00, 0x00, 0xFE, 0xFF], "UTF-32 BE"),
-        ([0xFF, 0xFE], "UTF-16 LE"),
-        ([0xFE, 0xFF], "UTF-16 BE")
-    ];
-
-    private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
-
     private TextFileContent(byte[] bytes)
     {
         _bytes = bytes;
-        _textStart = bytes.AsSpan().StartsWith(Utf8Bom) ? Utf8Bom.Length : 0;
+        _textStart = bytes.AsSpan().StartsWith(TextFileEncoding.Utf8Bom) ? TextFileEncoding.Utf8Bom.Length : 0;
         NewLine = bytes.AsSpan().IndexOf("\r\n"u8) >= 0 ? CrLf : Lf;
         Lines = SplitLines(bytes, _textStart);
     }
@@ -105,7 +91,7 @@ internal sealed class TextFileContent
 
         var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
 
-        if (FindUnsupportedEncodingName(bytes) is { } encodingName)
+        if (TextFileEncoding.FindUnsupportedEncodingName(bytes) is { } encodingName)
         {
             throw new UnsupportedFileEncodingException(filePath, encodingName);
         }
@@ -185,21 +171,6 @@ internal sealed class TextFileContent
 
     // A last line without line terminator is never empty, so an empty last line is always followed by one.
     private bool EndsWithEmptyLine => Lines.Count > 0 && Lines[^1].Text.Length == 0;
-
-    private static string? FindUnsupportedEncodingName(ReadOnlySpan<byte> bytes)
-    {
-        foreach (var (bom, encodingName) in UnsupportedBoms)
-        {
-            if (bytes.StartsWith(bom))
-            {
-                return encodingName;
-            }
-        }
-
-        // UTF-8 text practically never contains a NUL character, but UTF-16 and UTF-32 encode every ASCII character
-        // with NUL bytes.
-        return bytes.Contains((byte)0) ? UnmarkedWideEncodingName : null;
-    }
 
     private string ToFileLineEndings(string block)
     {

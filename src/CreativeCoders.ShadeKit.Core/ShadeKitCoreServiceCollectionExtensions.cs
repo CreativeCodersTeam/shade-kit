@@ -1,6 +1,8 @@
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Engine;
+using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
@@ -22,10 +24,13 @@ public static class ShadeKitCoreServiceCollectionExtensions
     /// <see cref="IKitStoreFactory" />, <see cref="IGitRepositoryLocator" />, <see cref="IFormatRegistry" /> (with the
     /// file types of <see cref="FormatRegistry.CreateDefault" />), <see cref="IVersionedJsonSerializer" />,
     /// <see cref="IEngineVersionProvider" />, <see cref="IRepositoryInitializer" />,
-    /// <see cref="IShippedTemplateReader" />, <see cref="IGitIgnorePlanner" />, and
-    /// <see cref="IInstructionSectionPlanner" /> are registered as singletons. Existing registrations are kept, so
-    /// calling this method more than once has no additional effect, and a registration made before the call replaces
-    /// the default.
+    /// <see cref="IShippedTemplateReader" />, <see cref="IGitIgnorePlanner" />,
+    /// <see cref="IInstructionSectionPlanner" />, <see cref="IGitExecutableLocator" />,
+    /// <see cref="IGitCommandRunner" />, <see cref="IGitRepositoryInfo" />, <see cref="IFeatureIdFactory" />,
+    /// <see cref="ICurrentFeatureResolver" />, <see cref="IFeatureStore" />, and <see cref="TimeProvider" /> (as
+    /// <see cref="TimeProvider.System" />) are registered as singletons. Existing registrations are kept, so calling
+    /// this method more than once has no additional effect, and a registration made before the call replaces the
+    /// default.
     /// </remarks>
     /// <param name="services">The service collection to add the services to.</param>
     /// <returns>The same <see cref="IServiceCollection" /> instance so that additional calls can be chained.</returns>
@@ -43,6 +48,13 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IShippedTemplateReader, ShippedTemplateReader>();
         services.TryAddSingleton<IGitIgnorePlanner, GitIgnorePlanner>();
         services.TryAddSingleton<IInstructionSectionPlanner, InstructionSectionPlanner>();
+        services.TryAddSingleton<IGitExecutableLocator, GitExecutableLocator>();
+        services.TryAddSingleton<IGitCommandRunner, GitCommandRunner>();
+        services.TryAddSingleton<IGitRepositoryInfo, GitRepositoryInfo>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IFeatureIdFactory, FeatureIdFactory>();
+        services.TryAddSingleton<ICurrentFeatureResolver, CurrentFeatureResolver>();
+        services.TryAddSingleton<IFeatureStore, FeatureStore>();
 
         return services;
     }

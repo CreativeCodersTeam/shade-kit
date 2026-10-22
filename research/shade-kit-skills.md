@@ -47,7 +47,7 @@ Called by the user; outside every profile. No entry protocol, only the version h
 |---|---|
 | `shade-kit-next-phase` | Finds the current feature and phase, offers the next steps from `shade-kit phase next --json`, lets the user choose, and starts the chosen phase skill. |
 | `shade-kit-discuss` | Free brainstorming on any topic. Can run as input for `new` or in any other phase. |
-| `shade-kit-drop` | Deletes the feature and clears the current feature. |
+| `shade-kit-drop` | Deletes the feature and clears the local override only if it points to the dropped feature. |
 
 ## 3. General skills
 
