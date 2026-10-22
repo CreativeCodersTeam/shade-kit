@@ -20,6 +20,9 @@ namespace CreativeCoders.ShadeKit.Cli.Tests;
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed class ProgramTests : IDisposable
 {
+    // CliJsonWriter ends every JSON document with LF on every platform, not with Environment.NewLine.
+    private const string JsonLineEnd = "\n";
+
     private const string StackTraceLinePrefix = "   at ";
 
     private readonly CurrentDirectoryScope _currentDirectory = new();
@@ -333,7 +336,7 @@ public sealed class ProgramTests : IDisposable
 
         var text = output.ToString();
 
-        text.Should().StartWith("{").And.EndWith("}\n").And.NotEndWith("\n\n");
+        text.Should().StartWith("{").And.EndWith("}" + JsonLineEnd).And.NotEndWith(JsonLineEnd + JsonLineEnd);
 
         using var document = JsonDocument.Parse(text);
 
@@ -608,7 +611,7 @@ public sealed class ProgramTests : IDisposable
         // Assert
         var text = output.ToString();
 
-        text.Should().StartWith("{").And.EndWith("}\n").And.NotEndWith("\n\n");
+        text.Should().StartWith("{").And.EndWith("}" + JsonLineEnd).And.NotEndWith(JsonLineEnd + JsonLineEnd);
     }
 
     [Fact]
@@ -1080,7 +1083,7 @@ public sealed class ProgramTests : IDisposable
     private static void AssertOnlyInvalidArgumentsEnvelope(string output, string argumentText, string helpCommand)
     {
         output
-            .Should().EndWith("}" + Environment.NewLine)
+            .Should().EndWith("}" + JsonLineEnd).And.NotEndWith(JsonLineEnd + JsonLineEnd)
             .And.NotContain(StackTraceLinePrefix);
 
         // JsonDocument.Parse rejects a second top-level value, so this also proves that only one envelope was written.
