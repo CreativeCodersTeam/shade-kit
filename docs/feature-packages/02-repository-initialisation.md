@@ -190,7 +190,7 @@ Every template follows the same conventions. **Decided** in the template intervi
 
   - `path` is the repository path with `/` as separator. Entries are sorted ordinally by `path`.
   - `kitVersion` is the engine version that wrote the template.
-  - `hash` is `sha256:` followed by the SHA-256 of the exact bytes written to the file (UTF-8 without byte order mark, LF line endings), as 64 lowercase hex digits.
+  - `hash` is `sha256:` followed by the SHA-256 of the exact bytes written to the file (UTF-8 without byte order mark, LF line endings), as 64 lowercase hex digits. CRLF line endings count as LF when a hash is computed, so a template that Git checks out with CRLF on Windows (`core.autocrlf`) still matches its entry.
   - Unknown fields are kept at the top level and in every entry (package 01).
 
 ### `.gitignore`

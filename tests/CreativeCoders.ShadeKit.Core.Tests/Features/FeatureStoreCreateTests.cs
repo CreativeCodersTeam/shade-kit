@@ -19,7 +19,8 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
     private const string IssueFeatureId = "gh-142-login-sso";
 
-    private const string TestTemplate =
+    // A raw string literal takes the line endings of the checked-out source file, which are CRLF on Windows.
+    private static readonly string TestTemplate =
         """
         # {{feature-title}}
         id: {{feature-id}}
@@ -27,7 +28,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         input: {{original input, unchanged}}
         created: {{created at and created by}}
 
-        """;
+        """.ReplaceLineEndings("\n");
 
     private readonly FeatureStoreTestContext _context = new();
 
@@ -646,7 +647,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
                  Users sign in with the company account.
                  created: {FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>
 
-                 """);
+                 """.ReplaceLineEndings("\n"));
     }
 
     [Fact]
@@ -670,7 +671,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
                  input: {IssueUrl}
                  created: {FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>
 
-                 """);
+                 """.ReplaceLineEndings("\n"));
     }
 
     [Fact]
@@ -722,7 +723,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
                  input: {input}
                  created: {FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>
 
-                 """);
+                 """.ReplaceLineEndings("\n"));
     }
 
     [Fact]
