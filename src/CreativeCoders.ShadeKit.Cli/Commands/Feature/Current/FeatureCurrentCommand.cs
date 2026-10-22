@@ -3,7 +3,6 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Store;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -12,21 +11,13 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Feature.Current;
 /// <summary>
 /// Resolves the current feature of the current repository from the branch name or the local override.
 /// </summary>
-/// <param name="ansiConsole">The console that receives the plain result.</param>
-/// <param name="kitStoreFactory">The factory that locates the SHADE kit store.</param>
+/// <param name="context">The context that runs the core operation and writes the result or the failure.</param>
 /// <param name="featureStore">The store that resolves the current feature.</param>
-/// <param name="jsonWriter">The writer that receives the JSON output.</param>
-/// <param name="errorMapper">The mapper that turns failures into exit codes, error codes, and messages.</param>
-/// <param name="cancellation">The cancellation of the run, whose token the command passes to the core.</param>
 [UsedImplicitly]
 [CliCommand([FeatureCommandGroup.Name, Name], Description = "Shows the current feature")]
 public class FeatureCurrentCommand(
-    IAnsiConsole ansiConsole,
-    IKitStoreFactory kitStoreFactory,
-    IFeatureStore featureStore,
-    ICliJsonWriter jsonWriter,
-    CliErrorMapper errorMapper,
-    ICliCancellation cancellation)
+    ShadeKitCommandContext context,
+    IFeatureStore featureStore)
     : ICliCommand<FeatureCurrentCommandOptions>
 {
     /// <summary>
@@ -34,17 +25,9 @@ public class FeatureCurrentCommand(
     /// </summary>
     public const string Name = "current";
 
-    private readonly IAnsiConsole _ansiConsole = Ensure.NotNull(ansiConsole);
-
-    private readonly IKitStoreFactory _kitStoreFactory = Ensure.NotNull(kitStoreFactory);
+    private readonly ShadeKitCommandContext _context = Ensure.NotNull(context);
 
     private readonly IFeatureStore _featureStore = Ensure.NotNull(featureStore);
-
-    private readonly ICliJsonWriter _jsonWriter = Ensure.NotNull(jsonWriter);
-
-    private readonly CliErrorMapper _errorMapper = Ensure.NotNull(errorMapper);
-
-    private readonly ICliCancellation _cancellation = Ensure.NotNull(cancellation);
 
     /// <summary>
     /// Resolves the current feature and writes it, as plain text or as a JSON envelope.
@@ -77,15 +60,13 @@ public class FeatureCurrentCommand(
     {
         Ensure.NotNull(options);
 
-        var result = await CliCommandAbort.RunAsync(
-                () => _featureStore.GetCurrentAsync(_kitStoreFactory.Create(), _cancellation.Token), _errorMapper,
-                options.Json, _jsonWriter)
+        var result = await _context.RunAsync(options.Json,
+                (store, cancellationToken) => _featureStore.GetCurrentAsync(store, cancellationToken))
             .ConfigureAwait(false);
 
         var data = FeatureCurrentCommandData.FromResult(result);
 
-        FeatureCommandOutput.Write(_ansiConsole, _jsonWriter, options.Json, data,
-            FeatureCommandOutput.CreateWarnings(result.FormatWarnings, result.Warnings), () => WriteResult(data));
+        _context.WriteSuccess(options.Json, data, result.Warnings, () => WriteResult(data));
 
         return CommandResult.Success;
     }
@@ -94,14 +75,13 @@ public class FeatureCurrentCommand(
     {
         if (data is not { Feature: { } feature, ResolvedFrom: { } resolvedFrom })
         {
-            FeatureCommandOutput.WriteLine(_ansiConsole, "No current feature.");
-            FeatureCommandOutput.WriteLine(_ansiConsole, "Run 'shade-kit feature set <id>' to select one.");
+            _context.Console.WriteLine("No current feature.");
+            _context.Console.WriteLine("Run 'shade-kit feature set <id>' to select one.");
 
             return;
         }
 
-        FeatureCommandOutput.WriteLine(_ansiConsole,
-            $"{feature.Id} ({feature.Profile}, {CliJsonWriter.GetEnumName(feature.Status)})");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Resolved from: {CliJsonWriter.GetEnumName(resolvedFrom)}");
+        _context.Console.WriteLine($"{feature.Id} ({feature.Profile}, {CliJsonWriter.GetEnumName(feature.Status)})");
+        _context.Console.WriteLine($"Resolved from: {CliJsonWriter.GetEnumName(resolvedFrom)}");
     }
 }

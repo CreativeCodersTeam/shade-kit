@@ -1,6 +1,7 @@
 using System.Reflection;
 using CreativeCoders.Cli.Core;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Files;
@@ -47,96 +48,80 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
 
         return exception switch
         {
-            KitRootPathNotFoundException e => new CliError(ShadeKitCliExitCodes.KitRootNotFound,
-                ShadeKitCliErrorCodes.KitRootNotFound,
+            KitRootPathNotFoundException e => CliError.Create(ShadeKitCliExitCodes.KitRootNotFound,
                 $"No SHADE kit root directory '{KitStorePaths.RootPath}' found at the repository root " +
                 $"'{e.GitRootPath}'. Run 'shade-kit init' to set up SHADE kit."),
 
-            KitRootNotADirectoryException e => new CliError(ShadeKitCliExitCodes.KitRootNotADirectory,
-                ShadeKitCliErrorCodes.KitRootNotADirectory,
+            KitRootNotADirectoryException e => CliError.Create(ShadeKitCliExitCodes.KitRootNotADirectory,
                 $"'{e.KitRootPath}' is a file, but SHADE kit needs a '{KitStorePaths.RootPath}' directory at the " +
                 "repository root. Move or remove the file, then run 'shade-kit init'."),
 
-            NotAGitRepositoryException e => new CliError(ShadeKitCliExitCodes.NotAGitRepository,
-                ShadeKitCliErrorCodes.NotAGitRepository,
+            NotAGitRepositoryException e => CliError.Create(ShadeKitCliExitCodes.NotAGitRepository,
                 $"'{e.StartPath}' is not inside a git repository. SHADE kit works only in a git repository; run " +
                 "shade-kit inside one."),
 
-            FormatTooNewException e => new CliError(ShadeKitCliExitCodes.FormatTooNew,
-                ShadeKitCliErrorCodes.FormatTooNew, CreateFormatTooNewMessage(e)),
+            FormatTooNewException e => CliError.Create(ShadeKitCliExitCodes.FormatTooNew,
+                CreateFormatTooNewMessage(e)),
 
-            UpgradeNeededException e => new CliError(ShadeKitCliExitCodes.UpgradeNeeded,
-                ShadeKitCliErrorCodes.UpgradeNeeded,
+            UpgradeNeededException e => CliError.Create(ShadeKitCliExitCodes.UpgradeNeeded,
                 $"{CreateVersionMismatchText(e.FilePath, e.FileVersion, e.CurrentVersion)} Run 'shade-kit upgrade'."),
 
-            InvalidKitFileException e => new CliError(ShadeKitCliExitCodes.InvalidFile,
-                ShadeKitCliErrorCodes.InvalidFile, $"'{e.FilePath}' is invalid: {e.Reason}"),
+            InvalidKitFileException e => CliError.Create(ShadeKitCliExitCodes.InvalidFile,
+                $"'{e.FilePath}' is invalid: {e.Reason}"),
 
-            KitAlreadyInitializedException e => new CliError(ShadeKitCliExitCodes.KitAlreadyInitialized,
-                ShadeKitCliErrorCodes.KitAlreadyInitialized,
+            KitAlreadyInitializedException e => CliError.Create(ShadeKitCliExitCodes.KitAlreadyInitialized,
                 $"SHADE kit is already initialised in this repository: '{e.KitRootPath}' exists. Run " +
                 "'shade-kit upgrade' to update it."),
 
-            InvalidManagedSectionException e => new CliError(ShadeKitCliExitCodes.InvalidManagedSection,
-                ShadeKitCliErrorCodes.InvalidManagedSection,
+            InvalidManagedSectionException e => CliError.Create(ShadeKitCliExitCodes.InvalidManagedSection,
                 $"The SHADE kit section markers in '{e.FilePath}' are invalid: {e.Reason} Fix the file so that " +
                 $"every code block is closed and the file contains exactly one " +
                 $"'{ManagedInstructionSection.BeginMarkerPrefix} ... -->' line followed by exactly one " +
                 $"'{ManagedInstructionSection.EndMarker}' line outside code blocks, then run the command again."),
 
-            UnsupportedFileEncodingException e => new CliError(ShadeKitCliExitCodes.UnsupportedFileEncoding,
-                ShadeKitCliErrorCodes.UnsupportedFileEncoding,
+            UnsupportedFileEncodingException e => CliError.Create(ShadeKitCliExitCodes.UnsupportedFileEncoding,
                 $"'{e.FilePath}' is encoded as {e.EncodingName}, but shade-kit can only change UTF-8 files. Convert " +
                 "the file to UTF-8, then run the command again."),
 
-            PathNotAFileException e => new CliError(ShadeKitCliExitCodes.PathNotAFile,
-                ShadeKitCliErrorCodes.PathNotAFile,
+            PathNotAFileException e => CliError.Create(ShadeKitCliExitCodes.PathNotAFile,
                 $"'{e.Path}' is a directory, but shade-kit must write a file at this path. Move or remove the " +
                 "directory, then run the command again."),
 
-            GitUnavailableException e => new CliError(ShadeKitCliExitCodes.GitUnavailable,
-                ShadeKitCliErrorCodes.GitUnavailable,
+            GitUnavailableException e => CliError.Create(ShadeKitCliExitCodes.GitUnavailable,
                 $"'{e.CommandText}' failed. Make sure git is installed, on the PATH, and works in this repository, " +
                 $"then run the command again. Details: {e.Reason}"),
 
-            GitIdentityNotConfiguredException e => new CliError(ShadeKitCliExitCodes.GitIdentityMissing,
-                ShadeKitCliErrorCodes.GitIdentityMissing, CreateGitIdentityMissingMessage(e)),
+            GitIdentityNotConfiguredException e => CliError.Create(ShadeKitCliExitCodes.GitIdentityMissing,
+                CreateGitIdentityMissingMessage(e)),
 
-            FeatureAlreadyExistsException e => new CliError(ShadeKitCliExitCodes.FeatureAlreadyExists,
-                ShadeKitCliErrorCodes.FeatureAlreadyExists,
+            FeatureAlreadyExistsException e => CliError.Create(ShadeKitCliExitCodes.FeatureAlreadyExists,
                 $"The feature '{e.FeatureId}' already exists; it may have been created on another branch. Nothing " +
                 "was changed. Run 'shade-kit feature list' to see the existing features, or pass another --title to " +
                 "create a feature with a different id."),
 
-            FeatureNotFoundException e => new CliError(ShadeKitCliExitCodes.FeatureNotFound,
-                ShadeKitCliErrorCodes.FeatureNotFound,
+            FeatureNotFoundException e => CliError.Create(ShadeKitCliExitCodes.FeatureNotFound,
                 $"The feature '{e.FeatureId}' does not exist. Run 'shade-kit feature list' to see the ids of the " +
                 "existing features."),
 
-            InvalidFeatureIdException e => new CliError(ShadeKitCliExitCodes.InvalidFeatureId,
-                ShadeKitCliErrorCodes.InvalidFeatureId,
+            InvalidFeatureIdException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureId,
                 $"'{e.FeatureId}' is not a valid feature id. A feature id consists of groups of lowercase letters " +
                 "a-z and digits joined by single hyphens, for example 'gh-142-login-sso'. Run 'shade-kit feature " +
                 "list' to see the ids of the existing features."),
 
-            InvalidFeatureSourceException e => new CliError(ShadeKitCliExitCodes.InvalidFeatureSource,
-                ShadeKitCliErrorCodes.InvalidFeatureSource,
+            InvalidFeatureSourceException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureSource,
                 $"The source '{e.SourceText}' cannot be used: {e.Reason} Pass an issue URL, the path of an existing " +
                 "UTF-8 text file, or the request text with --source."),
 
-            InvalidFeatureTitleException e => new CliError(ShadeKitCliExitCodes.InvalidFeatureTitle,
-                ShadeKitCliErrorCodes.InvalidFeatureTitle,
+            InvalidFeatureTitleException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureTitle,
                 $"The feature title cannot be used: {e.Reason}"),
 
-            FeatureIoFailedException e => new CliError(ShadeKitCliExitCodes.FeatureIoFailed,
-                ShadeKitCliErrorCodes.FeatureIoFailed,
+            FeatureIoFailedException e => CliError.Create(ShadeKitCliExitCodes.FeatureIoFailed,
                 $"Could not {e.Operation} the feature '{e.FeatureId}': the folder '{e.FolderPath}' cannot be " +
                 $"changed. Cause: {CreateCauseSentence(e.InnerException)} Nothing was changed. Check that you may write to " +
                 $"'{GetFeaturesDirectoryPath()}' and that no other program, such as an editor, a virus scanner, or " +
                 "a search indexer, holds a file in the folder open, then run the command again."),
 
-            UnknownProfileException e => new CliError(ShadeKitCliExitCodes.UnknownProfile,
-                ShadeKitCliErrorCodes.UnknownProfile,
+            UnknownProfileException e => CliError.Create(ShadeKitCliExitCodes.UnknownProfile,
                 $"The workflow profile '{e.Profile}' is unknown. Pass one of " +
                 $"{string.Join(", ", WorkflowProfiles.All.Select(x => $"'{x}'"))} with --profile, or set " +
                 $"'defaultProfile' in '{KitStorePaths.GetRepositoryPath(KitStorePaths.ConfigFileName)}' to one of them."),
@@ -199,7 +184,7 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
 
         return detail is null
             ? null
-            : new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
+            : CliError.Create(ShadeKitCliExitCodes.InvalidArguments,
                 $"Invalid arguments: {detail}. Run '{CreateHelpCommandText(args)}' for usage.");
     }
 
@@ -236,96 +221,81 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
 
         return Unwrap(exception) is OperationCanceledException canceled &&
                (cancellationToken.IsCancellationRequested || canceled.CancellationToken.IsCancellationRequested)
-            ? new CliError(ShadeKitCliExitCodes.Canceled, ShadeKitCliErrorCodes.Canceled, "The command was canceled.")
+            ? CliError.Create(ShadeKitCliExitCodes.Canceled, "The command was canceled.")
             : null;
     }
 
     /// <summary>
-    /// Maps the specified format warning to the warning object of a JSON envelope.
+    /// Maps the specified warning of the SHADE kit core to the warning object of a JSON envelope.
     /// </summary>
     /// <param name="warning">The warning to map.</param>
-    /// <returns>The warning with its code from <see cref="ShadeKitCliErrorCodes" /> and a message.</returns>
+    /// <returns>
+    /// The warning with a message and its code: from <see cref="ShadeKitCliErrorCodes" /> for a
+    /// <see cref="FormatWarning" />, otherwise from <see cref="ShadeKitCliWarningCodes" />.
+    /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="warning" /> is <see langword="null" />.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">The kind of <paramref name="warning" /> is not defined.</exception>
-    public static CliJsonMessage MapWarning(FormatWarning warning)
-    {
-        Ensure.NotNull(warning);
-
-        return warning.Kind switch
-        {
-            FormatWarningKind.UpgradeNeeded => new CliJsonMessage(ShadeKitCliErrorCodes.UpgradeNeeded,
-                $"{CreateVersionMismatchText(warning.FilePath, warning.FileVersion, warning.CurrentVersion)} " +
-                "It was migrated in memory; run 'shade-kit upgrade' to update the file."),
-
-            _ => throw new ArgumentOutOfRangeException(nameof(warning), warning.Kind,
-                "The warning kind is not supported.")
-        };
-    }
-
-    /// <summary>
-    /// Maps the specified feature warning to the warning object of a JSON envelope.
-    /// </summary>
-    /// <param name="warning">The warning to map.</param>
-    /// <returns>The warning with its code from <see cref="ShadeKitCliWarningCodes" /> and a message.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="warning" /> is <see langword="null" />.</exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="warning" /> is a <see cref="FeatureWarningKind.CurrentFeatureMismatch" /> or
-    /// <see cref="FeatureWarningKind.FeatureIdMismatch" /> warning without
-    /// <see cref="FeatureWarning.OtherFeatureId" />, or a <see cref="FeatureWarningKind.CurrentFeatureInvalid" />
-    /// warning without a <see cref="FeatureWarning.Detail" /> that contains text.
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The type of <paramref name="warning" />, the kind of a <see cref="FormatWarning" />, or the type of the problem
+    /// of a <see cref="CurrentFeatureInvalidWarning" /> is not supported.
     /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">The kind of <paramref name="warning" /> is not defined.</exception>
-    public static CliJsonMessage MapWarning(FeatureWarning warning)
+    public static CliJsonMessage MapWarning(KitWarning warning)
     {
         Ensure.NotNull(warning);
 
         var currentFeaturePath = KitStorePaths.GetRepositoryPath(KitStorePaths.CurrentFeatureFilePath);
 
-        return warning.Kind switch
+        return warning switch
         {
-            FeatureWarningKind.CurrentFeatureMismatch => new CliJsonMessage(
-                ShadeKitCliWarningCodes.CurrentFeatureMismatch,
-                CreateCurrentFeatureMismatchMessage(warning.FeatureId,
-                    warning.OtherFeatureId ?? throw new ArgumentException(
-                        "A current-feature-mismatch warning needs the feature of the branch.", nameof(warning)))),
+            FormatWarning { Kind: FormatWarningKind.UpgradeNeeded } w => new CliJsonMessage(
+                ShadeKitCliErrorCodes.UpgradeNeeded,
+                $"{CreateVersionMismatchText(w.FilePath, w.FileVersion, w.CurrentVersion)} " +
+                "It was migrated in memory; run 'shade-kit upgrade' to update the file."),
 
-            FeatureWarningKind.CurrentFeatureMissing => new CliJsonMessage(
-                ShadeKitCliWarningCodes.CurrentFeatureMissing,
-                $"The local override '{currentFeaturePath}' selects feature '{warning.FeatureId}', which does not " +
+            CurrentFeatureMismatchWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.CurrentFeatureMismatch,
+                CreateCurrentFeatureMismatchMessage(w.OverrideFeatureId, w.BranchFeatureId)),
+
+            CurrentFeatureMissingWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.CurrentFeatureMissing,
+                $"The local override '{currentFeaturePath}' selects feature '{w.OverrideFeatureId}', which does not " +
                 "exist; the override is ignored. Run 'shade-kit feature set <id>' with the id of an existing " +
                 "feature to replace it."),
 
-            FeatureWarningKind.FeatureFileMissing => new CliJsonMessage(ShadeKitCliWarningCodes.FeatureFileMissing,
-                $"The feature folder '{GetFeatureDirectoryPath(warning.FeatureId)}' has no " +
+            FeatureFileMissingWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.FeatureFileMissing,
+                $"The feature folder '{KitStorePaths.GetRepositoryFeatureDirPath(w.FeatureId)}' has no " +
                 $"'{KitStorePaths.FeatureFileName}' and was skipped."),
 
-            FeatureWarningKind.FeatureFolderInvalid => new CliJsonMessage(
-                ShadeKitCliWarningCodes.FeatureFolderInvalid,
-                $"The folder '{GetFeatureDirectoryPath(warning.FeatureId)}' is not a valid feature id and was " +
-                "skipped."),
+            FeatureFolderInvalidWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.FeatureFolderInvalid,
+                $"The folder '{KitStorePaths.GetRepositoryFeatureDirPath(w.FolderName)}' is not a valid " +
+                "feature id and was skipped."),
 
-            FeatureWarningKind.FeatureIdMismatch => new CliJsonMessage(ShadeKitCliWarningCodes.FeatureIdMismatch,
-                CreateFeatureIdMismatchMessage(warning.FeatureId,
-                    warning.OtherFeatureId ?? throw new ArgumentException(
-                        "A feature-id-mismatch warning needs the id of the feature file.", nameof(warning)))),
+            FeatureIdMismatchWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.FeatureIdMismatch,
+                CreateFeatureIdMismatchMessage(w.FolderFeatureId, w.FileFeatureId)),
 
-            FeatureWarningKind.CurrentFeatureInvalid => new CliJsonMessage(
-                ShadeKitCliWarningCodes.CurrentFeatureInvalid,
+            CurrentFeatureInvalidWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.CurrentFeatureInvalid,
                 $"The local override '{currentFeaturePath}' cannot be used and is ignored: " +
-                CreateSentence(string.IsNullOrWhiteSpace(warning.Detail)
-                    ? throw new ArgumentException("A current-feature-invalid warning needs the reason.",
-                        nameof(warning))
-                    : warning.Detail) +
-                " Run 'shade-kit feature set <id>' to replace it."),
+                $"{CreateOverrideProblemSentence(w.Problem)} Run 'shade-kit feature set <id>' to replace it."),
 
-            _ => throw new ArgumentOutOfRangeException(nameof(warning), warning.Kind,
-                "The warning kind is not supported.")
+            _ => throw new ArgumentOutOfRangeException(nameof(warning), warning,
+                "The warning is not supported.")
         };
     }
 
-    // The host calls commands with options through reflection, which wraps exceptions of synchronous commands.
-    private static Exception Unwrap(Exception exception)
+    /// <summary>
+    /// Returns the exception that caused the specified exception, without the <see cref="TargetInvocationException" />
+    /// wrappers around it.
+    /// </summary>
+    /// <remarks>
+    /// The host calls commands with options through reflection, which wraps exceptions of synchronous commands.
+    /// </remarks>
+    /// <param name="exception">The exception to unwrap.</param>
+    /// <returns>
+    /// The innermost exception of a chain of <see cref="TargetInvocationException" /> wrappers, or
+    /// <paramref name="exception" /> if it is no such wrapper or has no inner exception.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="exception" /> is <see langword="null" />.</exception>
+    internal static Exception Unwrap(Exception exception)
     {
+        Ensure.NotNull(exception);
+
         var cause = exception;
 
         while (cause is TargetInvocationException { InnerException: { } innerException })
@@ -412,14 +382,9 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         return KitStorePaths.GetRepositoryPath($"{KitStorePaths.FeaturesDirName}/");
     }
 
-    private static string GetFeatureDirectoryPath(string featureId)
-    {
-        return KitStorePaths.GetRepositoryPath($"{KitStorePaths.GetFeatureDirPath(featureId)}/");
-    }
-
     private static string CreateFeatureIdMismatchMessage(string folderFeatureId, string fileFeatureId)
     {
-        return $"'{GetFeatureDirectoryPath(folderFeatureId)}{KitStorePaths.FeatureFileName}' has the id " +
+        return $"'{KitStorePaths.GetRepositoryPath(KitStorePaths.GetFeatureFilePath(folderFeatureId))}' has the id " +
                $"'{fileFeatureId}'; the folder name '{folderFeatureId}' is used.";
     }
 
@@ -438,6 +403,22 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         return $"The current branch selects feature '{branchFeatureId}', but the local override selects " +
                $"'{overrideFeatureId}'. The branch wins. Run 'shade-kit feature set {branchFeatureId}' to make the " +
                $"override match the branch, or switch to the branch of '{overrideFeatureId}' to work on it.";
+    }
+
+    private static string CreateOverrideProblemSentence(KitFileFormatException problem)
+    {
+        return problem switch
+        {
+            InvalidKitFileException e => $"{e.Reason.TrimEnd('.')}.",
+            FormatTooNewException e =>
+                $"It uses format version {e.FileVersion}, but this engine supports only up to version " +
+                $"{e.SupportedVersion}.",
+            UpgradeNeededException e =>
+                $"It uses the older format version {e.FileVersion} (current version {e.CurrentVersion}), and " +
+                "'outdatedFormatOnRead' is 'stop'.",
+            _ => throw new ArgumentOutOfRangeException(nameof(problem), problem.GetType(),
+                "The format problem is not supported.")
+        };
     }
 
     private static string CreateVersionMismatchText(string filePath, int fileVersion, int currentVersion)

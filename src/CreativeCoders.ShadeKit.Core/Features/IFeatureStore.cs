@@ -12,7 +12,7 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// <para>
 /// A feature exists if and only if its folder <c>features/&lt;id&gt;</c> of the store exists. The folder name is the id
 /// of the feature in every result; an <c>id</c> in <c>feature.json</c> that differs from it is reported with a
-/// <see cref="FeatureWarningKind.FeatureIdMismatch" /> warning, and the file is not changed. Every method that takes
+/// <see cref="FeatureIdMismatchWarning" /> warning, and the file is not changed. Every method that takes
 /// a feature id checks it with <see cref="FeatureIds.EnsureValid" /> before a path is built from it.
 /// </para>
 /// <para>
@@ -93,7 +93,9 @@ public interface IFeatureStore
     /// <exception cref="GitUnavailableException">
     /// <c>git</c> cannot be started, or it fails in a way that SHADE kit does not expect.
     /// </exception>
-    /// <exception cref="InvalidKitFileException"><c>config.json</c> is invalid.</exception>
+    /// <exception cref="InvalidKitFileException">
+    /// <c>config.json</c> is invalid, or the repository template <c>templates/request.md</c> is not UTF-8 text.
+    /// </exception>
     /// <exception cref="FormatTooNewException">
     /// <c>config.json</c> uses a format version newer than the engine supports.
     /// </exception>
@@ -119,10 +121,10 @@ public interface IFeatureStore
     /// <remarks>
     /// Every <c>feature.json</c> is read with <see cref="FormatAccess.Read" /> access, and the name of its folder is
     /// listed as the id. Folders whose names start with a dot are ignored without a warning. A folder whose name is
-    /// not a valid feature id is skipped with a <see cref="FeatureWarningKind.FeatureFolderInvalid" /> warning, and a
-    /// feature folder without <c>feature.json</c> with a <see cref="FeatureWarningKind.FeatureFileMissing" />
+    /// not a valid feature id is skipped with a <see cref="FeatureFolderInvalidWarning" /> warning, and a
+    /// feature folder without <c>feature.json</c> with a <see cref="FeatureFileMissingWarning" />
     /// warning. A <c>feature.json</c> whose <c>id</c> differs from the folder name gives a
-    /// <see cref="FeatureWarningKind.FeatureIdMismatch" /> warning.
+    /// <see cref="FeatureIdMismatchWarning" /> warning.
     /// </remarks>
     /// <param name="store">The SHADE kit store whose features are listed.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
@@ -173,7 +175,7 @@ public interface IFeatureStore
     /// </summary>
     /// <remarks>
     /// The current feature is resolved with <see cref="ICurrentFeatureResolver.ResolveAsync" />, which ignores a local
-    /// override that cannot be used with a <see cref="FeatureWarningKind.CurrentFeatureInvalid" /> warning. A current
+    /// override that cannot be used with a <see cref="CurrentFeatureInvalidWarning" /> warning. A current
     /// feature that cannot be resolved is a result, not an error.
     /// </remarks>
     /// <param name="store">The SHADE kit store whose current feature is read.</param>
@@ -211,7 +213,7 @@ public interface IFeatureStore
     /// <remarks>
     /// The current branch is resolved before the override is written, so a failing <c>git</c> leaves the override
     /// unchanged. If the branch selects another existing feature, the override is written anyway and a
-    /// <see cref="FeatureWarningKind.CurrentFeatureMismatch" /> warning is returned, because the branch wins. An
+    /// <see cref="CurrentFeatureMismatchWarning" /> warning is returned, because the branch wins. An
     /// existing override that cannot be used because of its own format (invalid, too new, or outdated) is replaced:
     /// it is deleted, then written.
     /// </remarks>
@@ -286,8 +288,8 @@ public interface IFeatureStore
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous drop operation. The task result contains every file that was below
-    /// the feature folder, with its path in <c>features/&lt;id&gt;</c>, whether the local override selected the
-    /// feature, and whether it was cleared.
+    /// the feature folder, with its path in <c>features/&lt;id&gt;</c>, and whether the local override selected the
+    /// feature and was cleared.
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="store" /> or <paramref name="featureId" /> is <see langword="null" />.

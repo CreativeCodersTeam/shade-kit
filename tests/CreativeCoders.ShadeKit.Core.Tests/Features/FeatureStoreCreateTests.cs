@@ -58,7 +58,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         result.SuggestedBranch
             .Should().Be("feature/gh-142-login-sso");
 
-        result.FormatWarnings
+        result.Warnings
             .Should().BeEmpty();
 
         var feature = await _context.ReadFeatureFileAsync(IssueFeatureId);
@@ -730,6 +730,40 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().Equal(Encoding.UTF8.GetBytes("# Login SSO ä\n"));
     }
 
+    [Theory]
+    [InlineData(new byte[] { 0x23, 0x20, 0x4C, 0xE4, 0x6E, 0x67, 0x65 },
+        "The file contains bytes that are not valid UTF-8. Save the file as UTF-8 and run the command again.")]
+    [InlineData(new byte[] { 0xFF, 0xFE, 0x23, 0x00, 0x20, 0x00 },
+        "The file is encoded as UTF-16 LE, not as UTF-8. Save the file as UTF-8 and run the command again.")]
+    [InlineData(new byte[] { 0x23, 0x00, 0x20, 0x00 },
+        "The file contains a NUL byte, so it is not UTF-8 text; it may be UTF-16 or UTF-32 without byte order " +
+        "mark, or a binary file. Save the file as UTF-8 and run the command again.")]
+    public async Task CreateAsync_RepositoryTemplateIsNotUtf8_ThrowsInvalidKitFileExceptionAndChangesNothing(
+        byte[] content, string expectedReason)
+    {
+        // Arrange
+        _context.Repository.WriteFileBytes(content, ".shadekit", "templates", "request.md");
+        _context.Repository.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName);
+        var snapshot = _context.Repository.TakeSnapshot();
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<InvalidKitFileException>()).Which;
+
+        exception.FilePath
+            .Should().Be(".shadekit/templates/request.md");
+
+        exception.Reason
+            .Should().Be(expectedReason);
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
     [Fact]
     public async Task CreateAsync_RepositoryTemplateExists_DoesNotReadShippedTemplate()
     {
@@ -882,14 +916,75 @@ public sealed class FeatureStoreCreateTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateAsync_OutdatedOverrideAndConfigWithStop_CreatesFeatureAndReplacesOverride()
+    {
+        // Arrange
+        _context.Registry = FeatureStoreTestContext.CreateRegistryWithVersion2(FormatIds.CurrentFeature);
+        _context.WriteConfig(""", "outdatedFormatOnRead": "stop" """);
+        _context.WriteFeature("gh-7-checkout");
+        _context.WriteOverride("gh-7-checkout");
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(_context.CreateStore(),
+            _context.CreateRequest(IssueUrl, "Login SSO"), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().BeEmpty();
+
+        (await _context.ReadOverrideFeatureIdAsync())
+            .Should().Be(IssueFeatureId, "the override is read without a format warning, so it is in the current version");
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task CreateAsync_OverrideCannotBeRead_ThrowsBeforeWritingAnything()
+    {
+        // Arrange
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes are needed to make a file unreadable.");
+        _context.WriteOverrideContent("{");
+        var overridePath = Path.Combine(_context.RepositoryRootPath, ".shadekit", "features", "current-feature.json");
+        var store = A.Fake<IKitStore>(options => options.Wrapping(_context.CreateStore()));
+        var featureStore = _context.CreateFeatureStore();
+        File.SetUnixFileMode(overridePath, UnixFileMode.UserWrite);
+
+        try
+        {
+            Assert.SkipWhen(CanRead(overridePath),
+                $"'{overridePath}' is readable without permissions, for example because the tests run as root.");
+
+            // Act
+            var act = () => featureStore.CreateAsync(store, _context.CreateRequest(IssueUrl, "Login SSO"),
+                TestContext.Current.CancellationToken);
+
+            // Assert
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        }
+        finally
+        {
+            File.SetUnixFileMode(overridePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        A.CallTo(() => store.CreateDirectory(A<string>._))
+            .MustNotHaveHappened();
+
+        A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._, A<FormatAccess>._,
+                A<CancellationToken>._))
+            .MustNotHaveHappened();
+
+        Directory.EnumerateFileSystemEntries(Path.Combine(_context.RepositoryRootPath, ".shadekit", "features"))
+            .Should().Equal(overridePath);
+
+        _context.Repository.ReadFileText(".shadekit", "features", "current-feature.json")
+            .Should().Be("{");
+    }
+
+    [Fact]
     public async Task CreateAsync_BrokenOverrideAndOverrideWriteFails_RemovesFeatureFolderAndRethrows()
     {
         // Arrange
-        var realStore = _context.CreateStore();
-        var store = A.Fake<IKitStore>(options => options.Wrapping(realStore));
-        A.CallTo(() => store.WriteJsonAsync(A<string>._, FormatIds.CurrentFeature, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<CancellationToken>._))
-            .ThrowsAsync(new IOException("The disk is full."));
+        var store = _context.CreateStoreFailingOverrideWrite(new IOException("The disk is full."));
         _context.Repository.CreateDirectory(".shadekit", "features");
         _context.WriteOverrideContent("{");
         var featureStore = _context.CreateFeatureStore();
@@ -922,7 +1017,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
             _context.CreateRequest(IssueUrl, "Login SSO"), TestContext.Current.CancellationToken);
 
         // Assert
-        result.FormatWarnings
+        result.Warnings
             .Should().Equal(new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/config.json", 1, 2));
 
         result.Feature.Profile
@@ -1416,7 +1511,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().ContainSingle();
 
         (await featureStore.ListAsync(realStore, TestContext.Current.CancellationToken))
-            .Should().BeEquivalentTo(new FeatureListResult([], [], []));
+            .Should().BeEquivalentTo(new FeatureListResult([], []));
     }
 
     [Fact]

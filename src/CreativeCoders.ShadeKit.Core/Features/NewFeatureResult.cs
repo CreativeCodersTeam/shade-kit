@@ -1,5 +1,3 @@
-using CreativeCoders.ShadeKit.Core.Formats;
-
 namespace CreativeCoders.ShadeKit.Core.Features;
 
 /// <summary>
@@ -9,13 +7,25 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// The <c>feature.json</c> document of the new feature, as it was written; its <see cref="FeatureDocument.Id" /> is the
 /// name of the new feature folder.
 /// </param>
-/// <param name="Paths">The paths of the folder and the files of the new feature.</param>
-/// <param name="SuggestedBranch">
-/// The suggested name of the branch for the new feature, <c>feature/&lt;id&gt;</c>. SHADE kit does not create it.
-/// </param>
-/// <param name="FormatWarnings">The format warnings from reading <c>config.json</c>.</param>
+/// <param name="Warnings">The format warnings from reading <c>config.json</c>.</param>
 public sealed record NewFeatureResult(
     FeatureDocument Feature,
-    FeaturePaths Paths,
-    string SuggestedBranch,
-    IReadOnlyList<FormatWarning> FormatWarnings);
+    IReadOnlyList<KitWarning> Warnings)
+{
+    private const string SuggestedBranchPrefix = "feature/";
+
+    /// <summary>
+    /// Gets the paths of the folder and the files of the new feature.
+    /// </summary>
+    /// <value>The paths for the <see cref="FeatureDocument.Id" /> of <see cref="Feature" />.</value>
+    /// <exception cref="InvalidFeatureIdException">
+    /// The <see cref="FeatureDocument.Id" /> of <see cref="Feature" /> is not a valid feature id.
+    /// </exception>
+    public FeaturePaths Paths => FeaturePaths.For(Feature.Id);
+
+    /// <summary>
+    /// Gets the suggested name of the branch for the new feature. SHADE kit does not create it.
+    /// </summary>
+    /// <value><c>feature/&lt;id&gt;</c>, with the <see cref="FeatureDocument.Id" /> of <see cref="Feature" />.</value>
+    public string SuggestedBranch => SuggestedBranchPrefix + Feature.Id;
+}

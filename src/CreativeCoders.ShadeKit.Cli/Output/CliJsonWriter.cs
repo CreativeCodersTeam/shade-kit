@@ -2,6 +2,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Formats;
 
 namespace CreativeCoders.ShadeKit.Cli.Output;
 
@@ -17,8 +18,6 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// <param name="output">The text writer that receives the JSON documents.</param>
 public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
 {
-    private static readonly JsonNamingPolicy EnumNamingPolicy = JsonNamingPolicy.KebabCaseLower;
-
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -27,7 +26,7 @@ public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
         IndentSize = 2,
         NewLine = "\n",
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(EnumNamingPolicy, allowIntegerValues: false) }
+        Converters = { new JsonStringEnumConverter(JsonEnumNames.NamingPolicy, allowIntegerValues: false) }
     };
 
     private readonly TextWriter _output = Ensure.NotNull(output);
@@ -78,6 +77,6 @@ public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
     public static string GetEnumName<TEnum>(TEnum value)
         where TEnum : struct, Enum
     {
-        return EnumNamingPolicy.ConvertName(value.ToString());
+        return JsonEnumNames.Get(value);
     }
 }

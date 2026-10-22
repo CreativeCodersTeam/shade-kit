@@ -22,6 +22,10 @@ namespace CreativeCoders.ShadeKit.Core.Git;
 /// Unix rules, the file must also have at least one execute bit (owner, group, or others), like in the <c>PATH</c>
 /// search of a shell; a file without one is skipped and the search goes on with the next entry.
 /// </para>
+/// <para>
+/// The first path that is found is kept and returned by every later call without searching <c>PATH</c> again. As long
+/// as no executable is found, every call searches <c>PATH</c> again with its current value.
+/// </para>
 /// </remarks>
 public sealed class GitExecutableLocator : IGitExecutableLocator
 {
@@ -53,6 +57,8 @@ public sealed class GitExecutableLocator : IGitExecutableLocator
     private readonly Func<string, bool> _fileExists;
 
     private readonly Func<string, bool> _isExecutable;
+
+    private string? _gitExecutablePath;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GitExecutableLocator" /> class that reads the <c>PATH</c>
@@ -101,6 +107,11 @@ public sealed class GitExecutableLocator : IGitExecutableLocator
 
     /// <inheritdoc />
     public string? FindGitExecutable()
+    {
+        return _gitExecutablePath ??= SearchPathVariable();
+    }
+
+    private string? SearchPathVariable()
     {
         var pathVariable = _getPathVariable();
 

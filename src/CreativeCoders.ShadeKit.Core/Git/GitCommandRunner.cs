@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Text;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Files;
 
 namespace CreativeCoders.ShadeKit.Core.Git;
 
@@ -18,8 +18,6 @@ namespace CreativeCoders.ShadeKit.Core.Git;
 /// <param name="gitExecutableLocator">The locator that resolves the absolute path of the <c>git</c> executable.</param>
 public sealed class GitCommandRunner(IGitExecutableLocator gitExecutableLocator) : IGitCommandRunner
 {
-    private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
-
     private readonly IGitExecutableLocator _gitExecutableLocator = Ensure.NotNull(gitExecutableLocator);
 
     /// <inheritdoc />
@@ -87,8 +85,8 @@ public sealed class GitCommandRunner(IGitExecutableLocator gitExecutableLocator)
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardOutputEncoding = Utf8WithoutBom,
-            StandardErrorEncoding = Utf8WithoutBom
+            StandardOutputEncoding = TextFileEncoding.Utf8WithoutBom,
+            StandardErrorEncoding = TextFileEncoding.Utf8WithoutBom
         };
 
         foreach (var argument in arguments)

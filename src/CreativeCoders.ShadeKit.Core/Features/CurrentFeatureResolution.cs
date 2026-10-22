@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using CreativeCoders.ShadeKit.Core.Formats;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -17,13 +16,14 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// One of the enumeration values that specifies where <paramref name="FeatureId" /> comes from; or
 /// <see langword="null" /> if no current feature is resolved.
 /// </param>
-/// <param name="Warnings">The warnings about the current branch and the local override.</param>
-/// <param name="FormatWarnings">The format warnings from reading the local override.</param>
+/// <param name="Warnings">
+/// The format warnings from reading the local override first, then the warnings about the current branch and the
+/// local override.
+/// </param>
 public sealed record CurrentFeatureResolution(
     string? FeatureId,
     CurrentFeatureOrigin? Origin,
-    IReadOnlyList<FeatureWarning> Warnings,
-    IReadOnlyList<FormatWarning> FormatWarnings)
+    IReadOnlyList<KitWarning> Warnings)
 {
     /// <summary>
     /// Gets a value that indicates whether a current feature is resolved.

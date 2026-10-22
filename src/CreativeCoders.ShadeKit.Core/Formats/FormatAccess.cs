@@ -1,8 +1,8 @@
 namespace CreativeCoders.ShadeKit.Core.Formats;
 
 /// <summary>
-/// Specifies whether a command reads a versioned file only, reads it in order to change it, or migrates it to the
-/// current format.
+/// Specifies whether a command reads a versioned file only, reads it in order to change it, migrates it to the current
+/// format, or replaces it.
 /// </summary>
 public enum FormatAccess
 {
@@ -23,5 +23,12 @@ public enum FormatAccess
     /// format is migrated in memory whatever the <c>outdatedFormatOnRead</c> setting says, and may be replaced by a
     /// file in the current format.
     /// </summary>
-    Upgrade
+    Upgrade,
+
+    /// <summary>
+    /// The command replaces the file whatever it contains, because the file holds nothing that would be lost. An
+    /// existing file that cannot be used because of its own format (invalid, too new, or outdated) is deleted and
+    /// written again instead of stopping the command. Only writes accept this access.
+    /// </summary>
+    Replace
 }

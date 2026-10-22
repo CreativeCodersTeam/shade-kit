@@ -13,23 +13,15 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Feature.Drop;
 /// Deletes a feature folder of the SHADE kit store of the current repository and clears the local override if it
 /// selects that feature.
 /// </summary>
-/// <param name="ansiConsole">The console that receives the plain output.</param>
-/// <param name="kitStoreFactory">The factory that locates the SHADE kit store.</param>
+/// <param name="context">The context that runs the core operations and writes the result or the failure.</param>
 /// <param name="featureStore">The store that describes and deletes the feature.</param>
 /// <param name="confirmation">The console confirmation that asks the user in plain mode.</param>
-/// <param name="jsonWriter">The writer that receives the JSON output.</param>
-/// <param name="errorMapper">The mapper that turns failures into exit codes, error codes, and messages.</param>
-/// <param name="cancellation">The cancellation of the run, whose token the command passes to the core.</param>
 [UsedImplicitly]
 [CliCommand([FeatureCommandGroup.Name, Name], Description = "Deletes a feature and clears the override if it selects it")]
 public class FeatureDropCommand(
-    IAnsiConsole ansiConsole,
-    IKitStoreFactory kitStoreFactory,
+    ShadeKitCommandContext context,
     IFeatureStore featureStore,
-    IConsoleConfirmation confirmation,
-    ICliJsonWriter jsonWriter,
-    CliErrorMapper errorMapper,
-    ICliCancellation cancellation)
+    IConsoleConfirmation confirmation)
     : ICliCommand<FeatureDropCommandOptions>
 {
     /// <summary>
@@ -37,19 +29,11 @@ public class FeatureDropCommand(
     /// </summary>
     public const string Name = "drop";
 
-    private readonly IAnsiConsole _ansiConsole = Ensure.NotNull(ansiConsole);
-
-    private readonly IKitStoreFactory _kitStoreFactory = Ensure.NotNull(kitStoreFactory);
+    private readonly ShadeKitCommandContext _context = Ensure.NotNull(context);
 
     private readonly IFeatureStore _featureStore = Ensure.NotNull(featureStore);
 
     private readonly IConsoleConfirmation _confirmation = Ensure.NotNull(confirmation);
-
-    private readonly ICliJsonWriter _jsonWriter = Ensure.NotNull(jsonWriter);
-
-    private readonly CliErrorMapper _errorMapper = Ensure.NotNull(errorMapper);
-
-    private readonly ICliCancellation _cancellation = Ensure.NotNull(cancellation);
 
     /// <summary>
     /// Drops the feature, or describes what would be dropped, and writes the result as plain text or as a JSON
@@ -94,7 +78,7 @@ public class FeatureDropCommand(
     {
         Ensure.NotNull(options);
 
-        var store = CliCommandAbort.Run(_kitStoreFactory.Create, _errorMapper, options.Json, _jsonWriter);
+        var store = _context.CreateKitStore(options.Json);
 
         if (options.Yes)
         {
@@ -103,34 +87,31 @@ public class FeatureDropCommand(
             return CommandResult.Success;
         }
 
-        var preview = await CliCommandAbort.RunAsync(
-                () => _featureStore.PreviewDropAsync(store, options.FeatureId, _cancellation.Token), _errorMapper,
-                options.Json, _jsonWriter)
+        var preview = await _context.RunAsync(options.Json,
+                cancellationToken => _featureStore.PreviewDropAsync(store, options.FeatureId, cancellationToken))
             .ConfigureAwait(false);
+
+        _context.WriteSuccess(options.Json,
+            new FeatureDropCommandData(preview.FeatureId, false, preview.Files, preview.OverrideAffected, false),
+            () => WritePreview(preview));
 
         if (options.Json)
         {
-            _jsonWriter.Write(CliJsonEnvelope.Success(
-                new FeatureDropCommandData(preview.FeatureId, false, preview.Files, preview.OverrideAffected,
-                    false)));
-
             return CommandResult.Success;
         }
 
-        WritePreview(preview);
-
         if (!_confirmation.CanAsk)
         {
-            FeatureCommandOutput.WriteLine(_ansiConsole,
+            _context.Console.WriteLine(
                 $"Nothing was dropped. Run 'shade-kit feature drop {preview.FeatureId} --yes' to drop it.");
 
             return CommandResult.Success;
         }
 
-        if (!await _confirmation.ConfirmAsync($"Drop feature {preview.FeatureId}?", _cancellation.Token)
+        if (!await _confirmation.ConfirmAsync($"Drop feature {preview.FeatureId}?", _context.CancellationToken)
                 .ConfigureAwait(false))
         {
-            FeatureCommandOutput.WriteLine(_ansiConsole, "Nothing was dropped.");
+            _context.Console.WriteLine("Nothing was dropped.");
 
             return CommandResult.Success;
         }
@@ -142,41 +123,38 @@ public class FeatureDropCommand(
 
     private async Task DropAsync(IKitStore store, FeatureDropCommandOptions options)
     {
-        var result = await CliCommandAbort.RunAsync(
-                () => _featureStore.DropAsync(store, options.FeatureId, _cancellation.Token), _errorMapper,
-                options.Json, _jsonWriter)
+        var result = await _context.RunAsync(options.Json,
+                cancellationToken => _featureStore.DropAsync(store, options.FeatureId, cancellationToken))
             .ConfigureAwait(false);
 
-        if (options.Json)
+        _context.WriteSuccess(options.Json,
+            new FeatureDropCommandData(result.FeatureId, true, result.Files, result.OverrideAffected,
+                result.OverrideAffected),
+            () => WriteDropped(result));
+    }
+
+    private void WriteDropped(FeatureDropResult result)
+    {
+        _context.Console.WriteLine($"Dropped feature {result.FeatureId}.");
+
+        if (result.OverrideAffected)
         {
-            _jsonWriter.Write(CliJsonEnvelope.Success(
-                new FeatureDropCommandData(result.FeatureId, true, result.Files, result.OverrideAffected,
-                    result.OverrideCleared)));
-
-            return;
-        }
-
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Dropped feature {result.FeatureId}.");
-
-        if (result.OverrideCleared)
-        {
-            FeatureCommandOutput.WriteLine(_ansiConsole, "The local override pointed to this feature and was cleared.");
+            _context.Console.WriteLine("The local override pointed to this feature and was cleared.");
         }
     }
 
     private void WritePreview(FeatureDropPreview preview)
     {
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Feature {preview.FeatureId} would be dropped. Files:");
+        _context.Console.WriteLine($"Feature {preview.FeatureId} would be dropped. Files:");
 
         foreach (var file in preview.Files)
         {
-            FeatureCommandOutput.WriteLine(_ansiConsole, $"  {file}");
+            _context.Console.WriteLine($"  {file}");
         }
 
         if (preview.OverrideAffected)
         {
-            FeatureCommandOutput.WriteLine(_ansiConsole,
-                "The local override points to this feature and would be cleared.");
+            _context.Console.WriteLine("The local override points to this feature and would be cleared.");
         }
     }
 }

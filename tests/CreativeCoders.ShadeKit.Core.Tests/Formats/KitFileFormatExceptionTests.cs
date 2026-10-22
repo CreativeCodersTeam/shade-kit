@@ -19,7 +19,7 @@ public class KitFileFormatExceptionTests
     }
 
     [Fact]
-    public void UpgradeNeededException_Created_MessageNamesFileVersionsAndUpgradeCommand()
+    public void UpgradeNeededException_Created_MessageNamesFileAndVersions()
     {
         // Act
         var exception = new UpgradeNeededException("config.json", 1, 2);
@@ -29,7 +29,7 @@ public class KitFileFormatExceptionTests
             .Should().Contain("config.json")
             .And.Contain("version 1")
             .And.Contain("version is 2")
-            .And.Contain("shade-kit upgrade");
+            .And.NotContain("shade-kit upgrade");
     }
 
     [Fact]

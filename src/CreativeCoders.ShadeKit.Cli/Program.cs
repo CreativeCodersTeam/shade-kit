@@ -139,8 +139,7 @@ internal static class Program
         }
         catch (Exception e)
         {
-            // The host calls commands with options through reflection, which wraps exceptions of synchronous commands.
-            var cause = e is TargetInvocationException { InnerException: { } innerException } ? innerException : e;
+            var cause = CliErrorMapper.Unwrap(e);
 
             await TryWriteErrorAsync(error, $"The command failed unexpectedly: {cause.Message}", cause.ToString())
                 .ConfigureAwait(false);
@@ -231,7 +230,7 @@ internal static class Program
         string message)
     {
         return CompleteFailedJsonRunAsync(jsonWriter, error,
-            new CliError(ShadeKitCliExitCodes.HostError, ShadeKitCliErrorCodes.HostError, message));
+            CliError.Create(ShadeKitCliExitCodes.HostError, message));
     }
 
     private static async Task<int> CompleteFailedJsonRunAsync(CliJsonWriter jsonWriter, TextWriter error,

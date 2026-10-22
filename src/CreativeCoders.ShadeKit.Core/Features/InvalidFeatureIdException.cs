@@ -6,8 +6,7 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// </summary>
 /// <param name="featureId">The feature id that is not valid.</param>
 public class InvalidFeatureIdException(string featureId)
-    : Exception($"'{featureId}' is not a valid feature id. A feature id consists of groups of lowercase letters " +
-                "a-z and digits joined by single hyphens, for example 'gh-142-login-sso'.")
+    : Exception($"'{featureId}' is not a valid feature id.")
 {
     /// <summary>
     /// Gets the feature id that is not valid.

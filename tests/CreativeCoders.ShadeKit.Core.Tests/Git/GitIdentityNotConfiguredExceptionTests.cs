@@ -13,8 +13,7 @@ public class GitIdentityNotConfiguredExceptionTests
 
         // Assert
         exception.Message
-            .Should().Be("The git identity for the repository '/repo' is not configured: user.email is not set. " +
-                         "Set each missing key with 'git config <key> <value>'.");
+            .Should().Be("The git identity for the repository '/repo' is not configured; missing keys: user.email.");
 
         exception.RepositoryRootPath
             .Should().Be("/repo");
@@ -31,8 +30,8 @@ public class GitIdentityNotConfiguredExceptionTests
 
         // Assert
         exception.Message
-            .Should().Be("The git identity for the repository '/repo' is not configured: user.name and user.email " +
-                         "are not set. Set each missing key with 'git config <key> <value>'.");
+            .Should().Be("The git identity for the repository '/repo' is not configured; missing keys: user.name, " +
+                         "user.email.");
 
         exception.MissingKeys
             .Should().Equal("user.name", "user.email");

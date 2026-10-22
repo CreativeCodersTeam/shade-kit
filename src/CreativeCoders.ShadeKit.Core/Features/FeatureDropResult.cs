@@ -10,14 +10,6 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// </param>
 /// <param name="OverrideAffected">
 /// <see langword="true" /> if the local override selected the feature, under the same rule as
-/// <see cref="FeatureDropPreview.OverrideAffected" />; otherwise, <see langword="false" />.
+/// <see cref="FeatureDropPreview.OverrideAffected" />, and was deleted; otherwise, <see langword="false" />.
 /// </param>
-/// <param name="OverrideCleared">
-/// <see langword="true" /> if the local override selected the feature and was deleted; otherwise,
-/// <see langword="false" />.
-/// </param>
-public sealed record FeatureDropResult(
-    string FeatureId,
-    IReadOnlyList<string> Files,
-    bool OverrideAffected,
-    bool OverrideCleared);
+public sealed record FeatureDropResult(string FeatureId, IReadOnlyList<string> Files, bool OverrideAffected);

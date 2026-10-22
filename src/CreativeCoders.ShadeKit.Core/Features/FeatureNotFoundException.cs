@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Store;
+
 namespace CreativeCoders.ShadeKit.Core.Features;
 
 /// <summary>
@@ -5,7 +7,8 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// </summary>
 /// <param name="featureId">The id of the feature that does not exist.</param>
 public class FeatureNotFoundException(string featureId)
-    : Exception($"The feature '{featureId}' does not exist: there is no folder '.shadekit/features/{featureId}/'.")
+    : Exception($"The feature '{featureId}' does not exist: there is no folder " +
+        $"'{KitStorePaths.GetRepositoryFeatureDirPath(featureId)}'.")
 {
     /// <summary>
     /// Gets the id of the feature that does not exist.

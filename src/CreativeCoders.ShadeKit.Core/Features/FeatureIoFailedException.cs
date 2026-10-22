@@ -47,7 +47,7 @@ public class FeatureIoFailedException(string featureId, string operation, Except
     /// The path of the feature folder with a trailing <c>/</c>, for example
     /// <c>.shadekit/features/gh-142-login-sso/</c>.
     /// </value>
-    public string FolderPath { get; } = GetFolderPath(featureId);
+    public string FolderPath { get; } = KitStorePaths.GetRepositoryFeatureDirPath(featureId);
 
     /// <summary>
     /// Gets the name of the feature operation that failed.
@@ -59,12 +59,7 @@ public class FeatureIoFailedException(string featureId, string operation, Except
     {
         Ensure.NotNull(innerException);
 
-        return $"Could not {operation} the feature '{featureId}', because its folder '{GetFolderPath(featureId)}' " +
-               $"cannot be changed: {innerException.Message}";
-    }
-
-    private static string GetFolderPath(string featureId)
-    {
-        return $"{KitStorePaths.GetRepositoryPath(KitStorePaths.GetFeatureDirPath(featureId))}/";
+        return $"Could not {operation} the feature '{featureId}', because its folder " +
+               $"'{KitStorePaths.GetRepositoryFeatureDirPath(featureId)}' cannot be changed: {innerException.Message}";
     }
 }

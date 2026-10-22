@@ -41,11 +41,21 @@ public class FeatureTextFormatTests
     }
 
     [Fact]
-    public void FormatCreated_CreatorAndTime_ReturnsTimeByNameAndEmail()
+    public void FormatCreated_Feature_ReturnsTimeByNameAndEmail()
     {
+        // Arrange
+        var feature = new FeatureDocument
+        {
+            Id = "gh-142-login-sso",
+            Title = "Login SSO",
+            Profile = "feature",
+            Source = new FeatureSource { Kind = FeatureSourceKind.Text },
+            CreatedAt = new DateTimeOffset(2026, 10, 20, 15, 30, 45, TimeSpan.Zero),
+            CreatedBy = new FeatureCreator { Name = "Jane Doe", Email = "jane@example.com" }
+        };
+
         // Act
-        var text = FeatureTextFormat.FormatCreated(new DateTimeOffset(2026, 10, 20, 15, 30, 45, TimeSpan.Zero),
-            "Jane Doe", "jane@example.com");
+        var text = FeatureTextFormat.FormatCreated(feature);
 
         // Assert
         text
@@ -53,22 +63,13 @@ public class FeatureTextFormatTests
     }
 
     [Fact]
-    public void FormatCreated_NullCreatorName_ThrowsArgumentNullException()
+    public void FormatCreated_NullFeature_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => FeatureTextFormat.FormatCreated(DateTimeOffset.UnixEpoch, null!, "jane@example.com");
+        var act = () => FeatureTextFormat.FormatCreated(null!);
 
         // Assert
-        act.Should().Throw<ArgumentNullException>();
-    }
-
-    [Fact]
-    public void FormatCreated_NullCreatorEmail_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => FeatureTextFormat.FormatCreated(DateTimeOffset.UnixEpoch, "Jane Doe", null!);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>();
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("feature");
     }
 }

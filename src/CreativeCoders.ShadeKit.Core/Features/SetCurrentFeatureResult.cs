@@ -7,4 +7,4 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// <param name="Warnings">
 /// The warnings about the current branch, which wins over the local override when it selects another feature.
 /// </param>
-public sealed record SetCurrentFeatureResult(string FeatureId, IReadOnlyList<FeatureWarning> Warnings);
+public sealed record SetCurrentFeatureResult(string FeatureId, IReadOnlyList<KitWarning> Warnings);

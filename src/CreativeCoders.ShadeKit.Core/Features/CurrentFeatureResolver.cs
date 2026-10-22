@@ -1,5 +1,4 @@
 using CreativeCoders.Core;
-using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
 
@@ -23,28 +22,28 @@ public sealed class CurrentFeatureResolver(IGitRepositoryInfo gitRepositoryInfo)
         var branchFeatureId = await ResolveBranchFeatureIdAsync(store, cancellationToken).ConfigureAwait(false);
 
         var (overrideResult, overrideProblem) = await CurrentFeatureOverride
-            .ReadAsync(store, FormatAccess.Read, cancellationToken)
+            .ReadAsync(store, cancellationToken)
             .ConfigureAwait(false);
 
-        var formatWarnings = overrideResult?.Warnings ?? [];
-        List<FeatureWarning> warnings = [];
+        // The format warnings of the override come first, as in every result.
+        List<KitWarning> warnings = [.. overrideResult?.Warnings ?? []];
         string? overrideFeatureId = null;
 
         if (overrideProblem is not null)
         {
-            warnings.Add(FeatureWarning.CurrentFeatureInvalid(DescribeProblem(overrideProblem)));
+            warnings.Add(new CurrentFeatureInvalidWarning(overrideProblem));
         }
         else if (overrideResult is not null)
         {
             var storedFeatureId = overrideResult.Document.FeatureId;
 
-            if (FeatureExists(store, storedFeatureId))
+            if (store.FeatureExists(storedFeatureId))
             {
                 overrideFeatureId = storedFeatureId;
             }
             else
             {
-                warnings.Add(FeatureWarning.CurrentFeatureMissing(storedFeatureId));
+                warnings.Add(new CurrentFeatureMissingWarning(storedFeatureId));
             }
         }
 
@@ -53,16 +52,15 @@ public sealed class CurrentFeatureResolver(IGitRepositoryInfo gitRepositoryInfo)
             if (overrideFeatureId is not null && !string.Equals(overrideFeatureId, branchFeatureId,
                     StringComparison.Ordinal))
             {
-                warnings.Add(FeatureWarning.CurrentFeatureMismatch(overrideFeatureId, branchFeatureId));
+                warnings.Add(new CurrentFeatureMismatchWarning(overrideFeatureId, branchFeatureId));
             }
 
-            return new CurrentFeatureResolution(branchFeatureId, CurrentFeatureOrigin.Branch, warnings,
-                formatWarnings);
+            return new CurrentFeatureResolution(branchFeatureId, CurrentFeatureOrigin.Branch, warnings);
         }
 
         return overrideFeatureId is not null
-            ? new CurrentFeatureResolution(overrideFeatureId, CurrentFeatureOrigin.Override, warnings, formatWarnings)
-            : new CurrentFeatureResolution(null, null, warnings, formatWarnings);
+            ? new CurrentFeatureResolution(overrideFeatureId, CurrentFeatureOrigin.Override, warnings)
+            : new CurrentFeatureResolution(null, null, warnings);
     }
 
     /// <inheritdoc />
@@ -83,28 +81,6 @@ public sealed class CurrentFeatureResolver(IGitRepositoryInfo gitRepositoryInfo)
 
         var candidateFeatureId = branchName[(branchName.LastIndexOf('/') + 1)..];
 
-        return FeatureExists(store, candidateFeatureId) ? candidateFeatureId : null;
-    }
-
-    private static string DescribeProblem(KitFileFormatException exception)
-    {
-        return exception switch
-        {
-            InvalidKitFileException e => e.Reason.TrimEnd('.'),
-            FormatTooNewException e =>
-                $"It uses format version {e.FileVersion}, but this engine supports only up to version " +
-                $"{e.SupportedVersion}",
-            UpgradeNeededException e =>
-                $"It uses the older format version {e.FileVersion} (current version {e.CurrentVersion}), and " +
-                "'outdatedFormatOnRead' is 'stop'",
-            _ => exception.Message.TrimEnd('.')
-        };
-    }
-
-    // The id is checked before the path is built, so an invalid id never leads to a file system access.
-    private static bool FeatureExists(IKitStore store, string featureId)
-    {
-        return FeatureIds.IsValid(featureId)
-               && store.DirectoryExists(KitStorePaths.GetFeatureDirPath(featureId));
+        return store.FeatureExists(candidateFeatureId) ? candidateFeatureId : null;
     }
 }

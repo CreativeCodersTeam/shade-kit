@@ -48,9 +48,6 @@ public sealed class FeatureStoreTests : IDisposable
 
         result.Warnings
             .Should().BeEmpty();
-
-        result.FormatWarnings
-            .Should().BeEmpty();
     }
 
     [Fact]
@@ -69,7 +66,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Equal(FeatureId);
 
         result.Warnings
-            .Should().Equal(FeatureWarning.FeatureFileMissing("aaa-broken"));
+            .Should().Equal(new FeatureFileMissingWarning("aaa-broken"));
     }
 
     [Fact]
@@ -81,7 +78,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result
-            .Should().BeEquivalentTo(new FeatureListResult([], [], []));
+            .Should().BeEquivalentTo(new FeatureListResult([], []));
     }
 
     [Fact]
@@ -142,7 +139,7 @@ public sealed class FeatureStoreTests : IDisposable
         result.Paths
             .Should().Be(FeaturePaths.For(FeatureId));
 
-        result.FormatWarnings
+        result.Warnings
             .Should().BeEmpty();
     }
 
@@ -210,7 +207,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result
-            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, null, [], []));
+            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, []));
 
         result.IsResolved
             .Should().BeFalse();
@@ -231,7 +228,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().BeFalse();
 
         result.Warnings
-            .Should().Equal(FeatureWarning.CurrentFeatureMissing(FeatureId));
+            .Should().Equal(new CurrentFeatureMissingWarning(FeatureId));
     }
 
     [Fact]
@@ -262,7 +259,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Be(FeaturePaths.For(FeatureId));
 
         result.Warnings
-            .Should().Equal(FeatureWarning.CurrentFeatureMismatch(OtherFeatureId, FeatureId));
+            .Should().Equal(new CurrentFeatureMismatchWarning(OtherFeatureId, FeatureId));
     }
 
     [Fact]
@@ -349,7 +346,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result.Warnings
-            .Should().Equal(FeatureWarning.CurrentFeatureMismatch(FeatureId, OtherFeatureId));
+            .Should().Equal(new CurrentFeatureMismatchWarning(FeatureId, OtherFeatureId));
 
         (await _context.ReadOverrideFeatureIdAsync())
             .Should().Be(FeatureId);
@@ -535,9 +532,6 @@ public sealed class FeatureStoreTests : IDisposable
         result.OverrideAffected
             .Should().BeTrue();
 
-        result.OverrideCleared
-            .Should().BeTrue();
-
         _context.KitDirectoryExists("features", FeatureId)
             .Should().BeFalse();
 
@@ -563,9 +557,6 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result.OverrideAffected
-            .Should().BeFalse();
-
-        result.OverrideCleared
             .Should().BeFalse();
 
         _context.KitDirectoryExists("features", FeatureId)
@@ -605,7 +596,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result
-            .Should().BeEquivalentTo(new FeatureDropResult(FeatureId, [], false, false));
+            .Should().BeEquivalentTo(new FeatureDropResult(FeatureId, [], false));
 
         _context.KitDirectoryExists("features", FeatureId)
             .Should().BeFalse();
@@ -624,9 +615,6 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result.OverrideAffected
-            .Should().BeFalse();
-
-        result.OverrideCleared
             .Should().BeFalse();
 
         _context.KitDirectoryExists("features", FeatureId)
@@ -712,7 +700,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Equal(FeatureId);
 
         result.Warnings
-            .Should().Equal(FeatureWarning.FeatureFolderInvalid(folderName));
+            .Should().Equal(new FeatureFolderInvalidWarning(folderName));
     }
 
     [Theory]
@@ -754,7 +742,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Equal(("copy-of-login", "Copy"), (FeatureId, "Login SSO"));
 
         result.Warnings
-            .Should().Equal(FeatureWarning.FeatureIdMismatch("copy-of-login", FeatureId));
+            .Should().Equal(new FeatureIdMismatchWarning("copy-of-login", FeatureId));
 
         (await _context.ReadFeatureFileAsync("copy-of-login")).Id
             .Should().Be(FeatureId, "the file is not changed");
@@ -782,7 +770,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Be(FeaturePaths.For("copy-of-login"));
 
         result.Warnings
-            .Should().Equal(FeatureWarning.FeatureIdMismatch("copy-of-login", FeatureId));
+            .Should().Equal(new FeatureIdMismatchWarning("copy-of-login", FeatureId));
 
         _context.Repository.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
@@ -807,7 +795,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Be(FeaturePaths.For("copy-of-login"));
 
         result.Warnings
-            .Should().Equal(FeatureWarning.FeatureIdMismatch("copy-of-login", FeatureId));
+            .Should().Equal(new FeatureIdMismatchWarning("copy-of-login", FeatureId));
     }
 
     [Fact]
@@ -825,8 +813,8 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result.Warnings
-            .Should().Equal(FeatureWarning.CurrentFeatureMismatch(OtherFeatureId, "copy-of-login"),
-                FeatureWarning.FeatureIdMismatch("copy-of-login", FeatureId));
+            .Should().Equal(new CurrentFeatureMismatchWarning(OtherFeatureId, "copy-of-login"),
+                new FeatureIdMismatchWarning("copy-of-login", FeatureId));
     }
 
     [Theory]
@@ -852,8 +840,9 @@ public sealed class FeatureStoreTests : IDisposable
         result.Origin
             .Should().Be(CurrentFeatureOrigin.Branch);
 
-        result.Warnings.Select(x => x.Kind)
-            .Should().Equal(FeatureWarningKind.CurrentFeatureInvalid);
+        result.Warnings
+            .Should().ContainSingle()
+            .Which.Should().BeOfType<CurrentFeatureInvalidWarning>();
 
         _context.Repository.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
@@ -873,11 +862,82 @@ public sealed class FeatureStoreTests : IDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.FormatWarnings
+        result.Warnings
             .Should().Equal(
                 new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/features/a-feature/feature.json", 1, 2),
                 new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/config.json", 1, 2),
                 new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/features/b-feature/feature.json", 1, 2));
+    }
+
+    [Fact]
+    public async Task ListAsync_OutdatedFeatureFilesAndSkippedFolders_ReturnsFormatWarningsBeforeOtherWarnings()
+    {
+        // Arrange
+        _context.Registry = FeatureStoreTestContext.CreateRegistryWithVersion2(FormatIds.Feature);
+        _context.CreateFeatureFolder("A-invalid");
+        _context.WriteFeature("b-copy", recordedId: FeatureId);
+        _context.CreateFeatureFolder("c-empty");
+        _context.WriteFeature("d-feature");
+
+        // Act
+        var result = await _context.CreateFeatureStore().ListAsync(_context.CreateStore(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/features/b-copy/feature.json", 1, 2),
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/features/d-feature/feature.json", 1, 2),
+                new FeatureFolderInvalidWarning("A-invalid"),
+                new FeatureIdMismatchWarning("b-copy", FeatureId),
+                new FeatureFileMissingWarning("c-empty"));
+    }
+
+    [Fact]
+    public async Task ShowAsync_OutdatedFeatureFileWithOtherId_ReturnsFormatWarningBeforeIdMismatchWarning()
+    {
+        // Arrange
+        _context.Registry = FeatureStoreTestContext.CreateRegistryWithVersion2(FormatIds.Feature);
+        _context.WriteFeature("copy-of-login", "Copy", recordedId: FeatureId);
+
+        // Act
+        var result = await _context.CreateFeatureStore().ShowAsync(_context.CreateStore(), "copy-of-login",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/features/copy-of-login/feature.json", 1,
+                    2),
+                new FeatureIdMismatchWarning("copy-of-login", FeatureId));
+    }
+
+    [Fact]
+    public async Task GetCurrentAsync_OutdatedFilesWithMismatchAndOtherId_ReturnsFormatWarningsBeforeOtherWarnings()
+    {
+        // Arrange
+        _context.Registry = FeatureStoreTestContext.CreateRegistryWithVersion2(FormatIds.CurrentFeature,
+            FormatIds.Feature);
+        _context.WriteFeature("copy-of-login", "Copy", recordedId: FeatureId);
+        _context.WriteFeature(OtherFeatureId, "Checkout");
+        _context.WriteOverride(OtherFeatureId);
+        _context.SetBranch("feature/copy-of-login");
+
+        // Act
+        var result = await _context.CreateFeatureStore().GetCurrentAsync(_context.CreateStore(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.FeatureId
+            .Should().Be("copy-of-login");
+
+        result.Warnings
+            .Should().Equal(
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/features/current-feature.json", 1, 2),
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/features/copy-of-login/feature.json", 1,
+                    2),
+                new CurrentFeatureMismatchWarning(OtherFeatureId, "copy-of-login"),
+                new FeatureIdMismatchWarning("copy-of-login", FeatureId));
     }
 
     [Fact]
@@ -912,7 +972,7 @@ public sealed class FeatureStoreTests : IDisposable
         result.Feature?.Id
             .Should().Be(FeatureId);
 
-        result.FormatWarnings
+        result.Warnings
             .Should().Equal(
                 new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/features/current-feature.json", 1, 2),
                 new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/config.json", 1, 2),
@@ -960,6 +1020,29 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Be(FeatureId, "the override is read without a format warning, so it is in the current version");
     }
 
+    [Theory]
+    [InlineData("{")]
+    [InlineData("""{ "schemaVersion": 99, "minEngineVersion": "99.0.0" }""")]
+    public async Task SetCurrentAsync_OutdatedOverrideAndUnusableConfig_ReplacesOverride(string configContent)
+    {
+        // Arrange
+        _context.Registry = FeatureStoreTestContext.CreateRegistryWithVersion2(FormatIds.CurrentFeature);
+        _context.WriteKitFile(configContent, KitStorePaths.ConfigFileName);
+        _context.WriteFeature(FeatureId);
+        _context.WriteOverride(OtherFeatureId);
+
+        // Act
+        await _context.CreateFeatureStore().SetCurrentAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await _context.ReadOverrideFeatureIdAsync())
+            .Should().Be(FeatureId);
+
+        _context.Repository.ReadFileText(".shadekit", "config.json")
+            .Should().Be(configContent);
+    }
+
     [Fact]
     public async Task SetCurrentAsync_BrokenOverrideAndGitUnavailable_ThrowsAndKeepsOverride()
     {
@@ -1002,9 +1085,6 @@ public sealed class FeatureStoreTests : IDisposable
         result.OverrideAffected
             .Should().BeTrue();
 
-        result.OverrideCleared
-            .Should().BeTrue();
-
         _context.KitFileExists("features", "current-feature.json")
             .Should().BeFalse();
     }
@@ -1026,9 +1106,6 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result.OverrideAffected
-            .Should().BeFalse();
-
-        result.OverrideCleared
             .Should().BeFalse();
 
         _context.KitDirectoryExists("features", FeatureId)
@@ -1053,9 +1130,6 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result.OverrideAffected
-            .Should().BeFalse();
-
-        result.OverrideCleared
             .Should().BeFalse();
 
         _context.KitDirectoryExists("features", FeatureId)
@@ -1205,7 +1279,7 @@ public sealed class FeatureStoreTests : IDisposable
         var result = await featureStore.DropAsync(store, FeatureId, TestContext.Current.CancellationToken);
 
         // Assert
-        result.OverrideCleared
+        result.OverrideAffected
             .Should().BeTrue();
 
         Directory.EnumerateFileSystemEntries(Path.Combine(_context.RepositoryRootPath, ".shadekit", "features"))
@@ -1326,9 +1400,6 @@ public sealed class FeatureStoreTests : IDisposable
         result.OverrideAffected
             .Should().BeTrue();
 
-        result.OverrideCleared
-            .Should().BeTrue();
-
         Directory.EnumerateFileSystemEntries(Path.Combine(_context.RepositoryRootPath, ".shadekit", "features"))
             .Should().BeEmpty("the rename is the point of no return, so a later cancellation must not stop the drop");
     }
@@ -1368,7 +1439,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         current
-            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, null, [], []));
+            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, []));
 
         await secondDrop.Should().ThrowAsync<FeatureNotFoundException>();
     }
@@ -1501,7 +1572,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().BeFalse();
 
         (await featureStore.GetCurrentAsync(realStore, TestContext.Current.CancellationToken)).Warnings
-            .Should().Equal(FeatureWarning.CurrentFeatureMissing(FeatureId));
+            .Should().Equal(new CurrentFeatureMissingWarning(FeatureId));
     }
 
     [Fact]
@@ -1539,8 +1610,9 @@ public sealed class FeatureStoreTests : IDisposable
         result.IsResolved
             .Should().BeFalse();
 
-        result.Warnings.Select(x => x.Kind)
-            .Should().Equal(FeatureWarningKind.CurrentFeatureInvalid);
+        result.Warnings
+            .Should().ContainSingle()
+            .Which.Should().BeOfType<CurrentFeatureInvalidWarning>();
     }
 
     [Fact]
@@ -1557,7 +1629,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result
-            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, null, [], []));
+            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, []));
     }
 
     [Fact]
@@ -1577,7 +1649,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Equal(FeatureId);
 
         result.Warnings
-            .Should().Equal(FeatureWarning.FeatureFolderInvalid("Draft"));
+            .Should().Equal(new FeatureFolderInvalidWarning("Draft"));
     }
 
     [Fact]
@@ -1599,8 +1671,8 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Equal("b-copy", FeatureId);
 
         result.Warnings
-            .Should().Equal(FeatureWarning.FeatureFolderInvalid("A-invalid"),
-                FeatureWarning.FeatureIdMismatch("b-copy", FeatureId), FeatureWarning.FeatureFileMissing("c-empty"));
+            .Should().Equal(new FeatureFolderInvalidWarning("A-invalid"),
+                new FeatureIdMismatchWarning("b-copy", FeatureId), new FeatureFileMissingWarning("c-empty"));
     }
 
     [Fact]
@@ -1609,10 +1681,9 @@ public sealed class FeatureStoreTests : IDisposable
         // Arrange
         _context.WriteFeature(FeatureId);
         _context.WriteOverrideContent("{");
-        var store = A.Fake<IKitStore>(options => options.Wrapping(_context.CreateStore()));
-        A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<CancellationToken>._))
-            .ThrowsAsync(new IOException("The disk is full."));
+        // The store deletes the broken override for the replacement, then the write fails.
+        var store = A.Fake<IKitStore>(options =>
+            options.Wrapping(_context.CreateStoreFailingOverrideWrite(new IOException("The disk is full."))));
 
         // Act
         var act = () => _context.CreateFeatureStore().SetCurrentAsync(store, FeatureId,
@@ -1622,11 +1693,10 @@ public sealed class FeatureStoreTests : IDisposable
         await act.Should().ThrowAsync<IOException>()
             .WithMessage("The disk is full.");
 
-        A.CallTo(() => store.DeleteFile("features/current-feature.json"))
-            .MustHaveHappenedOnceExactly()
-            .Then(A.CallTo(() => store.WriteJsonAsync("features/current-feature.json", FormatIds.CurrentFeature,
-                    A<CurrentFeatureDocument>._, FormatAccess.Write, A<CancellationToken>._))
-                .MustHaveHappenedOnceExactly());
+        A.CallTo(() => store.WriteJsonAsync("features/current-feature.json", FormatIds.CurrentFeature,
+                A<CurrentFeatureDocument>.That.Matches(x => x.FeatureId == FeatureId), FormatAccess.Replace,
+                A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
 
         _context.KitFileExists("features", "current-feature.json")
             .Should().BeFalse();

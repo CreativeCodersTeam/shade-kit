@@ -319,7 +319,7 @@ public class GitExecutableLocatorTests
     }
 
     [Fact]
-    public void FindGitExecutable_PathVariableReadOnEveryCall_UsesCurrentValue()
+    public void FindGitExecutable_NotFoundOnFirstCall_SearchesCurrentPathValueOnNextCall()
     {
         // Arrange
         var pathVariable = "/opt/none";
@@ -334,6 +334,60 @@ public class GitExecutableLocatorTests
         // Assert
         firstResult
             .Should().BeNull();
+
+        secondResult
+            .Should().Be("/usr/bin/git");
+    }
+
+    [Fact]
+    public void FindGitExecutable_CalledRepeatedlyAfterMatch_SearchesPathOnlyOnce()
+    {
+        // Arrange
+        var pathVariableReads = 0;
+        var fileChecks = 0;
+        var sut = new GitExecutableLocator(() =>
+        {
+            pathVariableReads++;
+
+            return "/opt/none:/usr/bin";
+        }, false, x =>
+        {
+            fileChecks++;
+
+            return x == "/usr/bin/git";
+        }, AllExecutable);
+
+        // Act
+        var results = Enumerable.Range(0, 3).Select(_ => sut.FindGitExecutable()).ToList();
+
+        // Assert
+        results
+            .Should().Equal("/usr/bin/git", "/usr/bin/git", "/usr/bin/git");
+
+        pathVariableReads
+            .Should().Be(1);
+
+        fileChecks
+            .Should().Be(2);
+    }
+
+    [Fact]
+    public void FindGitExecutable_PathChangesAfterMatch_ReturnsFirstMatch()
+    {
+        // Arrange
+        var pathVariable = "/usr/bin";
+        var sut = new GitExecutableLocator(() => pathVariable, false,
+            x => x is "/usr/bin/git" or "/usr/local/bin/git", AllExecutable);
+
+        var firstResult = sut.FindGitExecutable();
+        pathVariable = "/usr/local/bin";
+
+        // Act
+        var secondResult = sut.FindGitExecutable();
+
+        // Assert
+        firstResult
+            .Should().Be("/usr/bin/git");
 
         secondResult
             .Should().Be("/usr/bin/git");

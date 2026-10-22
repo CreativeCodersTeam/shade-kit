@@ -1,3 +1,5 @@
+using System.Runtime.Versioning;
+using System.Text;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Config;
@@ -242,8 +244,10 @@ public class KitStoreJsonTests
             .Should().Equal(new FormatWarning(FormatWarningKind.UpgradeNeeded, ConfigDisplayPath, 1, 2));
     }
 
-    [Fact]
-    public async Task ReadJsonAsync_UndefinedAccess_ThrowsArgumentOutOfRangeException()
+    [Theory]
+    [InlineData((FormatAccess)42)]
+    [InlineData(FormatAccess.Replace)]
+    public async Task ReadJsonAsync_UndefinedOrReplaceAccess_ThrowsArgumentOutOfRangeException(FormatAccess access)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -251,12 +255,12 @@ public class KitStoreJsonTests
         var kitStore = CreateStore(tempDirectory);
 
         // Act
-        var act = () => kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, (FormatAccess)42,
+        var act = () => kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, access,
             TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<ArgumentOutOfRangeException>())
-            .WithParameterName("access");
+            .WithParameterName(nameof(access));
     }
 
     [Fact]
@@ -712,7 +716,7 @@ public class KitStoreJsonTests
     [Theory]
     [InlineData(FormatAccess.Read)]
     [InlineData((FormatAccess)42)]
-    public async Task WriteJsonAsync_AccessOtherThanWriteOrUpgrade_ThrowsArgumentOutOfRangeExceptionAndWritesNothing(
+    public async Task WriteJsonAsync_ReadOrUndefinedAccess_ThrowsArgumentOutOfRangeExceptionAndWritesNothing(
         FormatAccess access)
     {
         // Arrange
@@ -1115,6 +1119,370 @@ public class KitStoreJsonTests
         // Assert
         tempDirectory.ReadFileBytes(".shadekit", SampleFileName).Take(3)
             .Should().NotEqual(new byte[] { 0xEF, 0xBB, 0xBF });
+    }
+
+    [Fact]
+    public async Task ReadJsonAsync_SecondOlderFileAfterConfigChangedOnDisk_ReusesFirstConfigRead()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile(StoreTestFormats.SampleV1, ".shadekit", SampleFileName);
+        tempDirectory.WriteFile(StoreTestFormats.SampleV1, ".shadekit", "other.json");
+        tempDirectory.WriteFile(StoreTestFormats.Config(1, "migrate-and-warn"), ".shadekit", "config.json");
+        var kitStore = CreateStore(tempDirectory, configVersion: 2);
+
+        await kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        // A second read of config.json would fail.
+        tempDirectory.WriteFile("not json", ".shadekit", "config.json");
+
+        // Act
+        var result = await kitStore.ReadJsonAsync<SampleDocument>("other.json", SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
+            .Should().Equal(
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/other.json", 1, 2),
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, ConfigDisplayPath, 1, 2));
+    }
+
+    [Fact]
+    public async Task ReadJsonAsync_ConfigReadFailedBefore_ReadsConfigAgain()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile(StoreTestFormats.SampleV1, ".shadekit", SampleFileName);
+        tempDirectory.WriteFile("not json", ".shadekit", "config.json");
+        var kitStore = CreateStore(tempDirectory, configVersion: 2);
+
+        var firstRead = () => kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id,
+            FormatAccess.Read, TestContext.Current.CancellationToken);
+
+        await firstRead.Should().ThrowAsync<InvalidKitFileException>();
+
+        tempDirectory.WriteFile(StoreTestFormats.Config(1, "migrate-and-warn"), ".shadekit", "config.json");
+
+        // Act
+        var result = await kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
+            .Should().Equal(
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, SampleDisplayPath, 1, 2),
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, ConfigDisplayPath, 1, 2));
+    }
+
+    [Fact]
+    public async Task ReadJsonAsync_ConfigWrittenThroughStoreAfterRead_UsesNewSetting()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile(StoreTestFormats.SampleV1, ".shadekit", SampleFileName);
+        tempDirectory.WriteFile(StoreTestFormats.Config(1, "migrate-and-warn"), ".shadekit", "config.json");
+        var kitStore = CreateStore(tempDirectory);
+
+        await kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        await kitStore.WriteFileAsync("config.json", Encoding.UTF8.GetBytes(StoreTestFormats.Config(1, "stop")),
+            TestContext.Current.CancellationToken);
+
+        // Act
+        var act = () => kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<UpgradeNeededException>())
+            .Which.FilePath.Should().Be(SampleDisplayPath);
+    }
+
+    [Theory]
+    [InlineData("delete-file")]
+    [InlineData("delete-directory")]
+    [InlineData("move-directory")]
+    [InlineData("create-directory")]
+    public async Task ReadJsonAsync_StoreChangedAfterRead_ReadsConfigAgain(string change)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile(StoreTestFormats.SampleV1, ".shadekit", SampleFileName);
+        tempDirectory.WriteFile(StoreTestFormats.Config(1, "migrate-and-warn"), ".shadekit", "config.json");
+        tempDirectory.WriteFile("{}", ".shadekit", "scratch", "file.json");
+        var kitStore = CreateStore(tempDirectory);
+
+        await kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        tempDirectory.WriteFile(StoreTestFormats.Config(1, "stop"), ".shadekit", "config.json");
+
+        switch (change)
+        {
+            case "delete-file":
+                kitStore.DeleteFile("scratch/file.json");
+                break;
+            case "delete-directory":
+                kitStore.DeleteDirectory("scratch");
+                break;
+            case "move-directory":
+                kitStore.MoveDirectory("scratch", "moved");
+                break;
+            default:
+                kitStore.CreateDirectory("created");
+                break;
+        }
+
+        // Act
+        var act = () => kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<UpgradeNeededException>())
+            .Which.FilePath.Should().Be(SampleDisplayPath);
+    }
+
+    [Fact]
+    public async Task WriteJsonAsync_ReplaceAccessAndFileMissing_WritesFileInMissingDirectory()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitStore = CreateStore(tempDirectory);
+        var relativePath = Path.Combine("features", "login", SampleFileName);
+
+        // Act
+        await kitStore.WriteJsonAsync(relativePath, SampleFormat.Id, new SampleDocument { Title = "Logout" },
+            FormatAccess.Replace, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ReadTitleAsync(kitStore, relativePath))
+            .Should().Be("Logout");
+    }
+
+    [Theory]
+    [InlineData(StoreTestFormats.SampleV2)]
+    [InlineData(StoreTestFormats.SampleV1)]
+    [InlineData("""{ "schemaVersion": 3, "minEngineVersion": "2.0.0" }""")]
+    [InlineData("{")]
+    [InlineData("")]
+    [InlineData("""{ "title": "Login" }""")]
+    [InlineData("""{ "schemaVersion": 2, "title": "Login" }""")]
+    [InlineData("""{ "schemaVersion": 2, "minEngineVersion": "0.2.0", "title": 5 }""")]
+    public async Task WriteJsonAsync_ReplaceAccessAndExistingFile_ReplacesItWithCurrentVersion(string existingContent)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile(existingContent, ".shadekit", SampleFileName);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument { Title = "Logout" },
+            FormatAccess.Replace, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ReadTitleAsync(kitStore, SampleFileName))
+            .Should().Be("Logout", "the file is read back with write access, so it is in the current version");
+    }
+
+    [Theory]
+    [InlineData("""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "outdatedFormatOnRead": "stop" }""")]
+    [InlineData("{")]
+    [InlineData("""{ "schemaVersion": 99, "minEngineVersion": "99.0.0" }""")]
+    public async Task WriteJsonAsync_ReplaceAccessAndOlderFileWithStopOrUnusableConfig_ReplacesFileAndKeepsConfig(
+        string configContent)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile(StoreTestFormats.SampleV1, ".shadekit", SampleFileName);
+        tempDirectory.WriteFile(configContent, ".shadekit", "config.json");
+        var originalConfigBytes = tempDirectory.ReadFileBytes(".shadekit", "config.json");
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument { Title = "Logout" },
+            FormatAccess.Replace, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ReadTitleAsync(kitStore, SampleFileName))
+            .Should().Be("Logout");
+
+        tempDirectory.ReadFileBytes(".shadekit", "config.json")
+            .Should().Equal(originalConfigBytes);
+    }
+
+    [Fact]
+    public async Task WriteJsonAsync_ReplaceAccessAndDirectoryAtPath_ThrowsAndKeepsDirectory()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var directoryPath = tempDirectory.CreateDirectory(".shadekit", SampleFileName);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
+            FormatAccess.Replace, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<Exception>())
+            .Which
+            .Should().Match<Exception>(x => x is IOException || x is UnauthorizedAccessException);
+
+        Directory.Exists(directoryPath)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task WriteJsonAsync_ReplaceAccessAndUnknownFormatIdWithExistingFile_ThrowsAndLeavesFileUnchanged()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile("{", ".shadekit", SampleFileName);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        var act = () => kitStore.WriteJsonAsync(SampleFileName, "unknown", new SampleDocument(),
+            FormatAccess.Replace, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<ArgumentException>())
+            .WithParameterName("formatId");
+
+        tempDirectory.ReadFileText(".shadekit", SampleFileName)
+            .Should().Be("{");
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task WriteJsonAsync_ReplaceAccessAndUnreadableFile_ThrowsUnauthorizedAccessExceptionAndKeepsFile()
+    {
+        // Arrange
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes are needed to make a file unreadable.");
+        using var tempDirectory = new TempKitDirectory();
+        var filePath = tempDirectory.WriteFile("{", ".shadekit", SampleFileName);
+        var kitStore = CreateStore(tempDirectory);
+        File.SetUnixFileMode(filePath, UnixFileMode.UserWrite);
+
+        try
+        {
+            Assert.SkipWhen(CanRead(filePath),
+                $"'{filePath}' is readable without permissions, for example because the tests run as root.");
+
+            // Act
+            var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
+                FormatAccess.Replace, TestContext.Current.CancellationToken);
+
+            // Assert
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        }
+        finally
+        {
+            File.SetUnixFileMode(filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        tempDirectory.ReadFileText(".shadekit", SampleFileName)
+            .Should().Be("{");
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task WriteJsonAsync_ReplaceAccessAndReadOnlyUnusableFile_DeletesItAndWritesNewFile()
+    {
+        // Arrange
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes are needed to make a file read-only.");
+        using var tempDirectory = new TempKitDirectory();
+        var filePath = tempDirectory.WriteFile("{", ".shadekit", SampleFileName);
+        File.SetUnixFileMode(filePath, UnixFileMode.UserRead);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument { Title = "Logout" },
+            FormatAccess.Replace, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ReadTitleAsync(kitStore, SampleFileName))
+            .Should().Be("Logout");
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task WriteJsonAsync_ReplaceAccessAndReadOnlyCurrentFile_ThrowsUnauthorizedAccessExceptionAndKeepsFile()
+    {
+        // Arrange
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes are needed to make a file read-only.");
+        using var tempDirectory = new TempKitDirectory();
+        var filePath = tempDirectory.WriteFile(StoreTestFormats.SampleV2, ".shadekit", SampleFileName);
+        File.SetUnixFileMode(filePath, UnixFileMode.UserRead);
+        var kitStore = CreateStore(tempDirectory);
+
+        try
+        {
+            Assert.SkipWhen(CanWrite(filePath),
+                $"'{filePath}' is writable without permissions, for example because the tests run as root.");
+
+            // Act
+            var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
+                FormatAccess.Replace, TestContext.Current.CancellationToken);
+
+            // Assert
+            await act.Should().ThrowAsync<UnauthorizedAccessException>(
+                "a usable file is overwritten in place, not deleted");
+        }
+        finally
+        {
+            File.SetUnixFileMode(filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        tempDirectory.ReadFileText(".shadekit", SampleFileName)
+            .Should().Be(StoreTestFormats.SampleV2);
+    }
+
+    private static async Task<string?> ReadTitleAsync(KitStore kitStore, string relativePath)
+    {
+        var result = await kitStore.ReadJsonAsync<SampleDocument>(relativePath, SampleFormat.Id, FormatAccess.Write,
+            TestContext.Current.CancellationToken);
+
+        result
+            .Should().NotBeNull();
+
+        result.Warnings
+            .Should().BeEmpty();
+
+        return result.Document.Title;
+    }
+
+    private static bool CanRead(string filePath)
+    {
+        try
+        {
+            _ = File.ReadAllBytes(filePath);
+
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool CanWrite(string filePath)
+    {
+        try
+        {
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Write);
+
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static KitStore CreateStore(TempKitDirectory tempDirectory, int configVersion = 1)

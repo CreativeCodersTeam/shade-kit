@@ -38,7 +38,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Override,
-                [], []));
+                []));
     }
 
     [Fact]
@@ -63,11 +63,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
             .Should().Be(CurrentFeatureOrigin.Branch);
 
         resolution.Warnings
-            .Should().Equal(new FeatureWarning(FeatureWarningKind.CurrentFeatureMismatch, "gh-7-checkout",
-                "gh-142-login-sso"));
+            .Should().Equal(new CurrentFeatureMismatchWarning("gh-7-checkout", "gh-142-login-sso"));
 
-        resolution.FormatWarnings
-            .Should().BeEmpty();
     }
 
     [Fact]
@@ -84,7 +81,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
 
         // Assert
         resolution
-            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null, [], []));
+            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null, []));
 
         resolution.IsResolved
             .Should().BeFalse();
@@ -103,7 +100,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
 
         // Assert
         resolution
-            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null, [], []));
+            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null, []));
     }
 
     [Theory]
@@ -123,7 +120,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Branch,
-                [], []));
+                []));
 
         resolution.IsResolved
             .Should().BeTrue();
@@ -149,7 +146,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Override,
-                [], []));
+                []));
     }
 
     [Fact]
@@ -185,7 +182,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-7-checkout", CurrentFeatureOrigin.Override,
-                [], []));
+                []));
     }
 
     [Fact]
@@ -219,7 +216,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Override,
-                [], []));
+                []));
     }
 
     [Fact]
@@ -235,7 +232,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
 
         // Assert
         resolution
-            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null, [], []));
+            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null, []));
     }
 
     [Fact]
@@ -252,7 +249,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null,
-                [new FeatureWarning(FeatureWarningKind.CurrentFeatureMissing, "gh-142-login-sso")], []));
+                [new CurrentFeatureMissingWarning("gh-142-login-sso")]),
+                options => options.PreferringRuntimeMemberTypes());
     }
 
     [Fact]
@@ -287,7 +285,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Branch,
-                [new FeatureWarning(FeatureWarningKind.CurrentFeatureMissing, "gh-7-checkout")], []));
+                [new CurrentFeatureMissingWarning("gh-7-checkout")]),
+                options => options.PreferringRuntimeMemberTypes());
     }
 
     [Theory]
@@ -310,7 +309,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null,
-                [new FeatureWarning(FeatureWarningKind.CurrentFeatureMissing, overrideId)], []));
+                [new CurrentFeatureMissingWarning(overrideId)]),
+                options => options.PreferringRuntimeMemberTypes());
     }
 
     [Fact]
@@ -330,7 +330,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
 
         // Assert
         resolution.Warnings
-            .Should().Equal(new FeatureWarning(FeatureWarningKind.CurrentFeatureMissing, "../x"));
+            .Should().Equal(new CurrentFeatureMissingWarning("../x"));
 
         A.CallTo(() => store.DirectoryExists(A<string>._))
             .MustNotHaveHappened();
@@ -351,7 +351,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Branch,
-                [], []));
+                []));
     }
 
     [Fact]
@@ -369,7 +369,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Override,
-                [], [new FormatWarning(FormatWarningKind.UpgradeNeeded, CurrentFeatureDisplayPath, 1, 2)]));
+                [new FormatWarning(FormatWarningKind.UpgradeNeeded, CurrentFeatureDisplayPath, 1, 2)]),
+                options => options.PreferringRuntimeMemberTypes());
     }
 
     [Fact]
@@ -387,7 +388,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Branch,
-                [], [new FormatWarning(FormatWarningKind.UpgradeNeeded, CurrentFeatureDisplayPath, 1, 2)]));
+                [new FormatWarning(FormatWarningKind.UpgradeNeeded, CurrentFeatureDisplayPath, 1, 2)]),
+                options => options.PreferringRuntimeMemberTypes());
     }
 
     [Fact]
@@ -407,12 +409,19 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         var resolution = await CreateResolver().ResolveAsync(store, TestContext.Current.CancellationToken);
 
         // Assert
-        resolution
-            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null,
-                [
-                    FeatureWarning.CurrentFeatureInvalid(
-                        "It uses the older format version 1 (current version 2), and 'outdatedFormatOnRead' is 'stop'")
-                ], []));
+        resolution.IsResolved
+            .Should().BeFalse();
+
+        var problem = GetSingleInvalidWarningProblem<UpgradeNeededException>(resolution);
+
+        problem.FilePath
+            .Should().Be(CurrentFeatureDisplayPath);
+
+        problem.FileVersion
+            .Should().Be(1);
+
+        problem.CurrentVersion
+            .Should().Be(2);
     }
 
     [Fact]
@@ -438,8 +447,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         resolution.Origin
             .Should().Be(CurrentFeatureOrigin.Branch);
 
-        resolution.Warnings.Select(x => x.Kind)
-            .Should().Equal(FeatureWarningKind.CurrentFeatureInvalid);
+        GetSingleInvalidWarningProblem<UpgradeNeededException>(resolution);
     }
 
     [Fact]
@@ -456,10 +464,15 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         var resolution = await CreateResolver().ResolveAsync(store, TestContext.Current.CancellationToken);
 
         // Assert
-        resolution
-            .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Branch,
-                [FeatureWarning.CurrentFeatureMismatch("gh-7-checkout", "gh-142-login-sso")],
-                [new FormatWarning(FormatWarningKind.UpgradeNeeded, CurrentFeatureDisplayPath, 1, 2)]));
+        resolution.FeatureId
+            .Should().Be("gh-142-login-sso");
+
+        resolution.Origin
+            .Should().Be(CurrentFeatureOrigin.Branch);
+
+        resolution.Warnings
+            .Should().Equal(new FormatWarning(FormatWarningKind.UpgradeNeeded, CurrentFeatureDisplayPath, 1, 2),
+                new CurrentFeatureMismatchWarning("gh-7-checkout", "gh-142-login-sso"));
     }
 
     [Fact]
@@ -517,7 +530,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null,
-                [FeatureWarning.CurrentFeatureMissing("gh-142-login-sso")], []));
+                [new CurrentFeatureMissingWarning("gh-142-login-sso")]),
+                options => options.PreferringRuntimeMemberTypes());
     }
 
     [Fact]
@@ -535,7 +549,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null,
-                [FeatureWarning.CurrentFeatureMissing("gh-142-login-sso\n")], []));
+                [new CurrentFeatureMissingWarning("gh-142-login-sso\n")]),
+                options => options.PreferringRuntimeMemberTypes());
     }
 
     [Fact]
@@ -553,7 +568,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution
             .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-142-login-sso", CurrentFeatureOrigin.Branch,
-                [FeatureWarning.CurrentFeatureMissing("../gh-142-login-sso")], []));
+                [new CurrentFeatureMissingWarning("../gh-142-login-sso")]),
+                options => options.PreferringRuntimeMemberTypes());
     }
 
     [Fact]
@@ -598,15 +614,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         resolution.Origin
             .Should().Be(CurrentFeatureOrigin.Branch);
 
-        var warning = resolution.Warnings
-            .Should().ContainSingle().Subject;
-
-        warning.Kind
-            .Should().Be(FeatureWarningKind.CurrentFeatureInvalid);
-
-        warning.Detail
-            .Should().NotBeNullOrWhiteSpace()
-            .And.NotEndWith(".");
+        GetSingleInvalidWarningProblem<InvalidKitFileException>(resolution).FilePath
+            .Should().Be(CurrentFeatureDisplayPath);
 
         _repository.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
@@ -628,9 +637,11 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         var resolution = await CreateResolver().ResolveAsync(store, TestContext.Current.CancellationToken);
 
         // Assert
-        resolution
-            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null,
-                [FeatureWarning.CurrentFeatureInvalid(expectedReason.TrimEnd('.'))], []));
+        resolution.IsResolved
+            .Should().BeFalse();
+
+        GetSingleInvalidWarningProblem<InvalidKitFileException>(resolution).Reason
+            .Should().Be(expectedReason);
     }
 
     [Fact]
@@ -648,12 +659,16 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         var resolution = await CreateResolver().ResolveAsync(store, TestContext.Current.CancellationToken);
 
         // Assert
-        resolution
-            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null,
-                [
-                    FeatureWarning.CurrentFeatureInvalid(
-                        "It uses format version 99, but this engine supports only up to version 1")
-                ], []));
+        resolution.IsResolved
+            .Should().BeFalse();
+
+        var problem = GetSingleInvalidWarningProblem<FormatTooNewException>(resolution);
+
+        problem.FileVersion
+            .Should().Be(99);
+
+        problem.SupportedVersion
+            .Should().Be(1);
 
         _repository.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
@@ -677,8 +692,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         resolution.FeatureId
             .Should().Be("gh-142-login-sso");
 
-        resolution.Warnings.Select(x => x.Kind)
-            .Should().Equal(FeatureWarningKind.CurrentFeatureInvalid);
+        GetSingleInvalidWarningProblem<FormatTooNewException>(resolution);
     }
 
     [Fact]
@@ -885,6 +899,16 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("gitRepositoryInfo");
+    }
+
+    private static TProblem GetSingleInvalidWarningProblem<TProblem>(CurrentFeatureResolution resolution)
+        where TProblem : KitFileFormatException
+    {
+        return resolution.Warnings
+            .Should().ContainSingle()
+            .Which.Should().BeOfType<CurrentFeatureInvalidWarning>()
+            .Which.Problem.Should().BeOfType<TProblem>()
+            .Subject;
     }
 
     private static async Task<string> GetInvalidFileReasonAsync(KitStore store)

@@ -467,63 +467,25 @@ public class InitCommandTests
     }
 
     [Fact]
-    public void Ctor_NullConsole_ThrowsArgumentNullException()
+    public void Ctor_NullContext_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new InitCommand(null!, A.Fake<IRepositoryInitializer>(), A.Fake<ICliJsonWriter>(),
-            CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
+        var act = () => new InitCommand(null!, A.Fake<IRepositoryInitializer>());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("ansiConsole");
+            .WithParameterName("context");
     }
 
     [Fact]
     public void Ctor_NullRepositoryInitializer_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new InitCommand(new TestConsole(), null!, A.Fake<ICliJsonWriter>(),
-            CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
+        var act = () => new InitCommand(TestShadeKitCommandContext.Create(new TestConsole()), null!);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("repositoryInitializer");
-    }
-
-    [Fact]
-    public void Ctor_NullJsonWriter_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => new InitCommand(new TestConsole(), A.Fake<IRepositoryInitializer>(), null!,
-            CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("jsonWriter");
-    }
-
-    [Fact]
-    public void Ctor_NullErrorMapper_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => new InitCommand(new TestConsole(), A.Fake<IRepositoryInitializer>(),
-            A.Fake<ICliJsonWriter>(), null!, TestCliCancellation.None);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("errorMapper");
-    }
-
-    [Fact]
-    public void Ctor_NullCancellation_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => new InitCommand(new TestConsole(), A.Fake<IRepositoryInitializer>(),
-            A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), null!);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("cancellation");
     }
 
     [Fact]
@@ -562,8 +524,9 @@ public class InitCommandTests
     internal static InitCommand CreateCommand(IAnsiConsole console, IRepositoryInitializer repositoryInitializer,
         TextWriter? jsonOutput = null, ICliCancellation? cancellation = null)
     {
-        return new InitCommand(console, repositoryInitializer, new CliJsonWriter(jsonOutput ?? TextWriter.Null),
-            CliErrorMapperTests.CreateMapper(), cancellation ?? TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(console, jsonOutput: jsonOutput, cancellation: cancellation);
+
+        return new InitCommand(context, repositoryInitializer);
     }
 
     internal static IRepositoryInitializer CreateInitializer(RepositoryInitResult result)

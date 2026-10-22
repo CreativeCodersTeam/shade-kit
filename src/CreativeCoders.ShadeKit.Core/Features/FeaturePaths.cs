@@ -29,11 +29,9 @@ public sealed record FeaturePaths(string FeatureDir, string FeatureFile, string 
     {
         FeatureIds.EnsureValid(featureId);
 
-        var featureDir = $"{KitStorePaths.GetFeatureDirPath(featureId)}/";
+        var featureDir = KitStorePaths.GetRepositoryFeatureDirPath(featureId);
 
-        return new FeaturePaths(
-            KitStorePaths.GetRepositoryPath(featureDir),
-            KitStorePaths.GetRepositoryPath(featureDir + KitStorePaths.FeatureFileName),
-            KitStorePaths.GetRepositoryPath(featureDir + KitStorePaths.RequestFileName));
+        return new FeaturePaths(featureDir, featureDir + KitStorePaths.FeatureFileName,
+            featureDir + KitStorePaths.RequestFileName);
     }
 }

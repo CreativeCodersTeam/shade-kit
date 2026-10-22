@@ -104,4 +104,19 @@ public class ShippedTemplatesTests
                 .And.NotContain("\\")
                 .And.NotContain(".template."));
     }
+
+    [Fact]
+    public void Request_IsTheRequestTemplateOfTheCatalog()
+    {
+        // Act
+        var request = ShippedTemplates.Request;
+
+        // Assert
+        request
+            .Should().Be(new ShippedTemplate("request.template.md", "templates/request.md"));
+
+        ShippedTemplates.All
+            .Should().ContainSingle(x => x.ResourcePath == request.ResourcePath)
+            .Which.Should().BeSameAs(request);
+    }
 }

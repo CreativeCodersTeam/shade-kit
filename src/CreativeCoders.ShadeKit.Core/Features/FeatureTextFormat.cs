@@ -28,23 +28,18 @@ public static class FeatureTextFormat
     }
 
     /// <summary>
-    /// Formats the specified creation time and creator of a feature as one line.
+    /// Formats the creation time and the creator of the specified feature as one line.
     /// </summary>
-    /// <param name="createdAt">The creation time with its UTC offset.</param>
-    /// <param name="creatorName">The name of the git user who created the feature.</param>
-    /// <param name="creatorEmail">The email address of the git user who created the feature.</param>
+    /// <param name="feature">The <c>feature.json</c> document of the feature.</param>
     /// <returns>
     /// The text <c>&lt;createdAt&gt; by &lt;name&gt; &lt;&lt;email&gt;&gt;</c>, for example
     /// <c>2026-10-20T15:30:45+02:00 by Jane Doe &lt;jane@example.com&gt;</c>.
     /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="creatorName" /> or <paramref name="creatorEmail" /> is <see langword="null" />.
-    /// </exception>
-    public static string FormatCreated(DateTimeOffset createdAt, string creatorName, string creatorEmail)
+    /// <exception cref="ArgumentNullException"><paramref name="feature" /> is <see langword="null" />.</exception>
+    public static string FormatCreated(FeatureDocument feature)
     {
-        Ensure.NotNull(creatorName);
-        Ensure.NotNull(creatorEmail);
+        Ensure.NotNull(feature);
 
-        return $"{FormatCreatedAt(createdAt)} by {creatorName} <{creatorEmail}>";
+        return $"{FormatCreatedAt(feature.CreatedAt)} by {feature.CreatedBy.Name} <{feature.CreatedBy.Email}>";
     }
 }

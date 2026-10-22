@@ -1,13 +1,12 @@
-using System.Text;
 using System.Text.RegularExpressions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Files;
-using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Formats;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
 /// <summary>
-/// Fills the <c>request.md</c> template with the identity of a new feature.
+/// Fills the <c>request.md</c> template with the <c>feature.json</c> document and the original input of a new feature.
 /// </summary>
 /// <remarks>
 /// Only the placeholders that <c>shade-kit feature new</c> owns are replaced; every other part of the template, the
@@ -28,13 +27,18 @@ internal static partial class FeatureRequestTemplate
     private const string NoSourceReference = "n/a";
 
     /// <summary>
-    /// Decodes the bytes of a template file as UTF-8, without a leading UTF-8 byte order mark.
+    /// Decodes the bytes of a template file strictly as UTF-8, without a leading UTF-8 byte order mark.
     /// </summary>
-    public static string Decode(byte[] content)
+    /// <exception cref="InvalidKitFileException">
+    /// The template is not UTF-8 text: it has another Unicode encoding or contains bytes that are not valid UTF-8.
+    /// </exception>
+    public static string Decode(byte[] content, string filePath)
     {
         Ensure.NotNull(content);
+        Ensure.IsNotNullOrWhitespace(filePath);
 
-        return Encoding.UTF8.GetString(TextFileEncoding.SkipUtf8Bom(content));
+        return TextFileEncoding.DecodeUtf8(content,
+            (reason, innerException) => new InvalidKitFileException(filePath, reason, innerException));
     }
 
     /// <summary>
@@ -44,42 +48,36 @@ internal static partial class FeatureRequestTemplate
     /// The template is scanned once, so a replacement value that contains a placeholder, for example request text
     /// that quotes the template, is never replaced again.
     /// </remarks>
-    public static string Fill(string template, FeatureIdentity identity, GitIdentity creator)
+    public static string Fill(string template, FeatureDocument feature, string originalInput)
     {
         Ensure.NotNull(template);
-        Ensure.NotNull(identity);
-        Ensure.NotNull(creator);
+        Ensure.NotNull(feature);
+        Ensure.NotNull(originalInput);
 
         var values = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [FeatureTitlePlaceholder] = identity.Title,
-            [FeatureIdPlaceholder] = identity.Id,
-            [SourcePlaceholder] = FormatSource(identity.Source),
-            [CreatedPlaceholder] = FeatureTextFormat.FormatCreated(identity.CreatedAt, creator.Name, creator.Email),
-            [OriginalInputPlaceholder] = identity.OriginalInput
+            [FeatureTitlePlaceholder] = feature.Title,
+            [FeatureIdPlaceholder] = feature.Id,
+            [SourcePlaceholder] = FormatSource(feature.Source),
+            [CreatedPlaceholder] = FeatureTextFormat.FormatCreated(feature),
+            [OriginalInputPlaceholder] = originalInput
         };
 
-        return PlaceholderRegex().Replace(template, match => values[match.Value]);
+        return PlaceholderRegex().Replace(template,
+            match => values.TryGetValue(match.Value, out var value) ? value : match.Value);
     }
 
     private static string FormatSource(FeatureSource source)
     {
-        var kind = source.Kind switch
+        return source.Kind switch
         {
-            FeatureSourceKind.Text => "text",
-            FeatureSourceKind.Url => "url",
-            FeatureSourceKind.File => "file",
+            FeatureSourceKind.Text => $"{JsonEnumNames.Get(source.Kind)}: {NoSourceReference}",
+            FeatureSourceKind.Url or FeatureSourceKind.File => $"{JsonEnumNames.Get(source.Kind)}: {source.Value}",
             _ => throw new ArgumentOutOfRangeException(nameof(source), source.Kind, "The source kind is not defined.")
         };
-
-        return source.Kind == FeatureSourceKind.Text
-            ? $"{kind}: {NoSourceReference}"
-            : $"{kind}: {source.Value}";
     }
 
-    [GeneratedRegex(
-        @"\{\{(?:feature-title|feature-id|source kind and source reference|original input, unchanged|" +
-        @"created at and created by)\}\}",
-        RegexOptions.CultureInvariant)]
+    // Every {{...}} is matched; one that is not a placeholder of shade-kit feature new is kept as it is.
+    [GeneratedRegex(@"\{\{[^{}]+\}\}", RegexOptions.CultureInvariant)]
     private static partial Regex PlaceholderRegex();
 }

@@ -363,21 +363,53 @@ public class GitRepositoryInfoTests
     }
 
     [Fact]
-    public async Task GetIdentityAsync_UnexpectedExitCodeForName_DoesNotReadEmail()
+    public async Task GetIdentityAsync_UnexpectedExitCodeForNameAndEmail_ThrowsGitUnavailableExceptionForName()
     {
         // Arrange
         SetUpResult(UserNameArguments, new GitCommandResult(128, "", "fatal: unable to read config\n"));
+        SetUpResult(UserEmailArguments, new GitCommandResult(3, "", "error: invalid config file .git/config\n"));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
         var act = () => sut.GetIdentityAsync(RepositoryRootPath, TestContext.Current.CancellationToken);
 
         // Assert
-        await act.Should().ThrowAsync<GitUnavailableException>();
+        var exception = (await act.Should().ThrowAsync<GitUnavailableException>()).Which;
 
+        exception.Arguments
+            .Should().Equal(UserNameArguments);
+
+        exception.Reason
+            .Should().Be("git exited with the unexpected exit code 128: fatal: unable to read config");
+    }
+
+    [Fact]
+    public async Task GetIdentityAsync_NameReadNotCompleted_StartsEmailReadWithoutWaiting()
+    {
+        // Arrange
+        var nameResult =
+            new TaskCompletionSource<GitCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
+                A<IReadOnlyList<string>>.That.IsSameSequenceAs(UserNameArguments), A<CancellationToken>._))
+            .Returns(nameResult.Task);
+        SetUpResult(UserEmailArguments, new GitCommandResult(0, "jane@example.com\n", ""));
+        var sut = new GitRepositoryInfo(_gitCommandRunner);
+
+        // Act
+        var identityTask = sut.GetIdentityAsync(RepositoryRootPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        A.CallTo(() => _gitCommandRunner.RunAsync(RepositoryRootPath,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(UserEmailArguments), A<CancellationToken>._))
-            .MustNotHaveHappened();
+            .MustHaveHappenedOnceExactly();
+
+        identityTask.IsCompleted
+            .Should().BeFalse();
+
+        nameResult.SetResult(new GitCommandResult(0, "Jane Doe\n", ""));
+
+        (await identityTask)
+            .Should().Be(new GitIdentity("Jane Doe", "jane@example.com"));
     }
 
     [Fact]

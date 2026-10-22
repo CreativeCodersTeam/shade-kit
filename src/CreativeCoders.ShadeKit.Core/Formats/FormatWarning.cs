@@ -7,4 +7,5 @@ namespace CreativeCoders.ShadeKit.Core.Formats;
 /// <param name="FilePath">The path of the file the warning is about.</param>
 /// <param name="FileVersion">The format version of the file on disk.</param>
 /// <param name="CurrentVersion">The current format version of the file type.</param>
-public sealed record FormatWarning(FormatWarningKind Kind, string FilePath, int FileVersion, int CurrentVersion);
+public sealed record FormatWarning(FormatWarningKind Kind, string FilePath, int FileVersion, int CurrentVersion)
+    : KitWarning;

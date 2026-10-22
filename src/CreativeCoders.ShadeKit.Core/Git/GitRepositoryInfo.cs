@@ -37,11 +37,15 @@ public sealed class GitRepositoryInfo(IGitCommandRunner gitCommandRunner) : IGit
     {
         Ensure.IsNotNullOrWhitespace(repositoryRootPath);
 
-        var name = await RunForOptionalValueAsync(repositoryRootPath, ["config", UserNameKey], cancellationToken)
-            .ConfigureAwait(false);
+        // Both keys are read at the same time. Task.WhenAll throws the first exception in task order, so a failure of
+        // the name read wins over a failure of the email read; a cancellation is thrown only if neither read failed.
+        var nameTask = RunForOptionalValueAsync(repositoryRootPath, ["config", UserNameKey], cancellationToken);
+        var emailTask = RunForOptionalValueAsync(repositoryRootPath, ["config", UserEmailKey], cancellationToken);
 
-        var email = await RunForOptionalValueAsync(repositoryRootPath, ["config", UserEmailKey], cancellationToken)
-            .ConfigureAwait(false);
+        await Task.WhenAll(nameTask, emailTask).ConfigureAwait(false);
+
+        var name = await nameTask.ConfigureAwait(false);
+        var email = await emailTask.ConfigureAwait(false);
 
         if (name is not null && email is not null)
         {

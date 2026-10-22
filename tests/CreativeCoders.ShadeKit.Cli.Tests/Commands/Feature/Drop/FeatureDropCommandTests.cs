@@ -39,7 +39,7 @@ public sealed class FeatureDropCommandTests : IDisposable
         A.CallTo(() => _featureStore.PreviewDropAsync(A<IKitStore>._, A<string>._, A<CancellationToken>._))
             .Returns(new FeatureDropPreview(Id, Files, true));
         A.CallTo(() => _featureStore.DropAsync(A<IKitStore>._, A<string>._, A<CancellationToken>._))
-            .Returns(new FeatureDropResult(Id, Files, true, true));
+            .Returns(new FeatureDropResult(Id, Files, true));
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class FeatureDropCommandTests : IDisposable
     {
         // Arrange
         A.CallTo(() => _featureStore.DropAsync(A<IKitStore>._, A<string>._, A<CancellationToken>._))
-            .Returns(new FeatureDropResult(Id, Files, false, false));
+            .Returns(new FeatureDropResult(Id, Files, false));
 
         var command = CreateCommand();
 
@@ -340,11 +340,10 @@ public sealed class FeatureDropCommandTests : IDisposable
     public async Task ExecuteAsync_KitRootNotFound_ThrowsAbortExceptionWithoutCallingFeatureStore()
     {
         // Arrange
-        var command = new FeatureDropCommand(_console,
-            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
-                new KitRootPathNotFoundException("/repo/src", "/repo")),
-            _featureStore, _confirmation, new CliJsonWriter(TextWriter.Null), CliErrorMapperTests.CreateMapper(),
-            TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(_console,
+            kitStoreFactory: FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
+                new KitRootPathNotFoundException("/repo/src", "/repo")));
+        var command = new FeatureDropCommand(context, _featureStore, _confirmation);
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureDropCommandOptions { FeatureId = Id, Yes = true });
@@ -389,11 +388,11 @@ public sealed class FeatureDropCommandTests : IDisposable
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var command = new FeatureDropCommand(_console,
-            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
+        var context = TestShadeKitCommandContext.Create(_console,
+            kitStoreFactory: FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
                 new KitRootPathNotFoundException("/repo/src", "/repo")),
-            _featureStore, _confirmation, new CliJsonWriter(jsonOutput), CliErrorMapperTests.CreateMapper(),
-            TestCliCancellation.None);
+            jsonOutput: jsonOutput);
+        var command = new FeatureDropCommand(context, _featureStore, _confirmation);
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureDropCommandOptions { FeatureId = Id, Yes = yes, Json = true });
@@ -430,8 +429,8 @@ public sealed class FeatureDropCommandTests : IDisposable
         A.CallTo(() => _confirmation.ConfirmAsync(A<string>._, A<CancellationToken>._)).Returns(true);
 
         var kitStoreFactory = FeatureCommandTestHelper.CreateKitStoreFactory(_kitStore);
-        var command = new FeatureDropCommand(_console, kitStoreFactory, _featureStore, _confirmation,
-            new CliJsonWriter(TextWriter.Null), CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(_console, kitStoreFactory: kitStoreFactory);
+        var command = new FeatureDropCommand(context, _featureStore, _confirmation);
 
         // Act
         await command.ExecuteAsync(new FeatureDropCommandOptions { FeatureId = Id });
@@ -552,15 +551,13 @@ public sealed class FeatureDropCommandTests : IDisposable
     }
 
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    public async Task ExecuteAsync_JsonModeWithYes_WritesOverrideAffectedAndClearedFromResult(bool overrideAffected,
-        bool overrideCleared)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExecuteAsync_JsonModeWithYes_WritesOverrideAffectedAndClearedFromResult(bool overrideAffected)
     {
         // Arrange
         A.CallTo(() => _featureStore.DropAsync(A<IKitStore>._, A<string>._, A<CancellationToken>._))
-            .Returns(new FeatureDropResult(Id, Files, overrideAffected, overrideCleared));
+            .Returns(new FeatureDropResult(Id, Files, overrideAffected));
 
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(jsonOutput);
@@ -576,7 +573,7 @@ public sealed class FeatureDropCommandTests : IDisposable
             .Should().Be(overrideAffected);
 
         data.GetProperty("overrideCleared").GetBoolean()
-            .Should().Be(overrideCleared);
+            .Should().Be(overrideAffected);
     }
 
     [Fact]
@@ -700,23 +697,6 @@ public sealed class FeatureDropCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task ExecuteAsync_PlainModeWithYesOverrideAffectedButNotCleared_WritesOnlyDroppedLine()
-    {
-        // Arrange
-        A.CallTo(() => _featureStore.DropAsync(A<IKitStore>._, A<string>._, A<CancellationToken>._))
-            .Returns(new FeatureDropResult(Id, Files, true, false));
-
-        var command = CreateCommand();
-
-        // Act
-        await command.ExecuteAsync(new FeatureDropCommandOptions { FeatureId = Id, Yes = true });
-
-        // Assert
-        _console.Lines
-            .Should().Equal($"Dropped feature {Id}.");
-    }
-
-    [Fact]
     public async Task ExecuteAsync_NullOptions_ThrowsArgumentNullException()
     {
         // Arrange
@@ -731,24 +711,16 @@ public sealed class FeatureDropCommandTests : IDisposable
     }
 
     [Theory]
-    [InlineData(0, "ansiConsole")]
-    [InlineData(1, "kitStoreFactory")]
-    [InlineData(2, "featureStore")]
-    [InlineData(3, "confirmation")]
-    [InlineData(4, "jsonWriter")]
-    [InlineData(5, "errorMapper")]
-    [InlineData(6, "cancellation")]
+    [InlineData(0, "context")]
+    [InlineData(1, "featureStore")]
+    [InlineData(2, "confirmation")]
     public void Ctor_NullArgument_ThrowsArgumentNullException(int nullIndex, string parameterName)
     {
         // Act
         var act = () => new FeatureDropCommand(
-            nullIndex == 0 ? null! : new TestConsole(),
-            nullIndex == 1 ? null! : A.Fake<IKitStoreFactory>(),
-            nullIndex == 2 ? null! : A.Fake<IFeatureStore>(),
-            nullIndex == 3 ? null! : A.Fake<IConsoleConfirmation>(),
-            nullIndex == 4 ? null! : A.Fake<ICliJsonWriter>(),
-            nullIndex == 5 ? null! : CliErrorMapperTests.CreateMapper(),
-            nullIndex == 6 ? null! : TestCliCancellation.None);
+            nullIndex == 0 ? null! : TestShadeKitCommandContext.Create(new TestConsole()),
+            nullIndex == 1 ? null! : A.Fake<IFeatureStore>(),
+            nullIndex == 2 ? null! : A.Fake<IConsoleConfirmation>());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -811,8 +783,10 @@ public sealed class FeatureDropCommandTests : IDisposable
 
     private FeatureDropCommand CreateCommand(TextWriter? jsonOutput = null, TestConsole? console = null)
     {
-        return new FeatureDropCommand(console ?? _console, FeatureCommandTestHelper.CreateKitStoreFactory(_kitStore),
-            _featureStore, _confirmation, new CliJsonWriter(jsonOutput ?? TextWriter.Null),
-            CliErrorMapperTests.CreateMapper(), new TestCliCancellation(_cancellationSource.Token));
+        var context = TestShadeKitCommandContext.Create(console ?? _console,
+            kitStoreFactory: FeatureCommandTestHelper.CreateKitStoreFactory(_kitStore), jsonOutput: jsonOutput,
+            cancellation: new TestCliCancellation(_cancellationSource.Token));
+
+        return new FeatureDropCommand(context, _featureStore, _confirmation);
     }
 }

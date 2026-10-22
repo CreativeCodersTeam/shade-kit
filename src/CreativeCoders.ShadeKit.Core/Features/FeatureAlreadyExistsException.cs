@@ -16,7 +16,7 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// </param>
 public class FeatureAlreadyExistsException(string featureId, Exception? innerException = null)
     : Exception($"The feature '{featureId}' already exists: its folder " +
-        $"'{KitStorePaths.GetRepositoryPath(KitStorePaths.GetFeatureDirPath(featureId))}/' exists.", innerException)
+        $"'{KitStorePaths.GetRepositoryFeatureDirPath(featureId)}' exists.", innerException)
 {
     /// <summary>
     /// Gets the id of the feature that already exists.

@@ -17,8 +17,7 @@ public class FeatureExceptionsTests
             .Should().Be("../GH-142");
 
         exception.Message
-            .Should().Be("'../GH-142' is not a valid feature id. A feature id consists of groups of lowercase " +
-                         "letters a-z and digits joined by single hyphens, for example 'gh-142-login-sso'.");
+            .Should().Be("'../GH-142' is not a valid feature id.");
     }
 
     [Fact]

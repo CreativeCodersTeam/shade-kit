@@ -97,4 +97,37 @@ public static class KitStorePaths
     {
         return $"{FeaturesDirName}/{featureName}";
     }
+
+    /// <summary>
+    /// Gets the path of the <see cref="FeatureFileName" /> of a feature relative to the SHADE kit root directory.
+    /// </summary>
+    /// <remarks>
+    /// The name is not checked, as with <see cref="GetFeatureDirPath" />.
+    /// </remarks>
+    /// <param name="featureName">The name of the feature folder, which is the feature id for a valid feature.</param>
+    /// <returns>
+    /// The path <c>features/&lt;name&gt;/feature.json</c> with <c>/</c> as separator, for example
+    /// <c>features/gh-142-login-sso/feature.json</c>.
+    /// </returns>
+    public static string GetFeatureFilePath(string featureName)
+    {
+        return $"{GetFeatureDirPath(featureName)}/{FeatureFileName}";
+    }
+
+    /// <summary>
+    /// Gets the path of the folder of a feature relative to the repository root, as it is shown to users.
+    /// </summary>
+    /// <remarks>
+    /// The name is not checked, as with <see cref="GetFeatureDirPath" />, so the path can also be built for a name that
+    /// is not a valid feature id, for example in the message of an exception about that name.
+    /// </remarks>
+    /// <param name="featureName">The name of the feature folder, which is the feature id for a valid feature.</param>
+    /// <returns>
+    /// The path <c>.shadekit/features/&lt;name&gt;/</c> with <c>/</c> as separator and with a trailing separator, for
+    /// example <c>.shadekit/features/gh-142-login-sso/</c>.
+    /// </returns>
+    public static string GetRepositoryFeatureDirPath(string featureName)
+    {
+        return $"{GetRepositoryPath(GetFeatureDirPath(featureName))}/";
+    }
 }

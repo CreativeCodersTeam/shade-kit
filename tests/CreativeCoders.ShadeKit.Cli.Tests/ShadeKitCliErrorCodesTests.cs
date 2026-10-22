@@ -49,6 +49,40 @@ public partial class ShadeKitCliErrorCodesTests
             .And.AllSatisfy(code => KebabCaseRegex().IsMatch(code).Should().BeTrue(code));
     }
 
+    [Fact]
+    public void ForExitCode_EveryExitCodeConstant_ReturnsErrorCodeWithSameName()
+    {
+        // Arrange
+        var exitCodes = ShadeKitCliExitCodesTests.GetConstants<int>(typeof(ShadeKitCliExitCodes));
+        var errorCodes = ShadeKitCliExitCodesTests.GetConstants<string>(typeof(ShadeKitCliErrorCodes));
+
+        // Act
+        var mappedErrorCodes = exitCodes.ToDictionary(x => x.Key, x => ShadeKitCliErrorCodes.ForExitCode(x.Value));
+
+        // Assert
+        mappedErrorCodes
+            .Should().NotBeEmpty()
+            .And.BeEquivalentTo(errorCodes);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(11)]
+    [InlineData(49)]
+    [InlineData(256)]
+    [InlineData(-1)]
+    [InlineData(int.MinValue)]
+    public void ForExitCode_UndefinedExitCode_ThrowsArgumentOutOfRangeException(int exitCode)
+    {
+        // Act
+        var act = () => ShadeKitCliErrorCodes.ForExitCode(exitCode);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .Which.ParamName.Should().Be("exitCode");
+    }
+
     [GeneratedRegex("^[a-z]+(-[a-z]+)*$")]
     private static partial Regex KebabCaseRegex();
 }

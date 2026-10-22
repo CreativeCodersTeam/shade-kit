@@ -45,7 +45,8 @@ internal static class FeatureCommandTestHelper
     }
 
     public static FeatureDocument CreateDocument(string id = FeatureId, string title = "Login SSO",
-        FeatureStatus status = FeatureStatus.Active, FeatureSource? source = null)
+        FeatureStatus status = FeatureStatus.Active, FeatureSource? source = null,
+        string profile = WorkflowProfiles.Feature)
     {
         return new FeatureDocument
         {
@@ -53,7 +54,7 @@ internal static class FeatureCommandTestHelper
             MinEngineVersion = "0.1.0",
             Id = id,
             Title = title,
-            Profile = WorkflowProfiles.Feature,
+            Profile = profile,
             Source = source ?? new FeatureSource
             {
                 Kind = FeatureSourceKind.Url,

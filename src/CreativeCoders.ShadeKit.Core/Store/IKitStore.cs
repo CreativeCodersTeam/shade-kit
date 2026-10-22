@@ -36,6 +36,7 @@ public interface IKitStore
     /// <c>config.json</c> does not exist, the file is migrated with a warning. With <see cref="FormatAccess.Upgrade" />
     /// access, the file is always migrated in memory and <c>config.json</c> is not read; the
     /// <see cref="FormatWarningKind.UpgradeNeeded" /> warning names the version the file was migrated from.
+    /// <see cref="FormatAccess.Replace" /> is a write access and is not accepted.
     /// </para>
     /// <para>
     /// File paths in exceptions and warnings are relative to the repository root and use <c>/</c> as separator, for
@@ -54,7 +55,10 @@ public interface IKitStore
     /// A task that represents the asynchronous read operation. The task result contains the document and its
     /// warnings, or <see langword="null" /> if the file does not exist.
     /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="access" /> is not a defined value.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="access" /> is not <see cref="FormatAccess.Read" />, <see cref="FormatAccess.Write" />, or
+    /// <see cref="FormatAccess.Upgrade" />.
+    /// </exception>
     /// <exception cref="ArgumentException">
     /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />; or no file type
     /// with the id <paramref name="formatId" /> is registered.
@@ -76,32 +80,50 @@ public interface IKitStore
     /// Writes a versioned JSON file of the store.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// If the file exists, its format is checked first; a file that is too new or invalid stops the write and stays
     /// unchanged. A file in an older format version stops a write with <see cref="FormatAccess.Write" /> access and
-    /// is replaced by a write with <see cref="FormatAccess.Upgrade" /> access. The written file carries the current
-    /// format version and its <c>minEngineVersion</c>, is UTF-8 encoded without byte order mark, and is written
-    /// directly, not atomically. Missing directories are created.
+    /// is replaced by a write with <see cref="FormatAccess.Upgrade" /> access.
+    /// </para>
+    /// <para>
+    /// With <see cref="FormatAccess.Replace" /> access, an existing file that is too new, invalid, or in an older
+    /// format version does not stop the write: it is deleted and then written again. This suits files that hold
+    /// nothing that would be lost, such as the local override <c>features/current-feature.json</c>. The format check
+    /// of a write never reads <c>config.json</c>, so neither its content nor its <c>outdatedFormatOnRead</c> setting
+    /// can stop the write. A file that cannot be read, for example for missing permission, still stops the write.
+    /// </para>
+    /// <para>
+    /// The written file carries the current format version and its <c>minEngineVersion</c>, is UTF-8 encoded without
+    /// byte order mark, and is written directly, not atomically. Missing directories are created.
+    /// </para>
     /// </remarks>
     /// <typeparam name="T">The type of the document.</typeparam>
     /// <param name="relativePath">The path of the file relative to <see cref="RootPath" />, for example <c>config.json</c>.</param>
     /// <param name="formatId">The id of the file type, for example <see cref="FormatIds.Config" />.</param>
     /// <param name="document">The document to write.</param>
     /// <param name="access">
-    /// <see cref="FormatAccess.Write" /> for a command that changes the file, or <see cref="FormatAccess.Upgrade" />
-    /// for a command that migrates it to the current format.
+    /// <see cref="FormatAccess.Write" /> for a command that changes the file, <see cref="FormatAccess.Upgrade" />
+    /// for a command that migrates it to the current format, or <see cref="FormatAccess.Replace" /> for a command
+    /// that replaces it whatever it contains.
     /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous write operation.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="document" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="access" /> is neither <see cref="FormatAccess.Write" /> nor <see cref="FormatAccess.Upgrade" />.
+    /// <paramref name="access" /> is not <see cref="FormatAccess.Write" />, <see cref="FormatAccess.Upgrade" />, or
+    /// <see cref="FormatAccess.Replace" />.
     /// </exception>
     /// <exception cref="ArgumentException">
     /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />; or no file type
     /// with the id <paramref name="formatId" /> is registered.
     /// </exception>
-    /// <exception cref="InvalidKitFileException">The existing file is invalid.</exception>
-    /// <exception cref="FormatTooNewException">The existing file uses a format version newer than the engine supports.</exception>
+    /// <exception cref="InvalidKitFileException">
+    /// The existing file is invalid and <paramref name="access" /> is not <see cref="FormatAccess.Replace" />.
+    /// </exception>
+    /// <exception cref="FormatTooNewException">
+    /// The existing file uses a format version newer than the engine supports and <paramref name="access" /> is not
+    /// <see cref="FormatAccess.Replace" />.
+    /// </exception>
     /// <exception cref="UpgradeNeededException">
     /// The existing file uses an older format version and <paramref name="access" /> is
     /// <see cref="FormatAccess.Write" />.

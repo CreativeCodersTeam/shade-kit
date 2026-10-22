@@ -65,9 +65,9 @@ public class FeatureSetCommandTests
         // Arrange
         var kitStore = A.Fake<IKitStore>();
         var featureStore = CreateFeatureStore(new SetCurrentFeatureResult(Id, []));
-        var command = new FeatureSetCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(kitStore),
-            featureStore, new CliJsonWriter(TextWriter.Null), CliErrorMapperTests.CreateMapper(),
-            TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(new TestConsole(),
+            kitStoreFactory: FeatureCommandTestHelper.CreateKitStoreFactory(kitStore));
+        var command = new FeatureSetCommand(context, featureStore);
 
         // Act
         await command.ExecuteAsync(new FeatureSetCommandOptions { FeatureId = Id });
@@ -98,7 +98,7 @@ public class FeatureSetCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var command = CreateCommand(console, CreateFeatureStore(new SetCurrentFeatureResult(Id,
-            [FeatureWarning.CurrentFeatureMismatch(Id, "branch-feature")])));
+            [new CurrentFeatureMismatchWarning(Id, "branch-feature")])));
 
         // Act
         await command.ExecuteAsync(new FeatureSetCommandOptions { FeatureId = Id });
@@ -121,7 +121,7 @@ public class FeatureSetCommandTests
         var console = new TestConsole();
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(console, CreateFeatureStore(new SetCurrentFeatureResult(Id,
-            [FeatureWarning.CurrentFeatureMismatch(Id, "branch-feature")])), jsonOutput);
+            [new CurrentFeatureMismatchWarning(Id, "branch-feature")])), jsonOutput);
 
         // Act
         await command.ExecuteAsync(new FeatureSetCommandOptions { FeatureId = Id, Json = true });
@@ -197,10 +197,11 @@ public class FeatureSetCommandTests
         // Arrange
         var featureStore = A.Fake<IFeatureStore>();
         using var jsonOutput = new StringWriter();
-        var command = new FeatureSetCommand(new TestConsole(),
-            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
+        var context = TestShadeKitCommandContext.Create(new TestConsole(),
+            kitStoreFactory: FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
                 new KitRootPathNotFoundException("/repo/src", "/repo")),
-            featureStore, new CliJsonWriter(jsonOutput), CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
+            jsonOutput: jsonOutput);
+        var command = new FeatureSetCommand(context, featureStore);
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureSetCommandOptions { FeatureId = Id, Json = json });
@@ -236,22 +237,14 @@ public class FeatureSetCommandTests
     }
 
     [Theory]
-    [InlineData(0, "ansiConsole")]
-    [InlineData(1, "kitStoreFactory")]
-    [InlineData(2, "featureStore")]
-    [InlineData(3, "jsonWriter")]
-    [InlineData(4, "errorMapper")]
-    [InlineData(5, "cancellation")]
+    [InlineData(0, "context")]
+    [InlineData(1, "featureStore")]
     public void Ctor_NullArgument_ThrowsArgumentNullException(int nullIndex, string parameterName)
     {
         // Act
         var act = () => new FeatureSetCommand(
-            nullIndex == 0 ? null! : new TestConsole(),
-            nullIndex == 1 ? null! : A.Fake<IKitStoreFactory>(),
-            nullIndex == 2 ? null! : A.Fake<IFeatureStore>(),
-            nullIndex == 3 ? null! : A.Fake<ICliJsonWriter>(),
-            nullIndex == 4 ? null! : CliErrorMapperTests.CreateMapper(),
-            nullIndex == 5 ? null! : TestCliCancellation.None);
+            nullIndex == 0 ? null! : TestShadeKitCommandContext.Create(new TestConsole()),
+            nullIndex == 1 ? null! : A.Fake<IFeatureStore>());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -314,8 +307,10 @@ public class FeatureSetCommandTests
     private static FeatureSetCommand CreateCommand(IAnsiConsole console, IFeatureStore featureStore,
         TextWriter? jsonOutput = null, ICliCancellation? cancellation = null)
     {
-        return new FeatureSetCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(), featureStore,
-            new CliJsonWriter(jsonOutput ?? TextWriter.Null), CliErrorMapperTests.CreateMapper(),
-            cancellation ?? TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(console,
+            kitStoreFactory: FeatureCommandTestHelper.CreateKitStoreFactory(), jsonOutput: jsonOutput,
+            cancellation: cancellation);
+
+        return new FeatureSetCommand(context, featureStore);
     }
 }

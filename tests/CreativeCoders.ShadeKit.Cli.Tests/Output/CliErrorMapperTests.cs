@@ -4,6 +4,7 @@ using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.New;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
 using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Files;
@@ -528,7 +529,7 @@ public class CliErrorMapperTests
     public void MapWarning_NullWarning_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => CliErrorMapper.MapWarning((FormatWarning)null!);
+        var act = () => CliErrorMapper.MapWarning(null!);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -540,7 +541,7 @@ public class CliErrorMapperTests
     public void MapWarning_CurrentFeatureMismatch_ReturnsMismatchWarningNamingBothFeatures()
     {
         // Act
-        var warning = CliErrorMapper.MapWarning(FeatureWarning.CurrentFeatureMismatch("override-id", "branch-id"));
+        var warning = CliErrorMapper.MapWarning(new CurrentFeatureMismatchWarning("override-id", "branch-id"));
 
         // Assert
         warning.Code
@@ -553,22 +554,10 @@ public class CliErrorMapperTests
     }
 
     [Fact]
-    public void MapWarning_CurrentFeatureMismatchWithoutBranchFeature_ThrowsArgumentException()
-    {
-        // Act
-        var act = () => CliErrorMapper.MapWarning(
-            new FeatureWarning(FeatureWarningKind.CurrentFeatureMismatch, "override-id"));
-
-        // Assert
-        act.Should().Throw<ArgumentException>()
-            .WithParameterName("warning");
-    }
-
-    [Fact]
     public void MapWarning_CurrentFeatureMissing_ReturnsMissingWarningWithSetHint()
     {
         // Act
-        var warning = CliErrorMapper.MapWarning(FeatureWarning.CurrentFeatureMissing("gone"));
+        var warning = CliErrorMapper.MapWarning(new CurrentFeatureMissingWarning("gone"));
 
         // Assert
         warning.Code
@@ -584,7 +573,7 @@ public class CliErrorMapperTests
     public void MapWarning_FeatureFileMissing_ReturnsFileMissingWarningNamingTheFolder()
     {
         // Act
-        var warning = CliErrorMapper.MapWarning(FeatureWarning.FeatureFileMissing("login"));
+        var warning = CliErrorMapper.MapWarning(new FeatureFileMissingWarning("login"));
 
         // Assert
         warning.Code
@@ -598,7 +587,7 @@ public class CliErrorMapperTests
     public void MapWarning_FeatureFolderInvalid_ReturnsFolderInvalidWarningNamingTheFolder()
     {
         // Act
-        var warning = CliErrorMapper.MapWarning(FeatureWarning.FeatureFolderInvalid("Draft Folder"));
+        var warning = CliErrorMapper.MapWarning(new FeatureFolderInvalidWarning("Draft Folder"));
 
         // Assert
         warning.Code
@@ -612,7 +601,7 @@ public class CliErrorMapperTests
     public void MapWarning_FeatureIdMismatch_ReturnsIdMismatchWarningNamingFileIdAndFolder()
     {
         // Act
-        var warning = CliErrorMapper.MapWarning(FeatureWarning.FeatureIdMismatch("copy-of-login", "login"));
+        var warning = CliErrorMapper.MapWarning(new FeatureIdMismatchWarning("copy-of-login", "login"));
 
         // Assert
         warning.Code
@@ -624,23 +613,11 @@ public class CliErrorMapperTests
     }
 
     [Fact]
-    public void MapWarning_FeatureIdMismatchWithoutFileId_ThrowsArgumentException()
+    public void MapWarning_CurrentFeatureInvalidWithFormatTooNew_ReturnsInvalidWarningWithVersionsAndSetHint()
     {
         // Act
-        var act = () => CliErrorMapper.MapWarning(new FeatureWarning(FeatureWarningKind.FeatureIdMismatch, "login"));
-
-        // Assert
-        act.Should().Throw<ArgumentException>()
-            .WithParameterName("warning");
-    }
-
-    [Theory]
-    [InlineData("It uses format version 99, but this engine supports only up to version 1")]
-    [InlineData("It uses format version 99, but this engine supports only up to version 1.")]
-    public void MapWarning_CurrentFeatureInvalid_ReturnsInvalidWarningWithReasonAndSetHint(string reason)
-    {
-        // Act
-        var warning = CliErrorMapper.MapWarning(FeatureWarning.CurrentFeatureInvalid(reason));
+        var warning = CliErrorMapper.MapWarning(new CurrentFeatureInvalidWarning(
+            new FormatTooNewException(".shadekit/features/current-feature.json", 99, 1, null)));
 
         // Assert
         warning.Code
@@ -652,40 +629,86 @@ public class CliErrorMapperTests
                          "'shade-kit feature set <id>' to replace it.");
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void MapWarning_CurrentFeatureInvalidWithoutDetail_ThrowsArgumentException(string? detail)
+    [Fact]
+    public void MapWarning_CurrentFeatureInvalidWithUpgradeNeeded_ReturnsInvalidWarningWithStopPolicyAndSetHint()
     {
         // Act
-        var act = () => CliErrorMapper.MapWarning(
-            new FeatureWarning(FeatureWarningKind.CurrentFeatureInvalid, string.Empty, Detail: detail));
+        var warning = CliErrorMapper.MapWarning(new CurrentFeatureInvalidWarning(
+            new UpgradeNeededException(".shadekit/features/current-feature.json", 1, 2)));
 
         // Assert
-        act.Should().Throw<ArgumentException>()
-            .WithParameterName("warning");
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.CurrentFeatureInvalid);
+
+        warning.Message
+            .Should().Be("The local override '.shadekit/features/current-feature.json' cannot be used and is " +
+                         "ignored: It uses the older format version 1 (current version 2), and " +
+                         "'outdatedFormatOnRead' is 'stop'. Run 'shade-kit feature set <id>' to replace it.");
+    }
+
+    [Theory]
+    [InlineData("The file is not valid JSON")]
+    [InlineData("The file is not valid JSON.")]
+    [InlineData("The file is not valid JSON..")]
+    public void MapWarning_CurrentFeatureInvalidWithInvalidFile_ReturnsInvalidWarningWithReasonAsOneSentence(
+        string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new CurrentFeatureInvalidWarning(
+            new InvalidKitFileException(".shadekit/features/current-feature.json", reason)));
+
+        // Assert
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.CurrentFeatureInvalid);
+
+        warning.Message
+            .Should().Be("The local override '.shadekit/features/current-feature.json' cannot be used and is " +
+                         "ignored: The file is not valid JSON. Run 'shade-kit feature set <id>' to replace it.");
     }
 
     [Fact]
-    public void MapWarning_EveryFeatureWarningKind_ReturnsDistinctWarningCode()
+    public void MapWarning_CurrentFeatureInvalidWithUnsupportedProblem_ThrowsArgumentOutOfRangeException()
     {
         // Act
-        var codes = Enum.GetValues<FeatureWarningKind>()
-            .Select(kind => CliErrorMapper.MapWarning(new FeatureWarning(kind, "login", "other", "Detail")).Code)
+        var act = () => CliErrorMapper.MapWarning(
+            new CurrentFeatureInvalidWarning(new UnsupportedFormatException("file.json")));
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .WithParameterName("problem");
+    }
+
+    [Fact]
+    public void MapWarning_EveryConcreteCoreWarning_ReturnsCodeAndEveryWarningCodeOnce()
+    {
+        // Arrange
+        var warningTypes = typeof(KitWarning).Assembly.GetTypes()
+            .Where(x => x is { IsAbstract: false, IsPublic: true } && x.IsAssignableTo(typeof(KitWarning)))
+            .ToArray();
+
+        // Act
+        var warnings = warningTypes
+            .Select(x => (Type: x, Warning: CliErrorMapper.MapWarning(CreateWarning(x))))
             .ToArray();
 
         // Assert
-        codes
+        warningTypes
+            .Should().Contain(typeof(FormatWarning));
+
+        warnings.Single(x => x.Type == typeof(FormatWarning)).Warning.Code
+            .Should().Be(ShadeKitCliErrorCodes.UpgradeNeeded);
+
+        warnings.Where(x => x.Type != typeof(FormatWarning)).Select(x => x.Warning.Code)
             .Should().OnlyHaveUniqueItems()
-            .And.BeEquivalentTo(ShadeKitCliExitCodesTests.GetConstants<string>(typeof(ShadeKitCliWarningCodes)).Values);
+            .And.BeEquivalentTo(ShadeKitCliExitCodesTests.GetConstants<string>(typeof(ShadeKitCliWarningCodes)).Values,
+                "every feature warning has its own warning code");
     }
 
     [Fact]
     public void MapWarning_CurrentFeatureMissingWithInvalidId_ContainsIdVerbatim()
     {
         // Act
-        var warning = CliErrorMapper.MapWarning(FeatureWarning.CurrentFeatureMissing("../x"));
+        var warning = CliErrorMapper.MapWarning(new CurrentFeatureMissingWarning("../x"));
 
         // Assert
         warning.Message
@@ -693,24 +716,13 @@ public class CliErrorMapperTests
     }
 
     [Fact]
-    public void MapWarning_UndefinedFeatureWarningKind_ThrowsArgumentOutOfRangeException()
+    public void MapWarning_UnsupportedWarningType_ThrowsArgumentOutOfRangeException()
     {
         // Act
-        var act = () => CliErrorMapper.MapWarning(new FeatureWarning((FeatureWarningKind)99, "login"));
+        var act = () => CliErrorMapper.MapWarning(new UnsupportedWarning());
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>()
-            .WithParameterName("warning");
-    }
-
-    [Fact]
-    public void MapWarning_NullFeatureWarning_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => CliErrorMapper.MapWarning((FeatureWarning)null!);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
             .WithParameterName("warning");
     }
 
@@ -1106,6 +1118,60 @@ public class CliErrorMapperTests
     }
 
     [Fact]
+    public void Unwrap_NestedTargetInvocationExceptions_ReturnsInnermostException()
+    {
+        // Arrange
+        var cause = new InvalidOperationException("failed");
+        var exception = new TargetInvocationException(new TargetInvocationException(cause));
+
+        // Act
+        var result = CliErrorMapper.Unwrap(exception);
+
+        // Assert
+        result
+            .Should().BeSameAs(cause);
+    }
+
+    [Fact]
+    public void Unwrap_TargetInvocationExceptionWithoutInnerException_ReturnsSameException()
+    {
+        // Arrange
+        var exception = new TargetInvocationException(null);
+
+        // Act
+        var result = CliErrorMapper.Unwrap(exception);
+
+        // Assert
+        result
+            .Should().BeSameAs(exception);
+    }
+
+    [Fact]
+    public void Unwrap_OtherException_ReturnsSameException()
+    {
+        // Arrange
+        var exception = new InvalidOperationException("failed");
+
+        // Act
+        var result = CliErrorMapper.Unwrap(exception);
+
+        // Assert
+        result
+            .Should().BeSameAs(exception);
+    }
+
+    [Fact]
+    public void Unwrap_NullException_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => CliErrorMapper.Unwrap(null!);
+
+        // Assert
+        act
+            .Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
     public void Map_OperationCanceledException_ReturnsNull()
     {
         // Arrange
@@ -1264,4 +1330,27 @@ public class CliErrorMapperTests
 
         return new RequiredArgumentMissingException(property, property.GetCustomAttribute<OptionBaseAttribute>()!);
     }
+
+    private static KitWarning CreateWarning(Type warningType)
+    {
+        var constructor = warningType.GetConstructors().Single();
+        var arguments = constructor.GetParameters()
+            .Select(x => x.ParameterType switch
+            {
+                { } type when type == typeof(string) => "login",
+                { } type when type == typeof(int) => 1,
+                { IsEnum: true } type => Enum.GetValues(type).GetValue(0),
+                { } type when type.IsAssignableFrom(typeof(InvalidKitFileException)) =>
+                    new InvalidKitFileException("file.json", "Broken."),
+                { } type => throw new NotSupportedException($"No test value for a parameter of type {type}.")
+            })
+            .ToArray();
+
+        return (KitWarning)constructor.Invoke(arguments);
+    }
+
+    private sealed record UnsupportedWarning : KitWarning;
+
+    private sealed class UnsupportedFormatException(string filePath)
+        : KitFileFormatException(filePath, "The format is not supported.");
 }

@@ -76,6 +76,20 @@ internal sealed class FeatureStoreTestContext : IDisposable
             new VersionedJsonSerializer(Registry), Registry);
     }
 
+    /// <summary>
+    /// Creates a real store whose serializer throws the specified exception when the local override is serialized,
+    /// so writing the override fails after the store has checked, and if necessary deleted, the existing override.
+    /// </summary>
+    public KitStore CreateStoreFailingOverrideWrite(Exception exception)
+    {
+        var serializer = A.Fake<IVersionedJsonSerializer>(options =>
+            options.Wrapping(new VersionedJsonSerializer(Registry)));
+        A.CallTo(() => serializer.Serialize(A<CurrentFeatureDocument>._, FormatIds.CurrentFeature))
+            .Throws(exception);
+
+        return new KitStore(Path.Combine(RepositoryRootPath, KitStorePaths.RootPath), serializer, Registry);
+    }
+
     public FeatureStore CreateFeatureStore(IShippedTemplateReader? shippedTemplateReader = null)
     {
         var timeProvider = new FakeTimeProvider(UtcNow);

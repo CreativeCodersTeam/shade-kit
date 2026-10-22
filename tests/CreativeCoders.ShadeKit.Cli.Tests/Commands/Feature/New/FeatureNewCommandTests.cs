@@ -7,6 +7,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.New;
 using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
@@ -170,7 +171,7 @@ public class FeatureNewCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var command = CreateCommand(console,
-            CreateFeatureStore(CreateResult(formatWarnings: [FeatureCommandTestHelper.UpgradeWarning])));
+            CreateFeatureStore(CreateResult(warnings: [FeatureCommandTestHelper.UpgradeWarning])));
 
         // Act
         await command.ExecuteAsync(CreateOptions());
@@ -278,7 +279,7 @@ public class FeatureNewCommandTests
         // Arrange
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(new TestConsole(),
-            CreateFeatureStore(CreateResult(formatWarnings: [FeatureCommandTestHelper.UpgradeWarning])),
+            CreateFeatureStore(CreateResult(warnings: [FeatureCommandTestHelper.UpgradeWarning])),
             jsonOutput: jsonOutput);
 
         // Act
@@ -414,22 +415,14 @@ public class FeatureNewCommandTests
     }
 
     [Theory]
-    [InlineData(0, "ansiConsole")]
-    [InlineData(1, "kitStoreFactory")]
-    [InlineData(2, "featureStore")]
-    [InlineData(3, "jsonWriter")]
-    [InlineData(4, "errorMapper")]
-    [InlineData(5, "cancellation")]
+    [InlineData(0, "context")]
+    [InlineData(1, "featureStore")]
     public void Ctor_NullArgument_ThrowsArgumentNullException(int nullIndex, string parameterName)
     {
         // Act
         var act = () => new FeatureNewCommand(
-            nullIndex == 0 ? null! : new TestConsole(),
-            nullIndex == 1 ? null! : A.Fake<IKitStoreFactory>(),
-            nullIndex == 2 ? null! : A.Fake<IFeatureStore>(),
-            nullIndex == 3 ? null! : A.Fake<ICliJsonWriter>(),
-            nullIndex == 4 ? null! : CliErrorMapperTests.CreateMapper(),
-            nullIndex == 5 ? null! : TestCliCancellation.None);
+            nullIndex == 0 ? null! : TestShadeKitCommandContext.Create(new TestConsole()),
+            nullIndex == 1 ? null! : A.Fake<IFeatureStore>());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -492,7 +485,7 @@ public class FeatureNewCommandTests
     }
 
     private static NewFeatureResult CreateResult(string profile = WorkflowProfiles.Feature,
-        FeatureSource? source = null, IReadOnlyList<FormatWarning>? formatWarnings = null)
+        FeatureSource? source = null, IReadOnlyList<KitWarning>? warnings = null)
     {
         var document = FeatureCommandTestHelper.CreateDocument(source: source);
         var feature = new FeatureDocument
@@ -508,7 +501,7 @@ public class FeatureNewCommandTests
             Status = document.Status
         };
 
-        return new NewFeatureResult(feature, FeaturePaths.For(Id), $"feature/{Id}", formatWarnings ?? []);
+        return new NewFeatureResult(feature, warnings ?? []);
     }
 
     private static IFeatureStore CreateFeatureStore(NewFeatureResult result)
@@ -532,8 +525,10 @@ public class FeatureNewCommandTests
     private static FeatureNewCommand CreateCommand(IAnsiConsole console, IFeatureStore featureStore,
         IKitStoreFactory? kitStoreFactory = null, TextWriter? jsonOutput = null, ICliCancellation? cancellation = null)
     {
-        return new FeatureNewCommand(console, kitStoreFactory ?? FeatureCommandTestHelper.CreateKitStoreFactory(),
-            featureStore, new CliJsonWriter(jsonOutput ?? TextWriter.Null), CliErrorMapperTests.CreateMapper(),
-            cancellation ?? TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(console,
+            kitStoreFactory: kitStoreFactory ?? FeatureCommandTestHelper.CreateKitStoreFactory(),
+            jsonOutput: jsonOutput, cancellation: cancellation);
+
+        return new FeatureNewCommand(context, featureStore);
     }
 }

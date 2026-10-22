@@ -268,7 +268,7 @@ Reused codes: 10 (`kit-root-not-found`), 12 (`not-a-git-repository`), and 15 (`k
 
 ### Warnings
 
-**Decided** on 2026-10-20 (implementation clarification); `current-feature-invalid`, `feature-folder-invalid`, and `feature-id-mismatch` on 2026-10-21 (code review rework). **Implemented** (`FeatureWarningKind`, `ShadeKitCliWarningCodes`).
+**Decided** on 2026-10-20 (implementation clarification); `current-feature-invalid`, `feature-folder-invalid`, and `feature-id-mismatch` on 2026-10-21 (code review rework). **Implemented** (one `KitWarning` record per warning in `Features/`, `ShadeKitCliWarningCodes`).
 
 | Warning code | When |
 |---|---|

@@ -6,6 +6,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.Current;
 using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
@@ -62,19 +63,22 @@ public class FeatureCurrentCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_PlainModeIdWithMarkupCharacters_WritesIdVerbatim()
+    public async Task ExecuteAsync_PlainModeProfileWithMarkupCharacters_WritesProfileVerbatim()
     {
         // Arrange
         var console = new TestConsole();
-        var resolved = CreateResolvedResult(CurrentFeatureOrigin.Branch);
-        var command = CreateCommand(console, CreateFeatureStore(resolved with { FeatureId = "[red]x[/]" }));
+        var resolved = CreateResolvedResult(CurrentFeatureOrigin.Branch) with
+        {
+            Feature = FeatureCommandTestHelper.CreateDocument(profile: "[red]x[/]")
+        };
+        var command = CreateCommand(console, CreateFeatureStore(resolved));
 
         // Act
         await command.ExecuteAsync(new FeatureCurrentCommandOptions());
 
         // Assert
         console.Lines[0]
-            .Should().Be("[red]x[/] (feature, active)");
+            .Should().Be($"{Id} ([red]x[/], active)");
     }
 
     [Fact]
@@ -84,7 +88,7 @@ public class FeatureCurrentCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var command = CreateCommand(console, CreateFeatureStore(CreateResolvedResult(CurrentFeatureOrigin.Branch,
-            [FeatureWarning.CurrentFeatureMismatch("other-feature", Id)])));
+            [new CurrentFeatureMismatchWarning("other-feature", Id)])));
 
         // Act
         await command.ExecuteAsync(new FeatureCurrentCommandOptions());
@@ -186,14 +190,13 @@ public class FeatureCurrentCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_JsonModeWithWarnings_WritesFormatThenFeatureWarnings()
+    public async Task ExecuteAsync_JsonModeWithWarnings_WritesWarningsInResultOrder()
     {
         // Arrange
         using var jsonOutput = new StringWriter();
         var unresolved = CreateUnresolvedResult() with
         {
-            Warnings = [FeatureWarning.CurrentFeatureMissing("gone")],
-            FormatWarnings = [FeatureCommandTestHelper.UpgradeWarning]
+            Warnings = [FeatureCommandTestHelper.UpgradeWarning, new CurrentFeatureMissingWarning("gone")]
         };
         var command = CreateCommand(new TestConsole(), CreateFeatureStore(unresolved), jsonOutput);
 
@@ -208,14 +211,13 @@ public class FeatureCurrentCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_PlainModeNotResolvedWithWarnings_WritesFormatThenFeatureWarningsBeforeHint()
+    public async Task ExecuteAsync_PlainModeNotResolvedWithWarnings_WritesWarningsInResultOrderBeforeHint()
     {
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var unresolved = CreateUnresolvedResult() with
         {
-            Warnings = [FeatureWarning.CurrentFeatureMissing("gone")],
-            FormatWarnings = [FeatureCommandTestHelper.UpgradeWarning]
+            Warnings = [FeatureCommandTestHelper.UpgradeWarning, new CurrentFeatureMissingWarning("gone")]
         };
         var command = CreateCommand(console, CreateFeatureStore(unresolved));
 
@@ -262,9 +264,9 @@ public class FeatureCurrentCommandTests
         // Arrange
         var kitStore = A.Fake<IKitStore>();
         var featureStore = CreateFeatureStore(CreateUnresolvedResult());
-        var command = new FeatureCurrentCommand(new TestConsole(),
-            FeatureCommandTestHelper.CreateKitStoreFactory(kitStore), featureStore, new CliJsonWriter(TextWriter.Null),
-            CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(new TestConsole(),
+            kitStoreFactory: FeatureCommandTestHelper.CreateKitStoreFactory(kitStore));
+        var command = new FeatureCurrentCommand(context, featureStore);
 
         // Act
         await command.ExecuteAsync(new FeatureCurrentCommandOptions());
@@ -297,11 +299,11 @@ public class FeatureCurrentCommandTests
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var command = new FeatureCurrentCommand(new TestConsole(),
-            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
+        var context = TestShadeKitCommandContext.Create(new TestConsole(),
+            kitStoreFactory: FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
                 new KitRootPathNotFoundException("/repo/src", "/repo")),
-            A.Fake<IFeatureStore>(), new CliJsonWriter(jsonOutput), CliErrorMapperTests.CreateMapper(),
-            TestCliCancellation.None);
+            jsonOutput: jsonOutput);
+        var command = new FeatureCurrentCommand(context, A.Fake<IFeatureStore>());
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureCurrentCommandOptions { Json = true });
@@ -336,22 +338,14 @@ public class FeatureCurrentCommandTests
     }
 
     [Theory]
-    [InlineData(0, "ansiConsole")]
-    [InlineData(1, "kitStoreFactory")]
-    [InlineData(2, "featureStore")]
-    [InlineData(3, "jsonWriter")]
-    [InlineData(4, "errorMapper")]
-    [InlineData(5, "cancellation")]
+    [InlineData(0, "context")]
+    [InlineData(1, "featureStore")]
     public void Ctor_NullArgument_ThrowsArgumentNullException(int nullIndex, string parameterName)
     {
         // Act
         var act = () => new FeatureCurrentCommand(
-            nullIndex == 0 ? null! : new TestConsole(),
-            nullIndex == 1 ? null! : A.Fake<IKitStoreFactory>(),
-            nullIndex == 2 ? null! : A.Fake<IFeatureStore>(),
-            nullIndex == 3 ? null! : A.Fake<ICliJsonWriter>(),
-            nullIndex == 4 ? null! : CliErrorMapperTests.CreateMapper(),
-            nullIndex == 5 ? null! : TestCliCancellation.None);
+            nullIndex == 0 ? null! : TestShadeKitCommandContext.Create(new TestConsole()),
+            nullIndex == 1 ? null! : A.Fake<IFeatureStore>());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -381,15 +375,15 @@ public class FeatureCurrentCommandTests
     }
 
     private static CurrentFeatureResult CreateResolvedResult(CurrentFeatureOrigin origin,
-        IReadOnlyList<FeatureWarning>? warnings = null, FeatureStatus status = FeatureStatus.Active)
+        IReadOnlyList<KitWarning>? warnings = null, FeatureStatus status = FeatureStatus.Active)
     {
         return new CurrentFeatureResult(Id, FeatureCommandTestHelper.CreateDocument(status: status), origin,
-            FeaturePaths.For(Id), warnings ?? [], []);
+            warnings ?? []);
     }
 
     private static CurrentFeatureResult CreateUnresolvedResult()
     {
-        return new CurrentFeatureResult(null, null, null, null, [], Array.Empty<FormatWarning>());
+        return new CurrentFeatureResult(null, null, null, []);
     }
 
     private static IFeatureStore CreateFeatureStore(CurrentFeatureResult result)
@@ -403,8 +397,10 @@ public class FeatureCurrentCommandTests
     private static FeatureCurrentCommand CreateCommand(IAnsiConsole console, IFeatureStore featureStore,
         TextWriter? jsonOutput = null, ICliCancellation? cancellation = null)
     {
-        return new FeatureCurrentCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(), featureStore,
-            new CliJsonWriter(jsonOutput ?? TextWriter.Null), CliErrorMapperTests.CreateMapper(),
-            cancellation ?? TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(console,
+            kitStoreFactory: FeatureCommandTestHelper.CreateKitStoreFactory(), jsonOutput: jsonOutput,
+            cancellation: cancellation);
+
+        return new FeatureCurrentCommand(context, featureStore);
     }
 }

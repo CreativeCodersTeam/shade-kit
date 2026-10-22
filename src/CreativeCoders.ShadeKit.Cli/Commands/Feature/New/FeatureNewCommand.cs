@@ -4,7 +4,6 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Store;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -18,21 +17,13 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Feature.New;
 /// <summary>
 /// Creates a new feature in the SHADE kit store of the current repository and makes it the current feature.
 /// </summary>
-/// <param name="ansiConsole">The console that receives the plain summary.</param>
-/// <param name="kitStoreFactory">The factory that locates the SHADE kit store.</param>
+/// <param name="context">The context that runs the core operation and writes the result or the failure.</param>
 /// <param name="featureStore">The store that creates the feature folder and its files.</param>
-/// <param name="jsonWriter">The writer that receives the JSON output.</param>
-/// <param name="errorMapper">The mapper that turns failures into exit codes, error codes, and messages.</param>
-/// <param name="cancellation">The cancellation of the run, whose token the command passes to the core.</param>
 [UsedImplicitly]
 [CliCommand([FeatureCommandGroup.Name, Name], Description = "Creates a new feature and makes it the current feature")]
 public class FeatureNewCommand(
-    IAnsiConsole ansiConsole,
-    IKitStoreFactory kitStoreFactory,
-    IFeatureStore featureStore,
-    ICliJsonWriter jsonWriter,
-    CliErrorMapper errorMapper,
-    ICliCancellation cancellation)
+    ShadeKitCommandContext context,
+    IFeatureStore featureStore)
     : ICliCommand<FeatureNewCommandOptions>
 {
     /// <summary>
@@ -40,17 +31,9 @@ public class FeatureNewCommand(
     /// </summary>
     public const string Name = "new";
 
-    private readonly IAnsiConsole _ansiConsole = Ensure.NotNull(ansiConsole);
-
-    private readonly IKitStoreFactory _kitStoreFactory = Ensure.NotNull(kitStoreFactory);
+    private readonly ShadeKitCommandContext _context = Ensure.NotNull(context);
 
     private readonly IFeatureStore _featureStore = Ensure.NotNull(featureStore);
-
-    private readonly ICliJsonWriter _jsonWriter = Ensure.NotNull(jsonWriter);
-
-    private readonly CliErrorMapper _errorMapper = Ensure.NotNull(errorMapper);
-
-    private readonly ICliCancellation _cancellation = Ensure.NotNull(cancellation);
 
     /// <summary>
     /// Creates the feature and writes its id, paths, and suggested branch, as plain text or as a JSON envelope.
@@ -88,24 +71,22 @@ public class FeatureNewCommand(
         var request = new NewFeatureRequest(options.Source, options.Title, options.Profile,
             Directory.GetCurrentDirectory());
 
-        var result = await CliCommandAbort.RunAsync(
-                () => _featureStore.CreateAsync(_kitStoreFactory.Create(), request, _cancellation.Token), _errorMapper,
-                options.Json, _jsonWriter)
+        var result = await _context.RunAsync(options.Json,
+                (store, cancellationToken) => _featureStore.CreateAsync(store, request, cancellationToken))
             .ConfigureAwait(false);
 
         var data = FeatureNewCommandData.FromResult(result);
 
-        FeatureCommandOutput.Write(_ansiConsole, _jsonWriter, options.Json, data,
-            FeatureCommandOutput.CreateWarnings(result.FormatWarnings, []), () => WriteSummary(data));
+        _context.WriteSuccess(options.Json, data, result.Warnings, () => WriteSummary(data));
 
         return CommandResult.Success;
     }
 
     private void WriteSummary(FeatureNewCommandData data)
     {
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Created feature {data.Id} ({data.Profile}).");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"  {data.Paths.FeatureFile}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"  {data.Paths.Request}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Suggested branch: {data.SuggestedBranch}");
+        _context.Console.WriteLine($"Created feature {data.Id} ({data.Profile}).");
+        _context.Console.WriteLine($"  {data.Paths.FeatureFile}");
+        _context.Console.WriteLine($"  {data.Paths.Request}");
+        _context.Console.WriteLine($"Suggested branch: {data.SuggestedBranch}");
     }
 }

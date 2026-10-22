@@ -5,9 +5,9 @@ namespace CreativeCoders.ShadeKit.Cli;
 /// </summary>
 /// <remarks>
 /// Skills branch on these codes instead of parsing messages. Every error code belongs to one exit code in
-/// <see cref="ShadeKitCliExitCodes" />. <see cref="UpgradeNeeded" /> is also used as a warning code when a read
-/// command migrates an outdated file in memory. Warnings without a matching error use the codes of
-/// <see cref="ShadeKitCliWarningCodes" />.
+/// <see cref="ShadeKitCliExitCodes" />; <see cref="ForExitCode" /> returns it. <see cref="UpgradeNeeded" /> is also
+/// used as a warning code when a read command migrates an outdated file in memory. Warnings without a matching error
+/// use the codes of <see cref="ShadeKitCliWarningCodes" />.
 /// </remarks>
 public static class ShadeKitCliErrorCodes
 {
@@ -121,4 +121,46 @@ public static class ShadeKitCliErrorCodes
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.HostError" />.
     /// </summary>
     public const string HostError = "host-error";
+
+    /// <summary>
+    /// Returns the error code that belongs to the specified exit code.
+    /// </summary>
+    /// <remarks>
+    /// This is the only table that pairs the exit codes of <see cref="ShadeKitCliExitCodes" /> with their error codes;
+    /// <see cref="Output.CliError.Create" /> uses it so that an error names only its exit code.
+    /// </remarks>
+    /// <param name="exitCode">An exit code from <see cref="ShadeKitCliExitCodes" />.</param>
+    /// <returns>The error code that belongs to <paramref name="exitCode" />.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="exitCode" /> is not defined in <see cref="ShadeKitCliExitCodes" />.
+    /// </exception>
+    public static string ForExitCode(int exitCode)
+    {
+        return exitCode switch
+        {
+            ShadeKitCliExitCodes.InvalidArguments => InvalidArguments,
+            ShadeKitCliExitCodes.KitRootNotFound => KitRootNotFound,
+            ShadeKitCliExitCodes.NotAGitRepository => NotAGitRepository,
+            ShadeKitCliExitCodes.KitAlreadyInitialized => KitAlreadyInitialized,
+            ShadeKitCliExitCodes.PathNotAFile => PathNotAFile,
+            ShadeKitCliExitCodes.KitRootNotADirectory => KitRootNotADirectory,
+            ShadeKitCliExitCodes.GitUnavailable => GitUnavailable,
+            ShadeKitCliExitCodes.FormatTooNew => FormatTooNew,
+            ShadeKitCliExitCodes.UpgradeNeeded => UpgradeNeeded,
+            ShadeKitCliExitCodes.InvalidFile => InvalidFile,
+            ShadeKitCliExitCodes.InvalidManagedSection => InvalidManagedSection,
+            ShadeKitCliExitCodes.UnsupportedFileEncoding => UnsupportedFileEncoding,
+            ShadeKitCliExitCodes.FeatureAlreadyExists => FeatureAlreadyExists,
+            ShadeKitCliExitCodes.FeatureNotFound => FeatureNotFound,
+            ShadeKitCliExitCodes.InvalidFeatureId => InvalidFeatureId,
+            ShadeKitCliExitCodes.InvalidFeatureSource => InvalidFeatureSource,
+            ShadeKitCliExitCodes.InvalidFeatureTitle => InvalidFeatureTitle,
+            ShadeKitCliExitCodes.FeatureIoFailed => FeatureIoFailed,
+            ShadeKitCliExitCodes.GitIdentityMissing => GitIdentityMissing,
+            ShadeKitCliExitCodes.UnknownProfile => UnknownProfile,
+            ShadeKitCliExitCodes.Canceled => Canceled,
+            ShadeKitCliExitCodes.HostError => HostError,
+            _ => throw new ArgumentOutOfRangeException(nameof(exitCode), exitCode, "The exit code is not defined.")
+        };
+    }
 }

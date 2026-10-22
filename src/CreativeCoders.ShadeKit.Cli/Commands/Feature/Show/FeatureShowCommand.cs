@@ -3,7 +3,6 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Store;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -12,21 +11,13 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
 /// <summary>
 /// Shows the complete state of a feature of the SHADE kit store of the current repository.
 /// </summary>
-/// <param name="ansiConsole">The console that receives the plain result.</param>
-/// <param name="kitStoreFactory">The factory that locates the SHADE kit store.</param>
+/// <param name="context">The context that runs the core operation and writes the result or the failure.</param>
 /// <param name="featureStore">The store that reads the feature.</param>
-/// <param name="jsonWriter">The writer that receives the JSON output.</param>
-/// <param name="errorMapper">The mapper that turns failures into exit codes, error codes, and messages.</param>
-/// <param name="cancellation">The cancellation of the run, whose token the command passes to the core.</param>
 [UsedImplicitly]
 [CliCommand([FeatureCommandGroup.Name, Name], Description = "Shows the complete state of a feature")]
 public class FeatureShowCommand(
-    IAnsiConsole ansiConsole,
-    IKitStoreFactory kitStoreFactory,
-    IFeatureStore featureStore,
-    ICliJsonWriter jsonWriter,
-    CliErrorMapper errorMapper,
-    ICliCancellation cancellation)
+    ShadeKitCommandContext context,
+    IFeatureStore featureStore)
     : ICliCommand<FeatureShowCommandOptions>
 {
     /// <summary>
@@ -34,17 +25,9 @@ public class FeatureShowCommand(
     /// </summary>
     public const string Name = "show";
 
-    private readonly IAnsiConsole _ansiConsole = Ensure.NotNull(ansiConsole);
-
-    private readonly IKitStoreFactory _kitStoreFactory = Ensure.NotNull(kitStoreFactory);
+    private readonly ShadeKitCommandContext _context = Ensure.NotNull(context);
 
     private readonly IFeatureStore _featureStore = Ensure.NotNull(featureStore);
-
-    private readonly ICliJsonWriter _jsonWriter = Ensure.NotNull(jsonWriter);
-
-    private readonly CliErrorMapper _errorMapper = Ensure.NotNull(errorMapper);
-
-    private readonly ICliCancellation _cancellation = Ensure.NotNull(cancellation);
 
     /// <summary>
     /// Reads the feature and writes its state, as plain text or as a JSON envelope.
@@ -76,34 +59,32 @@ public class FeatureShowCommand(
     {
         Ensure.NotNull(options);
 
-        var result = await CliCommandAbort.RunAsync(
-                () => _featureStore.ShowAsync(_kitStoreFactory.Create(), options.FeatureId, _cancellation.Token),
-                _errorMapper, options.Json, _jsonWriter)
+        var result = await _context.RunAsync(options.Json,
+                (store, cancellationToken) => _featureStore.ShowAsync(store, options.FeatureId, cancellationToken))
             .ConfigureAwait(false);
 
         var data = FeatureShowCommandData.FromResult(result);
 
-        FeatureCommandOutput.Write(_ansiConsole, _jsonWriter, options.Json, data,
-            FeatureCommandOutput.CreateWarnings(result.FormatWarnings, result.Warnings), () => WriteFeature(data));
+        _context.WriteSuccess(options.Json, data, result.Warnings, () => WriteFeature(data, result.Feature));
 
         return CommandResult.Success;
     }
 
-    private void WriteFeature(FeatureShowCommandData data)
+    private void WriteFeature(FeatureShowCommandData data, FeatureDocument feature)
     {
         var source = data.Source.Value is null
             ? CliJsonWriter.GetEnumName(data.Source.Kind)
             : $"{CliJsonWriter.GetEnumName(data.Source.Kind)} {data.Source.Value}";
-        var created = FeatureTextFormat.FormatCreated(data.CreatedAt, data.CreatedBy.Name, data.CreatedBy.Email);
+        var created = FeatureTextFormat.FormatCreated(feature);
 
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Id: {data.Id}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Title: {data.Title}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Profile: {data.Profile}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Status: {CliJsonWriter.GetEnumName(data.Status)}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Source: {source}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Created: {created}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Feature directory: {data.Paths.FeatureDir}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Feature file: {data.Paths.FeatureFile}");
-        FeatureCommandOutput.WriteLine(_ansiConsole, $"Request: {data.Paths.Request}");
+        _context.Console.WriteLine($"Id: {data.Id}");
+        _context.Console.WriteLine($"Title: {data.Title}");
+        _context.Console.WriteLine($"Profile: {data.Profile}");
+        _context.Console.WriteLine($"Status: {CliJsonWriter.GetEnumName(data.Status)}");
+        _context.Console.WriteLine($"Source: {source}");
+        _context.Console.WriteLine($"Created: {created}");
+        _context.Console.WriteLine($"Feature directory: {data.Paths.FeatureDir}");
+        _context.Console.WriteLine($"Feature file: {data.Paths.FeatureFile}");
+        _context.Console.WriteLine($"Request: {data.Paths.Request}");
     }
 }

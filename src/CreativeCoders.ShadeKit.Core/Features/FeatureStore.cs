@@ -1,6 +1,6 @@
-using System.Text;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Config;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
@@ -24,20 +24,6 @@ public sealed class FeatureStore(
     IShippedTemplateReader shippedTemplateReader)
     : IFeatureStore
 {
-    private const string RequestTemplatePath = $"{KitStorePaths.TemplatesDirName}/{KitStorePaths.RequestFileName}";
-
-    private const string RequestTemplateResourcePath = "request.template.md";
-
-    private const string SuggestedBranchPrefix = "feature/";
-
-    // The suffixes of the hidden folders in which a new feature is built and a dropped feature is deleted. Their names
-    // start with a dot, so they are never valid feature ids and ListAsync ignores them.
-    private const string StagingDirSuffix = ".tmp";
-
-    private const string DroppingDirSuffix = ".dropping";
-
-    private static readonly UTF8Encoding Utf8WithoutBom = new(false);
-
     private readonly IFeatureIdFactory _featureIdFactory = Ensure.NotNull(featureIdFactory);
 
     private readonly ICurrentFeatureResolver _currentFeatureResolver = Ensure.NotNull(currentFeatureResolver);
@@ -73,16 +59,15 @@ public sealed class FeatureStore(
                 cancellationToken)
             .ConfigureAwait(false);
 
-        if (store.DirectoryExists(KitStorePaths.GetFeatureDirPath(identity.Id)))
+        if (store.FeatureExists(identity.Id))
         {
             throw new FeatureAlreadyExistsException(identity.Id);
         }
 
-        // The override is written last. An override that cannot be used is replaced then; any other problem with it
-        // surfaces now, before anything is written.
-        var (_, overrideProblem) = await CurrentFeatureOverride
-            .ReadAsync(store, FormatAccess.Write, cancellationToken)
-            .ConfigureAwait(false);
+        // The override is written last and replaces an override that cannot be used because of its format, so only an
+        // override that cannot be read at all would stop that write. It is read now, so it stops the command before
+        // anything is written.
+        await store.ReadFileAsync(KitStorePaths.CurrentFeatureFilePath, cancellationToken).ConfigureAwait(false);
 
         var creator = await _gitRepositoryInfo.GetIdentityAsync(repositoryRootPath, cancellationToken)
             .ConfigureAwait(false);
@@ -100,13 +85,11 @@ public sealed class FeatureStore(
             Status = FeatureStatus.Active
         };
 
-        await CreateFeatureDirAsync(store, identity, feature, creator, cancellationToken).ConfigureAwait(false);
+        await CreateFeatureDirAsync(store, feature, identity.OriginalInput, cancellationToken).ConfigureAwait(false);
 
-        await WriteOverrideOrRemoveFeatureAsync(store, identity.Id, overrideProblem is not null, cancellationToken)
-            .ConfigureAwait(false);
+        await WriteOverrideOrRemoveFeatureAsync(store, identity.Id, cancellationToken).ConfigureAwait(false);
 
-        return new NewFeatureResult(feature, FeaturePaths.For(identity.Id), SuggestedBranchPrefix + identity.Id,
-            configResult?.Warnings ?? []);
+        return new NewFeatureResult(feature, configResult?.Warnings ?? []);
     }
 
     /// <inheritdoc />
@@ -115,45 +98,44 @@ public sealed class FeatureStore(
         Ensure.NotNull(store);
 
         List<FeatureSummary> features = [];
-        List<FeatureWarning> warnings = [];
-        List<FormatWarning> formatWarnings = [];
+        List<KitWarning> warnings = [];
 
         // The names come from the file system, so each one is a single path segment inside the features folder.
         foreach (var featureName in store.GetFeatureNames().Order(StringComparer.Ordinal))
         {
             // Hidden folders are the staging and dropping folders of new and dropped features, also those that a
             // failed run left behind.
-            if (featureName.StartsWith('.'))
+            if (KitStoreDirectoryExtensions.IsHiddenName(featureName))
             {
                 continue;
             }
 
             if (!FeatureIds.IsValid(featureName))
             {
-                warnings.Add(FeatureWarning.FeatureFolderInvalid(featureName));
+                warnings.Add(new FeatureFolderInvalidWarning(featureName));
 
                 continue;
             }
 
             var result = await store
-                .ReadJsonAsync<FeatureDocument>(GetFeatureFilePath(featureName), FormatIds.Feature,
+                .ReadJsonAsync<FeatureDocument>(KitStorePaths.GetFeatureFilePath(featureName), FormatIds.Feature,
                     FormatAccess.Read, cancellationToken)
                 .ConfigureAwait(false);
 
             if (result is null)
             {
-                warnings.Add(FeatureWarning.FeatureFileMissing(featureName));
+                warnings.Add(new FeatureFileMissingWarning(featureName));
 
                 continue;
             }
 
+            warnings.AddRange(result.Warnings);
             warnings.AddRange(CheckFeatureId(featureName, result.Document));
             features.Add(new FeatureSummary(featureName, result.Document.Title, result.Document.Profile,
                 result.Document.Status));
-            formatWarnings.AddRange(result.Warnings);
         }
 
-        return new FeatureListResult(features, warnings, [.. formatWarnings.Distinct()]);
+        return new FeatureListResult(features, KitWarningOrder.Arrange(warnings));
     }
 
     /// <inheritdoc />
@@ -165,8 +147,8 @@ public sealed class FeatureStore(
 
         var result = await ReadFeatureAsync(store, featureId, cancellationToken).ConfigureAwait(false);
 
-        return new FeatureShowResult(featureId, result.Document, FeaturePaths.For(featureId),
-            CheckFeatureId(featureId, result.Document), result.Warnings);
+        return new FeatureShowResult(featureId, result.Document,
+            KitWarningOrder.Arrange([.. result.Warnings, .. CheckFeatureId(featureId, result.Document)]));
     }
 
     /// <inheritdoc />
@@ -179,15 +161,15 @@ public sealed class FeatureStore(
 
         if (!resolution.IsResolved)
         {
-            return new CurrentFeatureResult(null, null, null, null, resolution.Warnings, resolution.FormatWarnings);
+            return new CurrentFeatureResult(null, null, null, resolution.Warnings);
         }
 
         var featureId = resolution.FeatureId;
         var result = await ReadFeatureAsync(store, featureId, cancellationToken).ConfigureAwait(false);
 
-        return new CurrentFeatureResult(featureId, result.Document, resolution.Origin, FeaturePaths.For(featureId),
-            [.. resolution.Warnings, .. CheckFeatureId(featureId, result.Document)],
-            [.. resolution.FormatWarnings.Concat(result.Warnings).Distinct()]);
+        return new CurrentFeatureResult(featureId, result.Document, resolution.Origin,
+            KitWarningOrder.Arrange(
+                [.. resolution.Warnings, .. result.Warnings, .. CheckFeatureId(featureId, result.Document)]));
     }
 
     /// <inheritdoc />
@@ -201,16 +183,11 @@ public sealed class FeatureStore(
         var branchFeatureId = await _currentFeatureResolver.ResolveBranchFeatureIdAsync(store, cancellationToken)
             .ConfigureAwait(false);
 
-        var (_, overrideProblem) = await CurrentFeatureOverride
-            .ReadAsync(store, FormatAccess.Write, cancellationToken)
-            .ConfigureAwait(false);
+        await CurrentFeatureOverride.WriteAsync(store, featureId, cancellationToken).ConfigureAwait(false);
 
-        await CurrentFeatureOverride.WriteAsync(store, featureId, overrideProblem is not null, cancellationToken)
-            .ConfigureAwait(false);
-
-        IReadOnlyList<FeatureWarning> warnings =
+        IReadOnlyList<KitWarning> warnings =
             branchFeatureId is not null && !string.Equals(branchFeatureId, featureId, StringComparison.Ordinal)
-                ? [FeatureWarning.CurrentFeatureMismatch(featureId, branchFeatureId)]
+                ? [new CurrentFeatureMismatchWarning(featureId, branchFeatureId)]
                 : [];
 
         return new SetCurrentFeatureResult(featureId, warnings);
@@ -233,69 +210,48 @@ public sealed class FeatureStore(
     public async Task<FeatureDropResult> DropAsync(IKitStore store, string featureId,
         CancellationToken cancellationToken = default)
     {
-        Ensure.NotNull(store);
-        EnsureFeatureExists(store, featureId);
-
-        var files = GetFeatureFiles(store, featureId);
-
         // The override is checked before anything is changed, so a failure while reading it changes nothing.
-        var overrideAffected = await OverrideSelectsAsync(store, featureId, cancellationToken).ConfigureAwait(false);
+        var preview = await PreviewDropAsync(store, featureId, cancellationToken).ConfigureAwait(false);
 
         cancellationToken.ThrowIfCancellationRequested();
 
         // The rename is atomic: if it fails, nothing is deleted. After it, the feature no longer exists, even if
         // deleting the hidden folder fails.
-        var droppingDir = CreateHiddenDirPath(featureId, DroppingDirSuffix);
-
         try
         {
-            store.MoveDirectory(KitStorePaths.GetFeatureDirPath(featureId), droppingDir);
+            store.DeleteDirectoryAtomically(KitStorePaths.GetFeatureDirPath(featureId));
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (KitDirectoryIoFailedException exception)
         {
-            throw new FeatureIoFailedException(featureId, FeatureIoFailedException.DropOperation, exception);
-        }
-
-        try
-        {
-            store.DeleteDirectory(droppingDir);
+            throw new FeatureIoFailedException(featureId, FeatureIoFailedException.DropOperation,
+                exception.FileSystemException);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // The feature is dropped already, so the override must not keep selecting it; the failed delete is the
             // error that is reported.
-            ClearOverrideBestEffort(store, overrideAffected);
+            if (preview.OverrideAffected)
+            {
+                ClearOverrideBestEffort(store);
+            }
+
             throw;
         }
 
-        var overrideCleared = false;
-
-        if (overrideAffected)
+        if (preview.OverrideAffected)
         {
-            store.DeleteFile(CurrentFeatureOverride.FilePath);
-            overrideCleared = true;
+            store.DeleteFile(KitStorePaths.CurrentFeatureFilePath);
         }
 
-        return new FeatureDropResult(featureId, files, overrideAffected, overrideCleared);
+        return new FeatureDropResult(featureId, preview.Files, preview.OverrideAffected);
     }
 
-    private static string GetFeatureFilePath(string featureName)
-    {
-        return $"{KitStorePaths.GetFeatureDirPath(featureName)}/{KitStorePaths.FeatureFileName}";
-    }
-
-    // The name starts with a dot, so it is never a valid feature id; the random part keeps concurrent runs apart.
-    private static string CreateHiddenDirPath(string featureId, string suffix)
-    {
-        return KitStorePaths.GetFeatureDirPath($".{featureId}.{Guid.NewGuid().ToString("N")[..8]}{suffix}");
-    }
-
-    // The id is checked before the path is built, so an invalid id never leads to a file system access.
+    // An invalid id is reported as such, not as a missing feature.
     private static void EnsureFeatureExists(IKitStore store, string featureId)
     {
         FeatureIds.EnsureValid(featureId);
 
-        if (!store.DirectoryExists(KitStorePaths.GetFeatureDirPath(featureId)))
+        if (!store.FeatureExists(featureId))
         {
             throw new FeatureNotFoundException(featureId);
         }
@@ -304,7 +260,7 @@ public sealed class FeatureStore(
     private static async Task<VersionedReadResult<FeatureDocument>> ReadFeatureAsync(IKitStore store,
         string featureId, CancellationToken cancellationToken)
     {
-        var featureFilePath = GetFeatureFilePath(featureId);
+        var featureFilePath = KitStorePaths.GetFeatureFilePath(featureId);
 
         return await store
                    .ReadJsonAsync<FeatureDocument>(featureFilePath, FormatIds.Feature, FormatAccess.Read,
@@ -315,11 +271,11 @@ public sealed class FeatureStore(
     }
 
     // The folder name is the id of the feature; a different id in feature.json is reported, not corrected.
-    private static IReadOnlyList<FeatureWarning> CheckFeatureId(string featureId, FeatureDocument feature)
+    private static IReadOnlyList<KitWarning> CheckFeatureId(string featureId, FeatureDocument feature)
     {
         return string.Equals(feature.Id, featureId, StringComparison.Ordinal)
             ? []
-            : [FeatureWarning.FeatureIdMismatch(featureId, feature.Id)];
+            : [new FeatureIdMismatchWarning(featureId, feature.Id)];
     }
 
     private static IReadOnlyList<string> GetFeatureFiles(IKitStore store, string featureId)
@@ -333,7 +289,7 @@ public sealed class FeatureStore(
         try
         {
             var result = await store
-                .ReadJsonAsync<CurrentFeatureDocument>(CurrentFeatureOverride.FilePath, FormatIds.CurrentFeature,
+                .ReadJsonAsync<CurrentFeatureDocument>(KitStorePaths.CurrentFeatureFilePath, FormatIds.CurrentFeature,
                     FormatAccess.Read, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -347,16 +303,11 @@ public sealed class FeatureStore(
         }
     }
 
-    private static void ClearOverrideBestEffort(IKitStore store, bool overrideAffected)
+    private static void ClearOverrideBestEffort(IKitStore store)
     {
-        if (!overrideAffected)
-        {
-            return;
-        }
-
         try
         {
-            store.DeleteFile(CurrentFeatureOverride.FilePath);
+            store.DeleteFile(KitStorePaths.CurrentFeatureFilePath);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -365,141 +316,79 @@ public sealed class FeatureStore(
     }
 
     // Builds the feature in a hidden staging folder and moves it into place, so the feature folder appears only when
-    // it is complete, and an existing folder, also one created by a concurrent run, is never touched.
-    private async Task CreateFeatureDirAsync(IKitStore store, FeatureIdentity identity, FeatureDocument feature,
-        GitIdentity creator, CancellationToken cancellationToken)
+    // it is complete, and an existing folder, also one created by a concurrent run, is never touched. The names of
+    // the hidden folders start with a dot, so they are never valid feature ids and ListAsync ignores them.
+    private async Task CreateFeatureDirAsync(IKitStore store, FeatureDocument feature, string originalInput,
+        CancellationToken cancellationToken)
     {
-        var featureDir = KitStorePaths.GetFeatureDirPath(identity.Id);
-        var stagingDir = CreateHiddenDirPath(identity.Id, StagingDirSuffix);
-
         try
         {
-            CreateStagingDir(store, stagingDir, identity.Id);
-
             await store
-                .WriteJsonAsync($"{stagingDir}/{KitStorePaths.FeatureFileName}", FormatIds.Feature, feature,
-                    FormatAccess.Write, cancellationToken)
+                .CreateDirectoryExclusiveAsync(KitStorePaths.GetFeatureDirPath(feature.Id),
+                    (stagingDir, token) => WriteFeatureFilesAsync(store, stagingDir, feature, originalInput, token),
+                    cancellationToken)
                 .ConfigureAwait(false);
-
-            await WriteRequestAsync(store, $"{stagingDir}/{KitStorePaths.RequestFileName}", identity, creator,
-                cancellationToken).ConfigureAwait(false);
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            MoveIntoPlace(store, stagingDir, featureDir, identity.Id);
         }
-        catch
-        {
-            // Only the staging folder belongs to this run; the feature folder of another run is never removed.
-            DeleteDirectoryBestEffort(store, stagingDir);
-            throw;
-        }
-    }
-
-    private static void CreateStagingDir(IKitStore store, string stagingDir, string featureId)
-    {
-        try
-        {
-            store.CreateDirectory(stagingDir);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Usually the features folder is not writable; nothing exists yet that would have to be removed.
-            throw new FeatureIoFailedException(featureId, FeatureIoFailedException.CreateOperation, exception);
-        }
-    }
-
-    private static void MoveIntoPlace(IKitStore store, string stagingDir, string featureDir, string featureId)
-    {
-        try
-        {
-            store.MoveDirectory(stagingDir, featureDir);
-        }
-        catch (Exception exception) when ((exception is IOException or UnauthorizedAccessException)
-                                          && store.DirectoryExists(featureDir))
+        catch (KitDirectoryExistsException exception)
         {
             // Another run created the feature folder after the existence check.
-            throw new FeatureAlreadyExistsException(featureId, exception);
+            throw new FeatureAlreadyExistsException(feature.Id, exception.FileSystemException);
         }
-        catch (Exception exception) when ((exception is IOException or UnauthorizedAccessException)
-                                          && !store.FileExists(featureDir))
+        catch (KitDirectoryIoFailedException exception)
         {
-            // The folder cannot be renamed, for example because the features folder is not writable or a file in the
-            // staging folder is held open. A file at the feature folder path is not wrapped and stays an unexpected
-            // failure.
-            throw new FeatureIoFailedException(featureId, FeatureIoFailedException.CreateOperation, exception);
+            // Usually the features folder is not writable or a file in the staging folder is held open; nothing was
+            // changed.
+            throw new FeatureIoFailedException(feature.Id, FeatureIoFailedException.CreateOperation,
+                exception.FileSystemException);
         }
+    }
+
+    private async Task WriteFeatureFilesAsync(IKitStore store, string featureDir, FeatureDocument feature,
+        string originalInput, CancellationToken cancellationToken)
+    {
+        await store
+            .WriteJsonAsync($"{featureDir}/{KitStorePaths.FeatureFileName}", FormatIds.Feature, feature,
+                FormatAccess.Write, cancellationToken)
+            .ConfigureAwait(false);
+
+        await WriteRequestAsync(store, $"{featureDir}/{KitStorePaths.RequestFileName}", feature, originalInput,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task WriteOverrideOrRemoveFeatureAsync(IKitStore store, string featureId,
-        bool replaceUnusable, CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
         try
         {
-            await CurrentFeatureOverride.WriteAsync(store, featureId, replaceUnusable, cancellationToken)
-                .ConfigureAwait(false);
+            await CurrentFeatureOverride.WriteAsync(store, featureId, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
             // This run moved the feature folder into place, so removing it again loses nothing; the override then
-            // never selects a feature that was removed.
-            RemoveFeatureDirBestEffort(store, featureId);
+            // never selects a feature that was removed. If even the move back fails, the complete feature stays in
+            // place without override; the original failure is more important.
+            store.UndoCreateDirectoryExclusive(KitStorePaths.GetFeatureDirPath(featureId));
             throw;
         }
     }
 
-    private static void RemoveFeatureDirBestEffort(IKitStore store, string featureId)
-    {
-        var stagingDir = CreateHiddenDirPath(featureId, StagingDirSuffix);
-
-        try
-        {
-            store.MoveDirectory(KitStorePaths.GetFeatureDirPath(featureId), stagingDir);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // The complete feature stays in place without override; the original failure is more important.
-            return;
-        }
-
-        DeleteDirectoryBestEffort(store, stagingDir);
-    }
-
-    private async Task WriteRequestAsync(IKitStore store, string requestPath, FeatureIdentity identity,
-        GitIdentity creator, CancellationToken cancellationToken)
+    private async Task WriteRequestAsync(IKitStore store, string requestPath, FeatureDocument feature,
+        string originalInput, CancellationToken cancellationToken)
     {
         var template = await ReadRequestTemplateAsync(store, cancellationToken).ConfigureAwait(false);
-        var content = FeatureRequestTemplate.Fill(template, identity, creator);
+        var content = FeatureRequestTemplate.Fill(template, feature, originalInput);
 
-        await store.WriteFileAsync(requestPath, Utf8WithoutBom.GetBytes(content), cancellationToken)
+        await store.WriteFileAsync(requestPath, TextFileEncoding.Utf8WithoutBom.GetBytes(content), cancellationToken)
             .ConfigureAwait(false);
     }
 
     private async Task<string> ReadRequestTemplateAsync(IKitStore store, CancellationToken cancellationToken)
     {
-        var repositoryTemplate = await store.ReadFileAsync(RequestTemplatePath, cancellationToken)
+        var repositoryTemplate = await store.ReadFileAsync(ShippedTemplates.Request.KitPath, cancellationToken)
             .ConfigureAwait(false);
 
-        if (repositoryTemplate is not null)
-        {
-            return FeatureRequestTemplate.Decode(repositoryTemplate);
-        }
-
-        var shippedTemplate = ShippedTemplates.All.Single(x =>
-            string.Equals(x.ResourcePath, RequestTemplateResourcePath, StringComparison.Ordinal));
-
-        return _shippedTemplateReader.ReadContent(shippedTemplate);
-    }
-
-    private static void DeleteDirectoryBestEffort(IKitStore store, string relativePath)
-    {
-        try
-        {
-            store.DeleteDirectory(relativePath);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // The hidden folder stays in place and is ignored; the original failure is more important.
-        }
+        return repositoryTemplate is not null
+            ? FeatureRequestTemplate.Decode(repositoryTemplate, ShippedTemplates.Request.RepositoryPath)
+            : _shippedTemplateReader.ReadContent(ShippedTemplates.Request);
     }
 }

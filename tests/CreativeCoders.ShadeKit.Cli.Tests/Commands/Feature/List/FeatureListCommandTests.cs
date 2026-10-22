@@ -6,6 +6,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.List;
 using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
@@ -130,7 +131,7 @@ public class FeatureListCommandTests
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
             CreateFeatureStore([new FeatureSummary("login", "Login", "feature", FeatureStatus.Active)],
-                [FeatureWarning.FeatureFileMissing("broken")], [FeatureCommandTestHelper.UpgradeWarning]));
+                [FeatureCommandTestHelper.UpgradeWarning, new FeatureFileMissingWarning("broken")]));
 
         // Act
         await command.ExecuteAsync(new FeatureListCommandOptions());
@@ -341,75 +342,25 @@ public class FeatureListCommandTests
     }
 
     [Fact]
-    public void Ctor_NullConsole_ThrowsArgumentNullException()
+    public void Ctor_NullContext_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeatureListCommand(null!, A.Fake<IKitStoreFactory>(), A.Fake<IFeatureStore>(),
-            A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
+        var act = () => new FeatureListCommand(null!, A.Fake<IFeatureStore>());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("ansiConsole");
-    }
-
-    [Fact]
-    public void Ctor_NullKitStoreFactory_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => new FeatureListCommand(new TestConsole(), null!, A.Fake<IFeatureStore>(),
-            A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("kitStoreFactory");
+            .WithParameterName("context");
     }
 
     [Fact]
     public void Ctor_NullFeatureStore_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(), null!,
-            A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
+        var act = () => new FeatureListCommand(TestShadeKitCommandContext.Create(new TestConsole()), null!);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("featureStore");
-    }
-
-    [Fact]
-    public void Ctor_NullJsonWriter_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(),
-            A.Fake<IFeatureStore>(), null!, CliErrorMapperTests.CreateMapper(), TestCliCancellation.None);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("jsonWriter");
-    }
-
-    [Fact]
-    public void Ctor_NullErrorMapper_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(),
-            A.Fake<IFeatureStore>(), A.Fake<ICliJsonWriter>(), null!, TestCliCancellation.None);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("errorMapper");
-    }
-
-    [Fact]
-    public void Ctor_NullCancellation_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => new FeatureListCommand(new TestConsole(), A.Fake<IKitStoreFactory>(),
-            A.Fake<IFeatureStore>(), A.Fake<ICliJsonWriter>(), CliErrorMapperTests.CreateMapper(), null!);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("cancellation");
     }
 
     [Fact]
@@ -506,14 +457,13 @@ public class FeatureListCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_JsonModeWithWarnings_WritesFormatThenFeatureWarningsIntoEnvelope()
+    public async Task ExecuteAsync_JsonModeWithWarnings_WritesWarningsInResultOrderIntoEnvelope()
     {
         // Arrange
         var console = new TestConsole();
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
-            CreateFeatureStore([], [FeatureWarning.FeatureFileMissing("broken")],
-                [FeatureCommandTestHelper.UpgradeWarning]),
+            CreateFeatureStore([], [FeatureCommandTestHelper.UpgradeWarning, new FeatureFileMissingWarning("broken")]),
             jsonOutput);
 
         // Act
@@ -732,15 +682,15 @@ public class FeatureListCommandTests
 
     private static IFeatureStore CreateFeatureStore(params FeatureSummary[] features)
     {
-        return CreateFeatureStore(features, [], []);
+        return CreateFeatureStore(features, []);
     }
 
     private static IFeatureStore CreateFeatureStore(IReadOnlyList<FeatureSummary> features,
-        IReadOnlyList<FeatureWarning> warnings, IReadOnlyList<FormatWarning> formatWarnings)
+        IReadOnlyList<KitWarning> warnings)
     {
         var featureStore = A.Fake<IFeatureStore>();
         A.CallTo(() => featureStore.ListAsync(A<IKitStore>._, A<CancellationToken>._))
-            .Returns(new FeatureListResult(features, warnings, formatWarnings));
+            .Returns(new FeatureListResult(features, warnings));
 
         return featureStore;
     }
@@ -748,8 +698,9 @@ public class FeatureListCommandTests
     internal static FeatureListCommand CreateCommand(IAnsiConsole console, IKitStoreFactory kitStoreFactory,
         IFeatureStore? featureStore = null, TextWriter? jsonOutput = null, ICliCancellation? cancellation = null)
     {
-        return new FeatureListCommand(console, kitStoreFactory, featureStore ?? CreateFeatureStore(),
-            new CliJsonWriter(jsonOutput ?? TextWriter.Null), CliErrorMapperTests.CreateMapper(),
-            cancellation ?? TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(console, kitStoreFactory: kitStoreFactory,
+            jsonOutput: jsonOutput, cancellation: cancellation);
+
+        return new FeatureListCommand(context, featureStore ?? CreateFeatureStore());
     }
 }

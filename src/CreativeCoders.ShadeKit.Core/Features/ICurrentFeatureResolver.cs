@@ -34,15 +34,15 @@ public interface ICurrentFeatureResolver
     /// </para>
     /// <para>
     /// An override whose id is not a valid feature id or whose folder does not exist is ignored with a
-    /// <see cref="FeatureWarningKind.CurrentFeatureMissing" /> warning, also when the branch selects a feature; no path
+    /// <see cref="CurrentFeatureMissingWarning" /> warning, also when the branch selects a feature; no path
     /// is built from an invalid id. If the branch and the override select different existing features, the branch
-    /// wins with a <see cref="FeatureWarningKind.CurrentFeatureMismatch" /> warning. The override is read even when
+    /// wins with a <see cref="CurrentFeatureMismatchWarning" /> warning. The override is read even when
     /// the branch selects a feature, so its problems are always reported.
     /// </para>
     /// <para>
     /// An override that cannot be used because of its own format (invalid, a format version newer than the engine
     /// supports, or an older format version while <c>outdatedFormatOnRead</c> is <c>stop</c>) is ignored with a
-    /// <see cref="FeatureWarningKind.CurrentFeatureInvalid" /> warning that describes the problem; the branch can
+    /// <see cref="CurrentFeatureInvalidWarning" /> warning that describes the problem; the branch can
     /// still select a feature, and the file is left unchanged. A format problem of <c>config.json</c>, which is read
     /// for the policy of an outdated override, still stops the resolution.
     /// </para>

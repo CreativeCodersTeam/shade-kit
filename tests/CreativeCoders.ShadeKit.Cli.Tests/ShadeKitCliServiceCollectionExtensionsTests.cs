@@ -68,6 +68,29 @@ public class ShadeKitCliServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddShadeKitCli_WithConsoleAndCoreServices_RegistersCommandContextAsSingleton()
+    {
+        // Arrange
+        using var console = new TestConsole();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAnsiConsole>(console);
+        services.AddShadeKitCore();
+
+        // Act
+        services.AddShadeKitCli(A.Fake<ICliJsonWriter>(), A.Fake<ICliCancellation>());
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+        var context = serviceProvider.GetRequiredService<ShadeKitCommandContext>();
+
+        context
+            .Should().BeSameAs(serviceProvider.GetRequiredService<ShadeKitCommandContext>());
+
+        context.Console
+            .Should().BeSameAs(console);
+    }
+
+    [Fact]
     public void AddShadeKitCli_ExistingConsoleConfirmationRegistration_KeepsExistingRegistration()
     {
         // Arrange

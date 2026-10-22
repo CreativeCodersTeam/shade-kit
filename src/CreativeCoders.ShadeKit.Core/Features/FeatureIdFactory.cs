@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Text;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Files;
 
@@ -45,12 +44,6 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
     private const int MaxHeadingIndentation = 3;
 
     private const string ExplicitTitleOrigin = "passed with --title";
-
-    private const string SaveAsUtf8Hint = "Save the file as UTF-8 and run the command again.";
-
-    // Decodes strictly, so invalid bytes stop the command instead of being replaced with U+FFFD.
-    private static readonly UTF8Encoding StrictUtf8 =
-        new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     private readonly TimeProvider _timeProvider = Ensure.NotNull(timeProvider);
 
@@ -228,7 +221,11 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
 
             await using (stream.ConfigureAwait(false))
             {
-                length = await ReadUpToAsync(stream, content, cancellationToken).ConfigureAwait(false);
+                // Reads until the buffer is full or the stream ends. The length of the stream is not used, because
+                // devices such as /dev/zero report a length of 0.
+                length = await stream
+                    .ReadAtLeastAsync(content, content.Length, throwOnEndOfStream: false, cancellationToken)
+                    .ConfigureAwait(false);
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -245,27 +242,6 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
         }
 
         return DecodeUtf8(source, content.AsSpan(0, length));
-    }
-
-    // Reads until the buffer is full or the stream ends and returns the number of bytes read. The length of the
-    // stream is not used, because devices such as /dev/zero report a length of 0.
-    private static async Task<int> ReadUpToAsync(Stream stream, byte[] buffer, CancellationToken cancellationToken)
-    {
-        var length = 0;
-
-        while (length < buffer.Length)
-        {
-            var bytesRead = await stream.ReadAsync(buffer.AsMemory(length), cancellationToken).ConfigureAwait(false);
-
-            if (bytesRead == 0)
-            {
-                break;
-            }
-
-            length += bytesRead;
-        }
-
-        return length;
     }
 
     private static string? FindTrackerPrefix(IReadOnlyDictionary<string, string> trackers, string host)
@@ -287,30 +263,8 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
 
     private static string DecodeUtf8(string source, ReadOnlySpan<byte> content)
     {
-        var encodingName = TextFileEncoding.FindUnsupportedEncodingName(content);
-
-        if (encodingName == TextFileEncoding.UnmarkedWideEncodingName)
-        {
-            throw new InvalidFeatureSourceException(source,
-                "The file contains a NUL byte, so it is not UTF-8 text; it may be UTF-16 or UTF-32 without byte " +
-                $"order mark, or a binary file. {SaveAsUtf8Hint}");
-        }
-
-        if (encodingName is not null)
-        {
-            throw new InvalidFeatureSourceException(source,
-                $"The file is encoded as {encodingName}, not as UTF-8. {SaveAsUtf8Hint}");
-        }
-
-        try
-        {
-            return StrictUtf8.GetString(TextFileEncoding.SkipUtf8Bom(content));
-        }
-        catch (DecoderFallbackException exception)
-        {
-            throw new InvalidFeatureSourceException(source,
-                $"The file contains bytes that are not valid UTF-8. {SaveAsUtf8Hint}", exception);
-        }
+        return TextFileEncoding.DecodeUtf8(content,
+            (reason, innerException) => new InvalidFeatureSourceException(source, reason, innerException));
     }
 
     private static void EnsureNoControlCharacter(string title, string titleOrigin)

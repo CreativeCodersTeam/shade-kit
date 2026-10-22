@@ -7,6 +7,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
 using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
@@ -87,7 +88,7 @@ public class FeatureShowCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var command = CreateCommand(console,
-            CreateFeatureStore(CreateResult(formatWarnings: [FeatureCommandTestHelper.UpgradeWarning])));
+            CreateFeatureStore(CreateResult(warnings: [FeatureCommandTestHelper.UpgradeWarning])));
 
         // Act
         await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id });
@@ -106,7 +107,7 @@ public class FeatureShowCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         using var jsonOutput = new StringWriter();
-        var result = CreateResult(warnings: [FeatureWarning.FeatureIdMismatch(Id, "recorded-id")]) with
+        var result = CreateResult(warnings: [new FeatureIdMismatchWarning(Id, "recorded-id")]) with
         {
             Feature = FeatureCommandTestHelper.CreateDocument(id: "recorded-id")
         };
@@ -142,7 +143,7 @@ public class FeatureShowCommandTests
         var console = new TestConsole();
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(console,
-            CreateFeatureStore(CreateResult(formatWarnings: [FeatureCommandTestHelper.UpgradeWarning])), jsonOutput);
+            CreateFeatureStore(CreateResult(warnings: [FeatureCommandTestHelper.UpgradeWarning])), jsonOutput);
 
         // Act
         await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id, Json = true });
@@ -267,9 +268,9 @@ public class FeatureShowCommandTests
         // Arrange
         var kitStore = A.Fake<IKitStore>();
         var featureStore = CreateFeatureStore(CreateResult());
-        var command = new FeatureShowCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(kitStore),
-            featureStore, new CliJsonWriter(TextWriter.Null), CliErrorMapperTests.CreateMapper(),
-            TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(new TestConsole(),
+            kitStoreFactory: FeatureCommandTestHelper.CreateKitStoreFactory(kitStore));
+        var command = new FeatureShowCommand(context, featureStore);
 
         // Act
         await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id });
@@ -314,11 +315,10 @@ public class FeatureShowCommandTests
     {
         // Arrange
         var featureStore = A.Fake<IFeatureStore>();
-        var command = new FeatureShowCommand(new TestConsole(),
-            FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
-                new KitRootPathNotFoundException("/repo/src", "/repo")),
-            featureStore, new CliJsonWriter(TextWriter.Null), CliErrorMapperTests.CreateMapper(),
-            TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(new TestConsole(),
+            kitStoreFactory: FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
+                new KitRootPathNotFoundException("/repo/src", "/repo")));
+        var command = new FeatureShowCommand(context, featureStore);
 
         // Act
         var act = () => command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id });
@@ -336,7 +336,7 @@ public class FeatureShowCommandTests
     {
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
-        var command = CreateCommand(console, CreateFeatureStore(CreateResult(formatWarnings:
+        var command = CreateCommand(console, CreateFeatureStore(CreateResult(warnings:
             [new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/features/[x]/feature.json", 1, 2)])));
 
         // Act
@@ -365,7 +365,7 @@ public class FeatureShowCommandTests
             CreatedBy = document.CreatedBy
         };
         var command = CreateCommand(console,
-            CreateFeatureStore(new FeatureShowResult(Id, feature, FeaturePaths.For(Id), [], [])));
+            CreateFeatureStore(new FeatureShowResult(Id, feature, [])));
 
         var originalCulture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fi-FI");
@@ -400,22 +400,14 @@ public class FeatureShowCommandTests
     }
 
     [Theory]
-    [InlineData(0, "ansiConsole")]
-    [InlineData(1, "kitStoreFactory")]
-    [InlineData(2, "featureStore")]
-    [InlineData(3, "jsonWriter")]
-    [InlineData(4, "errorMapper")]
-    [InlineData(5, "cancellation")]
+    [InlineData(0, "context")]
+    [InlineData(1, "featureStore")]
     public void Ctor_NullArgument_ThrowsArgumentNullException(int nullIndex, string parameterName)
     {
         // Act
         var act = () => new FeatureShowCommand(
-            nullIndex == 0 ? null! : new TestConsole(),
-            nullIndex == 1 ? null! : A.Fake<IKitStoreFactory>(),
-            nullIndex == 2 ? null! : A.Fake<IFeatureStore>(),
-            nullIndex == 3 ? null! : A.Fake<ICliJsonWriter>(),
-            nullIndex == 4 ? null! : CliErrorMapperTests.CreateMapper(),
-            nullIndex == 5 ? null! : TestCliCancellation.None);
+            nullIndex == 0 ? null! : TestShadeKitCommandContext.Create(new TestConsole()),
+            nullIndex == 1 ? null! : A.Fake<IFeatureStore>());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -458,10 +450,9 @@ public class FeatureShowCommandTests
     }
 
     private static FeatureShowResult CreateResult(FeatureSource? source = null,
-        IReadOnlyList<FormatWarning>? formatWarnings = null, IReadOnlyList<FeatureWarning>? warnings = null)
+        IReadOnlyList<KitWarning>? warnings = null)
     {
-        return new FeatureShowResult(Id, FeatureCommandTestHelper.CreateDocument(source: source),
-            FeaturePaths.For(Id), warnings ?? [], formatWarnings ?? []);
+        return new FeatureShowResult(Id, FeatureCommandTestHelper.CreateDocument(source: source), warnings ?? []);
     }
 
     private static IFeatureStore CreateFeatureStore(FeatureShowResult result)
@@ -475,8 +466,10 @@ public class FeatureShowCommandTests
     private static FeatureShowCommand CreateCommand(IAnsiConsole console, IFeatureStore featureStore,
         TextWriter? jsonOutput = null, ICliCancellation? cancellation = null)
     {
-        return new FeatureShowCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(), featureStore,
-            new CliJsonWriter(jsonOutput ?? TextWriter.Null), CliErrorMapperTests.CreateMapper(),
-            cancellation ?? TestCliCancellation.None);
+        var context = TestShadeKitCommandContext.Create(console,
+            kitStoreFactory: FeatureCommandTestHelper.CreateKitStoreFactory(), jsonOutput: jsonOutput,
+            cancellation: cancellation);
+
+        return new FeatureShowCommand(context, featureStore);
     }
 }
