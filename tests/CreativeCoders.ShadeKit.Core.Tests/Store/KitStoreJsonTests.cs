@@ -456,6 +456,28 @@ public class KitStoreJsonTests
     }
 
     [Theory]
+    [InlineData(KitStorePaths.CurrentFeatureFilePath)]
+    [InlineData("./features/current-feature.json")]
+    [InlineData("features/./current-feature.json")]
+    [InlineData("features/login/../current-feature.json")]
+    public async Task ReadJsonAsync_InvalidFileAtOverridePath_ReportsDisplayPathOfKitStorePaths(string relativePath)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile("{}", ".shadekit", "features", KitStorePaths.CurrentFeatureFileName);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        var act = () => kitStore.ReadJsonAsync<SampleDocument>(relativePath, SampleFormat.Id, FormatAccess.Write,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidKitFileException>())
+            .Which.FilePath.Should().Be(KitStorePaths.GetDisplayPath(KitStorePaths.CurrentFeatureFilePath))
+            .And.Be(".shadekit/features/current-feature.json");
+    }
+
+    [Theory]
     [InlineData("../outside.json")]
     [InlineData("features/../../outside.json")]
     [InlineData("")]

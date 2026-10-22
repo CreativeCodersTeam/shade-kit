@@ -19,6 +19,35 @@ public class KitStorePathsTests
     }
 
     [Theory]
+    [InlineData(KitStorePaths.ConfigFileName, ".shadekit/config.json")]
+    [InlineData("features/gh-142-login-sso/feature.json", ".shadekit/features/gh-142-login-sso/feature.json")]
+    [InlineData(KitStorePaths.CurrentFeatureFilePath, ".shadekit/features/current-feature.json")]
+    public void GetDisplayPath_KitRelativePathWithSlashes_ReturnsRepositoryRelativePath(string kitRelativePath,
+        string expected)
+    {
+        // Act
+        var path = KitStorePaths.GetDisplayPath(kitRelativePath);
+
+        // Assert
+        path
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetDisplayPath_KitRelativePathWithPlatformSeparators_ReturnsRepositoryRelativePathWithSlashes()
+    {
+        // Arrange
+        var kitRelativePath = string.Join(Path.DirectorySeparatorChar, "features", "gh-142-login-sso", "feature.json");
+
+        // Act
+        var path = KitStorePaths.GetDisplayPath(kitRelativePath);
+
+        // Assert
+        path
+            .Should().Be(".shadekit/features/gh-142-login-sso/feature.json");
+    }
+
+    [Theory]
     [InlineData("gh-142-login-sso", ".shadekit/features/gh-142-login-sso/")]
     [InlineData("Draft Folder", ".shadekit/features/Draft Folder/")]
     [InlineData("../x", ".shadekit/features/../x/")]

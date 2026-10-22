@@ -82,6 +82,28 @@ public static class KitStorePaths
     }
 
     /// <summary>
+    /// Gets the path relative to the repository root of a normalised path relative to the SHADE kit root directory, as
+    /// it is shown in messages and in the file path of exceptions.
+    /// </summary>
+    /// <remarks>
+    /// The store builds the file path of every exception about a file with this method, so code that tells files
+    /// apart by that file path uses this method as well. The path is not normalised beyond the separator: callers pass
+    /// a path without <c>.</c> or <c>..</c> segments, as the store does after it resolves a path against its root.
+    /// </remarks>
+    /// <param name="kitRelativePath">
+    /// The normalised path relative to the SHADE kit root directory, with <c>/</c> or the directory separator of the
+    /// platform as separator, for example <c>features/current-feature.json</c>.
+    /// </param>
+    /// <returns>
+    /// The path with every directory separator of the platform replaced by <c>/</c> and prefixed with
+    /// <see cref="RootPath" /> and <c>/</c>, for example <c>.shadekit/features/current-feature.json</c>.
+    /// </returns>
+    public static string GetDisplayPath(string kitRelativePath)
+    {
+        return GetRepositoryPath(kitRelativePath.Replace(Path.DirectorySeparatorChar, '/'));
+    }
+
+    /// <summary>
     /// Gets the path of the folder of a feature relative to the SHADE kit root directory.
     /// </summary>
     /// <remarks>

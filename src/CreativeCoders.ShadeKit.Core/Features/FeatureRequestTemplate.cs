@@ -71,8 +71,8 @@ internal static partial class FeatureRequestTemplate
     {
         return source.Kind switch
         {
-            FeatureSourceKind.Text => $"{JsonEnumNames.Get(source.Kind)}: {NoSourceReference}",
-            FeatureSourceKind.Url or FeatureSourceKind.File => $"{JsonEnumNames.Get(source.Kind)}: {source.Value}",
+            FeatureSourceKind.Text => $"{source.Kind.ToJsonName()}: {NoSourceReference}",
+            FeatureSourceKind.Url or FeatureSourceKind.File => $"{source.Kind.ToJsonName()}: {source.Value}",
             _ => throw new ArgumentOutOfRangeException(nameof(source), source.Kind, "The source kind is not defined.")
         };
     }

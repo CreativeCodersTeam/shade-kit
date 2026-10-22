@@ -2,6 +2,7 @@ using System.Text.Json;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Config;
+using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Init;
 using FakeItEasy;
 
@@ -339,19 +340,20 @@ public class CliJsonWriterTests
     [InlineData(InitializedFileAction.Created, "created")]
     [InlineData(InitializedFileAction.Appended, "appended")]
     [InlineData(InitializedFileAction.Updated, "updated")]
-    public void GetEnumName_FileAction_ReturnsNameThatJsonOutputUses(InitializedFileAction action, string expectedName)
+    public void Write_FileAction_WritesNameThatToJsonNameReturns(InitializedFileAction action, string expectedName)
     {
         // Arrange
         using var output = new StringWriter();
-        new CliJsonWriter(output).Write(CliJsonEnvelope.Success(new { Action = action }));
-        using var document = JsonDocument.Parse(output.ToString());
+        var writer = new CliJsonWriter(output);
 
         // Act
-        var name = CliJsonWriter.GetEnumName(action);
+        writer.Write(CliJsonEnvelope.Success(new { Action = action }));
 
         // Assert
-        name
+        using var document = JsonDocument.Parse(output.ToString());
+
+        document.RootElement.GetProperty("data").GetProperty("action").GetString()
             .Should().Be(expectedName)
-            .And.Be(document.RootElement.GetProperty("data").GetProperty("action").GetString());
+            .And.Be(action.ToJsonName());
     }
 }

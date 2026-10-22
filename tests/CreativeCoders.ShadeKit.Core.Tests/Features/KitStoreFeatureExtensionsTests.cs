@@ -1,6 +1,8 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Features;
@@ -14,7 +16,8 @@ public class KitStoreFeatureExtensionsTests
     {
         // Arrange
         var store = A.Fake<IKitStore>();
-        A.CallTo(() => store.DirectoryExists("features/gh-142-login-sso")).Returns(folderExists);
+        A.CallTo(() => store.GetFeatureNames())
+            .Returns(folderExists ? ["gh-7-checkout", "gh-142-login-sso"] : ["gh-7-checkout"]);
 
         // Act
         var exists = store.FeatureExists("gh-142-login-sso");
@@ -22,6 +25,58 @@ public class KitStoreFeatureExtensionsTests
         // Assert
         exists
             .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("GH-142-LOGIN-SSO")]
+    [InlineData("Gh-142-login-sso")]
+    [InlineData("gh-142-login-SSO")]
+    public void FeatureExists_FolderNameDiffersOnlyInCase_ReturnsFalse(string folderName)
+    {
+        // Arrange
+        var store = A.Fake<IKitStore>();
+        A.CallTo(() => store.GetFeatureNames()).Returns([folderName]);
+        A.CallTo(() => store.DirectoryExists(A<string>._)).Returns(true);
+
+        // Act
+        var exists = store.FeatureExists("gh-142-login-sso");
+
+        // Assert
+        exists
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void FeatureExists_ExistingAndCaseVariantFolders_ReturnsTrue()
+    {
+        // Arrange
+        var store = A.Fake<IKitStore>();
+        A.CallTo(() => store.GetFeatureNames()).Returns(["GH-142-LOGIN-SSO", "gh-142-login-sso"]);
+
+        // Act
+        var exists = store.FeatureExists("gh-142-login-sso");
+
+        // Assert
+        exists
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void FeatureExists_RealFolderNameDiffersOnlyInCase_ReturnsFalse()
+    {
+        // Arrange
+        using var repository = new TempKitDirectory();
+        var kitStorePath = repository.CreateDirectory(".shadekit");
+        repository.CreateDirectory(".shadekit", "features", "GH-142-Login-SSO");
+        var registry = FormatRegistry.CreateDefault();
+        var store = new KitStore(kitStorePath, new VersionedJsonSerializer(registry), registry);
+
+        // Act
+        var exists = store.FeatureExists("gh-142-login-sso");
+
+        // Assert
+        exists
+            .Should().BeFalse();
     }
 
     [Theory]
@@ -33,6 +88,7 @@ public class KitStoreFeatureExtensionsTests
     {
         // Arrange
         var store = A.Fake<IKitStore>();
+        A.CallTo(() => store.GetFeatureNames()).Returns([featureId]);
         A.CallTo(() => store.DirectoryExists(A<string>._)).Returns(true);
 
         // Act
@@ -42,7 +98,7 @@ public class KitStoreFeatureExtensionsTests
         exists
             .Should().BeFalse();
 
-        A.CallTo(() => store.DirectoryExists(A<string>._))
+        A.CallTo(store)
             .MustNotHaveHappened();
     }
 

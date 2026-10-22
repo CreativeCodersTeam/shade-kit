@@ -363,8 +363,8 @@ public class KitStore : IKitStore
 
     private string GetDisplayPath(string relativePath)
     {
-        return KitStorePaths.GetRepositoryPath(Path.GetRelativePath(RootPath, GetFullPath(relativePath))
-            .Replace(Path.DirectorySeparatorChar, '/'));
+        // Resolving against the root removes "." and ".." segments; KitStorePaths builds the final string.
+        return KitStorePaths.GetDisplayPath(Path.GetRelativePath(RootPath, GetFullPath(relativePath)));
     }
 
     // The outdatedFormatOnRead setting of config.json and the warnings of an outdated config.json.

@@ -3,6 +3,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Formats;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -73,14 +74,14 @@ public class FeatureShowCommand(
     private void WriteFeature(FeatureShowCommandData data, FeatureDocument feature)
     {
         var source = data.Source.Value is null
-            ? CliJsonWriter.GetEnumName(data.Source.Kind)
-            : $"{CliJsonWriter.GetEnumName(data.Source.Kind)} {data.Source.Value}";
+            ? data.Source.Kind.ToJsonName()
+            : $"{data.Source.Kind.ToJsonName()} {data.Source.Value}";
         var created = FeatureTextFormat.FormatCreated(feature);
 
         _context.Console.WriteLine($"Id: {data.Id}");
         _context.Console.WriteLine($"Title: {data.Title}");
         _context.Console.WriteLine($"Profile: {data.Profile}");
-        _context.Console.WriteLine($"Status: {CliJsonWriter.GetEnumName(data.Status)}");
+        _context.Console.WriteLine($"Status: {data.Status.ToJsonName()}");
         _context.Console.WriteLine($"Source: {source}");
         _context.Console.WriteLine($"Created: {created}");
         _context.Console.WriteLine($"Feature directory: {data.Paths.FeatureDir}");

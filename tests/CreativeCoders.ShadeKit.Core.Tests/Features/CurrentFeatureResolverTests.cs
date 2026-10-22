@@ -163,6 +163,9 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         resolution.IsResolved
             .Should().BeFalse();
 
+        A.CallTo(() => store.GetFeatureNames())
+            .MustNotHaveHappened();
+
         A.CallTo(() => store.DirectoryExists(A<string>._))
             .MustNotHaveHappened();
     }
@@ -199,6 +202,44 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution.IsResolved
             .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ResolveAsync_BranchCandidateFolderDiffersOnlyInCase_IgnoresBranchWithoutWarning()
+    {
+        // Arrange
+        CreateFeature("GH-142-Login-SSO");
+        CreateFeature("gh-7-checkout");
+        WriteOverride("gh-7-checkout");
+        SetBranch("feature/gh-142-login-sso");
+        var store = CreateStore();
+
+        // Act
+        var resolution = await CreateResolver().ResolveAsync(store, TestContext.Current.CancellationToken);
+
+        // Assert
+        resolution
+            .Should().BeEquivalentTo(new CurrentFeatureResolution("gh-7-checkout", CurrentFeatureOrigin.Override,
+                []));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_OverrideToFolderThatDiffersOnlyInCase_ReturnsNotResolvedWithMissingWarning()
+    {
+        // Arrange
+        CreateFeature("GH-142-Login-SSO");
+        WriteOverride("gh-142-login-sso");
+        SetBranch("main");
+        var store = CreateStore();
+
+        // Act
+        var resolution = await CreateResolver().ResolveAsync(store, TestContext.Current.CancellationToken);
+
+        // Assert
+        resolution
+            .Should().BeEquivalentTo(new CurrentFeatureResolution(null, null,
+                [new CurrentFeatureMissingWarning("gh-142-login-sso")]),
+                options => options.PreferringRuntimeMemberTypes());
     }
 
     [Fact]
@@ -331,6 +372,9 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         resolution.Warnings
             .Should().Equal(new CurrentFeatureMissingWarning("../x"));
+
+        A.CallTo(() => store.GetFeatureNames())
+            .MustNotHaveHappened();
 
         A.CallTo(() => store.DirectoryExists(A<string>._))
             .MustNotHaveHappened();
@@ -799,6 +843,23 @@ public sealed class CurrentFeatureResolverTests : IDisposable
     }
 
     [Fact]
+    public async Task ResolveBranchFeatureIdAsync_FolderDiffersOnlyInCase_ReturnsNull()
+    {
+        // Arrange
+        CreateFeature("GH-142-Login-SSO");
+        SetBranch("feature/gh-142-login-sso");
+        var store = CreateStore();
+
+        // Act
+        var featureId = await CreateResolver().ResolveBranchFeatureIdAsync(store,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        featureId
+            .Should().BeNull();
+    }
+
+    [Fact]
     public async Task ResolveBranchFeatureIdAsync_InvalidOverride_DoesNotReadOverride()
     {
         // Arrange
@@ -822,7 +883,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Arrange
         var store = CreateFakeStore();
         SetBranch("feature/gh-142-login-sso");
-        A.CallTo(() => store.DirectoryExists("features/gh-142-login-sso")).Returns(true);
+        A.CallTo(() => store.GetFeatureNames()).Returns(["gh-142-login-sso"]);
         using var cancellationTokenSource = new CancellationTokenSource();
 
         // Act
@@ -858,6 +919,9 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         // Assert
         featureId
             .Should().BeNull();
+
+        A.CallTo(() => store.GetFeatureNames())
+            .MustNotHaveHappened();
 
         A.CallTo(() => store.DirectoryExists(A<string>._))
             .MustNotHaveHappened();

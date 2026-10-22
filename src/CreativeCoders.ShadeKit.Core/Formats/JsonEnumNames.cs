@@ -14,12 +14,12 @@ public static class JsonEnumNames
     public static JsonNamingPolicy NamingPolicy { get; } = JsonNamingPolicy.KebabCaseLower;
 
     /// <summary>
-    /// Gets the JSON name of the specified enumeration value.
+    /// Gets the name with which JSON writes the specified enumeration value.
     /// </summary>
     /// <typeparam name="TEnum">The type of the enumeration.</typeparam>
     /// <param name="value">The enumeration value.</param>
     /// <returns>The name of <paramref name="value" /> in lower-case kebab case, for example <c>upgrade-needed</c>.</returns>
-    public static string Get<TEnum>(TEnum value)
+    public static string ToJsonName<TEnum>(this TEnum value)
         where TEnum : struct, Enum
     {
         return NamingPolicy.ConvertName(value.ToString());

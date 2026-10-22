@@ -3,6 +3,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Formats;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -81,7 +82,7 @@ public class FeatureCurrentCommand(
             return;
         }
 
-        _context.Console.WriteLine($"{feature.Id} ({feature.Profile}, {CliJsonWriter.GetEnumName(feature.Status)})");
-        _context.Console.WriteLine($"Resolved from: {CliJsonWriter.GetEnumName(resolvedFrom)}");
+        _context.Console.WriteLine($"{feature.Id} ({feature.Profile}, {feature.Status.ToJsonName()})");
+        _context.Console.WriteLine($"Resolved from: {resolvedFrom.ToJsonName()}");
     }
 }

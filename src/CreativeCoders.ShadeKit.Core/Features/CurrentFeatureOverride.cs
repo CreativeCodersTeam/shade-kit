@@ -32,7 +32,8 @@ internal static class CurrentFeatureOverride
         ReadAsync(IKitStore store, CancellationToken cancellationToken)
     {
         // With read access, an outdated override makes the store read config.json for its outdatedFormatOnRead
-        // setting, so only the path tells a problem of the override from a problem of config.json.
+        // setting, so only the path tells a problem of the override from a problem of config.json. The store builds
+        // that path with KitStorePaths.GetDisplayPath, so the comparison uses the same method.
         try
         {
             var result = await store
@@ -43,7 +44,7 @@ internal static class CurrentFeatureOverride
             return (result, null);
         }
         catch (KitFileFormatException exception) when (string.Equals(exception.FilePath,
-                                                           KitStorePaths.GetRepositoryPath(
+                                                           KitStorePaths.GetDisplayPath(
                                                                KitStorePaths.CurrentFeatureFilePath),
                                                            StringComparison.Ordinal))
         {

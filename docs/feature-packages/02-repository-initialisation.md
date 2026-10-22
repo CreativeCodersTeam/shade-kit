@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions) and 2026-10-18 (implementation state; code review rework: exit codes 14 and 24, `.gitignore` rule, separator line). Implemented except the final content of the templates owned by later packages (skeletons until then), the `gates.json` defaults (package 05), and a possible Copilot instruction file (package 08). |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions), 2026-10-18 (implementation state; code review rework: exit codes 14 and 24, `.gitignore` rule, separator line), and 2026-10-22 (code review verification of package 03: `trackers` id prefixes validated). Implemented except the final content of the templates owned by later packages (skeletons until then), the `gates.json` defaults (package 05), and a possible Copilot instruction file (package 08). |
 | Source | Concept §3.1 (`init`), §4.1, [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.5) |
 | Depends on | 01 |
 | Enables | 03, 05, 18 and every phase package (they ship templates through this mechanism) |
@@ -117,7 +117,7 @@ The team owns the values; the engine owns the schema. **Decided** (concept §9.1
 | `kitVersion` | Kit version that initialised or last upgraded the repository. Informational only; format checks use `schemaVersion`. `init` writes the engine version. |
 | `defaultProfile` | Profile used by `feature new` when none is given. Default `feature`. `feature new` stops with exit code 40 (`unknown-profile`) if it is not `feature`, `bugfix`, or `quick` (package 03). **Implemented** (`KitConfig.DefaultProfile`, `FeatureStore`). |
 | `outdatedFormatOnRead` | What read commands do with a file in an older format (package 01): `migrate-and-warn` (default) or `stop`. |
-| `trackers` | Mapping from issue URL host to id prefix for feature ids. Default: `github.com` → `gh`, which also applies when the field is missing; `{}` turns issue-based ids off, `null` makes the file invalid. **Decided** on 2026-10-19 (code review rework). **Implemented** (`KitConfig.Trackers`); `feature new` uses it for issue-based ids (package 03, **Implemented**). |
+| `trackers` | Mapping from issue URL host to id prefix for feature ids. Default: `github.com` → `gh`, which also applies when the field is missing; `{}` turns issue-based ids off, `null` makes the file invalid. **Decided** on 2026-10-19 (code review rework). Every id prefix must consist of lowercase letters a-z and digits joined by single hyphens (`^[a-z0-9]+(-[a-z0-9]+)*$`, the pattern of a feature id), for example `gh` or `jira-1`; otherwise the file is invalid (exit code 22, `invalid-file`), and the message names the host and the prefix. **Decided** on 2026-10-22 (code review verification of package 03, finding 2); before, a prefix such as `GH` or `""` only failed in `feature new` with a misleading `invalid-feature-id`. **Implemented** (`KitConfig.Trackers`); `feature new` uses it for issue-based ids (package 03, **Implemented**). |
 | `coverageThreshold` | Optional. Minimum coverage that `verify` requires (package 14). Not written by `init`; absent means "measure and record only". |
 | `report` | Whether `finish` writes `report.md` (package 15): `ask` (default, `finish` asks the human), `always`, or `never`. Absent means `ask`. **Decided** on 2026-10-18 (findings clarification). |
 

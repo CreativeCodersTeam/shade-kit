@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
 
 namespace CreativeCoders.ShadeKit.Core.Config;
@@ -48,7 +49,9 @@ public sealed class KitConfig : VersionedDocument, IJsonOnDeserialized
     /// <value>
     /// The id prefixes keyed by host name. The default maps <c>github.com</c> to <c>gh</c>, which also applies when the
     /// field is missing; an empty mapping turns issue-based ids off. Host names are written exactly as given. A
-    /// <see langword="null" /> field or a host with a <see langword="null" /> id prefix makes the file invalid.
+    /// <see langword="null" /> field, a host with a <see langword="null" /> id prefix, or an id prefix that does not
+    /// consist of lowercase letters <c>a</c>–<c>z</c> and digits joined by single hyphens (for example <c>gh</c> or
+    /// <c>jira-1</c>, the pattern of <see cref="FeatureIds" />) makes the file invalid.
     /// </value>
     public Dictionary<string, string> Trackers { get; set; } = new() { ["github.com"] = "gh" };
 
@@ -77,6 +80,17 @@ public sealed class KitConfig : VersionedDocument, IJsonOnDeserialized
         if (Trackers.Values.Any(prefix => prefix is null))
         {
             throw new JsonException("The 'trackers' field contains a null id prefix.");
+        }
+
+        // The prefix becomes the first groups of an issue-based feature id, so it follows the feature id pattern.
+        foreach (var (host, prefix) in Trackers)
+        {
+            if (!FeatureIds.IsValid(prefix))
+            {
+                throw new JsonException(
+                    $"The id prefix '{prefix}' of host '{host}' in the 'trackers' field must consist of lowercase " +
+                    "letters a-z and digits joined by single hyphens.");
+            }
         }
 
         // A number beyond the double range is read as infinity, which cannot be written back.

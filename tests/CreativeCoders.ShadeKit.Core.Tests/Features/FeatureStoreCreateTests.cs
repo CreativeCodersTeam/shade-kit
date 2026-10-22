@@ -472,6 +472,34 @@ public sealed class FeatureStoreCreateTests : IDisposable
     }
 
     [Theory]
+    [InlineData("https://github.com/acme/shop/issues/142")]
+    [InlineData("Login SSO")]
+    public async Task CreateAsync_InvalidTrackerPrefixInConfig_ThrowsInvalidKitFileExceptionForConfigAndChangesNothing(
+        string source)
+    {
+        // Arrange
+        _context.WriteConfig(""", "trackers": { "github.com": "GH" } """);
+        var snapshot = _context.Repository.TakeSnapshot();
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(source, "Login"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<InvalidKitFileException>()).Which;
+
+        exception.FilePath
+            .Should().Be(".shadekit/config.json");
+
+        exception.Reason
+            .Should().Contain("The id prefix 'GH' of host 'github.com'");
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Theory]
     [InlineData("{")]
     [InlineData("""{ "schemaVersion": 1, "minEngineVersion": "0.1.0" }""")]
     [InlineData("""{ "schemaVersion": 99, "minEngineVersion": "99.0.0", "featureId": "x" }""")]
@@ -863,6 +891,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         A.CallTo(() => store.ReadJsonAsync<CurrentFeatureDocument>(A<string>._, A<string>._, A<FormatAccess>._,
                 A<CancellationToken>._))
             .Returns(Task.FromResult<VersionedReadResult<CurrentFeatureDocument>?>(null));
+        A.CallTo(() => store.GetFeatureNames()).Returns([]);
         A.CallTo(() => store.DirectoryExists(A<string>._)).Returns(false);
         A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._, A<FormatAccess>._,
                 A<CancellationToken>._))
@@ -978,6 +1007,87 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
         _context.Repository.ReadFileText(".shadekit", "features", "current-feature.json")
             .Should().Be("{");
+    }
+
+    [Theory]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    public async Task CreateAsync_OverrideReadFails_RethrowsUnwrappedBeforeWritingAnything(Type exceptionType)
+    {
+        // Arrange
+        _context.WriteFeature("gh-7-checkout");
+        _context.WriteOverride("gh-7-checkout");
+        var exception = (Exception)Activator.CreateInstance(exceptionType, "The override cannot be read.")!;
+        var store = A.Fake<IKitStore>(options => options.Wrapping(_context.CreateStore()));
+        A.CallTo(() => store.ReadJsonAsync<CurrentFeatureDocument>(KitStorePaths.CurrentFeatureFilePath,
+                A<string>._, A<FormatAccess>._, A<CancellationToken>._))
+            .ThrowsAsync(exception);
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(store, _context.CreateRequest(IssueUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<Exception>())
+            .Which.Should().BeSameAs(exception);
+
+        A.CallTo(() => _context.GitRepositoryInfo.GetIdentityAsync(A<string>._, A<CancellationToken>._))
+            .MustNotHaveHappened();
+
+        A.CallTo(() => store.CreateDirectory(A<string>._))
+            .MustNotHaveHappened();
+
+        A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._, A<FormatAccess>._,
+                A<CancellationToken>._))
+            .MustNotHaveHappened();
+
+        A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<CurrentFeatureDocument>._,
+                A<FormatAccess>._, A<CancellationToken>._))
+            .MustNotHaveHappened();
+
+        _context.KitDirectoryExists("features", IssueFeatureId)
+            .Should().BeFalse();
+
+        (await _context.ReadOverrideFeatureIdAsync())
+            .Should().Be("gh-7-checkout");
+    }
+
+    [Fact]
+    public async Task CreateAsync_OutdatedOverride_ChecksOverrideWithWriteAccessOnly()
+    {
+        // Arrange
+        _context.Registry = FeatureStoreTestContext.CreateRegistryWithVersion2(FormatIds.CurrentFeature);
+        _context.WriteFeature("gh-7-checkout");
+        _context.WriteOverride("gh-7-checkout");
+        var store = A.Fake<IKitStore>(options => options.Wrapping(_context.CreateStore()));
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(store, _context.CreateRequest(IssueUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Feature.Id
+            .Should().Be(IssueFeatureId);
+
+        A.CallTo(() => store.ReadJsonAsync<CurrentFeatureDocument>(KitStorePaths.CurrentFeatureFilePath,
+                FormatIds.CurrentFeature, FormatAccess.Write, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+
+        A.CallTo(() => store.ReadJsonAsync<CurrentFeatureDocument>(A<string>._, A<string>._,
+                A<FormatAccess>.That.Not.IsEqualTo(FormatAccess.Write), A<CancellationToken>._))
+            .MustNotHaveHappened();
+
+        A.CallTo(() => store.ReadFileAsync(KitStorePaths.CurrentFeatureFilePath, A<CancellationToken>._))
+            .MustNotHaveHappened();
+
+        A.CallTo(() => store.ReadJsonAsync<KitConfig>(A<string>._, A<string>._, A<FormatAccess>._,
+                A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+
+        (await _context.ReadOverrideFeatureIdAsync())
+            .Should().Be(IssueFeatureId);
     }
 
     [Fact]

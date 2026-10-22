@@ -2,6 +2,7 @@ using CreativeCoders.Cli.Core;
 using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 using JetBrains.Annotations;
@@ -76,7 +77,7 @@ public class InitCommand(
         foreach (var file in data.Files)
         {
             _context.Console.MarkupLine(
-                $"{Markup.Escape(CliJsonWriter.GetEnumName(file.Action))}  {Markup.Escape(file.Path)}");
+                $"{Markup.Escape(file.Action.ToJsonName())}  {Markup.Escape(file.Path)}");
         }
 
         _context.Console.MarkupLine(

@@ -43,6 +43,10 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
 
     private const int MaxHeadingIndentation = 3;
 
+    private const string FrontMatterDelimiter = "---";
+
+    private const string FrontMatterEndDelimiter = "...";
+
     private const string ExplicitTitleOrigin = "passed with --title";
 
     private readonly TimeProvider _timeProvider = Ensure.NotNull(timeProvider);
@@ -281,29 +285,80 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
             "a single line without tabs or other control characters. Pass such a title with --title.");
     }
 
+    /// <summary>
+    /// Finds the text of the first level-1 ATX heading of a Markdown text that is not empty.
+    /// </summary>
+    /// <remarks>
+    /// Lines in a leading front matter block and in fenced code blocks are no headings; a code block that is not
+    /// closed runs to the end of the text. An optional closing sequence of <c>#</c> characters is not part of the
+    /// heading text.
+    /// </remarks>
+    /// <returns>The heading text, or <see langword="null" /> if the text has no such heading.</returns>
     private static string? FindLevelOneHeading(string text)
     {
-        foreach (var line in text.Split('\n'))
+        var lines = text.Split('\n');
+        var bodyStart = GetFrontMatterLineCount(lines);
+        var bodyLines = new ArraySegment<string>(lines, bodyStart, lines.Length - bodyStart);
+        var (lineIndexes, _) = MarkdownCodeFences.FindLinesOutsideCodeFences(bodyLines);
+
+        return lineIndexes
+            .Select(index => ReadLevelOneHeading(bodyLines[index]))
+            .FirstOrDefault(heading => heading is { Length: > 0 });
+    }
+
+    /// <summary>
+    /// Gets the number of lines of a front matter block at the start of a text.
+    /// </summary>
+    /// <remarks>
+    /// A front matter block starts with a first line <c>---</c> and ends with the next line <c>---</c> or
+    /// <c>...</c>; trailing whitespace is allowed on both. Without such an end line, the text has no front matter.
+    /// </remarks>
+    /// <returns>The number of lines of the block, including both delimiter lines, or 0 if there is none.</returns>
+    private static int GetFrontMatterLineCount(string[] lines)
+    {
+        if (lines[0].TrimEnd() != FrontMatterDelimiter)
         {
-            var unindentedLine = line.TrimStart(' ');
-
-            if (line.Length - unindentedLine.Length > MaxHeadingIndentation
-                || unindentedLine.Length < 2
-                || unindentedLine[0] != '#'
-                || unindentedLine[1] is not (' ' or '\t'))
-            {
-                continue;
-            }
-
-            var heading = unindentedLine[2..].Trim();
-
-            if (heading.Length > 0)
-            {
-                return heading;
-            }
+            return 0;
         }
 
-        return null;
+        var endIndex = Array.FindIndex(lines, 1,
+            line => line.TrimEnd() is FrontMatterDelimiter or FrontMatterEndDelimiter);
+
+        return endIndex < 0 ? 0 : endIndex + 1;
+    }
+
+    /// <summary>
+    /// Reads the text of a level-1 ATX heading line.
+    /// </summary>
+    /// <returns>
+    /// The heading text without leading and trailing whitespace and without a closing sequence, which can be empty,
+    /// or <see langword="null" /> if the line is no level-1 heading.
+    /// </returns>
+    private static string? ReadLevelOneHeading(string line)
+    {
+        var unindentedLine = line.TrimStart(' ');
+
+        if (line.Length - unindentedLine.Length > MaxHeadingIndentation
+            || unindentedLine.Length < 2
+            || unindentedLine[0] != '#'
+            || unindentedLine[1] is not (' ' or '\t'))
+        {
+            return null;
+        }
+
+        var heading = unindentedLine[2..].Trim();
+        var withoutClosingSequence = heading.TrimEnd('#');
+
+        // A closing sequence must be preceded by a space or tab; a heading of only '#' is a closing sequence after
+        // the space or tab of the opening '#'. Otherwise the '#' belong to the text, as in "C#".
+        if (withoutClosingSequence.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return withoutClosingSequence[^1] is ' ' or '\t'
+            ? withoutClosingSequence.TrimEnd()
+            : heading;
     }
 
     private static string GetFileReference(string filePath, string repositoryRootPath)

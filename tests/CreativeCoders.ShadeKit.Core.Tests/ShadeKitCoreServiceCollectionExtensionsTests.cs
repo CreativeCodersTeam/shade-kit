@@ -332,7 +332,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         var store = A.Fake<IKitStore>();
         A.CallTo(() => store.RootPath).Returns("/repo/.shadekit");
-        A.CallTo(() => store.DirectoryExists("features/login")).Returns(true);
+        A.CallTo(() => store.GetFeatureNames()).Returns(["login"]);
 
         var services = new ServiceCollection();
         services.AddSingleton(existingInfo);

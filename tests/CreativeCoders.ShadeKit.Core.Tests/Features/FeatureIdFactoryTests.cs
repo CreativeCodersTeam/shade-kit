@@ -526,13 +526,23 @@ public sealed class FeatureIdFactoryTests : IDisposable
 
     [Theory]
     [InlineData("Intro text\n# Login SSO\n# Second heading\n", "Login SSO")]
-    [InlineData("## Overview\n# Login SSO #\n", "Login SSO #")]
+    [InlineData("## Overview\n# Login SSO #\n", "Login SSO")]
     [InlineData("   # Indented Login SSO  \n", "Indented Login SSO")]
     [InlineData("#\tTabbed Login SSO\n", "Tabbed Login SSO")]
     [InlineData("#   \n# Login SSO\n", "Login SSO")]
     [InlineData("#Hashtag\n# Login SSO\n", "Login SSO")]
     [InlineData("    # Code block heading\n# Login SSO\n", "Login SSO")]
     [InlineData("# Login SSO\r\nBody\r\n", "Login SSO")]
+    [InlineData("# Login with SSO #\n", "Login with SSO")]
+    [InlineData("# Foo ##  \n", "Foo")]
+    [InlineData("# Foo\t#\t\n", "Foo")]
+    [InlineData("# Foo ##\r\n", "Foo")]
+    [InlineData("# Foo#\n", "Foo#")]
+    [InlineData("# C#\n", "C#")]
+    [InlineData("# Foo # bar\n", "Foo # bar")]
+    [InlineData("# Foo \\#\n", "Foo \\#")]
+    [InlineData("# #\n# Login SSO\n", "Login SSO")]
+    [InlineData("# ###  \n# Login SSO\n", "Login SSO")]
     public async Task CreateAsync_FileWithLevelOneHeading_UsesFirstLevelOneHeadingAsTitle(string content,
         string expectedTitle)
     {
@@ -549,9 +559,93 @@ public sealed class FeatureIdFactoryTests : IDisposable
     }
 
     [Theory]
+    [InlineData("```sh\n# install deps\n```\n# Login SSO\n")]
+    [InlineData("~~~\n# install deps\n~~~\n# Login SSO\n")]
+    [InlineData("````md\n```\n# Inner heading\n```\n````\n# Login SSO\n")]
+    [InlineData("~~~\n# install deps\n```\n# Still in block\n~~~\n# Login SSO\n")]
+    [InlineData("   ```\n# install deps\n```\n# Login SSO\n")]
+    [InlineData("```sh\r\n# install deps\r\n```\r\n# Login SSO\r\n")]
+    [InlineData("    ```\n# Login SSO\n")]
+    [InlineData("``` sh `x`\n# Login SSO\n")]
+    [InlineData("---\n# yaml comment\n---\n# Login SSO\n")]
+    [InlineData("---  \n# yaml comment\ntitle: x\n...\n# Login SSO\n")]
+    [InlineData("---\r\n# yaml comment\r\n---\r\n# Login SSO\r\n")]
+    [InlineData("---\n```\n---\n# Login SSO\n")]
+    public async Task CreateAsync_FileWithHeadingInCodeFenceOrFrontMatter_UsesFirstHeadingOutsideThem(
+        string content)
+    {
+        // Arrange
+        _repository.WriteFile(content, "request.md");
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, "request.md", null);
+
+        // Assert
+        identity.Title
+            .Should().Be("Login SSO");
+
+        identity.Id
+            .Should().Be($"{TimePrefix}-login-sso");
+    }
+
+    [Theory]
+    [InlineData("```sh\n# install deps\n")]
+    [InlineData("Intro\n~~~\n# install deps\n```\n")]
+    [InlineData("````\n# install deps\n```\n# Not a heading either\n")]
+    public async Task CreateAsync_FileWithUnclosedCodeFence_UsesFileNameWithoutExtensionAsTitle(string content)
+    {
+        // Arrange
+        _repository.WriteFile(content, "login-sso-request.md");
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, "login-sso-request.md", null);
+
+        // Assert
+        identity.Title
+            .Should().Be("login-sso-request");
+    }
+
+    [Fact]
+    public async Task CreateAsync_FileWithHeadingBeforeUnclosedCodeFence_UsesHeadingBeforeFence()
+    {
+        // Arrange
+        _repository.WriteFile("# Login SSO\n```sh\n# install deps\n", "request.md");
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, "request.md", null);
+
+        // Assert
+        identity.Title
+            .Should().Be("Login SSO");
+    }
+
+    [Theory]
+    [InlineData("---\n# Login SSO\n# Second heading\n")]
+    [InlineData("Intro\n---\n# Login SSO\n---\n# Second heading\n")]
+    [InlineData("\n---\n# Login SSO\n---\n# Second heading\n")]
+    [InlineData(" ---\n# Login SSO\n---\n# Second heading\n")]
+    public async Task CreateAsync_FileWithoutLeadingFrontMatter_UsesFirstHeadingAfterDashes(string content)
+    {
+        // Arrange
+        _repository.WriteFile(content, "request.md");
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, "request.md", null);
+
+        // Assert
+        identity.Title
+            .Should().Be("Login SSO");
+    }
+
+    [Theory]
     [InlineData("Plain text without heading\n")]
     [InlineData("## Only a level-2 heading\n")]
     [InlineData("#NoSpace\n")]
+    [InlineData("# #\n")]
     [InlineData("")]
     public async Task CreateAsync_FileWithoutLevelOneHeading_UsesFileNameWithoutExtensionAsTitle(string content)
     {

@@ -14,6 +14,9 @@ public sealed class FeatureStoreTests : IDisposable
 
     private const string OtherFeatureId = "gh-7-checkout";
 
+    // A folder whose name differs from FeatureId only in case; it is not the feature on any file system.
+    private const string CaseVariantFolderName = "GH-142-Login-SSO";
+
     private readonly FeatureStoreTestContext _context = new();
 
     public void Dispose()
@@ -643,6 +646,82 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().BeEquivalentTo(snapshot);
     }
 
+    [Fact]
+    public async Task ShowAsync_FolderNameDiffersOnlyInCase_ThrowsFeatureNotFoundException()
+    {
+        // Arrange
+        _context.WriteFeature(CaseVariantFolderName, recordedId: FeatureId);
+
+        // Act
+        var act = () => _context.CreateFeatureStore().ShowAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<FeatureNotFoundException>())
+            .Which.FeatureId
+            .Should().Be(FeatureId);
+    }
+
+    [Fact]
+    public async Task SetCurrentAsync_FolderNameDiffersOnlyInCase_ThrowsFeatureNotFoundExceptionAndWritesNothing()
+    {
+        // Arrange
+        _context.WriteFeature(CaseVariantFolderName, recordedId: FeatureId);
+        var snapshot = _context.Repository.TakeSnapshot();
+
+        // Act
+        var act = () => _context.CreateFeatureStore().SetCurrentAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<FeatureNotFoundException>())
+            .Which.FeatureId
+            .Should().Be(FeatureId);
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task PreviewDropAsync_FolderNameDiffersOnlyInCase_ThrowsFeatureNotFoundException()
+    {
+        // Arrange
+        _context.WriteFeature(CaseVariantFolderName, recordedId: FeatureId);
+
+        // Act
+        var act = () => _context.CreateFeatureStore().PreviewDropAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<FeatureNotFoundException>())
+            .Which.FeatureId
+            .Should().Be(FeatureId);
+    }
+
+    [Fact]
+    public async Task DropAsync_FolderNameDiffersOnlyInCase_ThrowsFeatureNotFoundExceptionAndChangesNothing()
+    {
+        // Arrange
+        _context.WriteFeature(CaseVariantFolderName, recordedId: FeatureId);
+        _context.WriteOverride(FeatureId);
+        var snapshot = _context.Repository.TakeSnapshot();
+
+        // Act
+        var act = () => _context.CreateFeatureStore().DropAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<FeatureNotFoundException>())
+            .Which.FeatureId
+            .Should().Be(FeatureId);
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+
+        _context.KitDirectoryExists("features", CaseVariantFolderName)
+            .Should().BeTrue();
+    }
+
     [Theory]
     [MemberData(nameof(InvalidFeatureIds))]
     public async Task DropAsync_InvalidFeatureId_ThrowsInvalidFeatureIdExceptionWithoutStoreAccess(string featureId)
@@ -1144,7 +1223,7 @@ public sealed class FeatureStoreTests : IDisposable
     {
         // Arrange
         var store = A.Fake<IKitStore>();
-        A.CallTo(() => store.DirectoryExists($"features/{FeatureId}")).Returns(true);
+        A.CallTo(() => store.GetFeatureNames()).Returns([FeatureId]);
         A.CallTo(() => store.GetFiles(A<string>._)).Returns([$"features/{FeatureId}/feature.json"]);
         A.CallTo(() => store.ReadJsonAsync<CurrentFeatureDocument>(A<string>._, A<string>._, A<FormatAccess>._,
                 A<CancellationToken>._))
@@ -1705,7 +1784,7 @@ public sealed class FeatureStoreTests : IDisposable
     private static IKitStore CreateDropStore(string overrideFeatureId)
     {
         var store = A.Fake<IKitStore>();
-        A.CallTo(() => store.DirectoryExists($"features/{FeatureId}")).Returns(true);
+        A.CallTo(() => store.GetFeatureNames()).Returns([FeatureId]);
         A.CallTo(() => store.GetFiles(A<string>._)).Returns([]);
         A.CallTo(() => store.ReadJsonAsync<CurrentFeatureDocument>(A<string>._, A<string>._, A<FormatAccess>._,
                 A<CancellationToken>._))

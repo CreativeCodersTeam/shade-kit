@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Init;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Formats;
 
@@ -10,10 +11,24 @@ public class JsonEnumNamesTests
     [InlineData(FeatureSourceKind.Text, "text")]
     [InlineData(FeatureSourceKind.Url, "url")]
     [InlineData(FeatureSourceKind.File, "file")]
-    public void Get_SingleWordMember_ReturnsLowerCaseName(FeatureSourceKind kind, string expectedName)
+    public void ToJsonName_SingleWordMember_ReturnsLowerCaseName(FeatureSourceKind kind, string expectedName)
     {
         // Act
-        var name = JsonEnumNames.Get(kind);
+        var name = kind.ToJsonName();
+
+        // Assert
+        name
+            .Should().Be(expectedName);
+    }
+
+    [Theory]
+    [InlineData(InitializedFileAction.Created, "created")]
+    [InlineData(InitializedFileAction.Appended, "appended")]
+    [InlineData(InitializedFileAction.Updated, "updated")]
+    public void ToJsonName_FileAction_ReturnsLowerCaseName(InitializedFileAction action, string expectedName)
+    {
+        // Act
+        var name = action.ToJsonName();
 
         // Assert
         name
@@ -21,10 +36,10 @@ public class JsonEnumNamesTests
     }
 
     [Fact]
-    public void Get_MultiWordMember_ReturnsKebabCaseName()
+    public void ToJsonName_MultiWordMember_ReturnsKebabCaseName()
     {
         // Act
-        var name = JsonEnumNames.Get(FormatWarningKind.UpgradeNeeded);
+        var name = FormatWarningKind.UpgradeNeeded.ToJsonName();
 
         // Assert
         name

@@ -65,9 +65,19 @@ public sealed class FeatureStore(
         }
 
         // The override is written last and replaces an override that cannot be used because of its format, so only an
-        // override that cannot be read at all would stop that write. It is read now, so it stops the command before
-        // anything is written.
-        await store.ReadFileAsync(KitStorePaths.CurrentFeatureFilePath, cancellationToken).ConfigureAwait(false);
+        // override that cannot be read at all would stop that write. It is read now as for a write, which never reads
+        // config.json, so such an override stops the command before anything is written, and a format problem does not.
+        try
+        {
+            await store
+                .ReadJsonAsync<CurrentFeatureDocument>(KitStorePaths.CurrentFeatureFilePath, FormatIds.CurrentFeature,
+                    FormatAccess.Write, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (KitFileFormatException)
+        {
+            // The override is replaced when it is written.
+        }
 
         var creator = await _gitRepositoryInfo.GetIdentityAsync(repositoryRootPath, cancellationToken)
             .ConfigureAwait(false);

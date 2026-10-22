@@ -66,17 +66,4 @@ public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
             Write(envelope);
         }
     }
-
-    /// <summary>
-    /// Gets the name with which the JSON output writes an enumeration value, so that plain output can use the same
-    /// name.
-    /// </summary>
-    /// <typeparam name="TEnum">The type of the enumeration.</typeparam>
-    /// <param name="value">The enumeration value.</param>
-    /// <returns>The name of <paramref name="value" /> in lower-case kebab case, for example <c>created</c>.</returns>
-    public static string GetEnumName<TEnum>(TEnum value)
-        where TEnum : struct, Enum
-    {
-        return JsonEnumNames.Get(value);
-    }
 }
