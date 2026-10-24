@@ -1,9 +1,9 @@
 using CreativeCoders.ShadeKit.Core.Formats;
 
-namespace CreativeCoders.ShadeKit.Core.Features;
+namespace CreativeCoders.ShadeKit.Core;
 
 /// <summary>
-/// Puts the warnings of a feature result into the order in which they are reported.
+/// Puts the warnings of a result into the order in which they are reported.
 /// </summary>
 internal static class KitWarningOrder
 {
@@ -13,8 +13,9 @@ internal static class KitWarningOrder
     /// </summary>
     /// <remarks>
     /// <see cref="Store.IKitStore.ReadJsonAsync{T}" /> adds the warnings of an outdated <c>config.json</c> to the
-    /// result of every read, so a result that reads several files would otherwise report them once per read. Records
-    /// are compared by value, so an equal warning is reported once, at the place of its first occurrence.
+    /// result of every read, and every write determines the line ending again, so a result that reads or writes several
+    /// files would otherwise report the same warning once per file. Records are compared by value, so an equal warning
+    /// is reported once, at the place of its first occurrence.
     /// </remarks>
     /// <param name="warnings">The warnings in the order in which they came up.</param>
     /// <returns>The warnings in the order in which they are reported.</returns>

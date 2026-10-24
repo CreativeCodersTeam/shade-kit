@@ -290,6 +290,32 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
     }
 
     [Fact]
+    public void GetLineEnding_EditorConfigRewrittenWithSameTimeAndSize_KeepsParsedFile()
+    {
+        // Arrange
+        var editorConfigPath = _directory.WriteFile("root = true\n\n[*]\nend_of_line = lf\n", EditorConfigFileName);
+        var lastWriteTime = File.GetLastWriteTimeUtc(editorConfigPath);
+        var firstLineEnding = _sut.GetLineEnding(GetPath("readme.md")).LineEnding;
+
+        // A file with the same time of last write, size, and mode is taken as unchanged.
+        File.WriteAllText(editorConfigPath, "root = true\n\n[*]\nend_of_line = cr\n");
+        File.SetLastWriteTimeUtc(editorConfigPath, lastWriteTime);
+
+        // Act
+        var secondLineEnding = _sut.GetLineEnding(GetPath("readme.md")).LineEnding;
+
+        // Assert
+        firstLineEnding
+            .Should().Be(LineEnding.Lf);
+
+        secondLineEnding
+            .Should().Be(LineEnding.Lf);
+
+        new EditorConfigLineEndingResolver().GetLineEnding(GetPath("readme.md")).LineEnding
+            .Should().BeNull("another instance parses the rewritten file");
+    }
+
+    [Fact]
     public void GetLineEnding_AllEditorConfigFilesReadable_ReturnsNoWarning()
     {
         // Arrange
@@ -312,7 +338,7 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes are needed to make a file unreadable.");
         var editorConfigPath = _directory.WriteFile("root = true\n\n[*]\nend_of_line = crlf\n", EditorConfigFileName);
 
-        using var unreadableScope = new UnreadableFileScope(editorConfigPath);
+        using var unreadableScope = UnixFileModeScope.MakeUnreadable(editorConfigPath);
 
         // Act
         var result = _sut.GetLineEnding(GetPath("readme.md"));
@@ -341,7 +367,7 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
         var nestedEditorConfigPath = _directory.WriteFile("root = true\n\n[*]\nend_of_line = lf\n", "docs",
             EditorConfigFileName);
 
-        using var unreadableScope = new UnreadableFileScope(nestedEditorConfigPath);
+        using var unreadableScope = UnixFileModeScope.MakeUnreadable(nestedEditorConfigPath);
 
         // Act
         var result = _sut.GetLineEnding(GetPath("docs", "setup.md"));
@@ -367,7 +393,7 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
             EditorConfigFileName);
         _directory.WriteFile("root = true\n\n[*]\nend_of_line = crlf\n", "repo", EditorConfigFileName);
 
-        using var unreadableScope = new UnreadableFileScope(outerEditorConfigPath);
+        using var unreadableScope = UnixFileModeScope.MakeUnreadable(outerEditorConfigPath);
 
         // Act
         var result = _sut.GetLineEnding(GetPath("repo", "readme.md"));
@@ -387,7 +413,7 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
 
         EditorConfigLineEndingResult firstResult;
 
-        using (new UnreadableFileScope(editorConfigPath))
+        using (UnixFileModeScope.MakeUnreadable(editorConfigPath))
         {
             firstResult = _sut.GetLineEnding(GetPath("readme.md"));
         }
@@ -412,7 +438,7 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
         var editorConfigPath = _directory.WriteFile("root = true\n\n[*]\nend_of_line = crlf\n", EditorConfigFileName);
         var firstResult = _sut.GetLineEnding(GetPath("readme.md"));
 
-        using var unreadableScope = new UnreadableFileScope(editorConfigPath);
+        using var unreadableScope = UnixFileModeScope.MakeUnreadable(editorConfigPath);
 
         // Act
         var secondResult = _sut.GetLineEnding(GetPath("readme.md"));
@@ -455,7 +481,7 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
         WriteRootEditorConfig("[*]\nend_of_line = crlf\n");
         var otherEditorConfigPath = _directory.WriteFile("[*]\nend_of_line = lf\n", "other", EditorConfigFileName);
 
-        using var unreadableScope = new UnreadableFileScope(otherEditorConfigPath);
+        using var unreadableScope = UnixFileModeScope.MakeUnreadable(otherEditorConfigPath);
 
         // Act
         var result = _sut.GetLineEnding(GetPath("docs", "setup.md"));

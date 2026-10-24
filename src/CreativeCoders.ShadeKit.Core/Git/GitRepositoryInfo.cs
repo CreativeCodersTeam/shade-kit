@@ -9,10 +9,6 @@ namespace CreativeCoders.ShadeKit.Core.Git;
 /// <param name="gitCommandRunner">The runner that runs the <c>git</c> commands.</param>
 public sealed class GitRepositoryInfo(IGitCommandRunner gitCommandRunner) : IGitRepositoryInfo
 {
-    private const int SuccessExitCode = 0;
-
-    private const int NotFoundExitCode = 1;
-
     private const string UserNameKey = "user.name";
 
     private const string UserEmailKey = "user.email";
@@ -27,7 +23,7 @@ public sealed class GitRepositoryInfo(IGitCommandRunner gitCommandRunner) : IGit
     {
         Ensure.IsNotNullOrWhitespace(repositoryRootPath);
 
-        return await RunForOptionalValueAsync(repositoryRootPath, CurrentBranchArguments, cancellationToken)
+        return await _gitCommandRunner.RunForOptionalValueAsync(repositoryRootPath, CurrentBranchArguments, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -39,8 +35,10 @@ public sealed class GitRepositoryInfo(IGitCommandRunner gitCommandRunner) : IGit
 
         // Both keys are read at the same time. Task.WhenAll throws the first exception in task order, so a failure of
         // the name read wins over a failure of the email read; a cancellation is thrown only if neither read failed.
-        var nameTask = RunForOptionalValueAsync(repositoryRootPath, ["config", UserNameKey], cancellationToken);
-        var emailTask = RunForOptionalValueAsync(repositoryRootPath, ["config", UserEmailKey], cancellationToken);
+        var nameTask =
+            _gitCommandRunner.RunForOptionalValueAsync(repositoryRootPath, ["config", UserNameKey], cancellationToken);
+        var emailTask =
+            _gitCommandRunner.RunForOptionalValueAsync(repositoryRootPath, ["config", UserEmailKey], cancellationToken);
 
         await Task.WhenAll(nameTask, emailTask).ConfigureAwait(false);
 
@@ -65,35 +63,5 @@ public sealed class GitRepositoryInfo(IGitCommandRunner gitCommandRunner) : IGit
         }
 
         throw new GitIdentityNotConfiguredException(repositoryRootPath, missingKeys);
-    }
-
-    private async Task<string?> RunForOptionalValueAsync(string repositoryRootPath, IReadOnlyList<string> arguments,
-        CancellationToken cancellationToken)
-    {
-        var result = await _gitCommandRunner.RunAsync(repositoryRootPath, arguments, cancellationToken)
-            .ConfigureAwait(false);
-
-        switch (result.ExitCode)
-        {
-            case SuccessExitCode:
-                var value = result.StandardOutput.Trim();
-
-                return value.Length == 0 ? null : value;
-
-            case NotFoundExitCode:
-                return null;
-
-            default:
-                throw new GitUnavailableException(arguments, CreateUnexpectedExitCodeReason(result));
-        }
-    }
-
-    private static string CreateUnexpectedExitCodeReason(GitCommandResult result)
-    {
-        var standardError = result.StandardError.Trim();
-
-        return standardError.Length == 0
-            ? $"git exited with the unexpected exit code {result.ExitCode}."
-            : $"git exited with the unexpected exit code {result.ExitCode}: {standardError}";
     }
 }

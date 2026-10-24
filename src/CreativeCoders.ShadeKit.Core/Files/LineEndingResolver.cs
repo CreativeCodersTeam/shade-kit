@@ -76,4 +76,11 @@ public sealed class LineEndingResolver : ILineEndingResolver
         return new LineEndingResolution(editorConfigResult.LineEnding ?? _operatingSystemLineEnding,
             editorConfigResult.Warning is null ? [] : [editorConfigResult.Warning]);
     }
+
+    /// <inheritdoc />
+    public Task PrepareAsync(string repositoryRootPath, IReadOnlyCollection<string> relativePaths,
+        CancellationToken cancellationToken = default)
+    {
+        return _gitLineEndingResolver.PreloadAttributesAsync(repositoryRootPath, relativePaths, cancellationToken);
+    }
 }

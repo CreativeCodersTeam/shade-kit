@@ -39,7 +39,7 @@ public sealed class FeatureStore(
         Ensure.NotNull(store);
         Ensure.NotNull(request);
 
-        var repositoryRootPath = store.GetRepositoryRootPath();
+        var repositoryRootPath = store.RepositoryRootPath;
 
         var configResult = await store
             .ReadJsonAsync<KitConfig>(KitStorePaths.ConfigFileName, FormatIds.Config, FormatAccess.Read,
@@ -343,8 +343,8 @@ public sealed class FeatureStore(
         {
             await store
                 .CreateDirectoryExclusiveAsync(KitStorePaths.GetFeatureDirPath(feature.Id),
-                    async (stagingDir, token) => warnings.AddRange(
-                        await WriteFeatureFilesAsync(store, stagingDir, feature, originalInput, token)
+                    async (featureDirWriter, token) => warnings.AddRange(
+                        await WriteFeatureFilesAsync(store, featureDirWriter, feature, originalInput, token)
                             .ConfigureAwait(false)),
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -365,21 +365,19 @@ public sealed class FeatureStore(
         }
     }
 
-    // The files are written into the staging folder, but their line endings are determined for the feature folder in
-    // which they end up, so git attributes and .editorconfig sections for that path apply.
-    private async Task<IReadOnlyList<KitWarning>> WriteFeatureFilesAsync(IKitStore store, string stagingDir,
-        FeatureDocument feature, string originalInput, CancellationToken cancellationToken)
+    // The writer writes into the staging folder, but determines the line endings for the feature folder in which the
+    // files end up, so git attributes and .editorconfig sections for that path apply.
+    private async Task<IReadOnlyList<KitWarning>> WriteFeatureFilesAsync(IKitStore store,
+        IKitDirectoryWriter featureDirWriter, FeatureDocument feature, string originalInput,
+        CancellationToken cancellationToken)
     {
-        var featureDir = KitStorePaths.GetFeatureDirPath(feature.Id);
-
-        var featureFileWarnings = await store
-            .WriteJsonAsync($"{stagingDir}/{KitStorePaths.FeatureFileName}", FormatIds.Feature, feature,
-                FormatAccess.Write, $"{featureDir}/{KitStorePaths.FeatureFileName}", cancellationToken)
+        var featureFileWarnings = await featureDirWriter
+            .WriteJsonAsync(KitStorePaths.FeatureFileName, FormatIds.Feature, feature, FormatAccess.Write,
+                cancellationToken)
             .ConfigureAwait(false);
 
-        var requestWarnings = await WriteRequestAsync(store, $"{stagingDir}/{KitStorePaths.RequestFileName}",
-            $"{featureDir}/{KitStorePaths.RequestFileName}", feature, originalInput, cancellationToken)
-            .ConfigureAwait(false);
+        var requestWarnings = await WriteRequestAsync(store, featureDirWriter, feature, originalInput,
+            cancellationToken).ConfigureAwait(false);
 
         return [.. featureFileWarnings, .. requestWarnings];
     }
@@ -401,15 +399,16 @@ public sealed class FeatureStore(
         }
     }
 
-    private async Task<IReadOnlyList<KitWarning>> WriteRequestAsync(IKitStore store, string requestPath,
-        string lineEndingPath, FeatureDocument feature, string originalInput, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<KitWarning>> WriteRequestAsync(IKitStore store,
+        IKitDirectoryWriter featureDirWriter, FeatureDocument feature, string originalInput,
+        CancellationToken cancellationToken)
     {
         var template = await ReadRequestTemplateAsync(store, cancellationToken).ConfigureAwait(false);
         var content = FeatureRequestTemplate.Fill(template, feature, originalInput);
 
         // The whole file, the original input included, is written with the line ending of the repository.
-        return await store
-            .WriteFileAsync(requestPath, TextFileContent.FromText(content), lineEndingPath, cancellationToken)
+        return await featureDirWriter
+            .WriteFileAsync(KitStorePaths.RequestFileName, TextFileContent.FromText(content), cancellationToken)
             .ConfigureAwait(false);
     }
 

@@ -6,6 +6,7 @@ using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
+using CreativeCoders.ShadeKit.Core.Tests.Store;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
@@ -808,21 +809,6 @@ public sealed class CurrentFeatureResolverTests : IDisposable
             .WithParameterName("store");
     }
 
-    [Fact]
-    public async Task ResolveAsync_KitRootWithoutParentDirectory_ThrowsArgumentException()
-    {
-        // Arrange
-        var store = A.Fake<IKitStore>();
-        A.CallTo(() => store.RootPath).Returns(Path.GetPathRoot(Path.GetTempPath())!);
-
-        // Act
-        var act = () => CreateResolver().ResolveAsync(store, TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName("store");
-    }
-
     [Theory]
     [InlineData("feature/gh-142-login-sso", "gh-142-login-sso")]
     [InlineData("main", null)]
@@ -999,17 +985,14 @@ public sealed class CurrentFeatureResolverTests : IDisposable
 
     private KitStore CreateStore(FormatRegistry? formatRegistry = null)
     {
-        var kitStorePath = _repository.CreateDirectory(".shadekit");
-        var registry = formatRegistry ?? FormatRegistry.CreateDefault();
-
-        return new KitStore(kitStorePath, new VersionedJsonSerializer(registry), registry,
-            FixedLineEnding.CreateWriter(LineEnding.Lf));
+        return TestKitStores.Create(_repository.CreateDirectory(".shadekit"), formatRegistry: formatRegistry);
     }
 
     private IKitStore CreateFakeStore()
     {
         var store = A.Fake<IKitStore>();
         A.CallTo(() => store.RootPath).Returns(Path.Combine(_repository.RootPath, ".shadekit"));
+        A.CallTo(() => store.RepositoryRootPath).Returns(_repository.RootPath);
         A.CallTo(() => store.ReadJsonAsync<CurrentFeatureDocument>(A<string>._, A<string>._, A<FormatAccess>._,
                 A<CancellationToken>._))
             .Returns((VersionedReadResult<CurrentFeatureDocument>?)null);

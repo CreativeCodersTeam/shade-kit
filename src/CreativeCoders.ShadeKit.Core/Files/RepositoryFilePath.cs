@@ -13,6 +13,8 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// </remarks>
 internal static class RepositoryFilePath
 {
+    private const string RepositoryRootDescription = "the repository root";
+
     /// <summary>
     /// Gets the full path of the specified file and checks that it lies below the repository root.
     /// </summary>
@@ -32,7 +34,33 @@ internal static class RepositoryFilePath
     public static string GetFullPath(string repositoryRootPath, string relativePath,
         [CallerArgumentExpression(nameof(relativePath))] string paramName = "")
     {
-        return Resolve(repositoryRootPath, relativePath, paramName).FullPath;
+        Ensure.IsNotNullOrWhitespace(repositoryRootPath);
+
+        return Resolve(repositoryRootPath, relativePath, RepositoryRootDescription, paramName).FullPath;
+    }
+
+    /// <summary>
+    /// Gets the full path of the specified file and checks that it lies below the specified root directory, which
+    /// the message of an <see cref="ArgumentException" /> names with the specified description.
+    /// </summary>
+    /// <param name="rootPath">The root directory, for example the SHADE kit root.</param>
+    /// <param name="relativePath">The path of the file, relative to <paramref name="rootPath" />.</param>
+    /// <param name="rootDescription">The description of the root directory, for example <c>the SHADE kit root</c>.</param>
+    /// <param name="paramName">
+    /// The name of the caller's parameter that holds <paramref name="relativePath" />, which an
+    /// <see cref="ArgumentException" /> for an invalid <paramref name="relativePath" /> reports as its
+    /// <see cref="ArgumentException.ParamName" />.
+    /// </param>
+    /// <returns>The absolute, normalized path of the file.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="rootPath" /> or <paramref name="relativePath" /> is <see langword="null" />, empty, or
+    /// whitespace, or <paramref name="relativePath" /> is rooted or does not name a path below
+    /// <paramref name="rootPath" />.
+    /// </exception>
+    public static string GetFullPathBelowRoot(string rootPath, string relativePath, string rootDescription,
+        string paramName)
+    {
+        return Resolve(rootPath, relativePath, rootDescription, paramName).FullPath;
     }
 
     /// <summary>
@@ -58,48 +86,64 @@ internal static class RepositoryFilePath
     public static string GetGitPath(string repositoryRootPath, string relativePath,
         [CallerArgumentExpression(nameof(relativePath))] string paramName = "")
     {
-        var normalizedRelativePath = Resolve(repositoryRootPath, relativePath, paramName)
-            .NormalizedRelativePath;
+        Ensure.IsNotNullOrWhitespace(repositoryRootPath);
 
-        return Path.DirectorySeparatorChar == '/'
-            ? normalizedRelativePath
-            : normalizedRelativePath.Replace(Path.DirectorySeparatorChar, '/');
+        return ToForwardSlashes(Resolve(repositoryRootPath, relativePath, RepositoryRootDescription, paramName)
+            .NormalizedRelativePath);
+    }
+
+    /// <summary>
+    /// Replaces every directory separator of the operating system in the specified path with a forward slash, the
+    /// separator of git paths and of the paths that SHADE kit reports.
+    /// </summary>
+    /// <param name="path">The path with the directory separator of the operating system.</param>
+    /// <returns><paramref name="path" /> with forward slashes as separators.</returns>
+    public static string ToForwardSlashes(string path)
+    {
+        return path.Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    /// <summary>
+    /// Determines whether a path that <see cref="Path.GetRelativePath" /> returned for a root directory and a full path
+    /// leads out of the root directory.
+    /// </summary>
+    /// <param name="normalizedRelativePath">The relative path that <see cref="Path.GetRelativePath" /> returned.</param>
+    /// <returns>
+    /// <see langword="true" /> if the path is <c>..</c>, starts with <c>..</c> and a directory separator, or is rooted
+    /// because the full path lies on another drive; otherwise, <see langword="false" />.
+    /// </returns>
+    public static bool IsOutsideRoot(string normalizedRelativePath)
+    {
+        return normalizedRelativePath == ".."
+               || normalizedRelativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+               || Path.IsPathRooted(normalizedRelativePath);
     }
 
     [SuppressMessage("Minor Code Smell", "S3236:Caller information arguments should not be provided explicitly",
         Justification = "The caller's parameter name is forwarded on purpose, so an invalid path names the caller's " +
                         "parameter instead of this helper's.")]
-    private static (string FullPath, string NormalizedRelativePath) Resolve(string repositoryRootPath,
-        string relativePath, string paramName)
+    private static (string FullPath, string NormalizedRelativePath) Resolve(string rootPath, string relativePath,
+        string rootDescription, string paramName)
     {
-        Ensure.IsNotNullOrWhitespace(repositoryRootPath);
+        Ensure.IsNotNullOrWhitespace(rootPath);
         Ensure.IsNotNullOrWhitespace(relativePath, paramName);
 
         if (Path.IsPathRooted(relativePath))
         {
             throw new ArgumentException(
-                $"The path '{relativePath}' must be relative to the repository root, but it is rooted.",
-                paramName);
+                $"The path '{relativePath}' must be relative to {rootDescription}, but it is rooted.", paramName);
         }
 
-        var fullRootPath = Path.GetFullPath(repositoryRootPath);
+        var fullRootPath = Path.GetFullPath(rootPath);
         var fullPath = Path.GetFullPath(Path.Combine(fullRootPath, relativePath));
         var normalizedRelativePath = Path.GetRelativePath(fullRootPath, fullPath);
 
         if (normalizedRelativePath == "." || IsOutsideRoot(normalizedRelativePath))
         {
             throw new ArgumentException(
-                $"The path '{relativePath}' must name a path below the repository root '{repositoryRootPath}'.",
-                paramName);
+                $"The path '{relativePath}' must name a path below {rootDescription} '{rootPath}'.", paramName);
         }
 
         return (fullPath, normalizedRelativePath);
-    }
-
-    private static bool IsOutsideRoot(string normalizedRelativePath)
-    {
-        return normalizedRelativePath == ".."
-               || normalizedRelativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-               || Path.IsPathRooted(normalizedRelativePath);
     }
 }

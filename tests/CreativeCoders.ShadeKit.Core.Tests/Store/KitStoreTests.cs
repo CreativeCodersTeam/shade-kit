@@ -182,6 +182,21 @@ public class KitStoreTests
     }
 
     [Fact]
+    public void RepositoryRootPath_StoreBelowRepository_ReturnsParentOfKitRoot()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitStorePath = tempDirectory.CreateDirectory(".shadekit");
+
+        // Act
+        var kitStore = CreateStore(kitStorePath + Path.DirectorySeparatorChar);
+
+        // Assert
+        kitStore.RepositoryRootPath
+            .Should().Be(Path.GetDirectoryName(kitStorePath));
+    }
+
+    [Fact]
     public void RootPath_PathWithTrailingSeparator_ReturnsFullPathWithoutTrailingSeparator()
     {
         // Arrange
@@ -252,7 +267,7 @@ public class KitStoreTests
     }
 
     [Fact]
-    public async Task WriteFileAsync_LineEndingPath_PassesItRelativeToRepositoryRootToWriter()
+    public async Task CreateDirectoryWriter_WriteFile_PassesBothPathsRelativeToRepositoryRootToWriter()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -261,8 +276,8 @@ public class KitStoreTests
         var content = TextFileContent.FromText("# Request\n");
 
         // Act
-        await kitStore.WriteFileAsync("features/.login.1a2b3c4d.tmp/request.md", content,
-            "features/./login/request.md", TestContext.Current.CancellationToken);
+        await kitStore.CreateDirectoryWriter("features/.login.1a2b3c4d.tmp", "features/./login")
+            .WriteFileAsync("request.md", content, TestContext.Current.CancellationToken);
 
         // Assert
         A.CallTo(() => textFileWriter.WriteAsync(tempDirectory.RootPath,
@@ -272,7 +287,7 @@ public class KitStoreTests
     }
 
     [Fact]
-    public async Task WriteFileAsync_LineEndingPath_WritesFileAtRelativePathWithLineEndingResolvedForLineEndingPath()
+    public async Task CreateDirectoryWriter_WriteFile_WritesFileBelowWritePathWithLineEndingOfTargetPath()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -286,8 +301,8 @@ public class KitStoreTests
             new TextFileWriter(lineEndingResolver));
 
         // Act
-        await kitStore.WriteFileAsync("features/.login.1a2b3c4d.tmp/request.md", TextFileContent.FromText("a\nb\n"),
-            "features/login/request.md", TestContext.Current.CancellationToken);
+        await kitStore.CreateDirectoryWriter("features/.login.1a2b3c4d.tmp", "features/login")
+            .WriteFileAsync("request.md", TextFileContent.FromText("a\nb\n"), TestContext.Current.CancellationToken);
 
         // Assert
         (await File.ReadAllBytesAsync(
@@ -300,29 +315,43 @@ public class KitStoreTests
     }
 
     [Theory]
-    [InlineData("../outside.md")]
-    [InlineData("/absolute.md")]
+    [InlineData("../outside")]
+    [InlineData("/absolute")]
     [InlineData(" ")]
     [InlineData("")]
     [InlineData(".")]
-    public async Task WriteFileAsync_InvalidLineEndingPath_ThrowsArgumentExceptionAndWritesNothing(
-        string lineEndingPath)
+    public void CreateDirectoryWriter_InvalidWritePath_ThrowsArgumentException(string writePath)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        var textFileWriter = A.Fake<ITextFileWriter>();
-        var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, ".shadekit"), textFileWriter);
+        var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, ".shadekit"));
 
         // Act
-        var act = () => kitStore.WriteFileAsync("spec.md", TextFileContent.FromText("x"), lineEndingPath,
-            TestContext.Current.CancellationToken);
+        var act = () => kitStore.CreateDirectoryWriter(writePath, "features/login");
 
         // Assert
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName(nameof(lineEndingPath));
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName(nameof(writePath));
+    }
 
-        A.CallTo(textFileWriter)
-            .MustNotHaveHappened();
+    [Theory]
+    [InlineData("../outside")]
+    [InlineData("/absolute")]
+    [InlineData(" ")]
+    [InlineData("")]
+    [InlineData(".")]
+    public void CreateDirectoryWriter_InvalidTargetPath_ThrowsArgumentException(string targetPath)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, ".shadekit"));
+
+        // Act
+        var act = () => kitStore.CreateDirectoryWriter("features/.login.1a2b3c4d.tmp", targetPath);
+
+        // Assert
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName(nameof(targetPath));
     }
 
     [Theory]
@@ -331,41 +360,22 @@ public class KitStoreTests
     [InlineData(" ")]
     [InlineData("")]
     [InlineData(".")]
-    public async Task WriteFileAsync_InvalidRelativePathAndValidLineEndingPath_ThrowsNamingRelativePathAndWritesNothing(
+    public async Task CreateDirectoryWriter_WriteFilePathOutsideDirectory_ThrowsArgumentExceptionAndWritesNothing(
         string relativePath)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var textFileWriter = A.Fake<ITextFileWriter>();
         var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, ".shadekit"), textFileWriter);
+        var writer = kitStore.CreateDirectoryWriter("features/.login.1a2b3c4d.tmp", "features/login");
 
         // Act
-        var act = () => kitStore.WriteFileAsync(relativePath, TextFileContent.FromText("x"), "spec.md",
+        var act = () => writer.WriteFileAsync(relativePath, TextFileContent.FromText("x"),
             TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<ArgumentException>())
             .WithParameterName(nameof(relativePath));
-
-        A.CallTo(textFileWriter)
-            .MustNotHaveHappened();
-    }
-
-    [Fact]
-    public async Task WriteFileAsync_InvalidRelativePathAndInvalidLineEndingPath_ThrowsNamingRelativePath()
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var textFileWriter = A.Fake<ITextFileWriter>();
-        var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, ".shadekit"), textFileWriter);
-
-        // Act
-        var act = () => kitStore.WriteFileAsync("../outside.md", TextFileContent.FromText("x"), "/absolute.md",
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName("relativePath");
 
         A.CallTo(textFileWriter)
             .MustNotHaveHappened();
@@ -1438,9 +1448,6 @@ public class KitStoreTests
 
     private static KitStore CreateStore(string kitStorePath, ITextFileWriter? textFileWriter = null)
     {
-        var formatRegistry = FormatRegistry.CreateDefault();
-
-        return new KitStore(kitStorePath, new VersionedJsonSerializer(formatRegistry), formatRegistry,
-            textFileWriter ?? FixedLineEnding.CreateWriter(LineEnding.Lf));
+        return TestKitStores.Create(kitStorePath, textFileWriter);
     }
 }

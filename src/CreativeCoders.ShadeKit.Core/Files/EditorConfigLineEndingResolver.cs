@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using CreativeCoders.Core;
 using EditorConfig.Core;
 
@@ -8,24 +9,26 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// library.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Every call creates a new <see cref="EditorConfigParser" />, because a parser keeps the <c>.editorconfig</c> files
 /// it found for a directory until it is discarded and would not notice files that are created or deleted later. The
 /// parser reads each <c>.editorconfig</c> file through a factory of this class, so the path of a file that cannot be
 /// read is known for the warning, and the files that were read can be evaluated one by one to find a file whose
 /// content the parser cannot evaluate.
+/// </para>
+/// <para>
+/// The factory keeps every parsed <c>.editorconfig</c> file for the lifetime of the instance and parses it again only
+/// if its time of last write, its size, or, outside Windows, its Unix file mode has changed since. The class is
+/// registered as a singleton and the CLI builds one service container per command run, so a command that writes
+/// several files reads each <c>.editorconfig</c> file once.
+/// </para>
 /// </remarks>
 public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingResolver
 {
-    private static readonly EditorConfigLineEndingResult NoLineEndingResult =
-        new EditorConfigLineEndingResult(null, null);
-
-    private static readonly EditorConfigLineEndingResult LfResult =
-        new EditorConfigLineEndingResult(LineEnding.Lf, null);
-
-    private static readonly EditorConfigLineEndingResult CrLfResult =
-        new EditorConfigLineEndingResult(LineEnding.CrLf, null);
-
     private readonly Func<EditorConfigParser, string, FileConfiguration> _parse;
+
+    private readonly ConcurrentDictionary<string, (FileStamp Stamp, EditorConfigFile File)> _parsedFiles =
+        new ConcurrentDictionary<string, (FileStamp Stamp, EditorConfigFile File)>(StringComparer.Ordinal);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="EditorConfigLineEndingResolver" /> class.
@@ -69,7 +72,7 @@ public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingReso
         {
             try
             {
-                var editorConfigFile = EditorConfigFile.Parse(editorConfigPath);
+                var editorConfigFile = GetEditorConfigFile(editorConfigPath);
                 readEditorConfigFiles.Add((editorConfigPath, editorConfigFile));
 
                 return editorConfigFile;
@@ -92,26 +95,45 @@ public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingReso
         {
             // The remaining .editorconfig files alone could prescribe a wrong line ending, for example if the
             // unreadable file is a nested one with root = true; therefore none of them decides.
-            return new EditorConfigLineEndingResult(null, unreadableEditorConfigPath is null
-                ? new EditorConfigUnreadableWarning(filePath, exception.Message, IsEditorConfigFilePath: false)
-                : new EditorConfigUnreadableWarning(unreadableEditorConfigPath, exception.Message));
+            return new EditorConfigLineEndingResult(null,
+                new EditorConfigUnreadableWarning(unreadableEditorConfigPath ?? filePath, exception.Message,
+                    IsEditorConfigFilePath: unreadableEditorConfigPath is not null));
         }
         catch (Exception exception) when (IsInvalidContentException(exception))
         {
             // As for an unreadable file, none of the .editorconfig files decides.
             var invalidEditorConfigPath = FindInvalidEditorConfigPath(filePath, readEditorConfigFiles);
 
-            return new EditorConfigLineEndingResult(null, invalidEditorConfigPath is null
-                ? new EditorConfigInvalidWarning(filePath, exception.Message, IsEditorConfigFilePath: false)
-                : new EditorConfigInvalidWarning(invalidEditorConfigPath, exception.Message));
+            return new EditorConfigLineEndingResult(null,
+                new EditorConfigInvalidWarning(invalidEditorConfigPath ?? filePath, exception.Message,
+                    IsEditorConfigFilePath: invalidEditorConfigPath is not null));
         }
 
-        return configuration.EndOfLine switch
+        var lineEnding = configuration.EndOfLine switch
         {
-            EndOfLine.LF => LfResult,
-            EndOfLine.CRLF => CrLfResult,
-            _ => NoLineEndingResult
+            EndOfLine.LF => LineEnding.Lf,
+            EndOfLine.CRLF => LineEnding.CrLf,
+            _ => (LineEnding?)null
         };
+
+        return new EditorConfigLineEndingResult(lineEnding, null);
+    }
+
+    // Returns the kept file while its stamp is unchanged; a file that cannot be read is not kept, so it is read again
+    // by the next call.
+    private EditorConfigFile GetEditorConfigFile(string editorConfigPath)
+    {
+        var stamp = FileStamp.Read(editorConfigPath);
+
+        if (_parsedFiles.TryGetValue(editorConfigPath, out var parsedFile) && parsedFile.Stamp == stamp)
+        {
+            return parsedFile.File;
+        }
+
+        var editorConfigFile = EditorConfigFile.Parse(editorConfigPath);
+        _parsedFiles[editorConfigPath] = (stamp, editorConfigFile);
+
+        return editorConfigFile;
     }
 
     // Evaluates the sections of each .editorconfig file that was read on its own and returns the path of the first
@@ -153,5 +175,20 @@ public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingReso
     private static bool IsInvalidContentException(Exception exception)
     {
         return exception is OverflowException or ArgumentOutOfRangeException or OutOfMemoryException;
+    }
+
+    // What tells a changed .editorconfig file from the kept one: a new content changes the time of last write or the
+    // size, and a change of permissions, which can make the file unreadable, changes the Unix file mode.
+    private readonly record struct FileStamp(DateTime LastWriteTimeUtc, long Length, UnixFileMode UnixFileMode)
+    {
+        // Throws FileNotFoundException for a file that was deleted after the parser found it, which the factory
+        // reports like any other file that cannot be read.
+        public static FileStamp Read(string filePath)
+        {
+            var fileInfo = new FileInfo(filePath);
+
+            return new FileStamp(fileInfo.LastWriteTimeUtc, fileInfo.Length,
+                OperatingSystem.IsWindows() ? default : fileInfo.UnixFileMode);
+        }
     }
 }

@@ -560,7 +560,7 @@ public class TextFileContentTests
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes are needed to make a file unreadable.");
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile("text\n", FileName);
-        using var unreadableScope = new UnreadableFileScope(filePath);
+        using var unreadableScope = UnixFileModeScope.MakeUnreadable(filePath);
 
         // Act
         var act = () => TextFileContent.ReadAsync(filePath, TestContext.Current.CancellationToken);

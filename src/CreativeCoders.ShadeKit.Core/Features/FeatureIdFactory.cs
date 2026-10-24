@@ -364,13 +364,10 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
     private static string GetFileReference(string filePath, string repositoryRootPath)
     {
         var relativePath = Path.GetRelativePath(Path.GetFullPath(repositoryRootPath), filePath);
-        var isOutsideRepository = Path.IsPathRooted(relativePath)
-                                  || relativePath == ".."
-                                  || relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 
-        return isOutsideRepository
+        return RepositoryFilePath.IsOutsideRoot(relativePath)
             ? filePath
-            : relativePath.Replace(Path.DirectorySeparatorChar, '/');
+            : RepositoryFilePath.ToForwardSlashes(relativePath);
     }
 
     private static string CreateSlug(string title)

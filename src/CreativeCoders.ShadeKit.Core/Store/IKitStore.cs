@@ -16,6 +16,15 @@ public interface IKitStore
     string RootPath { get; }
 
     /// <summary>
+    /// Gets the full path of the root of the git repository that contains the SHADE kit root directory.
+    /// </summary>
+    /// <value>
+    /// The full path of the parent directory of <see cref="RootPath" />, because the SHADE kit root directory
+    /// <c>.shadekit</c> lies at the root of the git repository.
+    /// </value>
+    string RepositoryRootPath { get; }
+
+    /// <summary>
     /// Gets the names of all features in the SHADE kit store.
     /// </summary>
     /// <returns>
@@ -97,8 +106,7 @@ public interface IKitStore
     /// The written file carries the current format version and its <c>minEngineVersion</c>, is UTF-8 encoded without
     /// byte order mark, ends with a line ending, and is written directly, not atomically, like a file of
     /// <see cref="WriteFileAsync" />: its lines are joined with the line ending that the repository prescribes for
-    /// the file (see <see cref="WriteFileAsync" /> for <paramref name="lineEndingPath" />). Missing directories are
-    /// created.
+    /// the file. Missing directories are created.
     /// </para>
     /// </remarks>
     /// <typeparam name="T">The type of the document.</typeparam>
@@ -109,10 +117,6 @@ public interface IKitStore
     /// <see cref="FormatAccess.Write" /> for a command that changes the file, <see cref="FormatAccess.Upgrade" />
     /// for a command that migrates it to the current format, or <see cref="FormatAccess.Replace" /> for a command
     /// that replaces it whatever it contains.
-    /// </param>
-    /// <param name="lineEndingPath">
-    /// The path relative to <see cref="RootPath" /> for which the line ending is determined, or
-    /// <see langword="null" /> to determine it for <paramref name="relativePath" />.
     /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
@@ -126,9 +130,8 @@ public interface IKitStore
     /// <see cref="FormatAccess.Replace" />.
     /// </exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />;
-    /// <paramref name="lineEndingPath" /> is not <see langword="null" /> and is empty, rooted, or points outside
-    /// <see cref="RootPath" />; or no file type with the id <paramref name="formatId" /> is registered.
+    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />; or no file type
+    /// with the id <paramref name="formatId" /> is registered.
     /// </exception>
     /// <exception cref="InvalidKitFileException">
     /// The existing file is invalid and <paramref name="access" /> is not <see cref="FormatAccess.Replace" />.
@@ -142,7 +145,7 @@ public interface IKitStore
     /// <see cref="FormatAccess.Write" />.
     /// </exception>
     Task<IReadOnlyList<KitWarning>> WriteJsonAsync<T>(string relativePath, string formatId, T document,
-        FormatAccess access, string? lineEndingPath = null, CancellationToken cancellationToken = default)
+        FormatAccess access, CancellationToken cancellationToken = default)
         where T : VersionedDocument;
 
     /// <summary>
@@ -155,21 +158,15 @@ public interface IKitStore
     /// replaced. Missing directories are created.
     /// </para>
     /// <para>
-    /// The line ending is determined for <paramref name="lineEndingPath" /> if it is specified, otherwise for
-    /// <paramref name="relativePath" />, in both cases for the path relative to the repository root, for example
-    /// <c>.shadekit/features/login/request.md</c>. A file that is written into a hidden staging directory and moved
-    /// into place later passes its final path, so it gets the line ending of the path where it ends up.
+    /// The line ending is determined for the path of the file relative to the repository root, for example
+    /// <c>.shadekit/templates/spec.md</c>. A file that is written into a directory that is moved into place later is
+    /// written through <see cref="CreateDirectoryWriter" />, so it gets the line ending of the path where it ends up.
     /// </para>
     /// </remarks>
     /// <param name="relativePath">
     /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/spec.md</c>.
     /// </param>
     /// <param name="content">The content of the file.</param>
-    /// <param name="lineEndingPath">
-    /// The path relative to <see cref="RootPath" /> for which the line ending is determined, for example
-    /// <c>features/login/request.md</c>, or <see langword="null" /> to determine it for
-    /// <paramref name="relativePath" />. The file at this path is neither read nor written.
-    /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous write operation. The task result contains the warnings that occurred
@@ -178,12 +175,35 @@ public interface IKitStore
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="content" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />; or
-    /// <paramref name="lineEndingPath" /> is not <see langword="null" /> and is empty, rooted, or points outside
-    /// <see cref="RootPath" />.
+    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
     /// </exception>
     Task<IReadOnlyList<KitWarning>> WriteFileAsync(string relativePath, TextFileContent content,
-        string? lineEndingPath = null, CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a writer for the files of a directory that is written at one path and moved to another path later,
+    /// such as a hidden staging directory.
+    /// </summary>
+    /// <remarks>
+    /// The writer writes each file below <paramref name="writePath" /> as <see cref="WriteJsonAsync{T}" /> and
+    /// <see cref="WriteFileAsync" /> do, but determines its line ending for the same file below
+    /// <paramref name="targetPath" />, so git attributes and <c>.editorconfig</c> sections for the path where the file
+    /// ends up apply. Nothing is written or created until the writer writes a file.
+    /// </remarks>
+    /// <param name="writePath">
+    /// The path of the directory relative to <see cref="RootPath" /> into which the files are written, for example
+    /// <c>features/.login.1a2b3c4d.tmp</c>.
+    /// </param>
+    /// <param name="targetPath">
+    /// The path of the directory relative to <see cref="RootPath" /> to which the directory is moved later, for
+    /// example <c>features/login</c>.
+    /// </param>
+    /// <returns>The writer for the files of the directory.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="writePath" /> or <paramref name="targetPath" /> is empty, rooted, or points outside
+    /// <see cref="RootPath" />.
+    /// </exception>
+    IKitDirectoryWriter CreateDirectoryWriter(string writePath, string targetPath);
 
     /// <summary>
     /// Creates a directory of the store, together with its missing parent directories.

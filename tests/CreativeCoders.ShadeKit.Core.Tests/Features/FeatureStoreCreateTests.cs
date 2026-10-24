@@ -1,3 +1,4 @@
+using CreativeCoders.ShadeKit.Core.Tests.Store;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
@@ -893,6 +894,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         // Arrange
         var store = A.Fake<IKitStore>();
         A.CallTo(() => store.RootPath).Returns(Path.Combine(_context.RepositoryRootPath, ".shadekit"));
+        A.CallTo(() => store.RepositoryRootPath).Returns(_context.RepositoryRootPath);
         A.CallTo(() => store.ReadJsonAsync<KitConfig>(A<string>._, A<string>._, A<FormatAccess>._,
                 A<CancellationToken>._))
             .Returns(Task.FromResult<VersionedReadResult<KitConfig>?>(null));
@@ -901,8 +903,10 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Returns(Task.FromResult<VersionedReadResult<CurrentFeatureDocument>?>(null));
         A.CallTo(() => store.GetFeatureNames()).Returns([]);
         A.CallTo(() => store.DirectoryExists(A<string>._)).Returns(false);
-        A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._, A<FormatAccess>._,
-                A<string?>._, A<CancellationToken>._))
+        var featureDirWriter = A.Fake<IKitDirectoryWriter>();
+        A.CallTo(() => store.CreateDirectoryWriter(A<string>._, A<string>._)).Returns(featureDirWriter);
+        A.CallTo(() => featureDirWriter.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._,
+                A<FormatAccess>._, A<CancellationToken>._))
             .ThrowsAsync(new IOException("The disk is full."));
         A.CallTo(() => store.DeleteDirectory(A<string>._)).Throws(new IOException("The folder is locked."));
         var featureStore = _context.CreateFeatureStore();
@@ -1006,8 +1010,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         A.CallTo(() => store.CreateDirectory(A<string>._))
             .MustNotHaveHappened();
 
-        A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._, A<FormatAccess>._,
-                A<string?>._, A<CancellationToken>._))
+        A.CallTo(() => store.CreateDirectoryWriter(A<string>._, A<string>._))
             .MustNotHaveHappened();
 
         Directory.EnumerateFileSystemEntries(Path.Combine(_context.RepositoryRootPath, ".shadekit", "features"))
@@ -1046,12 +1049,11 @@ public sealed class FeatureStoreCreateTests : IDisposable
         A.CallTo(() => store.CreateDirectory(A<string>._))
             .MustNotHaveHappened();
 
-        A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._, A<FormatAccess>._,
-                A<string?>._, A<CancellationToken>._))
+        A.CallTo(() => store.CreateDirectoryWriter(A<string>._, A<string>._))
             .MustNotHaveHappened();
 
         A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<string?>._, A<CancellationToken>._))
+                A<FormatAccess>._, A<CancellationToken>._))
             .MustNotHaveHappened();
 
         _context.KitDirectoryExists("features", IssueFeatureId)
@@ -1268,9 +1270,8 @@ public sealed class FeatureStoreCreateTests : IDisposable
         var earlierWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
         _context.WriteFeature("other-feature");
         _context.SetBranch(null);
-        var store = new KitStore(Path.Combine(_context.RepositoryRootPath, KitStorePaths.RootPath),
-            new VersionedJsonSerializer(_context.Registry), _context.Registry,
-            FixedLineEnding.CreateWriterWithWarningsOnFirstWrite(LineEnding.Lf, earlierWarning));
+        var store = TestKitStores.Create(Path.Combine(_context.RepositoryRootPath, KitStorePaths.RootPath),
+            FixedLineEnding.CreateWriterWithWarningsOnFirstWrite(LineEnding.Lf, earlierWarning), _context.Registry);
         var featureStore = _context.CreateFeatureStore();
         var earlierResult = await featureStore.SetCurrentAsync(store, "other-feature",
             TestContext.Current.CancellationToken);
@@ -1484,7 +1485,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().BeEquivalentTo(snapshot, "the staging folder is removed and the override is not written");
 
         A.CallTo(() => store.WriteJsonAsync(A<string>._, FormatIds.CurrentFeature, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<string?>._, A<CancellationToken>._))
+                A<FormatAccess>._, A<CancellationToken>._))
             .MustNotHaveHappened();
     }
 
@@ -1645,9 +1646,19 @@ public sealed class FeatureStoreCreateTests : IDisposable
     public async Task CreateAsync_FileWriteFailsInStagingFolder_RethrowsUnwrappedIOException()
     {
         // Arrange
-        var store = A.Fake<IKitStore>(options => options.Wrapping(_context.CreateStore()));
-        A.CallTo(() => store.WriteFileAsync(A<string>._, A<TextFileContent>._, A<string?>._, A<CancellationToken>._))
-            .ThrowsAsync(new IOException("The disk is full."));
+        var realStore = _context.CreateStore();
+        var store = A.Fake<IKitStore>(options => options.Wrapping(realStore));
+        A.CallTo(() => store.CreateDirectoryWriter(A<string>._, A<string>._))
+            .ReturnsLazily((string writePath, string targetPath) =>
+            {
+                var featureDirWriter = A.Fake<IKitDirectoryWriter>(options =>
+                    options.Wrapping(realStore.CreateDirectoryWriter(writePath, targetPath)));
+                A.CallTo(() => featureDirWriter.WriteFileAsync(A<string>._, A<TextFileContent>._,
+                        A<CancellationToken>._))
+                    .ThrowsAsync(new IOException("The disk is full."));
+
+                return featureDirWriter;
+            });
         var featureStore = _context.CreateFeatureStore();
 
         // Act
@@ -1675,12 +1686,8 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
         Exception? thrown;
 
-        using (var readOnlyScope = new ReadOnlyDirectoryScope(
-                   Path.Combine(_context.RepositoryRootPath, ".shadekit", "features")))
+        using (UnixFileModeScope.MakeReadOnly(Path.Combine(_context.RepositoryRootPath, ".shadekit", "features")))
         {
-            Assert.SkipWhen(!readOnlyScope.IsEffective(),
-                "The features folder is writable without permissions, for example because the tests run as root.");
-
             // Act
             thrown = await Record.ExceptionAsync(() => featureStore.CreateAsync(_context.CreateStore(),
                 _context.CreateRequest(IssueUrl, "Login SSO"), TestContext.Current.CancellationToken));
@@ -1713,7 +1720,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         var realStore = _context.CreateStore();
         var store = A.Fake<IKitStore>(options => options.Wrapping(realStore));
         A.CallTo(() => store.WriteJsonAsync(A<string>._, FormatIds.CurrentFeature, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<string?>._, A<CancellationToken>._))
+                A<FormatAccess>._, A<CancellationToken>._))
             .ThrowsAsync(new IOException("The disk is full."));
         A.CallTo(() => store.MoveDirectory($"features/{IssueFeatureId}", A<string>._))
             .Throws(new IOException("The folder is locked."));
@@ -1772,7 +1779,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         var realStore = _context.CreateStore();
         var store = A.Fake<IKitStore>(options => options.Wrapping(realStore));
         A.CallTo(() => store.WriteJsonAsync(A<string>._, FormatIds.CurrentFeature, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<string?>._, A<CancellationToken>._))
+                A<FormatAccess>._, A<CancellationToken>._))
             .ThrowsAsync(new IOException("The disk is full."));
         A.CallTo(() => store.DeleteDirectory(A<string>._)).Throws(new IOException("The folder is locked."));
         var featureStore = _context.CreateFeatureStore();

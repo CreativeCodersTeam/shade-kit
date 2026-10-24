@@ -1,3 +1,4 @@
+using CreativeCoders.ShadeKit.Core.Tests.Store;
 using System.Runtime.Versioning;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
@@ -381,9 +382,8 @@ public sealed class FeatureStoreTests : IDisposable
     {
         // Arrange
         var earlierWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
-        var store = new KitStore(Path.Combine(_context.RepositoryRootPath, KitStorePaths.RootPath),
-            new VersionedJsonSerializer(_context.Registry), _context.Registry,
-            FixedLineEnding.CreateWriterWithWarningsOnFirstWrite(LineEnding.Lf, earlierWarning));
+        var store = TestKitStores.Create(Path.Combine(_context.RepositoryRootPath, KitStorePaths.RootPath),
+            FixedLineEnding.CreateWriterWithWarningsOnFirstWrite(LineEnding.Lf, earlierWarning), _context.Registry);
         var featureStore = _context.CreateFeatureStore();
         var earlierResult = await featureStore.CreateAsync(store,
             _context.CreateRequest("https://github.com/acme/shop/issues/142", "Login SSO"),
@@ -1470,12 +1470,8 @@ public sealed class FeatureStoreTests : IDisposable
 
         Exception? thrown;
 
-        using (var readOnlyScope = new ReadOnlyDirectoryScope(
-                   Path.Combine(_context.RepositoryRootPath, ".shadekit", "features")))
+        using (UnixFileModeScope.MakeReadOnly(Path.Combine(_context.RepositoryRootPath, ".shadekit", "features")))
         {
-            Assert.SkipWhen(!readOnlyScope.IsEffective(),
-                "The features folder is writable without permissions, for example because the tests run as root.");
-
             // Act
             thrown = await Record.ExceptionAsync(() => featureStore.DropAsync(_context.CreateStore(), FeatureId,
                 TestContext.Current.CancellationToken));
@@ -1842,7 +1838,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         A.CallTo(() => store.WriteJsonAsync("features/current-feature.json", FormatIds.CurrentFeature,
                 A<CurrentFeatureDocument>.That.Matches(x => x.FeatureId == FeatureId), FormatAccess.Replace,
-                A<string?>._, A<CancellationToken>._))
+                A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
 
         _context.KitFileExists("features", "current-feature.json")

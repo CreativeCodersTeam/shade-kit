@@ -40,4 +40,30 @@ public interface ILineEndingResolver
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
     Task<LineEndingResolution> GetLineEndingAsync(string repositoryRootPath, string relativePath,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Prepares the line endings of several files that are written next, so determining each of them later takes
+    /// fewer <c>git</c> processes.
+    /// </summary>
+    /// <remarks>
+    /// The git attributes of all files are read at once (see
+    /// <see cref="IGitLineEndingResolver.PreloadAttributesAsync" />). Calling this method is optional; it does not
+    /// change which line ending <see cref="GetLineEndingAsync" /> returns.
+    /// </remarks>
+    /// <param name="repositoryRootPath">The root directory of the repository.</param>
+    /// <param name="relativePaths">
+    /// The paths of the files relative to <paramref name="repositoryRootPath" />, with forward slashes or the
+    /// directory separator of the operating system.
+    /// </param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="relativePaths" /> is <see langword="null" />.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="repositoryRootPath" /> is <see langword="null" />, empty, or whitespace, or a path of
+    /// <paramref name="relativePaths" /> is <see langword="null" />, empty, whitespace, rooted, or does not name a
+    /// path below <paramref name="repositoryRootPath" />.
+    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
+    Task PrepareAsync(string repositoryRootPath, IReadOnlyCollection<string> relativePaths,
+        CancellationToken cancellationToken = default);
 }

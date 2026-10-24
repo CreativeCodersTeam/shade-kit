@@ -154,7 +154,7 @@ public class GitIgnorePlannerTests
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, ToLineEnding(newLine));
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, FixedLineEnding.FromNewLine(newLine));
 
         // Assert
         action
@@ -394,7 +394,7 @@ public class GitIgnorePlannerTests
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, ToLineEnding(newLine));
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, FixedLineEnding.FromNewLine(newLine));
 
         // Assert
         action
@@ -532,26 +532,11 @@ public class GitIgnorePlannerTests
             .Should().BeFalse();
     }
 
-    private static LineEnding ToLineEnding(string newLine)
-    {
-        return newLine == "\r\n" ? LineEnding.CrLf : LineEnding.Lf;
-    }
-
-    /// <summary>
-    /// Plans the change of a <c>.gitignore</c> file and writes it through a <see cref="TextFileWriter" /> with a fixed
-    /// line ending, as the initialisation does.
-    /// </summary>
-    /// <returns>The action of the planned change, or <see langword="null" /> if the file needs no change.</returns>
-    private static async Task<InitializedFileAction?> PlanAndWriteAsync(string filePath,
+    // Plans the change of a .gitignore file and writes it with a fixed line ending, as the initialisation does.
+    private static Task<InitializedFileAction?> PlanAndWriteAsync(string filePath,
         CancellationToken cancellationToken, LineEnding lineEnding = LineEnding.Lf)
     {
-        var change = await new GitIgnorePlanner().PlanAsync(filePath, cancellationToken);
-
-        if (change is not null)
-        {
-            await FixedLineEnding.WriteAsync(filePath, change.Content, lineEnding, cancellationToken);
-        }
-
-        return change?.Action;
+        return FixedLineEnding.PlanAndWriteAsync(new GitIgnorePlanner().PlanAsync, filePath, cancellationToken,
+            lineEnding);
     }
 }

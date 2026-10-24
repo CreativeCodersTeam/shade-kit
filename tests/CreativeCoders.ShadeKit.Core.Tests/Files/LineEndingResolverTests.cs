@@ -252,6 +252,27 @@ public class LineEndingResolverTests
             .MustHaveHappenedOnceExactly();
     }
 
+    [Fact]
+    public async Task PrepareAsync_Paths_PreloadsTheirGitAttributesWithToken()
+    {
+        // Arrange
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var cancellationToken = cancellationTokenSource.Token;
+        string[] relativePaths = [RelativePath, "other.md"];
+        var sut = CreateSut(LineEnding.Lf);
+
+        // Act
+        await sut.PrepareAsync(RepositoryRootPath, relativePaths, cancellationToken);
+
+        // Assert
+        A.CallTo(() => _gitLineEndingResolver.PreloadAttributesAsync(RepositoryRootPath, relativePaths,
+                cancellationToken))
+            .MustHaveHappenedOnceExactly();
+
+        A.CallTo(_editorConfigLineEndingResolver)
+            .MustNotHaveHappened();
+    }
+
     [Theory]
     [InlineData("docs/readme.md")]
     [InlineData("./docs/readme.md")]

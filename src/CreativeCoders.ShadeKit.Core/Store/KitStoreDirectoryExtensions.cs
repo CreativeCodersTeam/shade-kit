@@ -52,8 +52,10 @@ internal static class KitStoreDirectoryExtensions
     /// for example <c>features/login</c>.
     /// </param>
     /// <param name="populate">
-    /// The function that writes the content of the directory; it receives the path of the staging directory relative
-    /// to <see cref="IKitStore.RootPath" /> and the cancellation token. Its exceptions are thrown as they are.
+    /// The function that writes the content of the directory; it receives a writer that writes into the staging
+    /// directory with the line endings of <paramref name="relativePath" />
+    /// (<see cref="IKitStore.CreateDirectoryWriter" />) and the cancellation token. Its exceptions are thrown as they
+    /// are.
     /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous create operation.</returns>
@@ -81,7 +83,7 @@ internal static class KitStoreDirectoryExtensions
     /// <paramref name="cancellationToken" /> was canceled before the move into place.
     /// </exception>
     public static async Task CreateDirectoryExclusiveAsync(this IKitStore store, string relativePath,
-        Func<string, CancellationToken, Task> populate, CancellationToken cancellationToken = default)
+        Func<IKitDirectoryWriter, CancellationToken, Task> populate, CancellationToken cancellationToken = default)
     {
         Ensure.NotNull(store);
         Ensure.NotNull(populate);
@@ -92,7 +94,8 @@ internal static class KitStoreDirectoryExtensions
         {
             CreateStagingDirectory(store, stagingPath, relativePath);
 
-            await populate(stagingPath, cancellationToken).ConfigureAwait(false);
+            await populate(store.CreateDirectoryWriter(stagingPath, relativePath), cancellationToken)
+                .ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
 

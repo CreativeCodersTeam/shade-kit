@@ -23,14 +23,17 @@ public class GitLineEndingResolverTests
 
     private readonly IGitCommandRunner _gitCommandRunner = A.Fake<IGitCommandRunner>();
 
+    private readonly GitLineEndingResolver _sut;
+
     public GitLineEndingResolverTests()
     {
         // Every git call that a test does not set up fails, so a forgotten setup cannot pass by accident; both
         // configuration keys are unset unless a test sets them.
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
             .Returns(new GitCommandResult(128, "", "fatal: unexpected call"));
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(1, "", ""));
-        SetUpResult(EolArguments, new GitCommandResult(1, "", ""));
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(1, "", ""));
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(1, "", ""));
+        _sut = new GitLineEndingResolver(_gitCommandRunner);
     }
 
     [Fact]
@@ -62,12 +65,11 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(eol, "set", Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -79,15 +81,12 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes("lf", "set", Unspecified);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        await GetLineEndingAsync(sut);
+        await GetLineEndingAsync(_sut);
 
         // Assert
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
-                A<IReadOnlyList<string>>.That.Matches(x => x[0] == "config"), A<CancellationToken>._))
-            .MustNotHaveHappened();
+        AssertConfigurationNotRead();
     }
 
     [Theory]
@@ -97,19 +96,16 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(eol, "unset", Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
             .Should().BeNull();
 
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
-                A<IReadOnlyList<string>>.That.Matches(x => x[0] == "config"), A<CancellationToken>._))
-            .MustNotHaveHappened();
+        AssertConfigurationNotRead();
     }
 
     [Theory]
@@ -122,10 +118,9 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(eol, text, Unspecified);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -141,10 +136,9 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(eol, Unspecified, Unspecified);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -156,19 +150,16 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "unset", Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
             .Should().BeNull();
 
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
-                A<IReadOnlyList<string>>.That.Matches(x => x[0] == "config"), A<CancellationToken>._))
-            .MustNotHaveHappened();
+        AssertConfigurationNotRead();
     }
 
     [Fact]
@@ -178,11 +169,10 @@ public class GitLineEndingResolverTests
         // "*.md binary" followed by "*.md text": the macro sets -text, the later text attribute sets it again, so
         // check-attr reports text as set; the binary attribute itself is not requested.
         SetUpAttributes(Unspecified, "set", Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -201,19 +191,16 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes("crlf", text, "unset");
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
             .Should().BeNull();
 
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
-                A<IReadOnlyList<string>>.That.Matches(x => x[0] == "config"), A<CancellationToken>._))
-            .MustNotHaveHappened();
+        AssertConfigurationNotRead();
     }
 
     [Theory]
@@ -225,11 +212,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, crlf);
-        SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -243,11 +229,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "custom", crlf);
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -262,11 +247,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, crlf);
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -278,19 +262,16 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, "input");
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
             .Should().Be(LineEnding.Lf);
 
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
-                A<IReadOnlyList<string>>.That.Matches(x => x[0] == "config"), A<CancellationToken>._))
-            .MustNotHaveHappened();
+        AssertConfigurationNotRead();
     }
 
     [Theory]
@@ -301,11 +282,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, text, crlf);
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -319,10 +299,9 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes("lf", "unset", crlf);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -337,20 +316,17 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, text, crlf);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
             .Should().Be(LineEnding.Lf);
 
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
-                A<IReadOnlyList<string>>.That.Matches(x => x[0] == "config"), A<CancellationToken>._))
-            .MustNotHaveHappened();
+        AssertConfigurationNotRead();
     }
 
     [Theory]
@@ -361,10 +337,9 @@ public class GitLineEndingResolverTests
         // Arrange
         // git lets the eol attribute override the LF of text=input / crlf=input.
         SetUpAttributes("crlf", text, crlf);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -379,11 +354,10 @@ public class GitLineEndingResolverTests
         // Arrange
         // Attribute values are case-sensitive in git, so the value counts as unknown and core.eol does not apply.
         SetUpAttributes(Unspecified, text, Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -415,11 +389,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf + "\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf + "\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -433,11 +406,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf + "\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf + "\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -454,12 +426,11 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, text, Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf, ""));
-        SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf, ""));
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -483,11 +454,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf, ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf, ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -505,12 +475,11 @@ public class GitLineEndingResolverTests
         // Arrange
         // git config prints an empty line for a key without a value, which git itself treats as true.
         SetUpAttributes(Unspecified, text, Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf, ""));
-        SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf, ""));
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -538,11 +507,10 @@ public class GitLineEndingResolverTests
         // Arrange
         // git_parse_int rejects these values (out of the int range, an invalid digit or unit) or reads them as 0.
         SetUpAttributes(Unspecified, Unspecified, Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf + "\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf + "\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -554,10 +522,9 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, Unspecified);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -572,7 +539,7 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
         var sut = new GitLineEndingResolver(_gitCommandRunner, LineEnding.CrLf);
 
         // Act
@@ -599,11 +566,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, text, Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -617,13 +583,12 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "set", Unspecified);
-        SetUpResult(AutoCrLfArguments,
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments,
             autoCrLf is null ? new GitCommandResult(1, "", "") : new GitCommandResult(0, autoCrLf, ""));
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -637,7 +602,7 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "auto", Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, "native\n", ""));
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "native\n", ""));
         var sut = new GitLineEndingResolver(_gitCommandRunner, nativeLineEnding);
 
         // Act
@@ -653,11 +618,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "set", Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, "native\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "native\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -671,11 +635,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "set", Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -692,12 +655,11 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "set", Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf, ""));
-        SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, autoCrLf, ""));
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, eol, ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -709,10 +671,9 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "set", Unspecified);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -724,11 +685,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "custom", Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -740,10 +700,9 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, Unspecified);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        await GetLineEndingAsync(sut);
+        await GetLineEndingAsync(_sut);
 
         // Assert
         A.CallTo(() => _gitCommandRunner.RunAsync(RepositoryRootPath,
@@ -759,10 +718,9 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes("lf", Unspecified, Unspecified);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await sut.GetLineEndingAsync(RepositoryRootPath, relativePath,
+        var lineEnding = await _sut.GetLineEndingAsync(RepositoryRootPath, relativePath,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -774,13 +732,12 @@ public class GitLineEndingResolverTests
     public async Task GetLineEndingAsync_FileNameStartsWithTwoDots_PassesPathToGit()
     {
         // Arrange
-        SetUpResult(["check-attr", "eol", "text", "crlf", "--", "..hidden.md"],
+        _gitCommandRunner.SetUpResult(["check-attr", "eol", "text", "crlf", "--", "..hidden.md"],
             new GitCommandResult(0, "..hidden.md: eol: crlf\n..hidden.md: text: set\n..hidden.md: crlf: unspecified\n",
                 ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await sut.GetLineEndingAsync(RepositoryRootPath, "..hidden.md",
+        var lineEnding = await _sut.GetLineEndingAsync(RepositoryRootPath, "..hidden.md",
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -793,10 +750,9 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes("crlf", Unspecified, Unspecified);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await sut.GetLineEndingAsync(RepositoryRootPath,
+        var lineEnding = await _sut.GetLineEndingAsync(RepositoryRootPath,
             Path.Combine("docs", "readme.md"), TestContext.Current.CancellationToken);
 
         // Assert
@@ -809,13 +765,12 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         const string relativePath = "notes: eol: crlf.md";
-        SetUpResult(["check-attr", "eol", "text", "crlf", "--", relativePath],
+        _gitCommandRunner.SetUpResult(["check-attr", "eol", "text", "crlf", "--", relativePath],
             new GitCommandResult(0,
                 $"{relativePath}: eol: lf\n{relativePath}: text: set\n{relativePath}: crlf: unspecified\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await sut.GetLineEndingAsync(RepositoryRootPath, relativePath,
+        var lineEnding = await _sut.GetLineEndingAsync(RepositoryRootPath, relativePath,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -827,14 +782,13 @@ public class GitLineEndingResolverTests
     public async Task GetLineEndingAsync_CheckAttrOutputWithCrLf_ParsesAttributes()
     {
         // Arrange
-        SetUpResult(CheckAttrArguments,
+        _gitCommandRunner.SetUpResult(CheckAttrArguments,
             new GitCommandResult(0,
                 $"{RelativePath}: eol: crlf\r\n{RelativePath}: text: set\r\n{RelativePath}: crlf: unspecified\r\n",
                 ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -850,12 +804,11 @@ public class GitLineEndingResolverTests
         string standardOutput)
     {
         // Arrange
-        SetUpResult(CheckAttrArguments, new GitCommandResult(0, standardOutput, ""));
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "input\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(CheckAttrArguments, new GitCommandResult(0, standardOutput, ""));
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "input\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -869,10 +822,9 @@ public class GitLineEndingResolverTests
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(CheckAttrArguments), A<CancellationToken>._))
             .Throws(new GitUnavailableException(CheckAttrArguments, "git was not found."));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -887,11 +839,10 @@ public class GitLineEndingResolverTests
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(AutoCrLfArguments), A<CancellationToken>._))
             .Throws(new GitUnavailableException(AutoCrLfArguments, "git could not be started."));
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -905,12 +856,11 @@ public class GitLineEndingResolverTests
     public async Task GetLineEndingAsync_CheckAttrFails_ReturnsNull(int exitCode)
     {
         // Arrange
-        SetUpResult(CheckAttrArguments,
+        _gitCommandRunner.SetUpResult(CheckAttrArguments,
             new GitCommandResult(exitCode, $"{RelativePath}: eol: lf\n", "fatal: not a git repository"));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -924,12 +874,11 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "set", Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(exitCode, "", "error: invalid config"));
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(exitCode, "", "error: invalid config"));
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -941,11 +890,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "set", Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(128, "", "fatal: bad config line"));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(128, "", "fatal: bad config line"));
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -959,11 +907,10 @@ public class GitLineEndingResolverTests
         using var cancellationTokenSource = new CancellationTokenSource();
         var cancellationToken = cancellationTokenSource.Token;
         SetUpAttributes(Unspecified, "set", Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, "lf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "lf\n", ""));
 
         // Act
-        await sut.GetLineEndingAsync(RepositoryRootPath, RelativePath, cancellationToken);
+        await _sut.GetLineEndingAsync(RepositoryRootPath, RelativePath, cancellationToken);
 
         // Assert
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, cancellationToken))
@@ -977,10 +924,9 @@ public class GitLineEndingResolverTests
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(CheckAttrArguments), A<CancellationToken>._))
             .Throws(new OperationCanceledException());
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var act = () => GetLineEndingAsync(sut);
+        var act = () => GetLineEndingAsync(_sut);
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -997,10 +943,9 @@ public class GitLineEndingResolverTests
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(configArguments), A<CancellationToken>._))
             .Throws(new OperationCanceledException());
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var act = () => GetLineEndingAsync(sut);
+        var act = () => GetLineEndingAsync(_sut);
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -1013,10 +958,9 @@ public class GitLineEndingResolverTests
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(CheckAttrArguments), A<CancellationToken>._))
             .Throws(new InvalidOperationException("unexpected"));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var act = () => GetLineEndingAsync(sut);
+        var act = () => GetLineEndingAsync(_sut);
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>();
@@ -1033,15 +977,14 @@ public class GitLineEndingResolverTests
             SetUpAttributes(relativePath, Unspecified, "set", Unspecified);
         }
 
-        SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "crlf\n", ""));
 
         // Act
         var lineEndings = new List<LineEnding?>();
 
         foreach (var relativePath in relativePaths)
         {
-            lineEndings.Add(await sut.GetLineEndingAsync(RepositoryRootPath, relativePath,
+            lineEndings.Add(await _sut.GetLineEndingAsync(RepositoryRootPath, relativePath,
                 TestContext.Current.CancellationToken));
         }
 
@@ -1070,11 +1013,10 @@ public class GitLineEndingResolverTests
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(AutoCrLfArguments), A<CancellationToken>._))
             .ReturnsNextFromSequence(new GitCommandResult(0, "true\n", ""), new GitCommandResult(0, "input\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var firstLineEnding = await GetLineEndingAsync(sut);
-        var secondLineEnding = await GetLineEndingAsync(sut);
+        var firstLineEnding = await GetLineEndingAsync(_sut);
+        var secondLineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         firstLineEnding
@@ -1089,11 +1031,10 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, "set", Unspecified);
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        await GetLineEndingAsync(sut);
-        var lineEnding = await GetLineEndingAsync(sut);
+        await GetLineEndingAsync(_sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -1116,13 +1057,12 @@ public class GitLineEndingResolverTests
         A.CallTo(() => _gitCommandRunner.RunAsync(otherRepositoryRootPath,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(AutoCrLfArguments), A<CancellationToken>._))
             .Returns(new GitCommandResult(0, "input\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
-        var otherLineEnding = await sut.GetLineEndingAsync(otherRepositoryRootPath, RelativePath,
+        var lineEnding = await GetLineEndingAsync(_sut);
+        var otherLineEnding = await _sut.GetLineEndingAsync(otherRepositoryRootPath, RelativePath,
             TestContext.Current.CancellationToken);
-        var lineEndingAgain = await GetLineEndingAsync(sut);
+        var lineEndingAgain = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -1148,12 +1088,11 @@ public class GitLineEndingResolverTests
     {
         // Arrange
         SetUpAttributes(Unspecified, Unspecified, Unspecified);
-        SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(AutoCrLfArguments, new GitCommandResult(0, "true\n", ""));
 
         // Act
-        await GetLineEndingAsync(sut);
-        var lineEnding = await sut.GetLineEndingAsync(otherSpelling, RelativePath,
+        await GetLineEndingAsync(_sut);
+        var lineEnding = await _sut.GetLineEndingAsync(otherSpelling, RelativePath,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -1219,11 +1158,10 @@ public class GitLineEndingResolverTests
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(AutoCrLfArguments), A<CancellationToken>._))
             .ReturnsNextFromSequence(new GitCommandResult(exitCode, "", "error"), new GitCommandResult(0, "true\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var firstLineEnding = await GetLineEndingAsync(sut);
-        var secondLineEnding = await GetLineEndingAsync(sut);
+        var firstLineEnding = await GetLineEndingAsync(_sut);
+        var secondLineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         firstLineEnding
@@ -1242,11 +1180,10 @@ public class GitLineEndingResolverTests
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(AutoCrLfArguments), A<CancellationToken>._))
             .Throws(new GitUnavailableException(AutoCrLfArguments, "git could not be started.")).Once()
             .Then.Returns(new GitCommandResult(0, "true\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var firstLineEnding = await GetLineEndingAsync(sut);
-        var secondLineEnding = await GetLineEndingAsync(sut);
+        var firstLineEnding = await GetLineEndingAsync(_sut);
+        var secondLineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         firstLineEnding
@@ -1265,11 +1202,10 @@ public class GitLineEndingResolverTests
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(EolArguments), A<CancellationToken>._))
             .ReturnsNextFromSequence(new GitCommandResult(128, "", "fatal: bad config line"),
                 new GitCommandResult(0, "crlf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
 
         // Act
-        var firstLineEnding = await GetLineEndingAsync(sut);
-        var secondLineEnding = await GetLineEndingAsync(sut);
+        var firstLineEnding = await GetLineEndingAsync(_sut);
+        var secondLineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         firstLineEnding
@@ -1294,12 +1230,11 @@ public class GitLineEndingResolverTests
         const string textFilePath = "docs/setup.md";
         SetUpAttributes(Unspecified, Unspecified, Unspecified);
         SetUpAttributes(textFilePath, Unspecified, "set", Unspecified);
-        SetUpResult(EolArguments, new GitCommandResult(0, "lf\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
+        _gitCommandRunner.SetUpResult(EolArguments, new GitCommandResult(0, "lf\n", ""));
 
         // Act
-        var firstLineEnding = await GetLineEndingAsync(sut);
-        var secondLineEnding = await sut.GetLineEndingAsync(RepositoryRootPath, textFilePath,
+        var firstLineEnding = await GetLineEndingAsync(_sut);
+        var secondLineEnding = await _sut.GetLineEndingAsync(RepositoryRootPath, textFilePath,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -1327,12 +1262,11 @@ public class GitLineEndingResolverTests
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(AutoCrLfArguments), A<CancellationToken>._))
             .Throws(new OperationCanceledException()).Once()
             .Then.Returns(new GitCommandResult(0, "true\n", ""));
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
-        var firstAct = () => GetLineEndingAsync(sut);
+        var firstAct = () => GetLineEndingAsync(_sut);
         await firstAct.Should().ThrowAsync<OperationCanceledException>();
 
         // Act
-        var lineEnding = await GetLineEndingAsync(sut);
+        var lineEnding = await GetLineEndingAsync(_sut);
 
         // Assert
         lineEnding
@@ -1345,11 +1279,8 @@ public class GitLineEndingResolverTests
     [InlineData("   ")]
     public async Task GetLineEndingAsync_InvalidRepositoryRootPath_ThrowsArgumentException(string? invalidRootPath)
     {
-        // Arrange
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
-
         // Act
-        var act = () => sut.GetLineEndingAsync(invalidRootPath!, RelativePath,
+        var act = () => _sut.GetLineEndingAsync(invalidRootPath!, RelativePath,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -1372,11 +1303,8 @@ public class GitLineEndingResolverTests
     [InlineData("docs/..")]
     public async Task GetLineEndingAsync_InvalidRelativePath_ThrowsArgumentException(string? invalidRelativePath)
     {
-        // Arrange
-        var sut = new GitLineEndingResolver(_gitCommandRunner);
-
         // Act
-        var act = () => sut.GetLineEndingAsync(RepositoryRootPath, invalidRelativePath!,
+        var act = () => _sut.GetLineEndingAsync(RepositoryRootPath, invalidRelativePath!,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -1384,6 +1312,172 @@ public class GitLineEndingResolverTests
             .WithParameterName("relativePath");
 
         A.CallTo(_gitCommandRunner)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task PreloadAttributesAsync_SeveralPaths_RunsOneCheckAttrForAllFiles()
+    {
+        // Arrange
+        _gitCommandRunner.SetUpResult(["check-attr", "eol", "text", "crlf", "--", "a.md", "b.md"],
+            new GitCommandResult(0,
+                "a.md: eol: lf\na.md: text: unspecified\na.md: crlf: unspecified\n" +
+                "b.md: eol: crlf\nb.md: text: unspecified\nb.md: crlf: unspecified\n", ""));
+
+        // Act
+        await _sut.PreloadAttributesAsync(RepositoryRootPath, ["a.md", "b.md"], TestContext.Current.CancellationToken);
+        var first = await _sut.GetLineEndingAsync(RepositoryRootPath, "a.md", TestContext.Current.CancellationToken);
+        var second = await _sut.GetLineEndingAsync(RepositoryRootPath, "b.md", TestContext.Current.CancellationToken);
+
+        // Assert
+        first
+            .Should().Be(LineEnding.Lf);
+
+        second
+            .Should().Be(LineEnding.CrLf);
+
+        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
+                A<IReadOnlyList<string>>.That.Matches(x => x[0] == "check-attr"), A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task PreloadAttributesAsync_FileMissingFromOutput_ReadsItsAttributesOnItsOwn()
+    {
+        // Arrange
+        _gitCommandRunner.SetUpResult(["check-attr", "eol", "text", "crlf", "--", "a.md", "b.md"],
+            new GitCommandResult(0, "a.md: eol: lf\na.md: text: unspecified\na.md: crlf: unspecified\n", ""));
+        SetUpAttributes("b.md", "crlf", Unspecified, Unspecified);
+        string[] singleFileArguments = ["check-attr", "eol", "text", "crlf", "--", "b.md"];
+
+        // Act
+        await _sut.PreloadAttributesAsync(RepositoryRootPath, ["a.md", "b.md"], TestContext.Current.CancellationToken);
+        var lineEnding = await _sut.GetLineEndingAsync(RepositoryRootPath, "b.md",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        lineEnding
+            .Should().Be(LineEnding.CrLf);
+
+        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
+                A<IReadOnlyList<string>>.That.IsSameSequenceAs(singleFileArguments), A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task PreloadAttributesAsync_CheckAttrFails_KeepsNothingWithoutThrowing()
+    {
+        // Arrange
+        SetUpAttributes("lf", Unspecified, Unspecified);
+
+        // Act
+        await _sut.PreloadAttributesAsync(RepositoryRootPath, [RelativePath, "other.md"],
+            TestContext.Current.CancellationToken);
+        var lineEnding = await GetLineEndingAsync(_sut);
+
+        // Assert
+        lineEnding
+            .Should().Be(LineEnding.Lf);
+
+        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
+                A<IReadOnlyList<string>>.That.IsSameSequenceAs(CheckAttrArguments), A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task PreloadAttributesAsync_NoPaths_RunsNoGit()
+    {
+        // Act
+        await _sut.PreloadAttributesAsync(RepositoryRootPath, [], TestContext.Current.CancellationToken);
+
+        // Assert
+        A.CallTo(_gitCommandRunner)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task PreloadAttributesAsync_SameFileInSeveralSpellings_PassesItOnceNormalized()
+    {
+        // Act
+        await _sut.PreloadAttributesAsync(RepositoryRootPath,
+            [RelativePath, "./docs/readme.md", Path.Combine("docs", "readme.md")],
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        A.CallTo(() => _gitCommandRunner.RunAsync(RepositoryRootPath,
+                A<IReadOnlyList<string>>.That.IsSameSequenceAs(CheckAttrArguments), A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task PreloadAttributesAsync_MoreThanOneHundredFiles_RunsCheckAttrForEachHundred()
+    {
+        // Arrange
+        string[] paths = [.. Enumerable.Range(0, 150).Select(x => $"file{x}.md")];
+        string[] firstArguments = ["check-attr", "eol", "text", "crlf", "--", .. paths[..100]];
+        string[] secondArguments = ["check-attr", "eol", "text", "crlf", "--", .. paths[100..]];
+
+        // Act
+        await _sut.PreloadAttributesAsync(RepositoryRootPath, paths, TestContext.Current.CancellationToken);
+
+        // Assert
+        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
+                A<IReadOnlyList<string>>.That.IsSameSequenceAs(firstArguments), A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly()
+            .Then(A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
+                    A<IReadOnlyList<string>>.That.IsSameSequenceAs(secondArguments), A<CancellationToken>._))
+                .MustHaveHappenedOnceExactly());
+    }
+
+    [Fact]
+    public async Task PreloadAttributesAsync_CheckAttrCanceled_ThrowsOperationCanceledException()
+    {
+        // Arrange
+        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
+                A<IReadOnlyList<string>>.That.Matches(x => x[0] == "check-attr"), A<CancellationToken>._))
+            .ThrowsAsync(new OperationCanceledException());
+
+        // Act
+        var act = () => _sut.PreloadAttributesAsync(RepositoryRootPath, [RelativePath],
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Theory]
+    [InlineData("../outside.md")]
+    [InlineData("/absolute.md")]
+    [InlineData(" ")]
+    public async Task PreloadAttributesAsync_InvalidPath_ThrowsArgumentExceptionWithoutRunningGit(string path)
+    {
+        // Act
+        var act = () => _sut.PreloadAttributesAsync(RepositoryRootPath, [RelativePath, path],
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<ArgumentException>())
+            .WithParameterName("relativePaths");
+
+        A.CallTo(_gitCommandRunner)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task PreloadAttributesAsync_NullPaths_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => _sut.PreloadAttributesAsync(RepositoryRootPath, null!, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<ArgumentNullException>())
+            .WithParameterName("relativePaths");
+    }
+
+    private void AssertConfigurationNotRead()
+    {
+        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
+                A<IReadOnlyList<string>>.That.Matches(x => x[0] == "config"), A<CancellationToken>._))
             .MustNotHaveHappened();
     }
 
@@ -1399,9 +1493,9 @@ public class GitLineEndingResolverTests
             .GetLineEndingAsync(RepositoryRootPath, RelativePath, TestContext.Current.CancellationToken);
     }
 
-    private static Task<LineEnding?> GetLineEndingAsync(GitLineEndingResolver sut)
+    private static Task<LineEnding?> GetLineEndingAsync(GitLineEndingResolver _sut)
     {
-        return sut.GetLineEndingAsync(RepositoryRootPath, RelativePath, TestContext.Current.CancellationToken);
+        return _sut.GetLineEndingAsync(RepositoryRootPath, RelativePath, TestContext.Current.CancellationToken);
     }
 
     private void SetUpAttributes(string eol, string text, string crlf)
@@ -1411,14 +1505,7 @@ public class GitLineEndingResolverTests
 
     private void SetUpAttributes(string path, string eol, string text, string crlf)
     {
-        SetUpResult(["check-attr", "eol", "text", "crlf", "--", path],
+        _gitCommandRunner.SetUpResult(["check-attr", "eol", "text", "crlf", "--", path],
             new GitCommandResult(0, $"{path}: eol: {eol}\n{path}: text: {text}\n{path}: crlf: {crlf}\n", ""));
-    }
-
-    private void SetUpResult(IReadOnlyList<string> arguments, GitCommandResult result)
-    {
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
-                A<IReadOnlyList<string>>.That.IsSameSequenceAs(arguments), A<CancellationToken>._))
-            .Returns(result);
     }
 }

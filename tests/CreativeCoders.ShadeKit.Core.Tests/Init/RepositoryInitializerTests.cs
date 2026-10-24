@@ -1,3 +1,4 @@
+using CreativeCoders.ShadeKit.Core.Tests.Store;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -13,6 +14,7 @@ using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
+using FakeItEasy.Configuration;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Init;
 
@@ -183,9 +185,8 @@ public class RepositoryInitializerTests
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateGitRoot();
         var textFileWriter = A.Fake<ITextFileWriter>();
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
-            .Returns(Task.FromResult<IReadOnlyList<KitWarning>>([]));
+        CallToWrite(textFileWriter)
+            .Returns(Warnings());
 
         // Act
         await CreateInitializer(textFileWriter)
@@ -201,6 +202,45 @@ public class RepositoryInitializerTests
     }
 
     [Fact]
+    public async Task InitializeAsync_NewRepository_PreparesLineEndingsOfEveryWrittenFileOnceBeforeTheFirstWrite()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+        var lineEndingResolver = A.Fake<ILineEndingResolver>();
+        var textFileWriter =
+            A.Fake<ITextFileWriter>(options => options.Wrapping(FixedLineEnding.CreateWriter(LineEnding.Lf)));
+        var kitStoreTextFileWriter =
+            A.Fake<ITextFileWriter>(options => options.Wrapping(FixedLineEnding.CreateWriter(LineEnding.Lf)));
+        var initializer = CreateInitializer(new ShippedTemplateReader(), new GitIgnorePlanner(),
+            new InstructionSectionPlanner(), textFileWriter, kitStoreTextFileWriter, lineEndingResolver);
+        string[] expectedPaths =
+        [
+            ".shadekit/config.json",
+            ".shadekit/gates.json",
+            .. ShippedTemplates.All.Select(x => x.RepositoryPath),
+            ".shadekit/templates.lock.json",
+            GitIgnore,
+            ClaudeMd,
+            AgentsMd
+        ];
+
+        // Act
+        await initializer.InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        A.CallTo(() => lineEndingResolver.PrepareAsync(tempDirectory.RootPath,
+                A<IReadOnlyCollection<string>>.That.IsSameSequenceAs(expectedPaths),
+                TestContext.Current.CancellationToken))
+            .MustHaveHappenedOnceExactly()
+            .Then(CallToWrite(kitStoreTextFileWriter)
+                .MustHaveHappened());
+
+        CallToWrite(textFileWriter)
+            .MustHaveHappened(3, Times.Exactly);
+    }
+
+    [Fact]
     public async Task InitializeAsync_WriterReturnsWarnings_ReturnsEachDistinctWarningOnceInFirstOccurrenceOrder()
     {
         // Arrange
@@ -210,16 +250,12 @@ public class RepositoryInitializerTests
         var otherWarning = new EditorConfigUnreadableWarning("/repo/docs/.editorconfig", "Access denied.");
 
         var textFileWriter = A.Fake<ITextFileWriter>();
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, GitIgnore, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
-            .Returns(Task.FromResult<IReadOnlyList<KitWarning>>([rootWarning]));
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, ClaudeMd, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
-            .Returns(Task.FromResult<IReadOnlyList<KitWarning>>(
-                [new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied."), otherWarning]));
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, AgentsMd, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
-            .Returns(Task.FromResult<IReadOnlyList<KitWarning>>([otherWarning, rootWarning]));
+        CallToWrite(textFileWriter, GitIgnore)
+            .Returns(Warnings(rootWarning));
+        CallToWrite(textFileWriter, ClaudeMd)
+            .Returns(Warnings(new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied."), otherWarning));
+        CallToWrite(textFileWriter, AgentsMd)
+            .Returns(Warnings(otherWarning, rootWarning));
 
         // Act
         var result = await CreateInitializer(textFileWriter)
@@ -240,12 +276,11 @@ public class RepositoryInitializerTests
         var secondWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "The file is locked.");
 
         var textFileWriter = A.Fake<ITextFileWriter>();
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
+        CallToWrite(textFileWriter)
             .ReturnsNextFromSequence(
-                Task.FromResult<IReadOnlyList<KitWarning>>([firstWarning]),
-                Task.FromResult<IReadOnlyList<KitWarning>>([secondWarning]),
-                Task.FromResult<IReadOnlyList<KitWarning>>([]));
+                Warnings(firstWarning),
+                Warnings(secondWarning),
+                Warnings());
 
         // Act
         var result = await CreateInitializer(textFileWriter)
@@ -308,12 +343,10 @@ public class RepositoryInitializerTests
             new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied."));
 
         var textFileWriter = A.Fake<ITextFileWriter>();
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
+        CallToWrite(textFileWriter)
             .ReturnsLazily((string root, string relativePath, TextFileContent content, string? lineEndingPath,
                 CancellationToken token) => realWriter.WriteAsync(root, relativePath, content, lineEndingPath, token));
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, failingFileName, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
+        CallToWrite(textFileWriter, failingFileName)
             .ThrowsAsync(new IOException("disk full"));
 
         // Act
@@ -341,8 +374,7 @@ public class RepositoryInitializerTests
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateGitRoot();
         var textFileWriter = A.Fake<ITextFileWriter>();
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
+        CallToWrite(textFileWriter)
             .ThrowsAsync(new OperationCanceledException());
 
         // Act
@@ -364,9 +396,8 @@ public class RepositoryInitializerTests
         tempDirectory.CreateGitRoot();
         using var cancellationTokenSource = new CancellationTokenSource();
         var textFileWriter = A.Fake<ITextFileWriter>();
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
-            .Returns(Task.FromResult<IReadOnlyList<KitWarning>>([]));
+        CallToWrite(textFileWriter)
+            .Returns(Warnings());
 
         // Act
         await CreateInitializer(textFileWriter).InitializeAsync(tempDirectory.RootPath, cancellationTokenSource.Token);
@@ -387,11 +418,10 @@ public class RepositoryInitializerTests
         tempDirectory.WriteFile("# Agents\n", AgentsMd);
         var writtenContents = new Dictionary<string, TextFileContent>();
         var textFileWriter = A.Fake<ITextFileWriter>();
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
+        CallToWrite(textFileWriter)
             .Invokes((string _, string relativePath, TextFileContent content, string? _, CancellationToken _) =>
                 writtenContents[relativePath] = content)
-            .Returns(Task.FromResult<IReadOnlyList<KitWarning>>([]));
+            .Returns(Warnings());
 
         // Act
         await CreateInitializer(textFileWriter)
@@ -422,17 +452,15 @@ public class RepositoryInitializerTests
         tempDirectory.WriteFile(ExpectedSectionFile, ClaudeMd);
         var warning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
         var textFileWriter = A.Fake<ITextFileWriter>();
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
-            .Returns(Task.FromResult<IReadOnlyList<KitWarning>>([warning]));
+        CallToWrite(textFileWriter)
+            .Returns(Warnings(warning));
 
         // Act
         var result = await CreateInitializer(textFileWriter)
             .InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
 
         // Assert
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
+        CallToWrite(textFileWriter)
             .MustHaveHappenedOnceExactly();
 
         A.CallTo(() => textFileWriter.WriteAsync(tempDirectory.RootPath, AgentsMd, A<TextFileContent>._,
@@ -451,12 +479,11 @@ public class RepositoryInitializerTests
         tempDirectory.CreateGitRoot();
         var warning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
         var textFileWriter = A.Fake<ITextFileWriter>();
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
+        CallToWrite(textFileWriter)
             .ReturnsNextFromSequence(
-                Task.FromResult<IReadOnlyList<KitWarning>>([warning, warning]),
-                Task.FromResult<IReadOnlyList<KitWarning>>([]),
-                Task.FromResult<IReadOnlyList<KitWarning>>([]));
+                Warnings(warning, warning),
+                Warnings(),
+                Warnings());
 
         // Act
         var result = await CreateInitializer(textFileWriter)
@@ -732,9 +759,8 @@ public class RepositoryInitializerTests
         tempDirectory.WriteFile(ExpectedSectionFile, ClaudeMd);
         tempDirectory.WriteFile(ExpectedSectionFile, AgentsMd);
         var earlierWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
-        var kitStore = new KitStore(Path.Combine(tempDirectory.RootPath, KitRoot),
-            new VersionedJsonSerializer(Registry), Registry,
-            FixedLineEnding.CreateWriterWithWarningsOnFirstWrite(LineEnding.Lf, earlierWarning));
+        var kitStore = TestKitStores.Create(Path.Combine(tempDirectory.RootPath, KitRoot),
+            FixedLineEnding.CreateWriterWithWarningsOnFirstWrite(LineEnding.Lf, earlierWarning), Registry);
         var earlierWarnings = await kitStore.WriteFileAsync("earlier.md", TextFileContent.FromText("a\n"),
             cancellationToken: TestContext.Current.CancellationToken);
         Directory.Delete(kitStore.RootPath, recursive: true);
@@ -745,7 +771,7 @@ public class RepositoryInitializerTests
         A.CallTo(() => engineVersionProvider.Version).Returns(EngineVersion);
         var initializer = new RepositoryInitializer(new GitRepositoryLocator(), kitStoreFactory,
             new ShippedTemplateReader(), new GitIgnorePlanner(), new InstructionSectionPlanner(),
-            engineVersionProvider, FixedLineEnding.CreateWriter(LineEnding.Lf));
+            engineVersionProvider, FixedLineEnding.CreateWriter(LineEnding.Lf), A.Fake<ILineEndingResolver>());
 
         // Act
         var result = await initializer.InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
@@ -1280,7 +1306,7 @@ public class RepositoryInitializerTests
         await CreateInitializer().InitializeAsync(tempDirectory.RootPath, cancellationToken);
 
         // Assert
-        var kitStore = CreateKitStoreFactory().Create(tempDirectory.RootPath);
+        var kitStore = KitStoreFactoryTests.CreateFactory().Create(tempDirectory.RootPath);
 
         var config = await kitStore.ReadJsonAsync<KitConfig>(KitStorePaths.ConfigFileName, FormatIds.Config,
             FormatAccess.Read, cancellationToken);
@@ -1506,9 +1532,9 @@ public class RepositoryInitializerTests
         var engineVersionProvider = A.Fake<IEngineVersionProvider>();
         A.CallTo(() => engineVersionProvider.Version).Throws(new InvalidOperationException("no version"));
 
-        var initializer = new RepositoryInitializer(new GitRepositoryLocator(), CreateKitStoreFactory(),
+        var initializer = new RepositoryInitializer(new GitRepositoryLocator(), KitStoreFactoryTests.CreateFactory(),
             new ShippedTemplateReader(), new GitIgnorePlanner(), new InstructionSectionPlanner(), engineVersionProvider,
-            FixedLineEnding.CreateWriter(LineEnding.Lf));
+            FixedLineEnding.CreateWriter(LineEnding.Lf), A.Fake<ILineEndingResolver>());
         var snapshot = tempDirectory.TakeSnapshot();
 
         // Act
@@ -1600,6 +1626,7 @@ public class RepositoryInitializerTests
     [InlineData(4)]
     [InlineData(5)]
     [InlineData(6)]
+    [InlineData(7)]
     public void Constructor_NullDependency_ThrowsArgumentNullException(int nullIndex)
     {
         // Arrange
@@ -1611,7 +1638,8 @@ public class RepositoryInitializerTests
             A.Fake<IGitIgnorePlanner>(),
             A.Fake<IInstructionSectionPlanner>(),
             A.Fake<IEngineVersionProvider>(),
-            A.Fake<ITextFileWriter>()
+            A.Fake<ITextFileWriter>(),
+            A.Fake<ILineEndingResolver>()
         ];
         dependencies[nullIndex] = null;
 
@@ -1623,7 +1651,8 @@ public class RepositoryInitializerTests
             (IGitIgnorePlanner)dependencies[3]!,
             (IInstructionSectionPlanner)dependencies[4]!,
             (IEngineVersionProvider)dependencies[5]!,
-            (ITextFileWriter)dependencies[6]!);
+            (ITextFileWriter)dependencies[6]!,
+            (ILineEndingResolver)dependencies[7]!);
 
         // Assert
         act.Should().Throw<ArgumentNullException>();
@@ -1673,21 +1702,34 @@ public class RepositoryInitializerTests
     // writes of one without affecting the other.
     private static RepositoryInitializer CreateInitializer(IShippedTemplateReader shippedTemplateReader,
         IGitIgnorePlanner gitIgnorePlanner, IInstructionSectionPlanner instructionSectionPlanner,
-        ITextFileWriter? textFileWriter = null, ITextFileWriter? kitStoreTextFileWriter = null)
+        ITextFileWriter? textFileWriter = null, ITextFileWriter? kitStoreTextFileWriter = null,
+        ILineEndingResolver? lineEndingResolver = null)
     {
         var engineVersionProvider = A.Fake<IEngineVersionProvider>();
         A.CallTo(() => engineVersionProvider.Version).Returns(EngineVersion);
 
         // A fixed line ending keeps the tests independent of the operating system and the git configuration.
-        return new RepositoryInitializer(new GitRepositoryLocator(), CreateKitStoreFactory(kitStoreTextFileWriter),
+        return new RepositoryInitializer(new GitRepositoryLocator(),
+            KitStoreFactoryTests.CreateFactory(textFileWriter: kitStoreTextFileWriter),
             shippedTemplateReader, gitIgnorePlanner, instructionSectionPlanner, engineVersionProvider,
-            textFileWriter ?? FixedLineEnding.CreateWriter(LineEnding.Lf));
+            textFileWriter ?? FixedLineEnding.CreateWriter(LineEnding.Lf),
+            lineEndingResolver ?? A.Fake<ILineEndingResolver>());
     }
 
-    private static KitStoreFactory CreateKitStoreFactory(ITextFileWriter? textFileWriter = null)
+    // Every write of the writer, or only the writes of the file with the specified name.
+    private static IReturnValueArgumentValidationConfiguration<Task<IReadOnlyList<KitWarning>>> CallToWrite(
+        ITextFileWriter textFileWriter, string? fileName = null)
     {
-        return new KitStoreFactory(new GitRepositoryLocator(), new VersionedJsonSerializer(Registry), Registry,
-            textFileWriter ?? FixedLineEnding.CreateWriter(LineEnding.Lf));
+        return fileName is null
+            ? A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._, A<string?>._,
+                A<CancellationToken>._))
+            : A.CallTo(() => textFileWriter.WriteAsync(A<string>._, fileName, A<TextFileContent>._, A<string?>._,
+                A<CancellationToken>._));
+    }
+
+    private static Task<IReadOnlyList<KitWarning>> Warnings(params KitWarning[] warnings)
+    {
+        return Task.FromResult<IReadOnlyList<KitWarning>>(warnings);
     }
 
     private static IEnumerable<string> ReadLockHashes(TempKitDirectory tempDirectory)

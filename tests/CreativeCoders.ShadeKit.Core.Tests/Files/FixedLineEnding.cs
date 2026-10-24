@@ -1,4 +1,5 @@
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Init;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Files;
@@ -72,6 +73,34 @@ internal static class FixedLineEnding
             });
 
         return resolver;
+    }
+
+    /// <summary>
+    /// Gets the line ending that the specified line ending string stands for.
+    /// </summary>
+    /// <param name="newLine"><c>\r\n</c> for <see cref="LineEnding.CrLf" />; any other string for <see cref="LineEnding.Lf" />.</param>
+    public static LineEnding FromNewLine(string newLine)
+    {
+        return newLine == "\r\n" ? LineEnding.CrLf : LineEnding.Lf;
+    }
+
+    /// <summary>
+    /// Plans the change of a file with the specified planner and writes it with a fixed line ending, as the
+    /// initialisation does.
+    /// </summary>
+    /// <returns>The action of the planned change, or <see langword="null" /> if the file needs no change.</returns>
+    public static async Task<InitializedFileAction?> PlanAndWriteAsync(
+        Func<string, CancellationToken, Task<PlannedFileChange?>> planAsync, string filePath,
+        CancellationToken cancellationToken, LineEnding lineEnding = LineEnding.Lf)
+    {
+        var change = await planAsync(filePath, cancellationToken);
+
+        if (change is not null)
+        {
+            await WriteAsync(filePath, change.Content, lineEnding, cancellationToken);
+        }
+
+        return change?.Action;
     }
 
     /// <summary>

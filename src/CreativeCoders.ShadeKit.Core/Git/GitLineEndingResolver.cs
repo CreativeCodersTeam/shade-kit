@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Files;
 
@@ -21,14 +22,13 @@ namespace CreativeCoders.ShadeKit.Core.Git;
 /// per command run and a later run reads them again; another container gets another instance with its own values.
 /// A value is kept only after <c>git config</c> succeeded or reported the key as not set; a failed or canceled read is
 /// not kept. Two calls that run at the same time can both read a value that is not kept yet. The attributes are read
-/// for every call, because they depend on the path.
+/// for every call, because they depend on the path, unless <see cref="PreloadAttributesAsync" /> has read them for the
+/// file before; those are kept for the lifetime of the instance as well.
 /// </para>
 /// </remarks>
 public sealed class GitLineEndingResolver : IGitLineEndingResolver
 {
     private const int SuccessExitCode = 0;
-
-    private const int NotSetExitCode = 1;
 
     private const string EolAttribute = "eol";
 
@@ -56,6 +56,9 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
 
     private const string AttributeSeparator = ": ";
 
+    // Keeps the command line of one git check-attr process short, also on Windows.
+    private const int MaxPathsPerCheckAttr = 100;
+
     private static readonly string[] RequestedAttributes = [EolAttribute, TextAttribute, CrLfAttribute];
 
     // The words that git accepts as boolean true in a configuration value; any integer other than 0 is true as well.
@@ -67,6 +70,10 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
 
     private readonly ConcurrentDictionary<(string RepositoryRootPath, string Key), string?> _configValues =
         new ConcurrentDictionary<(string RepositoryRootPath, string Key), string?>();
+
+    private readonly ConcurrentDictionary<(string RepositoryRootPath, string GitPath), Dictionary<string, string>>
+        _preloadedAttributes =
+            new ConcurrentDictionary<(string RepositoryRootPath, string GitPath), Dictionary<string, string>>();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GitLineEndingResolver" /> class that resolves
@@ -100,17 +107,15 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
         // Not specified, or a value that git does not know.
         Undefined,
 
-        // text or crlf: the line ending comes from eol, core.autocrlf, and core.eol.
+        // text, crlf, text=auto, or crlf=auto: the line ending comes from eol, core.autocrlf, and core.eol. For auto,
+        // git converts only files it detects as text, and SHADE kit writes only text files.
         Text,
 
         // -text, -crlf, or the binary macro: no conversion.
         Binary,
 
         // text=input or crlf=input: LF, unless the eol attribute says otherwise.
-        Input,
-
-        // text=auto or crlf=auto: like Text for a file that git detects as text.
-        Auto
+        Input
     }
 
     /// <inheritdoc />
@@ -130,11 +135,50 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
         }
     }
 
+    /// <inheritdoc />
+    [SuppressMessage("Minor Code Smell", "S3236:Caller information arguments should not be provided explicitly",
+        Justification = "An invalid path names the parameter that holds the collection, not the lambda's parameter.")]
+    public async Task PreloadAttributesAsync(string repositoryRootPath, IReadOnlyCollection<string> relativePaths,
+        CancellationToken cancellationToken = default)
+    {
+        Ensure.NotNull(relativePaths);
+
+        string[] gitPaths =
+        [
+            .. relativePaths
+                .Select(relativePath => RepositoryFilePath.GetGitPath(repositoryRootPath, relativePath,
+                    nameof(relativePaths)))
+                .Distinct(StringComparer.Ordinal)
+        ];
+
+        var cacheRootPath = gitPaths.Length == 0 ? null : GetCacheRootPath(repositoryRootPath);
+
+        foreach (var chunk in gitPaths.Chunk(MaxPathsPerCheckAttr))
+        {
+            try
+            {
+                var attributesByPath = await ReadAttributesAsync(repositoryRootPath, chunk, cancellationToken)
+                    .ConfigureAwait(false);
+
+                foreach (var (gitPath, attributes) in attributesByPath)
+                {
+                    _preloadedAttributes.TryAdd((cacheRootPath!, gitPath), attributes);
+                }
+            }
+            catch (GitUnavailableException)
+            {
+                // Each file of the chunk reads its attributes when its line ending is determined.
+            }
+        }
+    }
+
     private async Task<LineEnding?> ResolveAsync(string repositoryRootPath, string gitPath,
         CancellationToken cancellationToken)
     {
-        var attributes = await ReadAttributesAsync(repositoryRootPath, gitPath, cancellationToken)
-            .ConfigureAwait(false);
+        var attributes = _preloadedAttributes.TryGetValue((GetCacheRootPath(repositoryRootPath), gitPath),
+                             out var preloadedAttributes)
+            ? preloadedAttributes
+            : await ReadAttributesAsync(repositoryRootPath, gitPath, cancellationToken).ConfigureAwait(false);
 
         // As in git, the legacy crlf attribute counts only while text is unspecified or has an unknown value. The
         // binary macro sets -text, and a later text attribute overrides it, so binary itself is not read.
@@ -185,7 +229,7 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
         }
 
         // core.eol only applies to files that are marked as text.
-        if (textConversion is not (TextConversion.Text or TextConversion.Auto))
+        if (textConversion != TextConversion.Text)
         {
             return null;
         }
@@ -206,10 +250,9 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
     {
         return attributeValue switch
         {
-            SetAttributeValue => TextConversion.Text,
+            SetAttributeValue or AutoAttributeValue => TextConversion.Text,
             UnsetAttributeValue => TextConversion.Binary,
             InputValue => TextConversion.Input,
-            AutoAttributeValue => TextConversion.Auto,
             _ => TextConversion.Undefined
         };
     }
@@ -319,17 +362,58 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
         };
     }
 
+    // The attributes of one file; the path in the output is not compared, so a path that git prints quoted, for
+    // example one with non-ASCII characters, is read as well.
     private async Task<Dictionary<string, string>> ReadAttributesAsync(string repositoryRootPath, string gitPath,
         CancellationToken cancellationToken)
     {
-        string[] arguments = ["check-attr", .. RequestedAttributes, "--", gitPath];
+        var lines = await RunCheckAttrAsync(repositoryRootPath, [gitPath], cancellationToken).ConfigureAwait(false);
+
+        var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (_, attribute, value) in lines)
+        {
+            attributes[attribute] = value;
+        }
+
+        return attributes;
+    }
+
+    // The attributes of several files by their path in the output. A path that git prints quoted does not match the
+    // requested path, so that file reads its attributes again when its line ending is determined.
+    private async Task<Dictionary<string, Dictionary<string, string>>> ReadAttributesAsync(
+        string repositoryRootPath, IReadOnlyList<string> gitPaths, CancellationToken cancellationToken)
+    {
+        var lines = await RunCheckAttrAsync(repositoryRootPath, gitPaths, cancellationToken).ConfigureAwait(false);
+
+        var attributesByPath = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+
+        foreach (var (path, attribute, value) in lines)
+        {
+            if (!attributesByPath.TryGetValue(path, out var attributes))
+            {
+                attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+                attributesByPath[path] = attributes;
+            }
+
+            attributes[attribute] = value;
+        }
+
+        return attributesByPath;
+    }
+
+    private async Task<List<(string Path, string Attribute, string Value)>> RunCheckAttrAsync(
+        string repositoryRootPath, IReadOnlyList<string> gitPaths, CancellationToken cancellationToken)
+    {
+        string[] arguments = ["check-attr", .. RequestedAttributes, "--", .. gitPaths];
 
         var result = await _gitCommandRunner.RunAsync(repositoryRootPath, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         if (result.ExitCode != SuccessExitCode)
         {
-            throw new GitUnavailableException(arguments, CreateUnexpectedExitCodeReason(result));
+            throw new GitUnavailableException(arguments,
+                GitCommandRunnerExtensions.CreateUnexpectedExitCodeReason(result));
         }
 
         return ParseAttributes(result.StandardOutput);
@@ -343,9 +427,9 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
     /// The attribute and the value are taken from the end of the line, because the path may itself contain
     /// <c>": "</c>, while attribute names and values never contain whitespace.
     /// </remarks>
-    private static Dictionary<string, string> ParseAttributes(string standardOutput)
+    private static List<(string Path, string Attribute, string Value)> ParseAttributes(string standardOutput)
     {
-        var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var attributes = new List<(string Path, string Attribute, string Value)>();
 
         foreach (var rawLine in standardOutput.Split('\n'))
         {
@@ -369,7 +453,8 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
 
             if (RequestedAttributes.Contains(attribute, StringComparer.Ordinal))
             {
-                attributes[attribute] = line[(valueSeparatorIndex + AttributeSeparator.Length)..].Trim();
+                attributes.Add((line[..attributeSeparatorIndex], attribute,
+                    line[(valueSeparatorIndex + AttributeSeparator.Length)..].Trim()));
             }
         }
 
@@ -386,17 +471,9 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
             return cachedValue;
         }
 
-        string[] arguments = ["config", key];
-
-        var result = await _gitCommandRunner.RunAsync(repositoryRootPath, arguments, cancellationToken)
+        var value = await _gitCommandRunner
+            .RunForOptionalValueAsync(repositoryRootPath, ["config", key], cancellationToken)
             .ConfigureAwait(false);
-
-        var value = result.ExitCode switch
-        {
-            SuccessExitCode => result.StandardOutput.Trim(),
-            NotSetExitCode => null,
-            _ => throw new GitUnavailableException(arguments, CreateUnexpectedExitCodeReason(result))
-        };
 
         _configValues.TryAdd(cacheKey, value);
 
@@ -408,11 +485,5 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
     private static string GetCacheRootPath(string repositoryRootPath)
     {
         return Path.TrimEndingDirectorySeparator(Path.GetFullPath(repositoryRootPath));
-    }
-
-    // The exception never leaves this class: GetLineEndingAsync turns it into "git does not decide".
-    private static string CreateUnexpectedExitCodeReason(GitCommandResult result)
-    {
-        return $"git exited with the unexpected exit code {result.ExitCode}.";
     }
 }

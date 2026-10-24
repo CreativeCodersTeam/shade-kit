@@ -682,7 +682,7 @@ public class KitStoreJsonTests
     }
 
     [Fact]
-    public async Task WriteJsonAsync_LineEndingPath_WritesFileAtRelativePathWithLineEndingResolvedForLineEndingPath()
+    public async Task CreateDirectoryWriter_WriteJson_WritesFileBelowWritePathWithLineEndingOfTargetPath()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -696,8 +696,9 @@ public class KitStoreJsonTests
         var document = new SampleDocument { SchemaVersion = 2, MinEngineVersion = "0.2.0", Title = "Login" };
 
         // Act
-        await kitStore.WriteJsonAsync($"staging/{SampleFileName}", SampleFormat.Id, document, FormatAccess.Write,
-            $"final/{SampleFileName}", TestContext.Current.CancellationToken);
+        await kitStore.CreateDirectoryWriter("staging", "final")
+            .WriteJsonAsync(SampleFileName, SampleFormat.Id, document, FormatAccess.Write,
+                TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileText(".shadekit", "staging", SampleFileName)
@@ -712,42 +713,18 @@ public class KitStoreJsonTests
     [InlineData(FormatAccess.Upgrade, "/absolute.json")]
     [InlineData(FormatAccess.Replace, " ")]
     [InlineData(FormatAccess.Replace, ".")]
-    public async Task WriteJsonAsync_InvalidLineEndingPath_ThrowsArgumentExceptionAndWritesNothing(
-        FormatAccess access, string lineEndingPath)
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var textFileWriter = A.Fake<ITextFileWriter>();
-        var kitStore = CreateStore(tempDirectory, textFileWriter: textFileWriter);
-
-        // Act
-        var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(), access,
-            lineEndingPath, TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName(nameof(lineEndingPath));
-
-        A.CallTo(textFileWriter)
-            .MustNotHaveHappened();
-    }
-
-    [Theory]
-    [InlineData(FormatAccess.Write, "../outside.json")]
-    [InlineData(FormatAccess.Upgrade, "/absolute.json")]
-    [InlineData(FormatAccess.Replace, " ")]
-    [InlineData(FormatAccess.Replace, ".")]
-    public async Task WriteJsonAsync_InvalidRelativePathAndValidLineEndingPath_ThrowsNamingRelativePathAndWritesNothing(
+    public async Task CreateDirectoryWriter_WriteJsonPathOutsideDirectory_ThrowsArgumentExceptionAndWritesNothing(
         FormatAccess access, string relativePath)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var textFileWriter = A.Fake<ITextFileWriter>();
         var kitStore = CreateStore(tempDirectory, textFileWriter: textFileWriter);
+        var writer = kitStore.CreateDirectoryWriter("staging", "final");
 
         // Act
-        var act = () => kitStore.WriteJsonAsync(relativePath, SampleFormat.Id, new SampleDocument(), access,
-            $"final/{SampleFileName}", TestContext.Current.CancellationToken);
+        var act = () => writer.WriteJsonAsync(relativePath, SampleFormat.Id, new SampleDocument(), access,
+            TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<ArgumentException>())
@@ -758,33 +735,9 @@ public class KitStoreJsonTests
     }
 
     [Theory]
-    [InlineData(FormatAccess.Write)]
-    [InlineData(FormatAccess.Upgrade)]
-    [InlineData(FormatAccess.Replace)]
-    public async Task WriteJsonAsync_InvalidRelativePathAndInvalidLineEndingPath_ThrowsNamingRelativePath(
-        FormatAccess access)
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var textFileWriter = A.Fake<ITextFileWriter>();
-        var kitStore = CreateStore(tempDirectory, textFileWriter: textFileWriter);
-
-        // Act
-        var act = () => kitStore.WriteJsonAsync("../outside.json", SampleFormat.Id, new SampleDocument(), access,
-            "/absolute.json", TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName("relativePath");
-
-        A.CallTo(textFileWriter)
-            .MustNotHaveHappened();
-    }
-
-    [Theory]
     [InlineData("{")]
     [InlineData(StoreTestFormats.SampleV1)]
-    public async Task WriteJsonAsync_ReplaceAccessUnusableFileAndInvalidLineEndingPath_ThrowsAndKeepsFile(
+    public async Task CreateDirectoryWriter_WriteJsonReplaceAccessUnusableFileOutsideDirectory_ThrowsAndKeepsFile(
         string existingContent)
     {
         // Arrange
@@ -793,12 +746,13 @@ public class KitStoreJsonTests
         var kitStore = CreateStore(tempDirectory);
 
         // Act
-        var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
-            FormatAccess.Replace, "../outside.json", TestContext.Current.CancellationToken);
+        var act = () => kitStore.CreateDirectoryWriter("staging", "final")
+            .WriteJsonAsync($"../{SampleFileName}", SampleFormat.Id, new SampleDocument(), FormatAccess.Replace,
+                TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName("lineEndingPath");
+            .WithParameterName("relativePath");
 
         tempDirectory.ReadFileText(".shadekit", SampleFileName)
             .Should().Be(existingContent);
@@ -1738,10 +1692,7 @@ public class KitStoreJsonTests
     private static KitStore CreateStore(TempKitDirectory tempDirectory, int configVersion = 1,
         ITextFileWriter? textFileWriter = null)
     {
-        var kitStorePath = tempDirectory.CreateDirectory(".shadekit");
-        var formatRegistry = StoreTestFormats.CreateRegistry(configVersion: configVersion);
-
-        return new KitStore(kitStorePath, new VersionedJsonSerializer(formatRegistry), formatRegistry,
-            textFileWriter ?? FixedLineEnding.CreateWriter(LineEnding.Lf));
+        return TestKitStores.Create(tempDirectory.CreateDirectory(".shadekit"), textFileWriter,
+            StoreTestFormats.CreateRegistry(configVersion: configVersion));
     }
 }

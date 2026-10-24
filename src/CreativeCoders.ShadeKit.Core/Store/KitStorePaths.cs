@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Files;
+
 namespace CreativeCoders.ShadeKit.Core.Store;
 
 /// <summary>
@@ -100,7 +102,7 @@ public static class KitStorePaths
     /// </returns>
     public static string GetDisplayPath(string kitRelativePath)
     {
-        return GetRepositoryPath(kitRelativePath.Replace(Path.DirectorySeparatorChar, '/'));
+        return GetRepositoryPath(RepositoryFilePath.ToForwardSlashes(kitRelativePath));
     }
 
     /// <summary>

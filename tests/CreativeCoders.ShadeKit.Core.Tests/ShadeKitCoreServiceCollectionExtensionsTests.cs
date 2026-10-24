@@ -346,6 +346,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         var store = A.Fake<IKitStore>();
         A.CallTo(() => store.RootPath).Returns("/repo/.shadekit");
+        A.CallTo(() => store.RepositoryRootPath).Returns("/repo");
         A.CallTo(() => store.GetFeatureNames()).Returns(["login"]);
 
         var services = new ServiceCollection();

@@ -6,6 +6,7 @@ using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
+using CreativeCoders.ShadeKit.Core.Tests.Store;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.Time.Testing;
@@ -91,8 +92,7 @@ internal sealed class FeatureStoreTestContext : IDisposable
 
     public KitStore CreateStore()
     {
-        return new KitStore(Path.Combine(RepositoryRootPath, KitStorePaths.RootPath),
-            new VersionedJsonSerializer(Registry), Registry, CreateWriter());
+        return TestKitStores.Create(Path.Combine(RepositoryRootPath, KitStorePaths.RootPath), CreateWriter(), Registry);
     }
 
     /// <summary>
