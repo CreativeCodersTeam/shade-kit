@@ -1,6 +1,5 @@
 using System.Text.RegularExpressions;
 using CreativeCoders.Core;
-using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
@@ -9,8 +8,7 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Fills the <c>request.md</c> template with the <c>feature.json</c> document and the original input of a new feature.
 /// </summary>
 /// <remarks>
-/// Only the placeholders that <c>shade-kit feature new</c> owns are replaced; every other part of the template, the
-/// guidance comment included, stays as it is, because the skill of package 09 completes the file.
+/// Only the placeholders of <c>shade-kit feature new</c> are replaced; a skill completes the rest of the file.
 /// </remarks>
 internal static partial class FeatureRequestTemplate
 {
@@ -25,21 +23,6 @@ internal static partial class FeatureRequestTemplate
     public const string CreatedPlaceholder = "{{created at and created by}}";
 
     private const string NoSourceReference = "n/a";
-
-    /// <summary>
-    /// Decodes the bytes of a template file strictly as UTF-8, without a leading UTF-8 byte order mark.
-    /// </summary>
-    /// <exception cref="InvalidKitFileException">
-    /// The template is not UTF-8 text: it has another Unicode encoding or contains bytes that are not valid UTF-8.
-    /// </exception>
-    public static string Decode(byte[] content, string filePath)
-    {
-        Ensure.NotNull(content);
-        Ensure.IsNotNullOrWhitespace(filePath);
-
-        return TextFileEncoding.DecodeUtf8(content,
-            (reason, innerException) => new InvalidKitFileException(filePath, reason, innerException));
-    }
 
     /// <summary>
     /// Replaces every occurrence of the placeholders of <c>shade-kit feature new</c> in the template.

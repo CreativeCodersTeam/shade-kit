@@ -1,7 +1,9 @@
 using System.Text;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Init;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Init;
@@ -153,7 +155,7 @@ public class GitIgnorePlannerTests
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, FixedLineEnding.FromNewLine(newLine));
 
         // Assert
         action
@@ -196,19 +198,61 @@ public class GitIgnorePlannerTests
             .Should().Be($"{Comment}\n{LocalEntry}\n{CurrentFeatureEntry}\n");
     }
 
-    [Fact]
-    public async Task PlanAsync_CrLfFile_AppendsWithCrLf()
+    [Theory]
+    [InlineData("bin/\r\nobj/", LineEnding.CrLf, "\r\n")]
+    [InlineData("bin/\r\nobj/", LineEnding.Lf, "\n")]
+    [InlineData("bin/\nobj/", LineEnding.CrLf, "\r\n")]
+    [InlineData("bin/\r\nobj/\n", LineEnding.Lf, "\n")]
+    public async Task PlanAsync_FileWithLineEndings_WholeFileIsWrittenWithTargetLineEnding(string text,
+        LineEnding lineEnding, string newLine)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        var filePath = tempDirectory.WriteFile("bin/\r\nobj/", FileName);
+        var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, lineEnding);
 
         // Assert
         tempDirectory.ReadFileText(FileName)
-            .Should().Be($"bin/\r\nobj/\r\n\r\n{Comment}\r\n{LocalEntry}\r\n{CurrentFeatureEntry}\r\n");
+            .Should().Be(string.Join(newLine, "bin/", "obj/", "", Comment, LocalEntry, CurrentFeatureEntry, ""));
+    }
+
+    [Theory]
+    [InlineData(LineEnding.Lf, "\n")]
+    [InlineData(LineEnding.CrLf, "\r\n")]
+    public async Task PlanAsync_FileMissingWithLineEnding_CreatesFileWithTargetLineEnding(LineEnding lineEnding,
+        string newLine)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var filePath = Path.Combine(tempDirectory.RootPath, FileName);
+
+        // Act
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, lineEnding);
+
+        // Assert
+        tempDirectory.ReadFileText(FileName)
+            .Should().Be(string.Join(newLine, Comment, LocalEntry, CurrentFeatureEntry, ""));
+    }
+
+    [Fact]
+    public async Task PlanAsync_InvalidUtf8File_ThrowsUnsupportedFileEncodingExceptionAndLeavesFileUnchanged()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        byte[] original = [(byte)'b', (byte)'i', (byte)'n', 0xFF, (byte)'\n'];
+        var filePath = tempDirectory.WriteFileBytes(original, FileName);
+
+        // Act
+        var act = () => new GitIgnorePlanner().PlanAsync(filePath, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<UnsupportedFileEncodingException>())
+            .Which.FilePath.Should().Be(filePath);
+
+        tempDirectory.ReadFileBytes(FileName)
+            .Should().Equal(original);
     }
 
     [Fact]
@@ -351,7 +395,7 @@ public class GitIgnorePlannerTests
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, FixedLineEnding.FromNewLine(newLine));
 
         // Assert
         action
@@ -489,20 +533,11 @@ public class GitIgnorePlannerTests
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// Plans the change of a <c>.gitignore</c> file and writes it, as the initialisation does.
-    /// </summary>
-    /// <returns>The action of the planned change, or <see langword="null" /> if the file needs no change.</returns>
-    private static async Task<InitializedFileAction?> PlanAndWriteAsync(string filePath,
-        CancellationToken cancellationToken)
+    // Plans the change of a .gitignore file and writes it with a fixed line ending, as the initialisation does.
+    private static Task<InitializedFileAction?> PlanAndWriteAsync(string filePath,
+        CancellationToken cancellationToken, LineEnding lineEnding = LineEnding.Lf)
     {
-        var change = await new GitIgnorePlanner().PlanAsync(filePath, cancellationToken);
-
-        if (change is not null)
-        {
-            await File.WriteAllBytesAsync(filePath, change.Content, cancellationToken);
-        }
-
-        return change?.Action;
+        return FixedLineEnding.PlanAndWriteAsync(new GitIgnorePlanner().PlanAsync, filePath, cancellationToken,
+            lineEnding);
     }
 }

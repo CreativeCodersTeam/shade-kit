@@ -1,8 +1,8 @@
-using System.Text;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
-using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
@@ -12,7 +12,7 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
 {
     private const string DirectoryPath = "features/login";
 
-    private readonly TempKitDirectory _tempDirectory = new();
+    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory();
 
     private readonly KitStore _realStore;
 
@@ -20,9 +20,7 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
 
     public KitStoreDirectoryExtensionsTests()
     {
-        var formatRegistry = FormatRegistry.CreateDefault();
-        _realStore = new KitStore(_tempDirectory.RootPath, new VersionedJsonSerializer(formatRegistry),
-            formatRegistry);
+        _realStore = TestKitStores.Create(_tempDirectory.RootPath);
         _store = A.Fake<IKitStore>(options => options.Wrapping(_realStore));
     }
 
@@ -62,27 +60,26 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
     [Fact]
     public async Task CreateDirectoryExclusiveAsync_NewDirectory_PopulatesHiddenStagingDirectoryAndMovesItIntoPlace()
     {
-        // Arrange
-        string? stagingPath = null;
-
         // Act
-        await _store.CreateDirectoryExclusiveAsync(DirectoryPath, async (path, cancellationToken) =>
+        await _store.CreateDirectoryExclusiveAsync(DirectoryPath, async (writer, cancellationToken) =>
         {
-            stagingPath = path;
-
             // The directory appears only with the move.
             _realStore.DirectoryExists(DirectoryPath)
                 .Should().BeFalse();
 
-            await _realStore.WriteFileAsync($"{path}/a.txt", "a"u8.ToArray(), cancellationToken);
+            await WriteFileAsync(writer, cancellationToken);
         }, TestContext.Current.CancellationToken);
 
         // Assert
+        var stagingPath = GetStagingPaths().Single();
+
         stagingPath
             .Should().MatchRegex(StagingPathRegex("features/", "login"));
 
         A.CallTo(() => _store.CreateDirectory(stagingPath))
             .MustHaveHappenedOnceExactly()
+            .Then(A.CallTo(() => _store.CreateDirectoryWriter(stagingPath, DirectoryPath))
+                .MustHaveHappenedOnceExactly())
             .Then(A.CallTo(() => _store.MoveDirectory(stagingPath, DirectoryPath))
                 .MustHaveHappenedOnceExactly());
 
@@ -96,19 +93,12 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
     [Fact]
     public async Task CreateDirectoryExclusiveAsync_PathWithoutParent_StagesNextToDirectoryInRoot()
     {
-        // Arrange
-        string? stagingPath = null;
-
         // Act
-        await _store.CreateDirectoryExclusiveAsync("login", (path, _) =>
-        {
-            stagingPath = path;
-
-            return Task.CompletedTask;
-        }, TestContext.Current.CancellationToken);
+        await _store.CreateDirectoryExclusiveAsync("login", (_, _) => Task.CompletedTask,
+            TestContext.Current.CancellationToken);
 
         // Assert
-        stagingPath
+        GetStagingPaths().Single()
             .Should().MatchRegex(StagingPathRegex("", "login"));
 
         _realStore.DirectoryExists("login")
@@ -118,22 +108,14 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
     [Fact]
     public async Task CreateDirectoryExclusiveAsync_TwoRuns_UseDifferentStagingDirectories()
     {
-        // Arrange
-        List<string> stagingPaths = [];
-
-        Task Populate(string path, CancellationToken _)
-        {
-            stagingPaths.Add(path);
-
-            return Task.CompletedTask;
-        }
-
         // Act
-        await _store.CreateDirectoryExclusiveAsync("features/a", Populate, TestContext.Current.CancellationToken);
-        await _store.CreateDirectoryExclusiveAsync("features/a-copy", Populate, TestContext.Current.CancellationToken);
+        await _store.CreateDirectoryExclusiveAsync("features/a", (_, _) => Task.CompletedTask,
+            TestContext.Current.CancellationToken);
+        await _store.CreateDirectoryExclusiveAsync("features/a-copy", (_, _) => Task.CompletedTask,
+            TestContext.Current.CancellationToken);
 
         // Assert
-        stagingPaths.Select(x => x.Split('.')[^2])
+        GetStagingPaths().Select(x => x.Split('.')[^2])
             .Should().OnlyHaveUniqueItems();
     }
 
@@ -159,11 +141,11 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
     {
         // Arrange
         // Another run creates the directory between the caller's existence check and the move.
-        Task Populate(string path, CancellationToken cancellationToken)
+        Task Populate(IKitDirectoryWriter writer, CancellationToken cancellationToken)
         {
             _tempDirectory.WriteFile("other run", "features", "login", "other.txt");
 
-            return _realStore.WriteFileAsync($"{path}/a.txt", "a"u8.ToArray(), cancellationToken);
+            return WriteFileAsync(writer, cancellationToken);
         }
 
         // Act
@@ -323,9 +305,9 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
         var populateException = new IOException("The disk is full.");
 
         // Act
-        var act = () => _store.CreateDirectoryExclusiveAsync(DirectoryPath, async (path, cancellationToken) =>
+        var act = () => _store.CreateDirectoryExclusiveAsync(DirectoryPath, async (writer, cancellationToken) =>
         {
-            await WriteFileAsync(path, cancellationToken);
+            await WriteFileAsync(writer, cancellationToken);
 
             throw populateException;
         }, TestContext.Current.CancellationToken);
@@ -348,9 +330,9 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
         using var cancellationTokenSource = new CancellationTokenSource();
 
         // Act
-        var act = () => _store.CreateDirectoryExclusiveAsync(DirectoryPath, async (path, cancellationToken) =>
+        var act = () => _store.CreateDirectoryExclusiveAsync(DirectoryPath, async (writer, cancellationToken) =>
         {
-            await WriteFileAsync(path, cancellationToken);
+            await WriteFileAsync(writer, cancellationToken);
             await cancellationTokenSource.CancelAsync();
         }, cancellationTokenSource.Token);
 
@@ -675,9 +657,17 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
         return $"^{Regex.Escape(parentPath)}\\.{Regex.Escape(name)}\\.[0-9a-f]{{8}}\\.dropping$";
     }
 
-    private Task WriteFileAsync(string directoryPath, CancellationToken cancellationToken)
+    private static async Task WriteFileAsync(IKitDirectoryWriter writer, CancellationToken cancellationToken)
     {
-        return _realStore.WriteFileAsync($"{directoryPath}/a.txt", Encoding.UTF8.GetBytes("a"), cancellationToken);
+        await writer.WriteFileAsync("a.txt", TextFileContent.FromText("a"), cancellationToken);
+    }
+
+    // The protocol creates no other directory than the staging directory.
+    private IEnumerable<string> GetStagingPaths()
+    {
+        return Fake.GetCalls(_store)
+            .Where(call => call.Method.Name == nameof(IKitStore.CreateDirectory))
+            .Select(call => call.GetArgument<string>(0)!);
     }
 
     private IEnumerable<string> GetDirectoryNames(string relativePath)

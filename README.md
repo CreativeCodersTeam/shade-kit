@@ -12,7 +12,7 @@ SHADE kit has two parts. The skills are the prompts the agent follows; the `shad
 - **Engine** (`shade-kit`): a .NET CLI that keeps the feature state in `.shadekit/` inside the repository, committed and merged with the code. Agents call it with `--json`.
 - **Phases:** `new` → `refine` → `map` → `plan` → `implement` → `verify` → `finish` in the `feature` profile. The `bugfix` profile replaces `refine` and `map` with `diagnose`; the `quick` profile runs `new` → `quick` → `finish` for small changes.
 - **Gates:** the human approves every phase transition. The Definition of Ready guards `plan`, the Definition of Done guards `finish`; each gate can be switched off per repository.
-- **Traceability:** requirements get stable IDs and are mapped to the tests that prove them; `finish` writes a report with requirements, tests, check results, and approvals.
+- **Traceability:** requirements get stable IDs and are mapped to the tests that prove them; `finish` can write a report with requirements, tests, check results, and approvals (`report` in `config.json`).
 
 SHADE kit never commits, pushes, or opens pull requests; that stays with the developer.
 

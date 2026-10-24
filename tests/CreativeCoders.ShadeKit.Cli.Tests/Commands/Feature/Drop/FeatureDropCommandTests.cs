@@ -7,7 +7,9 @@ using CreativeCoders.ShadeKit.Cli.Commands.Feature.Drop;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using FakeItEasy;
 using Spectre.Console.Testing;
@@ -24,11 +26,11 @@ public sealed class FeatureDropCommandTests : IDisposable
         $".shadekit/features/{Id}/request.md"
     ];
 
-    private readonly CancellationTokenSource _cancellationSource = new();
+    private readonly CancellationTokenSource _cancellationSource = new CancellationTokenSource();
 
     private readonly IConsoleConfirmation _confirmation = A.Fake<IConsoleConfirmation>();
 
-    private readonly TestConsole _console = new();
+    private readonly TestConsole _console = new TestConsole();
 
     private readonly IFeatureStore _featureStore = A.Fake<IFeatureStore>();
 

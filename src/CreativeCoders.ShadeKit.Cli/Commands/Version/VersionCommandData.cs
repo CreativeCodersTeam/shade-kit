@@ -4,8 +4,7 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Version;
 /// Represents the <c>data</c> object that <c>shade-kit version --json</c> returns.
 /// </summary>
 /// <remarks>
-/// The data describes the capabilities of the installed engine, not the state of a repository. Skills use it for the
-/// version handshake.
+/// Describes the installed engine, not a repository; skills use it for the version handshake.
 /// </remarks>
 /// <param name="EngineVersion">The version of the running engine without build metadata.</param>
 /// <param name="Formats">

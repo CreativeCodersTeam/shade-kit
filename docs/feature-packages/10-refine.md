@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (`spec.md` template) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (`spec.md` template), 2026-10-18 (consistency review: router reference replaced by `shade-kit-next-phase`), and 2026-10-24 (documentation check: the `quick` phase writes the `quick` spec) |
 | Source | Concept §3.3 (research focuses), §5.1 (`refine`), §5.2 (DoR), §6 |
 | Depends on | 06, 09 |
 | Enables | 11 (`map`), 12 (`plan`, DoR) |
@@ -23,7 +23,7 @@ Vague statements, gaps, and contradictions in a requirement are found and resolv
 ### Out of scope
 
 - Anything about the code base (`map`, package 11). `refine` deals with the requirement only. **Proposed** split in the concept, adopted.
-- `bugfix` and `quick`: their specs are written by `diagnose` (package 16) and `implement` (package 17) in the same `spec.md` format.
+- `bugfix` and `quick`: their specs are written by `diagnose` (package 16) and the `quick` phase (package 17) in the same `spec.md` format.
 
 ## Functional description
 

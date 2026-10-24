@@ -7,9 +7,7 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// Provides the rules by which SHADE kit tells UTF-8 text files from text files in other Unicode encodings.
 /// </summary>
 /// <remarks>
-/// SHADE kit reads and writes text as UTF-8, with or without byte order mark. A file that starts with a UTF-16 or
-/// UTF-32 byte order mark, or that contains a NUL byte, which UTF-16 and UTF-32 without byte order mark do for every
-/// ASCII character, is not UTF-8 text.
+/// A file with a UTF-16 or UTF-32 byte order mark, or with a NUL byte, is not UTF-8 text.
 /// </remarks>
 internal static class TextFileEncoding
 {
@@ -18,6 +16,11 @@ internal static class TextFileEncoding
     /// byte order mark that contains a NUL byte.
     /// </summary>
     public const string UnmarkedWideEncodingName = "UTF-16 or UTF-32 without byte order mark";
+
+    /// <summary>
+    /// Represents the encoding name that is reported for content that contains bytes that are not valid UTF-8.
+    /// </summary>
+    public const string InvalidUtf8EncodingName = "an unknown encoding with bytes that are not valid UTF-8";
 
     private const string SaveAsUtf8Hint = "Save the file as UTF-8 and run the command again.";
 
@@ -33,7 +36,7 @@ internal static class TextFileEncoding
 
     // Decodes strictly, so invalid bytes stop the caller instead of being replaced with U+FFFD.
     private static readonly UTF8Encoding StrictUtf8 =
-        new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>
     /// Gets the encoding with which SHADE kit writes text: UTF-8 without byte order mark.
@@ -41,7 +44,7 @@ internal static class TextFileEncoding
     /// <value>
     /// A UTF-8 encoding that emits no byte order mark and replaces invalid bytes with U+FFFD when it decodes.
     /// </value>
-    public static UTF8Encoding Utf8WithoutBom { get; } = new(encoderShouldEmitUTF8Identifier: false);
+    public static UTF8Encoding Utf8WithoutBom { get; } = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
     /// <summary>
     /// Gets the UTF-8 byte order mark.
@@ -93,14 +96,15 @@ internal static class TextFileEncoding
     /// Decodes the specified content strictly as UTF-8 text, without a leading UTF-8 byte order mark.
     /// </summary>
     /// <remarks>
-    /// The content is rejected if <see cref="FindUnsupportedEncodingName" /> finds another Unicode encoding or if it
-    /// contains bytes that are not valid UTF-8. The reason passed to <paramref name="createException" /> is a sentence
-    /// that ends with the advice to save the file as UTF-8 and to run the command again.
+    /// The reason passed to <paramref name="createException" /> advises to save the file as UTF-8 and to run the
+    /// command again.
     /// </remarks>
     /// <param name="bytes">The content of a text file.</param>
     /// <param name="createException">
-    /// The function that creates the exception that is thrown when the content is not UTF-8 text, from the reason and
-    /// the exception of the decoder, which is <see langword="null" /> if the content has another encoding.
+    /// The function that creates the exception that is thrown when the content is not UTF-8 text, from the name of the
+    /// encoding (the one <see cref="FindUnsupportedEncodingName" /> finds, or <see cref="InvalidUtf8EncodingName" />),
+    /// the reason, and the exception of the decoder, which is <see langword="null" /> if the content has another
+    /// encoding.
     /// </param>
     /// <returns>The decoded text.</returns>
     /// <exception cref="ArgumentNullException">
@@ -109,7 +113,8 @@ internal static class TextFileEncoding
     /// <exception cref="Exception">
     /// The content is not UTF-8 text; the exception is the one that <paramref name="createException" /> returns.
     /// </exception>
-    public static string DecodeUtf8(ReadOnlySpan<byte> bytes, Func<string, Exception?, Exception> createException)
+    public static string DecodeUtf8(ReadOnlySpan<byte> bytes,
+        Func<string, string, Exception?, Exception> createException)
     {
         Ensure.NotNull(createException);
 
@@ -117,14 +122,15 @@ internal static class TextFileEncoding
 
         if (encodingName == UnmarkedWideEncodingName)
         {
-            throw createException(
+            throw createException(encodingName,
                 "The file contains a NUL byte, so it is not UTF-8 text; it may be UTF-16 or UTF-32 without byte " +
                 $"order mark, or a binary file. {SaveAsUtf8Hint}", null);
         }
 
         if (encodingName is not null)
         {
-            throw createException($"The file is encoded as {encodingName}, not as UTF-8. {SaveAsUtf8Hint}", null);
+            throw createException(encodingName,
+                $"The file is encoded as {encodingName}, not as UTF-8. {SaveAsUtf8Hint}", null);
         }
 
         try
@@ -133,7 +139,8 @@ internal static class TextFileEncoding
         }
         catch (DecoderFallbackException exception)
         {
-            throw createException($"The file contains bytes that are not valid UTF-8. {SaveAsUtf8Hint}", exception);
+            throw createException(InvalidUtf8EncodingName,
+                $"The file contains bytes that are not valid UTF-8. {SaveAsUtf8Hint}", exception);
         }
     }
 }

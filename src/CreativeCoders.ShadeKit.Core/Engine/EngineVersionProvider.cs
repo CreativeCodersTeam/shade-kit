@@ -7,9 +7,8 @@ namespace CreativeCoders.ShadeKit.Core.Engine;
 /// Provides the engine version taken from the assembly attributes of the SHADE kit core assembly.
 /// </summary>
 /// <remarks>
-/// The version is the <see cref="AssemblyInformationalVersionAttribute" /> without its build metadata, such as the
-/// source revision after the first <c>+</c> sign. If the attribute is missing or yields an empty or whitespace
-/// version, the assembly version is used instead.
+/// The <see cref="AssemblyInformationalVersionAttribute" /> without build metadata, or the assembly version if the
+/// attribute is missing or empty.
 /// </remarks>
 public sealed class EngineVersionProvider : IEngineVersionProvider
 {

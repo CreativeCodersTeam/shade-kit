@@ -1,6 +1,6 @@
 # SHADE kit concept
 
-Status: draft, 2026-10-13, updated 2026-10-17 (template interview) and 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over) and 2026-10-21 (feature commands implemented, package 03). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-13, updated 2026-10-17 (template interview), 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over), 2026-10-21 (feature commands implemented, package 03), and 2026-10-24 (documentation check against the code). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
 
 Labels used in this document:
 
@@ -66,7 +66,7 @@ SHADE kit keeps what worked (interviews, draft → approve, requirement-to-test 
 | `shade-kit integrations update` | Updates the user-level integration to the installed kit version. |
 | `shade-kit init` | Creates `.shadekit/` in a repository: `config.json`, `gates.json`, templates, `templates.lock.json`, `.gitignore` entries, and a short SHADE kit section in `CLAUDE.md` / `AGENTS.md`. **Implemented** (`InitCommand`). |
 | `shade-kit upgrade` | Migrates an initialised repository to the current format versions. Rules in [section 9](#9-version-drift). |
-| `shade-kit version` | Prints the engine version. **Implemented** (`VersionCommand`). Skills call it before they run (section 9.6). |
+| `shade-kit version` | Prints the engine version; with `--json` also the current format version per file type. **Implemented** (`VersionCommand`). Skills call it before they run (section 9.6). |
 | `shade-kit feature list` | Lists the features in the store with id, title, profile, and status. **Implemented** (`FeatureListCommand`). |
 
 Skills and agent files are not written into the repository (section 9.6, confirmed in the interview). The repository only holds kit data and the short instruction section.
@@ -77,7 +77,7 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 
 | Command (proposed name) | Returns / does |
 |---|---|
-| `shade-kit feature current --json` | The current feature: id, profile, feature status (`active` or `done`), phase, phase status, artifact paths. Resolution in section 4.3. **Implemented** without phase and phase status (`FeatureCurrentCommand`). |
+| `shade-kit feature current --json` | The current feature: id, profile, feature status (`active` or `done`), phase, phase status, artifact paths, and where it was resolved from (`resolvedFrom`: `branch` or `override`). Resolution in section 4.3. **Implemented** without phase and phase status (`FeatureCurrentCommand`). |
 | `shade-kit feature show <id> --json` | The full state of a feature: profile, phases, approval history. **Implemented** without phases and approval history (`FeatureShowCommand`). |
 | `shade-kit feature set <id>` | Writes the local override (`current-feature.json`). **Implemented** (`FeatureSetCommand`). |
 | `shade-kit feature new --source <text\|url\|file> [--profile <p>] [--title <t>]` | Creates the feature folder and `request.md`. **Implemented** (`FeatureNewCommand`). |
@@ -143,8 +143,8 @@ The kit root is `.shadekit/` (decided; **Implemented** in `KitStorePaths`).
 └── features/
     ├── current-feature.json    # gitignored; local override only
     └── <feature-id>/
-        ├── feature.json        # schemaVersion, profile, phase, status, approvals, history
-        ├── request.md          # original input (text, issue link, file)
+        ├── feature.json        # schemaVersion, id, title, profile, source, created, status; phases and approvals (package 04)
+        ├── request.md          # from the request template, with the original input (text, issue link, file)
         ├── discussions/        # discuss notes while this feature is current
         ├── researches.md       # research results from refine, map, and diagnose
         ├── diagnosis.md        # bugfix: reproduction, root cause, fix options
@@ -178,7 +178,7 @@ Decided: resolved in this order:
 2. The local, gitignored `features/current-feature.json`.
 3. Ask the user.
 
-**Proposed:** if 1 and 2 disagree, the branch wins and the CLI warns.
+If 1 and 2 disagree, the branch wins and the CLI warns (`current-feature-mismatch`). **Implemented** (package 03, `CurrentFeatureResolver`).
 
 The branch counts only if the part after its last `/` is a valid feature id with an existing feature folder; the warning is `current-feature-mismatch` (package 03). **Implemented** (`CurrentFeatureResolver`).
 
@@ -220,7 +220,7 @@ Decided in the template interview on 2026-10-17. Details in [package 02](../docs
 | Phase | Purpose | Input | Output |
 |---|---|---|---|
 | `discuss` | Brainstorm any topic. Optional, can run as input for `new` or in any other phase. | Anything | Discussion notes in `.shadekit/discussions/`, or in the feature's `discussions/` folder when a feature is current. **Decided** on 2026-10-18 (package 09). |
-| `new` | Create the feature folder. | Requirement as text, issue URL, Markdown file, discussion notes | `feature.json`, `request.md` |
+| `new` | Create the feature folder. | Requirement as text, issue URL, UTF-8 text file (a Markdown heading becomes the title), discussion notes | `feature.json`, `request.md` |
 | `refine` | Clarify vague statements, gaps, and open questions about the requirement. Can run several times. | `request.md` | `spec.md`: requirements with IDs and priority, acceptance criteria, edge cases, out of scope, assumptions, open questions, decisions; research in `researches.md` |
 | `map` | Map the feature onto the code base, using parallel research subagents. | `spec.md`, code base | `researches.md`: best practice, existing architecture, affected code, don't hand-roll, security |
 | `plan` | Plan the implementation. | `spec.md`, `researches.md` | `plan.md` with design decisions and test strategy, `tasks.md` with requirement → test mapping and coverage matrix |

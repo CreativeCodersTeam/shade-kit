@@ -31,11 +31,11 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
 
     private readonly IConsoleConfirmation _confirmation = A.Fake<IConsoleConfirmation>();
 
-    private readonly CurrentDirectoryScope _currentDirectory = new();
+    private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
 
     private readonly IGitCommandRunner _gitCommandRunner = A.Fake<IGitCommandRunner>();
 
-    private readonly TempKitDirectory _tempDirectory = new("shade-kit-feature-tests-");
+    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-feature-tests-");
 
     private string? _branch = "main";
 

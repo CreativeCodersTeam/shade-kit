@@ -1,5 +1,7 @@
-using CreativeCoders.ShadeKit.Core.Formats;
-using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
@@ -9,22 +11,10 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// commands do.
 /// </summary>
 /// <remarks>
-/// <para>
-/// A feature exists if and only if its folder <c>features/&lt;id&gt;</c> of the store exists. The folder name is the id
-/// of the feature in every result; an <c>id</c> in <c>feature.json</c> that differs from it is reported with a
-/// <see cref="FeatureIdMismatchWarning" /> warning, and the file is not changed. Every method that takes
-/// a feature id checks it with <see cref="FeatureIds.EnsureValid" /> before a path is built from it.
-/// </para>
-/// <para>
-/// Folders in <c>features</c> whose names start with a dot are not features: <see cref="CreateAsync" /> builds a new
-/// feature in <c>features/.&lt;id&gt;.&lt;random&gt;.tmp</c>, and <see cref="DropAsync" /> deletes a feature as
-/// <c>features/.&lt;id&gt;.&lt;random&gt;.dropping</c>. Such folders, also those that a failed run left behind, are
-/// ignored.
-/// </para>
-/// <para>
-/// The repository root is the parent directory of <see cref="IKitStore.RootPath" />, because the SHADE kit root
-/// directory <c>.shadekit</c> lies at the root of the git repository. <c>git</c> is run there.
-/// </para>
+/// A feature exists if its folder <c>features/&lt;id&gt;</c> exists. The folder name is the id in every result; a
+/// different <c>id</c> in <c>feature.json</c> gives a <see cref="FeatureIdMismatchWarning" />. Folders whose names
+/// start with a dot, such as staging and dropping folders, are no features. Every feature id is checked with
+/// <see cref="FeatureIds.EnsureValid" /> before a path is built from it.
 /// </remarks>
 public interface IFeatureStore
 {
@@ -34,26 +24,13 @@ public interface IFeatureStore
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The workflow profile, the id, the git identity, and the local override are checked before anything is written.
-    /// Then <c>feature.json</c> (status <see cref="FeatureStatus.Active" />) and <c>request.md</c> are written to the
-    /// hidden staging folder <c>features/.&lt;id&gt;.&lt;random&gt;.tmp</c>, the staging folder is moved to
-    /// <c>features/&lt;id&gt;</c> with <see cref="IKitStore.MoveDirectory" />, so the feature folder appears only when
-    /// it is complete, and the local override <c>features/current-feature.json</c> is written last. A local override
-    /// that cannot be used because of its own format (invalid, too new, or outdated) is replaced: it is deleted, then
-    /// written.
+    /// Everything is checked before anything is written. The feature is built in a hidden staging folder and moved
+    /// into place, so the feature folder appears only when complete; the local override is written last and replaces
+    /// an unusable one. <c>request.md</c> comes from <c>templates/request.md</c>, else from the shipped template.
     /// </para>
     /// <para>
-    /// <c>request.md</c> is created from the repository template <c>templates/request.md</c>, or from the shipped
-    /// template if the repository has none, and written as UTF-8 without byte order mark.
-    /// </para>
-    /// <para>
-    /// If a step up to the move fails or is cancelled, only the staging folder is deleted (best effort) and the
-    /// exception is rethrown; an existing feature folder is never touched. If another run creates the feature folder
-    /// between the existence check and the move, the move fails and <see cref="FeatureAlreadyExistsException" /> is
-    /// thrown. If the staging folder cannot be created or moved for another reason, such as missing write permission
-    /// or a file that another program holds open, <see cref="FeatureIoFailedException" /> is thrown. If writing the local override fails, the new feature folder is moved back to a hidden folder and
-    /// deleted (best effort), so the override never selects a feature that was removed; a broken override that was
-    /// deleted for the replacement stays deleted.
+    /// A failure or cancellation before the move deletes only the staging folder; an existing feature folder is never
+    /// touched. If writing the override fails, the new feature folder is removed again (best effort).
     /// </para>
     /// </remarks>
     /// <param name="store">The SHADE kit store to create the feature in.</param>
@@ -61,7 +38,9 @@ public interface IFeatureStore
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous create operation. The task result contains the new
-    /// <c>feature.json</c> document, the paths of the feature, the suggested branch name, and the format warnings.
+    /// <c>feature.json</c> document, the paths of the feature, the suggested branch name, the format warnings, and the
+    /// warnings of the files that this call wrote (see <see cref="IKitStore.WriteFileAsync" />); warnings of earlier
+    /// writes of <paramref name="store" /> are not included.
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="store" /> or <paramref name="request" /> is <see langword="null" />.
@@ -119,12 +98,8 @@ public interface IFeatureStore
     /// Lists the features of the specified store, as <c>shade-kit feature list</c> does.
     /// </summary>
     /// <remarks>
-    /// Every <c>feature.json</c> is read with <see cref="FormatAccess.Read" /> access, and the name of its folder is
-    /// listed as the id. Folders whose names start with a dot are ignored without a warning. A folder whose name is
-    /// not a valid feature id is skipped with a <see cref="FeatureFolderInvalidWarning" /> warning, and a
-    /// feature folder without <c>feature.json</c> with a <see cref="FeatureFileMissingWarning" />
-    /// warning. A <c>feature.json</c> whose <c>id</c> differs from the folder name gives a
-    /// <see cref="FeatureIdMismatchWarning" /> warning.
+    /// A folder with an invalid name gives a <see cref="FeatureFolderInvalidWarning" />, a folder without
+    /// <c>feature.json</c> a <see cref="FeatureFileMissingWarning" />; both are skipped.
     /// </remarks>
     /// <param name="store">The SHADE kit store whose features are listed.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
@@ -174,9 +149,8 @@ public interface IFeatureStore
     /// Resolves and reads the current feature of the specified store, as <c>shade-kit feature current</c> does.
     /// </summary>
     /// <remarks>
-    /// The current feature is resolved with <see cref="ICurrentFeatureResolver.ResolveAsync" />, which ignores a local
-    /// override that cannot be used with a <see cref="CurrentFeatureInvalidWarning" /> warning. A current
-    /// feature that cannot be resolved is a result, not an error.
+    /// A current feature that cannot be resolved is a result, not an error; see
+    /// <see cref="ICurrentFeatureResolver.ResolveAsync" />.
     /// </remarks>
     /// <param name="store">The SHADE kit store whose current feature is read.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
@@ -211,11 +185,9 @@ public interface IFeatureStore
     /// <c>features/current-feature.json</c>, as <c>shade-kit feature set</c> does.
     /// </summary>
     /// <remarks>
-    /// The current branch is resolved before the override is written, so a failing <c>git</c> leaves the override
-    /// unchanged. If the branch selects another existing feature, the override is written anyway and a
-    /// <see cref="CurrentFeatureMismatchWarning" /> warning is returned, because the branch wins. An
-    /// existing override that cannot be used because of its own format (invalid, too new, or outdated) is replaced:
-    /// it is deleted, then written.
+    /// The branch is resolved first, so a failing <c>git</c> leaves the override unchanged. If the branch selects
+    /// another feature, the override is still written with a <see cref="CurrentFeatureMismatchWarning" />. An unusable
+    /// existing override is replaced.
     /// </remarks>
     /// <param name="store">The SHADE kit store that contains the feature.</param>
     /// <param name="featureId">The id of the feature to make current.</param>
@@ -244,9 +216,7 @@ public interface IFeatureStore
     /// anything.
     /// </summary>
     /// <remarks>
-    /// The local override is affected if it can be read with <see cref="FormatAccess.Read" /> access and selects the
-    /// feature. A local override that is invalid or uses an unsupported format version is not affected; it is left
-    /// alone.
+    /// The local override is affected only if it can be read and selects the feature.
     /// </remarks>
     /// <param name="store">The SHADE kit store that contains the feature.</param>
     /// <param name="featureId">The id of the feature that would be dropped.</param>
@@ -268,20 +238,9 @@ public interface IFeatureStore
     /// the feature, as <c>shade-kit feature drop --yes</c> does.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The feature is dropped even if its <c>feature.json</c> is missing or invalid. The feature folder is first
-    /// renamed to the hidden folder <c>features/.&lt;id&gt;.&lt;random&gt;.dropping</c> with
-    /// <see cref="IKitStore.MoveDirectory" />; if the rename fails, nothing is changed and
-    /// <see cref="FeatureIoFailedException" /> is thrown. Then the hidden folder is
-    /// deleted, and the local override is cleared by deleting <c>features/current-feature.json</c> under the rule of
-    /// <see cref="PreviewDropAsync" />; an override that selects another feature, is invalid, or uses an unsupported
-    /// format version is left alone.
-    /// </para>
-    /// <para>
-    /// If deleting the hidden folder fails, the feature is dropped already: it no longer exists for any method of
-    /// this interface, and the rest of its files stay in the ignored hidden folder. The override is then still
-    /// cleared (best effort) and the exception of the delete is rethrown.
-    /// </para>
+    /// The feature is dropped even if its <c>feature.json</c> is missing or invalid. The folder is renamed to a hidden
+    /// dropping folder first, so a failed delete leaves no visible feature. The override is cleared under the rule of
+    /// <see cref="PreviewDropAsync" />.
     /// </remarks>
     /// <param name="store">The SHADE kit store that contains the feature.</param>
     /// <param name="featureId">The id of the feature to drop.</param>

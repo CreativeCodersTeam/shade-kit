@@ -55,9 +55,7 @@ public sealed class FormatRegistry : IFormatRegistry
     /// Creates a registry with the file types this engine version supports.
     /// </summary>
     /// <remarks>
-    /// Every file type listed in <see cref="FormatIds" /> is registered at format version <c>1</c>, which is
-    /// supported since engine version <c>0.1.0</c>. Raising a format version means adding an entry to its table and a
-    /// migration step here.
+    /// Raising a format version means a new table entry and a migration step here.
     /// </remarks>
     /// <returns>A registry with the definitions of all file types in <see cref="FormatIds" />.</returns>
     public static FormatRegistry CreateDefault()

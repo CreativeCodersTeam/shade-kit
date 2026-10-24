@@ -21,7 +21,7 @@ public sealed class GitIgnorePlanner : IGitIgnorePlanner
         }
 
         var missingEntries = KitGitIgnoreEntries.All
-            .Where(entry => !content.Lines.Any(line => IsEntryLine(line.Text, entry)))
+            .Where(entry => !content.Lines.Any(line => IsEntryLine(line, entry)))
             .ToArray();
 
         return missingEntries.Length == 0

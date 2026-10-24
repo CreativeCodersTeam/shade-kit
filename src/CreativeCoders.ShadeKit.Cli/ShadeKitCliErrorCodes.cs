@@ -4,10 +4,8 @@ namespace CreativeCoders.ShadeKit.Cli;
 /// Defines the stable kebab-case codes of the errors and warnings that SHADE kit CLI commands report in JSON mode.
 /// </summary>
 /// <remarks>
-/// Skills branch on these codes instead of parsing messages. Every error code belongs to one exit code in
-/// <see cref="ShadeKitCliExitCodes" />; <see cref="ForExitCode" /> returns it. <see cref="UpgradeNeeded" /> is also
-/// used as a warning code when a read command migrates an outdated file in memory. Warnings without a matching error
-/// use the codes of <see cref="ShadeKitCliWarningCodes" />.
+/// Skills branch on these codes instead of parsing messages. <see cref="ForExitCode" /> pairs every exit code with
+/// its error code. <see cref="UpgradeNeeded" /> is also used as a warning code.
 /// </remarks>
 public static class ShadeKitCliErrorCodes
 {
@@ -125,10 +123,6 @@ public static class ShadeKitCliErrorCodes
     /// <summary>
     /// Returns the error code that belongs to the specified exit code.
     /// </summary>
-    /// <remarks>
-    /// This is the only table that pairs the exit codes of <see cref="ShadeKitCliExitCodes" /> with their error codes;
-    /// <see cref="Output.CliError.Create" /> uses it so that an error names only its exit code.
-    /// </remarks>
     /// <param name="exitCode">An exit code from <see cref="ShadeKitCliExitCodes" />.</param>
     /// <returns>The error code that belongs to <paramref name="exitCode" />.</returns>
     /// <exception cref="ArgumentOutOfRangeException">

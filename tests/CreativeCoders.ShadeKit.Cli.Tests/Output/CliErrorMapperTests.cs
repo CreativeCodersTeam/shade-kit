@@ -4,14 +4,18 @@ using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.New;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
 using CreativeCoders.ShadeKit.Cli.Output;
-using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Core.Engine;
-using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Files;
-using CreativeCoders.ShadeKit.Core.Formats;
-using CreativeCoders.ShadeKit.Core.Git;
-using CreativeCoders.ShadeKit.Core.Init;
-using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
+using CreativeCoders.ShadeKit.Core.Git.Warnings;
+using CreativeCoders.ShadeKit.Core.Init.Exceptions;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
+using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
 using FakeItEasy;
@@ -212,7 +216,7 @@ public class CliErrorMapperTests
         // Assert
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.PathNotAFile, ShadeKitCliErrorCodes.PathNotAFile,
-                "'/repo/CLAUDE.md' is a directory, but shade-kit must write a file at this path. Move or remove " +
+                "'/repo/CLAUDE.md' is a directory, but shade-kit needs a file at this path. Move or remove " +
                 "the directory, then run the command again."));
     }
 
@@ -676,6 +680,212 @@ public class CliErrorMapperTests
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>()
             .WithParameterName("problem");
+    }
+
+    [Theory]
+    [InlineData("Access to the path '/repo/.editorconfig' is denied.")]
+    [InlineData("Access to the path '/repo/.editorconfig' is denied")]
+    [InlineData("Access to the path '/repo/.editorconfig' is denied..")]
+    [InlineData(" Access to the path '/repo/.editorconfig' is denied. ")]
+    [InlineData("Access to the path '/REPO/.editorconfig' is denied.")]
+    public void MapWarning_EditorConfigUnreadableWithPathInReason_NamesFileOnlyThroughReason(string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new EditorConfigUnreadableWarning("/repo/.editorconfig", reason));
+
+        // Assert
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.EditorConfigUnreadable);
+
+        warning.Message
+            .Should().Be($"An .editorconfig file cannot be read: {reason.Trim().TrimEnd('.')}. The .editorconfig " +
+                         "files were ignored and the line ending of the operating system was used instead.");
+    }
+
+    [Theory]
+    [InlineData("Permission denied")]
+    [InlineData("Permission denied.")]
+    public void MapWarning_EditorConfigUnreadableWithReasonWithoutPath_NamesFileAndReason(string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new EditorConfigUnreadableWarning("/repo/.editorconfig", reason));
+
+        // Assert
+        warning.Message
+            .Should().Be("The .editorconfig file '/repo/.editorconfig' cannot be read: Permission denied. The " +
+                         ".editorconfig files were ignored and the line ending of the operating system was used " +
+                         "instead.");
+    }
+
+    [Theory]
+    [InlineData("Access to the path '/repo/.editorconfig.bak' is denied.")]
+    [InlineData("Access to the path '/x/repo/.editorconfig' is denied.")]
+    public void MapWarning_EditorConfigUnreadableWithOtherPathInReason_NamesFileAndReason(string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new EditorConfigUnreadableWarning("/repo/.editorconfig", reason));
+
+        // Assert
+        warning.Message
+            .Should().Be($"The .editorconfig file '/repo/.editorconfig' cannot be read: {reason.TrimEnd('.')}. The " +
+                         ".editorconfig files were ignored and the line ending of the operating system was used " +
+                         "instead.");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(".")]
+    [InlineData(" . ")]
+    public void MapWarning_EditorConfigUnreadableWithEmptyReason_ReturnsSentenceWithoutReason(string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new EditorConfigUnreadableWarning("/repo/.editorconfig", reason));
+
+        // Assert
+        warning.Message
+            .Should().Be("The .editorconfig file '/repo/.editorconfig' cannot be read. The .editorconfig files were " +
+                         "ignored and the line ending of the operating system was used instead.");
+    }
+
+    [Fact]
+    public void MapWarning_GitAttributesUnavailable_ReturnsWarningNamingRepositoryCommandReasonAndFallback()
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new GitAttributesUnavailableWarning("/repo", "git check-attr",
+            "git exited with the unexpected exit code 128: fatal: detected dubious ownership in repository at '/repo'"));
+
+        // Assert
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.GitAttributesUnavailable);
+
+        warning.Message
+            .Should().Be("git cannot read the line ending settings of the repository '/repo', so the line endings " +
+                         "come from .editorconfig or the operating system. 'git check-attr' failed: git exited with " +
+                         "the unexpected exit code 128: fatal: detected dubious ownership in repository at '/repo'");
+    }
+
+    [Theory]
+    [InlineData("Value was either too large or too small for an Int32.")]
+    [InlineData("Value was either too large or too small for an Int32")]
+    public void MapWarning_EditorConfigInvalid_ReturnsInvalidWarningNamingFileReasonAndFallback(string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new EditorConfigInvalidWarning("/repo/.editorconfig", reason));
+
+        // Assert
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.EditorConfigInvalid);
+
+        warning.Message
+            .Should().Be("The .editorconfig file '/repo/.editorconfig' cannot be evaluated because of its content: " +
+                         "Value was either too large or too small for an Int32. The .editorconfig files were ignored " +
+                         "and the line ending of the operating system was used instead.");
+    }
+
+    [Fact]
+    public void MapWarning_EditorConfigInvalidWithPathInReason_NamesFileOnlyThroughReason()
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new EditorConfigInvalidWarning("/repo/.editorconfig",
+            "The section [{1..99999999999}] of '/repo/.editorconfig' is too large."));
+
+        // Assert
+        warning.Message
+            .Should().Be("An .editorconfig file cannot be evaluated because of its content: The section " +
+                         "[{1..99999999999}] of '/repo/.editorconfig' is too large. The .editorconfig files were " +
+                         "ignored and the line ending of the operating system was used instead.");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(".")]
+    [InlineData(" . ")]
+    public void MapWarning_EditorConfigInvalidWithEmptyReason_ReturnsSentenceWithoutReason(string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new EditorConfigInvalidWarning("/repo/.editorconfig", reason));
+
+        // Assert
+        warning.Message
+            .Should().Be("The .editorconfig file '/repo/.editorconfig' cannot be evaluated because of its content. " +
+                         "The .editorconfig files were ignored and the line ending of the operating system was used " +
+                         "instead.");
+    }
+
+    [Theory]
+    [InlineData("Permission denied.")]
+    [InlineData("Access to the path '/repo/.shadekit/spec.md' is denied.")]
+    public void MapWarning_EditorConfigUnreadableWithUnknownEditorConfigFile_NamesWrittenFileAsFileItAppliesTo(
+        string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(
+            new EditorConfigUnreadableWarning("/repo/.shadekit/spec.md", reason, IsEditorConfigFilePath: false));
+
+        // Assert
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.EditorConfigUnreadable);
+
+        warning.Message
+            .Should().Be($"An .editorconfig file that applies to '/repo/.shadekit/spec.md' cannot be read: " +
+                         $"{reason.TrimEnd('.')}. The .editorconfig files were ignored and the line ending of the " +
+                         "operating system was used instead.");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" . ")]
+    public void MapWarning_EditorConfigUnreadableWithUnknownEditorConfigFileAndEmptyReason_ReturnsSentenceWithoutReason(
+        string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(
+            new EditorConfigUnreadableWarning("/repo/.shadekit/spec.md", reason, IsEditorConfigFilePath: false));
+
+        // Assert
+        warning.Message
+            .Should().Be("An .editorconfig file that applies to '/repo/.shadekit/spec.md' cannot be read. The " +
+                         ".editorconfig files were ignored and the line ending of the operating system was used " +
+                         "instead.");
+    }
+
+    [Theory]
+    [InlineData("Value was either too large or too small for an Int32.")]
+    [InlineData("The section of '/repo/.shadekit/spec.md' is too large.")]
+    public void MapWarning_EditorConfigInvalidWithUnknownEditorConfigFile_NamesWrittenFileAsFileItAppliesTo(
+        string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(
+            new EditorConfigInvalidWarning("/repo/.shadekit/spec.md", reason, IsEditorConfigFilePath: false));
+
+        // Assert
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.EditorConfigInvalid);
+
+        warning.Message
+            .Should().Be($"An .editorconfig file that applies to '/repo/.shadekit/spec.md' cannot be evaluated " +
+                         $"because of its content: {reason.TrimEnd('.')}. The .editorconfig files were ignored and " +
+                         "the line ending of the operating system was used instead.");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" . ")]
+    public void MapWarning_EditorConfigInvalidWithUnknownEditorConfigFileAndEmptyReason_ReturnsSentenceWithoutReason(
+        string reason)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(
+            new EditorConfigInvalidWarning("/repo/.shadekit/spec.md", reason, IsEditorConfigFilePath: false));
+
+        // Assert
+        warning.Message
+            .Should().Be("An .editorconfig file that applies to '/repo/.shadekit/spec.md' cannot be evaluated " +
+                         "because of its content. The .editorconfig files were ignored and the line ending of the " +
+                         "operating system was used instead.");
     }
 
     [Fact]
@@ -1339,6 +1549,7 @@ public class CliErrorMapperTests
             {
                 { } type when type == typeof(string) => "login",
                 { } type when type == typeof(int) => 1,
+                { } type when type == typeof(bool) => true,
                 { IsEnum: true } type => Enum.GetValues(type).GetValue(0),
                 { } type when type.IsAssignableFrom(typeof(InvalidKitFileException)) =>
                     new InvalidKitFileException("file.json", "Broken."),

@@ -7,9 +7,8 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// Asks the user to confirm an action through a Spectre.Console yes/no prompt.
 /// </summary>
 /// <remarks>
-/// The prompt reads its answer from the input of the console. Spectre.Console reads keys from the system console, which
-/// fails when standard input is redirected, so <see cref="CanAsk" /> also checks
-/// <see cref="Console.IsInputRedirected" />.
+/// <see cref="CanAsk" /> also checks <see cref="Console.IsInputRedirected" />, because Spectre.Console cannot read
+/// keys from redirected standard input.
 /// </remarks>
 public sealed class ConsoleConfirmation : IConsoleConfirmation
 {

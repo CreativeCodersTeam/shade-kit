@@ -3,15 +3,15 @@ using AwesomeAssertions;
 using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Engine;
-using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests.Output;
 
 public class CliCommandAbortTests
 {
-    private static readonly CliError Error = new(ShadeKitCliExitCodes.InvalidFile, ShadeKitCliErrorCodes.InvalidFile,
-        "'/kit/[nested]/config.json' is invalid: Broken.");
+    private static readonly CliError Error = new CliError(ShadeKitCliExitCodes.InvalidFile,
+        ShadeKitCliErrorCodes.InvalidFile, "'/kit/[nested]/config.json' is invalid: Broken.");
 
     [Fact]
     public void Create_PlainMode_ReturnsPrintedAbortExceptionWithEscapedMessageAndWritesNoJson()

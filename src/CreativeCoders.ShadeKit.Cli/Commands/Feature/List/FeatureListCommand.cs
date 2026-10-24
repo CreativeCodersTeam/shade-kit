@@ -31,18 +31,11 @@ public class FeatureListCommand(
     private readonly IFeatureStore _featureStore = Ensure.NotNull(featureStore);
 
     /// <summary>
-    /// Writes the id, status, profile, and title of every feature of the SHADE kit store in ordinal order of the ids,
-    /// as plain text or as a JSON envelope.
+    /// Writes the id, status, profile, and title of every feature, as plain text or as a JSON envelope.
     /// </summary>
     /// <remarks>
-    /// The store is the <c>.shadekit</c> directory at the root of the git repository that contains the current
-    /// directory. A feature folder without <c>feature.json</c> is skipped with a <c>feature-file-missing</c> warning.
-    /// Plain output is one line <c>Warning: &lt;message&gt;</c> per warning, then one line
-    /// <c>&lt;id&gt;  &lt;status&gt;  &lt;profile&gt;  &lt;title&gt;</c> per feature, or a hint if the store has no
-    /// features. JSON output is an envelope whose <c>data</c> is a <see cref="FeatureListCommandData" /> and whose
-    /// <c>warnings</c> contain the format and feature warnings; a store without features, also one without a
-    /// <c>features</c> directory, is a result, not an error. In JSON mode, an expected failure is written as an error
-    /// envelope and the abort message is not printed.
+    /// A feature folder without <c>feature.json</c> is skipped with a warning. A store without features is a result,
+    /// not an error.
     /// </remarks>
     /// <param name="options">The options of the command.</param>
     /// <returns>
@@ -50,11 +43,7 @@ public class FeatureListCommand(
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// The current directory is not inside a git repository (exit code
-    /// <see cref="ShadeKitCliExitCodes.NotAGitRepository" />), no SHADE kit root is found (exit code
-    /// <see cref="ShadeKitCliExitCodes.KitRootNotFound" />), <c>.shadekit</c> at the repository root is a file (exit
-    /// code <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />), or a <c>feature.json</c> is invalid or too new
-    /// (exit codes <see cref="ShadeKitCliExitCodes.InvalidFile" /> and <see cref="ShadeKitCliExitCodes.FormatTooNew" />).
+    /// No SHADE kit store is found, or a <c>feature.json</c> is invalid or too new.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(FeatureListCommandOptions options)

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (short plan sections, DOR-09 and DOR-10 in `bugfix`) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (short plan sections, DOR-09 and DOR-10 in `bugfix`) and 2026-10-24 (documentation check: acceptance criteria in id order) |
 | Source | Concept §2 (Workflow profiles), §5.4, §11.2 |
 | Depends on | 04, 05, 06, 09, 12, 13, 14, 15 |
 | Enables | v1 profile `bugfix` end to end |
@@ -57,11 +57,11 @@ Because `bugfix` has no `refine` and no `map`, `diagnose` uses the interview ski
 - **FP16-AC1** `diagnose` writes `diagnosis.md` with reproduction, root cause with file evidence, and ruled-out causes.
 - **FP16-AC2** `diagnose` stops and asks the human when the bug cannot be reproduced.
 - **FP16-AC3** `diagnose` writes a `spec.md` that passes the DoR check, with DOR-10 passed on the "affected code" section of `diagnosis.md` and DOR-09 passed on the `diagnose / security` research.
-- **FP16-AC7** After `diagnose`, `researches.md` has a `diagnose / security` section.
-- **FP16-AC8** The short `plan.md` in `bugfix` has a filled Summary, Test strategy with a command for build, test, lint, and coverage (or the reason one does not apply), Risks, and Deviations; every other section says "n/a in bugfix".
 - **FP16-AC4** In `bugfix`, the first task in `tasks.md` is a failing regression test.
 - **FP16-AC5** `review.md` records a failing run of the regression test before the first production code change.
 - **FP16-AC6** A `bugfix` feature goes from `new` to `done` with `verify` and `finish` unchanged, and, if a report is written (package 15), it lists the regression test under requirements and tests.
+- **FP16-AC7** After `diagnose`, `researches.md` has a `diagnose / security` section.
+- **FP16-AC8** The short `plan.md` in `bugfix` has a filled Summary, Test strategy with a command for build, test, lint, and coverage (or the reason one does not apply), Risks, and Deviations; every other section says "n/a in bugfix".
 
 ## Open points
 

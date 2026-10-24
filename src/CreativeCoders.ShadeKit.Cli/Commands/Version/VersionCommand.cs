@@ -42,11 +42,6 @@ public class VersionCommand(
     /// <summary>
     /// Writes the engine version, as plain text or as a JSON envelope.
     /// </summary>
-    /// <remarks>
-    /// Plain output is the tool name followed by the engine version. JSON output is an envelope whose <c>data</c> is
-    /// a <see cref="VersionCommandData" /> with the engine version and the current format version of every file type
-    /// in registration order.
-    /// </remarks>
     /// <param name="options">The options of the command.</param>
     /// <returns>A task that represents the asynchronous operation. The task result is <see cref="CommandResult.Success" />.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>

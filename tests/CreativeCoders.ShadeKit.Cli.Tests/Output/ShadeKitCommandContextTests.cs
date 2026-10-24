@@ -4,9 +4,11 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.Set;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Cli.Tests.Commands.Feature;
-using CreativeCoders.ShadeKit.Core;
-using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
+using CreativeCoders.ShadeKit.Core.Warnings;
 using FakeItEasy;
 using Spectre.Console;
 using Spectre.Console.Testing;
@@ -15,11 +17,12 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Output;
 
 public sealed class ShadeKitCommandContextTests : IDisposable
 {
-    private static readonly KitRootPathNotFoundException KitRootNotFound = new("/repo/src", "/repo");
+    private static readonly KitRootPathNotFoundException KitRootNotFound =
+        new KitRootPathNotFoundException("/repo/src", "/repo");
 
     private readonly TestConsole _console = FeatureCommandTestHelper.CreateWideConsole();
 
-    private readonly StringWriter _jsonOutput = new();
+    private readonly StringWriter _jsonOutput = new StringWriter();
 
     [Theory]
     [InlineData(0, "ansiConsole")]

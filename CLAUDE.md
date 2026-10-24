@@ -10,17 +10,17 @@ Repository language is always English. The kit is designed to be used by English
 
 It has two deliverables:
 
-1. **Plugin** (`skills/`): skills and research agent definitions in the Claude Code plugin layout. Hooks and commands come later.
+1. **Plugin** (`skills/`): skills (skeletons) and *(planned)* research agent definitions in the Claude Code plugin layout *(planned: plugin manifest)*. Hooks and commands come later.
 2. **Engine** (`src/`): a .NET 10 CLI, shipped two ways:
    - as a `dotnet` global tool
    - as self-contained single-file binaries (no .NET install needed) for `osx-arm64`, `linux-x64`, `linux-arm64`, `win-x64`, `win-arm64`
 
 ### v1 scope
 
-- **Gated workflow profiles:** `feature` (new → refine → map → plan → implement → verify → finish), `bugfix` (new → diagnose → plan → implement → verify → finish), and `quick` (new → quick → finish). The agent checks each gate when the next phase starts; the human approves the transition. Each gate's approval and checklist can be switched off in `gates.json`.
-- **Quality gates:** the Definition of Ready (gate into `plan`) and Definition of Done (gate into `finish`) are checklists. In v1 the agent runs build, test, lint, and coverage with the commands approved in `plan.md` and records the results; the CLI enforcing and running them comes later.
-- **State & traceability:** workflow state and approval history are saved in `.shadekit/`, requirements are mapped to the tests that prove them, and `finish` can write a report (`report` in `config.json`).
-- **Install/sync:** the engine installs and updates the kit's skills at user level for each supported agent (`integrations install/update`) and initialises and upgrades a repository's `.shadekit/` (`init`, `upgrade`). Nothing is installed into a repository.
+- **Gated workflow profiles** *(planned)*: `feature` (new → refine → map → plan → implement → verify → finish), `bugfix` (new → diagnose → plan → implement → verify → finish), and `quick` (new → quick → finish). The agent checks each gate when the next phase starts; the human approves the transition. Each gate's approval and checklist can be switched off in `gates.json`.
+- **Quality gates** *(planned)*: the Definition of Ready (gate into `plan`) and Definition of Done (gate into `finish`) are checklists. In v1 the agent runs build, test, lint, and coverage with the commands approved in `plan.md` and records the results; the CLI enforcing and running them comes later.
+- **State & traceability:** workflow state and approval history are saved in `.shadekit/` (features: built; phases, approvals, traceability, report *(planned)*), requirements are mapped to the tests that prove them, and `finish` can write a report (`report` in `config.json`).
+- **Install/sync:** the engine installs and updates the kit's skills at user level for each supported agent (`integrations install/update` *(planned)*) and initialises and upgrades a repository's `.shadekit/` (`init`, `upgrade` *(planned)*). Nothing is installed into a repository.
 
 ## Target agents
 
@@ -34,10 +34,12 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 |---|---|
 | `skills/` | Shipped plugin content |
 | `src/` | Production .NET projects: `CreativeCoders.ShadeKit.Cli` (the `shade-kit` CLI) and `CreativeCoders.ShadeKit.Core` (engine logic). The templates that `init` writes live in `src/CreativeCoders.ShadeKit.Core/Templates/Resources/` (`<name>.template.md`, checklists in `checks/`) and are embedded into the Core assembly; their repository paths are listed in `ShippedTemplates`. |
-| `tests/` | One test project per production project (`<Project>.Tests`) |
+| `tests/` | One test project per production project (`<Project>.Tests`); `tests/Shared/` holds test helpers that both projects compile in (`<Compile Include="..\Shared\**\*.cs">`) |
 | `build/` | Cake Frosting build project (`CreativeCoders.CakeBuild`), run through `build.sh` / `build.ps1` / `build.cmd`. Not part of `ShadeKit.slnx`; it has its own `Directory.Build.props` and `Directory.Packages.props`. |
 | `.github/` | GitHub Actions workflows and Dependabot configuration |
 | `research/` | Design notes and investigations. Not shipped. Shipped code and skills must not depend on it. |
+| `docs/feature-packages/` | v1 feature packages: functional description, acceptance criteria, implementation state; `README.md` has the order, milestones, and the consistency log |
+| `docs/reviews/` | Code review reports of the current branch; removed when the branch is merged |
 | `docs/specs/`, `docs/plans/` | Only created when the spec-driven workflow is used (see below) |
 
 ## .NET conventions
@@ -53,6 +55,7 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 - The CLI is built on `CreativeCoders.Cli.Hosting`. A command is a class with `[CliCommand([...])]` that implements `ICliCommand` or `ICliCommand<TOptions>`, placed under `Commands/<Group>/<Command>/`. A group is declared with `[assembly: CliCommandGroup([...], "...")]` in `Commands/<Group>/<Group>CommandGroup.cs`. Expected failures throw `CliCommandAbortException` with an exit code from `ShadeKitCliExitCodes`.
 - Agent contract: every agent-facing command takes options derived from `JsonCommandOptions` (`--json`). In JSON mode it writes one `CliJsonEnvelope` (`ok`, `data`, `warnings`, `error`) through `ICliJsonWriter` to stdout and nothing else; on an expected failure it writes a failure envelope and throws `CliCommandAbortException` with `PrintMessage = false`. Commands get `ShadeKitCommandContext` (`Output/`) injected: `RunAsync` runs the core call (optionally with the kit store) with the run's cancellation token and turns mapped failures into the failure envelope / `CliCommandAbortException`, and `WriteSuccess` writes the single success envelope or the plain warnings and lines; commands do not use `ICliJsonWriter`, `CliErrorMapper`, or `CliCommandAbort` directly (only `version`, which cannot fail, writes its envelope through `ICliJsonWriter`). Core exceptions are mapped to exit code, error code, and message only in `CliErrorMapper`. Exit codes are grouped by area (10–19 store, 20–29 format, 30–39 features, 40–49 phases and gates, 255 host); 2 (invalid arguments, usage) and 130 (canceled) are outside the ranges; every exit code has a kebab-case error code in `ShadeKitCliErrorCodes`; codes that only appear as warnings are in `ShadeKitCliWarningCodes`.
 - Versioned JSON files in `.shadekit/` are read and written only through `IKitStore.ReadJsonAsync`/`WriteJsonAsync`. Each file type has a format id in `FormatIds` and a definition in `FormatRegistry.CreateDefault()`; raising a format version means a new table entry plus an `IFormatMigration` step and a test that migrates a fixture from the previous version. Document models derive from `VersionedDocument`; nested classes need their own `[JsonExtensionData] Dictionary<string, JsonElement>` to keep unknown fields.
+- Text file content is held as `TextFileContent` (lines, UTF-8 BOM flag, final-line-ending flag), never as `byte[]`, and is written only through `ITextFileWriter` (`IKitStore.WriteFileAsync` uses it for `.shadekit/`). The writer is the only place that encodes to bytes; it resolves the line ending with `ILineEndingResolver`: git (attributes as git's `convert_attrs`: resolved `text`, legacy `crlf` only while `text` is unspecified; `-text` → no decision, `eol` attribute, `text=input`/`crlf=input` → LF, `core.autocrlf`, `core.eol` for text files; config values and a failing `git` cached per repository root for the resolver's lifetime, i.e. one command run; a `git` that is installed but fails gives a `GitAttributesUnavailableWarning`, a missing one (`GitNotFoundException`) none; `ILineEndingResolver.PrepareAsync` / `IKitStore.PrepareLineEndingsAsync` read the attributes of several files with one `git check-attr`, as `init` and `feature new` do) → `.editorconfig` `end_of_line` (parsed files kept per resolver while their write time, size, and Unix mode are unchanged) → operating system. Paths reach the writer and the resolvers as `RepositoryFile`, checked once where it is created (`RepositoryFile.Resolve`, or `KitStore` for `.shadekit/`). Lines are split at CRLF, LF, and a lone CR. Files, the versioned JSON files included, are read as strict UTF-8; an unreadable `.editorconfig` falls back with an `EditorConfigUnreadableWarning`, one the parser cannot evaluate (e.g. an overflowing numeric-range glob, or a glob that expands into more than 10 000 patterns, checked before the parser expands it) with an `EditorConfigInvalidWarning`.
 - Core services are registered with `services.AddShadeKitCore()`.
 
 ```sh

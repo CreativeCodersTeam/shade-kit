@@ -2,11 +2,15 @@ using System.Diagnostics.CodeAnalysis;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
+using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -61,6 +65,10 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IGitExecutableLocator), typeof(GitExecutableLocator))]
     [InlineData(typeof(IGitCommandRunner), typeof(GitCommandRunner))]
     [InlineData(typeof(IGitRepositoryInfo), typeof(GitRepositoryInfo))]
+    [InlineData(typeof(IGitLineEndingResolver), typeof(GitLineEndingResolver))]
+    [InlineData(typeof(IEditorConfigLineEndingResolver), typeof(EditorConfigLineEndingResolver))]
+    [InlineData(typeof(ILineEndingResolver), typeof(LineEndingResolver))]
+    [InlineData(typeof(ITextFileWriter), typeof(TextFileWriter))]
     [InlineData(typeof(IFeatureIdFactory), typeof(FeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver), typeof(CurrentFeatureResolver))]
     [InlineData(typeof(IFeatureStore), typeof(FeatureStore))]
@@ -151,6 +159,10 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IGitExecutableLocator))]
     [InlineData(typeof(IGitCommandRunner))]
     [InlineData(typeof(IGitRepositoryInfo))]
+    [InlineData(typeof(IGitLineEndingResolver))]
+    [InlineData(typeof(IEditorConfigLineEndingResolver))]
+    [InlineData(typeof(ILineEndingResolver))]
+    [InlineData(typeof(ITextFileWriter))]
     [InlineData(typeof(IFeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver))]
     [InlineData(typeof(IFeatureStore))]
@@ -184,6 +196,10 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IGitExecutableLocator))]
     [InlineData(typeof(IGitCommandRunner))]
     [InlineData(typeof(IGitRepositoryInfo))]
+    [InlineData(typeof(IGitLineEndingResolver))]
+    [InlineData(typeof(IEditorConfigLineEndingResolver))]
+    [InlineData(typeof(ILineEndingResolver))]
+    [InlineData(typeof(ITextFileWriter))]
     [InlineData(typeof(IFeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver))]
     [InlineData(typeof(IFeatureStore))]
@@ -332,6 +348,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         var store = A.Fake<IKitStore>();
         A.CallTo(() => store.RootPath).Returns("/repo/.shadekit");
+        A.CallTo(() => store.RepositoryRootPath).Returns("/repo");
         A.CallTo(() => store.GetFeatureNames()).Returns(["login"]);
 
         var services = new ServiceCollection();
@@ -348,6 +365,90 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         featureId
             .Should().Be("login");
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_ExistingGitCommandRunnerRegistration_GitLineEndingResolverUsesExistingRunner()
+    {
+        // Arrange
+        var existingRunner = A.Fake<IGitCommandRunner>();
+        A.CallTo(() => existingRunner.RunAsync(Path.GetFullPath("/repo"), A<IReadOnlyList<string>>._,
+                A<CancellationToken>._))
+            .Returns(new GitCommandResult(0, "readme.md: eol: crlf\n", ""));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingRunner);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        var result = await serviceProvider.GetRequiredService<IGitLineEndingResolver>()
+            .GetLineEndingAsync(RepositoryFile.Resolve("/repo", "readme.md"), TestContext.Current.CancellationToken);
+
+        result.LineEnding
+            .Should().Be(LineEnding.CrLf);
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_ExistingLineEndingSourceRegistrations_LineEndingResolverUsesExistingSources()
+    {
+        // Arrange
+        var existingGitResolver = A.Fake<IGitLineEndingResolver>();
+        A.CallTo(() => existingGitResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .Returns(new GitLineEndingResult(null, null));
+
+        var existingEditorConfigResolver = A.Fake<IEditorConfigLineEndingResolver>();
+        A.CallTo(() => existingEditorConfigResolver.GetLineEnding(A<string>._))
+            .Returns(new EditorConfigLineEndingResult(LineEnding.CrLf, null));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingGitResolver);
+        services.AddSingleton(existingEditorConfigResolver);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        var resolution = await serviceProvider.GetRequiredService<ILineEndingResolver>()
+            .GetLineEndingAsync(RepositoryFile.Resolve("/repo", "readme.md"), TestContext.Current.CancellationToken);
+
+        resolution.LineEnding
+            .Should().Be(LineEnding.CrLf);
+
+        A.CallTo(() => existingGitResolver.GetLineEndingAsync(RepositoryFile.Resolve("/repo", "readme.md"),
+                A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_ExistingLineEndingResolverRegistration_TextFileWriterUsesExistingResolver()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var existingResolver = A.Fake<ILineEndingResolver>();
+        A.CallTo(() => existingResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .Returns(new LineEndingResolution(LineEnding.CrLf, []));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingResolver);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        await serviceProvider.GetRequiredService<ITextFileWriter>().WriteAsync(
+            RepositoryFile.Resolve(tempDirectory.RootPath, "notes.txt"), TextFileContent.FromText("a\nb\n"),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        tempDirectory.ReadFileText("notes.txt")
+            .Should().Be("a\r\nb\r\n");
     }
 
     [Fact]

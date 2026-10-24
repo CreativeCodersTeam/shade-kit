@@ -7,12 +7,9 @@ namespace CreativeCoders.ShadeKit.Core.Formats;
 /// Represents the base class of every versioned JSON document that SHADE kit stores in a file.
 /// </summary>
 /// <remarks>
-/// Derived classes add the known fields of their file type. Fields the engine does not know are collected in
-/// <see cref="ExtensionData" /> and written back unchanged. A nested class of a document must declare its own
-/// <see cref="JsonExtensionDataAttribute" /> property of type <see cref="Dictionary{TKey,TValue}" /> with
-/// <see cref="JsonElement" /> values to preserve unknown fields at its level. A <c>JsonObject</c> property is not
-/// suitable: System.Text.Json writes it as a nested object instead of flattening its fields, which produces invalid
-/// JSON.
+/// Unknown fields are kept in <see cref="ExtensionData" /> and written back. A nested class needs its own
+/// <see cref="JsonExtensionDataAttribute" /> dictionary with <see cref="JsonElement" /> values; a <c>JsonObject</c>
+/// property would be written as a nested object and produce invalid JSON.
 /// </remarks>
 public abstract class VersionedDocument
 {

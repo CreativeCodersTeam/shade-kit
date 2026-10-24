@@ -4,8 +4,7 @@ namespace CreativeCoders.ShadeKit.Core.Formats;
 /// Defines the logical ids of the versioned JSON file types that SHADE kit reads and writes.
 /// </summary>
 /// <remarks>
-/// Each file type has its own format version and its own migration chain. The ids are part of the agent contract,
-/// for example as keys of the <c>formats</c> object returned by <c>shade-kit version --json</c>.
+/// Each file type has its own format version and migration chain. The ids are part of the agent contract.
 /// </remarks>
 public static class FormatIds
 {

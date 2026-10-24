@@ -34,14 +34,7 @@ public class FeatureCurrentCommand(
     /// Resolves the current feature and writes it, as plain text or as a JSON envelope.
     /// </summary>
     /// <remarks>
-    /// The branch name wins over the local override; if both select different features, a
-    /// <c>current-feature-mismatch</c> warning is reported. A feature that cannot be resolved is a result, not an
-    /// error. Plain output is one line <c>Warning: &lt;message&gt;</c> per warning, then the lines
-    /// <c>&lt;id&gt; (&lt;profile&gt;, &lt;status&gt;)</c> and <c>Resolved from: branch|override</c>, or the line
-    /// <c>No current feature.</c> and a hint to run <c>shade-kit feature set &lt;id&gt;</c>. JSON output is an envelope
-    /// whose <c>data</c> is a <see cref="FeatureCurrentCommandData" /> and whose <c>warnings</c> contain the format and
-    /// feature warnings. In JSON mode, an expected failure is written as an error envelope and the abort message is not
-    /// printed.
+    /// The branch wins over the local override. A feature that cannot be resolved is a result, not an error.
     /// </remarks>
     /// <param name="options">The options of the command.</param>
     /// <returns>
@@ -50,11 +43,7 @@ public class FeatureCurrentCommand(
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// No SHADE kit store is found (exit codes <see cref="ShadeKitCliExitCodes.NotAGitRepository" />,
-    /// <see cref="ShadeKitCliExitCodes.KitRootNotFound" />, or <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />);
-    /// <c>git</c> cannot be run (exit code <see cref="ShadeKitCliExitCodes.GitUnavailable" />); or a kit file is
-    /// missing, invalid, or too new (exit codes <see cref="ShadeKitCliExitCodes.InvalidFile" /> and
-    /// <see cref="ShadeKitCliExitCodes.FormatTooNew" />).
+    /// No SHADE kit store is found, <c>git</c> cannot be run, or a kit file is missing, invalid, or too new.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(FeatureCurrentCommandOptions options)

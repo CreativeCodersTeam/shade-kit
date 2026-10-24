@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Files;
 
 namespace CreativeCoders.ShadeKit.Core.Templates;
 
@@ -8,9 +10,8 @@ namespace CreativeCoders.ShadeKit.Core.Templates;
 /// Represents one installed template in <c>.shadekit/templates.lock.json</c>.
 /// </summary>
 /// <remarks>
-/// <see cref="Path" />, <see cref="KitVersion" />, and <see cref="Hash" /> are required: a lock file in which one of
-/// them is missing or <see langword="null" /> cannot be read. Fields the engine does not know are kept in
-/// <see cref="ExtensionData" /> and written back unchanged.
+/// <see cref="Path" />, <see cref="KitVersion" />, and <see cref="Hash" /> are required. Unknown fields are kept in
+/// <see cref="ExtensionData" />.
 /// </remarks>
 public sealed class TemplatesLockEntry
 {
@@ -35,8 +36,8 @@ public sealed class TemplatesLockEntry
     /// Gets the hash of the template content as installed.
     /// </summary>
     /// <value>
-    /// The SHA-256 hash of the bytes written with CRLF line endings counted as LF, in the form <c>sha256:</c> followed
-    /// by 64 lowercase hexadecimal digits.
+    /// The SHA-256 hash of the content with its lines joined by LF, whatever line ending the file was written with, in
+    /// the form <c>sha256:</c> followed by 64 lowercase hexadecimal digits.
     /// </value>
     public required string Hash { get; init; }
 
@@ -53,32 +54,19 @@ public sealed class TemplatesLockEntry
     /// Computes the <see cref="Hash" /> of the content of a template.
     /// </summary>
     /// <remarks>
-    /// Every CRLF line ending counts as LF, because Git checks a template out with CRLF on Windows when
-    /// <c>core.autocrlf</c> is set; an unchanged template then still has the hash of its lock entry. A carriage return
-    /// that is not followed by a line feed is hashed as it is.
+    /// Hashes the UTF-8 bytes of the lines joined by LF, with the byte order mark and final line ending as recorded, so
+    /// the line ending of the written file does not change the hash and older lock entries stay valid.
     /// </remarks>
-    /// <param name="content">The bytes of the template as written to the repository.</param>
+    /// <param name="content">The content of the template.</param>
     /// <returns>
     /// The SHA-256 hash of <paramref name="content" /> with LF line endings, in the form <c>sha256:</c> followed by 64
     /// lowercase hexadecimal digits.
     /// </returns>
-    public static string ComputeHash(ReadOnlySpan<byte> content)
+    /// <exception cref="ArgumentNullException"><paramref name="content" /> is <see langword="null" />.</exception>
+    public static string ComputeHash(TextFileContent content)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Ensure.NotNull(content);
 
-        var remaining = content;
-        var crLfIndex = remaining.IndexOf("\r\n"u8);
-
-        while (crLfIndex >= 0)
-        {
-            // The carriage return is skipped; the line feed starts the next part.
-            hash.AppendData(remaining[..crLfIndex]);
-            remaining = remaining[(crLfIndex + 1)..];
-            crLfIndex = remaining.IndexOf("\r\n"u8);
-        }
-
-        hash.AppendData(remaining);
-
-        return HashPrefix + Convert.ToHexStringLower(hash.GetHashAndReset());
+        return HashPrefix + Convert.ToHexStringLower(SHA256.HashData(TextFileWriter.Encode(content, LineEnding.Lf)));
     }
 }

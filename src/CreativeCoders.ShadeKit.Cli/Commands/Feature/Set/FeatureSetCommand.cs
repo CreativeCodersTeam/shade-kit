@@ -40,12 +40,8 @@ public class FeatureSetCommand(
     /// or as a JSON envelope.
     /// </summary>
     /// <remarks>
-    /// If the current branch selects a different feature, the override is still written and a
-    /// <c>current-feature-mismatch</c> warning is reported, because the branch wins when the current feature is
-    /// resolved. Plain output is one line <c>Warning: &lt;message&gt;</c> per warning and the line
-    /// <c>Current feature: &lt;id&gt;.</c>. JSON output is an envelope whose <c>data</c> is a
-    /// <see cref="FeatureSetCommandData" />. In JSON mode, an expected failure is written as an error envelope and the
-    /// abort message is not printed.
+    /// If the current branch selects another feature, the override is still written with a
+    /// <c>current-feature-mismatch</c> warning, because the branch wins. An unusable existing override is replaced.
     /// </remarks>
     /// <param name="options">The options of the command.</param>
     /// <returns>
@@ -53,12 +49,7 @@ public class FeatureSetCommand(
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// No SHADE kit store is found (exit codes <see cref="ShadeKitCliExitCodes.NotAGitRepository" />,
-    /// <see cref="ShadeKitCliExitCodes.KitRootNotFound" />, or <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />);
-    /// the id is not valid (exit code <see cref="ShadeKitCliExitCodes.InvalidFeatureId" />); the feature does not exist
-    /// (exit code <see cref="ShadeKitCliExitCodes.FeatureNotFound" />); or <c>git</c> cannot be run (exit code
-    /// <see cref="ShadeKitCliExitCodes.GitUnavailable" />). An existing override that is invalid, outdated, or too new is
-    /// replaced.
+    /// No SHADE kit store is found, the id is not valid, the feature does not exist, or <c>git</c> cannot be run.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(FeatureSetCommandOptions options)

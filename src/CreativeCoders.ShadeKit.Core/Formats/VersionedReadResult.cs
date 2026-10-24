@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+
 namespace CreativeCoders.ShadeKit.Core.Formats;
 
 /// <summary>

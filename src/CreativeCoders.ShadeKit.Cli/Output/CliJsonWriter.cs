@@ -10,15 +10,14 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// Writes the JSON output of a command to a text writer, usually standard output.
 /// </summary>
 /// <remarks>
-/// The document is indented with two spaces, uses camel-case property names, lower-case kebab-case enumeration values,
-/// and LF line endings, keeps non-ASCII characters unescaped, and ends with a line break. The writer is flushed after every document. The output does not
-/// go through Spectre.Console, which could wrap long lines. The writer records whether a document was written, so
-/// that a run in JSON mode never writes a second one.
+/// Writes indented camel-case JSON with kebab-case enumeration values, LF line endings, and unescaped non-ASCII
+/// characters, bypassing Spectre.Console so long lines are not wrapped. It records whether a document was written,
+/// so a run never writes a second one.
 /// </remarks>
 /// <param name="output">The text writer that receives the JSON documents.</param>
 public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DictionaryKeyPolicy = null,

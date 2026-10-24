@@ -13,9 +13,9 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Init;
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed partial class InitCommandEndToEndTests : IDisposable
 {
-    private readonly CurrentDirectoryScope _currentDirectory = new();
+    private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
 
-    private readonly TempKitDirectory _tempDirectory = new("shade-kit-init-tests-");
+    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-init-tests-");
 
     [Fact]
     [Trait("Requirement", "FP02-AC1")]
@@ -418,8 +418,19 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
 
         var lines = output.ToString().Split(Environment.NewLine);
 
-        lines[0]
-            .Should().StartWith("Initialised SHADE kit in ");
+        // The test repository is only an empty .git folder, which git itself rejects, so the summary may follow the
+        // warning that git could not read the line ending settings; nothing else comes before it.
+        var summaryIndex = Array.FindIndex(lines,
+            line => line.StartsWith("Initialised SHADE kit in ", StringComparison.Ordinal));
+
+        summaryIndex
+            .Should().BeGreaterThanOrEqualTo(0);
+
+        if (summaryIndex > 0)
+        {
+            lines[0]
+                .Should().StartWith("Warning: git cannot read the line ending settings");
+        }
 
         lines
             .Should().Contain(["created  .shadekit/config.json", "created  .gitignore", "created  AGENTS.md"])

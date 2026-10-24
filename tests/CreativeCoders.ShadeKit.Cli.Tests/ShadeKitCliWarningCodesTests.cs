@@ -12,6 +12,9 @@ public partial class ShadeKitCliWarningCodesTests
     [InlineData(ShadeKitCliWarningCodes.FeatureFolderInvalid, "feature-folder-invalid")]
     [InlineData(ShadeKitCliWarningCodes.FeatureIdMismatch, "feature-id-mismatch")]
     [InlineData(ShadeKitCliWarningCodes.CurrentFeatureInvalid, "current-feature-invalid")]
+    [InlineData(ShadeKitCliWarningCodes.EditorConfigUnreadable, "editorconfig-unreadable")]
+    [InlineData(ShadeKitCliWarningCodes.EditorConfigInvalid, "editorconfig-invalid")]
+    [InlineData(ShadeKitCliWarningCodes.GitAttributesUnavailable, "git-attributes-unavailable")]
     public void WarningCodes_Contract_HaveStableValues(string warningCode, string expectedWarningCode)
     {
         // Assert

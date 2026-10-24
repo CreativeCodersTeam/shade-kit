@@ -7,12 +7,13 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.New;
 using CreativeCoders.ShadeKit.Cli.Output;
-using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Formats;
-using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
+using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using FakeItEasy;
 using Spectre.Console;
@@ -341,7 +342,8 @@ public class FeatureNewCommandTests
             .Should().Be(errorCode);
     }
 
-    public static TheoryData<Exception, int, string> MappedCreateFailures() => new()
+    public static TheoryData<Exception, int, string> MappedCreateFailures() =>
+        new TheoryData<Exception, int, string>
     {
         { new FeatureAlreadyExistsException(Id), ShadeKitCliExitCodes.FeatureAlreadyExists, ShadeKitCliErrorCodes.FeatureAlreadyExists },
         { new InvalidFeatureSourceException(" ", "It is empty."), ShadeKitCliExitCodes.InvalidFeatureSource, ShadeKitCliErrorCodes.InvalidFeatureSource },

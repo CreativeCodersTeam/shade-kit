@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14 |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`) |
 | Source | Concept §2 (Lifecycle), §3.1 (`integrations install/update`), §3.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 01, 06 |
 | Enables | 08 (same mechanism for more agents); end-to-end use of all phase packages in Claude Code |

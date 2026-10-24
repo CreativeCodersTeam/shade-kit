@@ -7,10 +7,8 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// <c>.shadekit/features/current-feature.json</c>.
 /// </summary>
 /// <remarks>
-/// This model holds the fields of format version <c>1</c> (format id <see cref="FormatIds.CurrentFeature" />). The
-/// file is local-only and not committed. <see cref="FeatureId" /> is required: a file in which it is missing or
-/// <see langword="null" /> cannot be read. Fields the engine does not know are kept in
-/// <see cref="VersionedDocument.ExtensionData" /> and written back unchanged.
+/// Local-only and not committed. <see cref="FeatureId" /> is required. Unknown fields are kept in
+/// <see cref="VersionedDocument.ExtensionData" />.
 /// </remarks>
 public sealed class CurrentFeatureDocument : VersionedDocument
 {

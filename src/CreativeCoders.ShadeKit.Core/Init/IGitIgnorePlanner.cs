@@ -1,4 +1,4 @@
-using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Init;
 
@@ -12,19 +12,9 @@ public interface IGitIgnorePlanner
     /// <see cref="KitGitIgnoreEntries.All" />, without writing it.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// An entry is present if a line, without trailing spaces, equals the entry or the entry prefixed with <c>/</c>.
-    /// This follows git, which ignores trailing spaces of a pattern but treats leading whitespace and trailing tabs
-    /// as part of it, so a line with leading whitespace or a trailing tab does not count. Missing entries are
-    /// appended without a leading <c>/</c>, under the comment line <c># SHADE kit: local-only files</c>; one blank
-    /// line separates them from existing content, unless the file already ends with an empty line.
-    /// </para>
-    /// <para>
-    /// A missing file gets new content as UTF-8 without byte order mark and with <c>\n</c> line terminators. In an
-    /// existing file, every existing byte stays unchanged, a leading UTF-8 byte order mark is kept, a missing final
-    /// line terminator is added, and the appended lines end with <c>\r\n</c> if the file contains one. A file that is
-    /// not UTF-8 is refused.
-    /// </para>
+    /// An entry is present if a line without trailing spaces equals it, with or without a leading <c>/</c>, as git
+    /// matches patterns. Missing entries are appended under <c># SHADE kit: local-only files</c> after one blank line.
+    /// Existing lines and a byte order mark are kept.
     /// </remarks>
     /// <param name="filePath">The absolute path of the <c>.gitignore</c> file.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
@@ -39,7 +29,8 @@ public interface IGitIgnorePlanner
     /// </exception>
     /// <exception cref="PathNotAFileException"><paramref name="filePath" /> is an existing directory.</exception>
     /// <exception cref="UnsupportedFileEncodingException">
-    /// The file starts with a UTF-16 or UTF-32 byte order mark or contains a NUL byte.
+    /// The file starts with a UTF-16 or UTF-32 byte order mark, contains a NUL byte, or contains bytes that are not
+    /// valid UTF-8.
     /// </exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
     Task<PlannedFileChange?> PlanAsync(string filePath, CancellationToken cancellationToken = default);

@@ -1,4 +1,5 @@
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Init;
 
@@ -27,17 +28,23 @@ public sealed class InstructionSectionPlanner : IInstructionSectionPlanner
                 InitializedFileAction.Appended);
         }
 
-        var newBytes = content.ReplaceLines(section.Begin, section.End, ManagedInstructionSection.Text);
+        var newContent = content.ReplaceLines(section.BeginIndex, section.EndIndex, ManagedInstructionSection.Text);
 
-        return content.HasBytes(newBytes) ? null : new PlannedFileChange(newBytes, InitializedFileAction.Updated);
+        // Line endings are not part of the content, so a current section in a file with other line endings needs no
+        // change either.
+        return content.HasSameContent(newContent)
+            ? null
+            : new PlannedFileChange(newContent, InitializedFileAction.Updated);
     }
 
     /// <summary>
     /// Finds the lines of the begin and end marker of the managed section.
     /// </summary>
-    /// <returns>The marker lines, or <see langword="null" /> if the file contains no marker.</returns>
+    /// <returns>
+    /// The zero-based indexes of the marker lines, or <see langword="null" /> if the file contains no marker.
+    /// </returns>
     /// <exception cref="InvalidManagedSectionException">The markers in the file are invalid.</exception>
-    private static (TextFileLine Begin, TextFileLine End)? FindSection(TextFileContent content, string filePath)
+    private static (int BeginIndex, int EndIndex)? FindSection(TextFileContent content, string filePath)
     {
         // Markers in a fenced code block are examples, for example in documentation of the markers, not the section.
         var (lines, unclosedFenceIndex) = GetTrimmedLinesOutsideCodeFences(content);
@@ -72,9 +79,7 @@ public sealed class InstructionSectionPlanner : IInstructionSectionPlanner
             throw new InvalidManagedSectionException(filePath, reason);
         }
 
-        return beginIndexes.Length == 0
-            ? null
-            : (content.Lines[beginIndexes[0]], content.Lines[endIndexes[0]]);
+        return beginIndexes.Length == 0 ? null : (beginIndexes[0], endIndexes[0]);
     }
 
     private static bool IsBeginMarker(string text)
@@ -107,9 +112,9 @@ public sealed class InstructionSectionPlanner : IInstructionSectionPlanner
         TextFileContent content)
     {
         var (lineIndexes, unclosedFenceIndex) =
-            MarkdownCodeFences.FindLinesOutsideCodeFences([.. content.Lines.Select(line => line.Text)]);
+            MarkdownCodeFences.FindLinesOutsideCodeFences(content.Lines);
 
-        return ([.. lineIndexes.Select(index => (content.Lines[index].Text.Trim(), index))], unclosedFenceIndex);
+        return ([.. lineIndexes.Select(index => (content.Lines[index].Trim(), index))], unclosedFenceIndex);
     }
 
     private static string FormatLineNumbers(IEnumerable<int> lineIndexes)

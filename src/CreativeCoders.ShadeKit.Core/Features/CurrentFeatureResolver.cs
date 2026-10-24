@@ -1,6 +1,8 @@
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -69,7 +71,7 @@ public sealed class CurrentFeatureResolver(IGitRepositoryInfo gitRepositoryInfo)
     {
         Ensure.NotNull(store);
 
-        var repositoryRootPath = store.GetRepositoryRootPath();
+        var repositoryRootPath = store.RepositoryRootPath;
 
         var branchName = await _gitRepositoryInfo.GetCurrentBranchAsync(repositoryRootPath, cancellationToken)
             .ConfigureAwait(false);

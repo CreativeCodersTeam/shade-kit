@@ -1,6 +1,6 @@
 ---
 name: shade-kit-research
-description: SHADE kit general skill that runs a set of research focuses, one research agent per focus in parallel where the agent supports subagents, and merges the results into researches.md. Loaded by the SHADE kit skills refine and map; not meant to be called directly.
+description: SHADE kit general skill that runs a set of research focuses, one research agent per focus in parallel where the agent supports subagents, and merges the results into researches.md. Loaded by SHADE kit phase skills; not meant to be called directly.
 ---
 
 # shade-kit-research

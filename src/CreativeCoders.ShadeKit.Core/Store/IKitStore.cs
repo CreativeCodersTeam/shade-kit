@@ -1,4 +1,10 @@
+using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
 
@@ -15,6 +21,15 @@ public interface IKitStore
     string RootPath { get; }
 
     /// <summary>
+    /// Gets the full path of the root of the git repository that contains the SHADE kit root directory.
+    /// </summary>
+    /// <value>
+    /// The full path of the parent directory of <see cref="RootPath" />, because the SHADE kit root directory
+    /// <c>.shadekit</c> lies at the root of the git repository.
+    /// </value>
+    string RepositoryRootPath { get; }
+
+    /// <summary>
     /// Gets the names of all features in the SHADE kit store.
     /// </summary>
     /// <returns>
@@ -28,19 +43,15 @@ public interface IKitStore
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A file in the current format version is returned as it is. A file in an older format version stops a command
-    /// with <see cref="FormatAccess.Write" /> access. With <see cref="FormatAccess.Read" /> access, the
-    /// <c>outdatedFormatOnRead</c> setting of <c>config.json</c> decides: the file is migrated in memory and an
-    /// <see cref="FormatWarningKind.UpgradeNeeded" /> warning is returned, or the command stops. To read this setting,
-    /// an outdated <c>config.json</c> is migrated in memory and the setting applies to it as well. If
-    /// <c>config.json</c> does not exist, the file is migrated with a warning. With <see cref="FormatAccess.Upgrade" />
-    /// access, the file is always migrated in memory and <c>config.json</c> is not read; the
-    /// <see cref="FormatWarningKind.UpgradeNeeded" /> warning names the version the file was migrated from.
-    /// <see cref="FormatAccess.Replace" /> is a write access and is not accepted.
+    /// An outdated file stops a <see cref="FormatAccess.Write" /> read. With <see cref="FormatAccess.Read" />, the
+    /// <c>outdatedFormatOnRead</c> setting of <c>config.json</c> decides between migrating in memory with an
+    /// <see cref="FormatWarningKind.UpgradeNeeded" /> warning and stopping; without <c>config.json</c>, the file is
+    /// migrated. <see cref="FormatAccess.Upgrade" /> always migrates and does not read <c>config.json</c>.
+    /// <see cref="FormatAccess.Replace" /> is not accepted.
     /// </para>
     /// <para>
-    /// File paths in exceptions and warnings are relative to the repository root and use <c>/</c> as separator, for
-    /// example <c>.shadekit/config.json</c>.
+    /// File paths in exceptions and warnings are repository-relative with <c>/</c>, for example
+    /// <c>.shadekit/config.json</c>.
     /// </para>
     /// </remarks>
     /// <typeparam name="T">The type of the document.</typeparam>
@@ -81,20 +92,14 @@ public interface IKitStore
     /// </summary>
     /// <remarks>
     /// <para>
-    /// If the file exists, its format is checked first; a file that is too new or invalid stops the write and stays
-    /// unchanged. A file in an older format version stops a write with <see cref="FormatAccess.Write" /> access and
-    /// is replaced by a write with <see cref="FormatAccess.Upgrade" /> access.
+    /// An existing file that is too new or invalid stops the write; an outdated one stops a
+    /// <see cref="FormatAccess.Write" /> and is replaced by an <see cref="FormatAccess.Upgrade" />.
+    /// <see cref="FormatAccess.Replace" /> replaces any existing file, for files that hold nothing to lose, such as the
+    /// local override. The format check never reads <c>config.json</c>.
     /// </para>
     /// <para>
-    /// With <see cref="FormatAccess.Replace" /> access, an existing file that is too new, invalid, or in an older
-    /// format version does not stop the write: it is deleted and then written again. This suits files that hold
-    /// nothing that would be lost, such as the local override <c>features/current-feature.json</c>. The format check
-    /// of a write never reads <c>config.json</c>, so neither its content nor its <c>outdatedFormatOnRead</c> setting
-    /// can stop the write. A file that cannot be read, for example for missing permission, still stops the write.
-    /// </para>
-    /// <para>
-    /// The written file carries the current format version and its <c>minEngineVersion</c>, is UTF-8 encoded without
-    /// byte order mark, and is written directly, not atomically. Missing directories are created.
+    /// The file gets the current format version, UTF-8 without byte order mark, a final line ending, and the line
+    /// ending of the repository. It is written directly, not atomically; missing directories are created.
     /// </para>
     /// </remarks>
     /// <typeparam name="T">The type of the document.</typeparam>
@@ -107,7 +112,11 @@ public interface IKitStore
     /// that replaces it whatever it contains.
     /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous write operation.</returns>
+    /// <returns>
+    /// A task that represents the asynchronous write operation. The task result contains the warnings that occurred
+    /// while the line ending of the file was determined, for example an <see cref="EditorConfigUnreadableWarning" />;
+    /// empty if there were none.
+    /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="document" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="access" /> is not <see cref="FormatAccess.Write" />, <see cref="FormatAccess.Upgrade" />, or
@@ -128,28 +137,80 @@ public interface IKitStore
     /// The existing file uses an older format version and <paramref name="access" /> is
     /// <see cref="FormatAccess.Write" />.
     /// </exception>
-    Task WriteJsonAsync<T>(string relativePath, string formatId, T document, FormatAccess access,
-        CancellationToken cancellationToken = default)
+    Task<IReadOnlyList<KitWarning>> WriteJsonAsync<T>(string relativePath, string formatId, T document,
+        FormatAccess access, CancellationToken cancellationToken = default)
         where T : VersionedDocument;
 
     /// <summary>
-    /// Writes a file of the store that is not a versioned JSON file, for example a template.
+    /// Writes a text file of the store that is not a versioned JSON file, for example a template.
     /// </summary>
     /// <remarks>
-    /// The bytes are written as they are, directly, not atomically; an existing file is replaced. Missing directories
-    /// are created.
+    /// Written through an <see cref="ITextFileWriter" /> with the line ending of the repository, directly and not
+    /// atomically; missing directories are created. A file in a directory that is moved into place later is written
+    /// through <see cref="CreateDirectoryWriter" />.
     /// </remarks>
     /// <param name="relativePath">
     /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/spec.md</c>.
     /// </param>
-    /// <param name="content">The bytes of the file.</param>
+    /// <param name="content">The content of the file.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous write operation.</returns>
+    /// <returns>
+    /// A task that represents the asynchronous write operation. The task result contains the warnings that occurred
+    /// while the line ending of the file was determined, for example an <see cref="EditorConfigUnreadableWarning" />;
+    /// empty if there were none.
+    /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="content" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentException">
     /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
     /// </exception>
-    Task WriteFileAsync(string relativePath, byte[] content, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<KitWarning>> WriteFileAsync(string relativePath, TextFileContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a writer for the files of a directory that is written at one path and moved to another path later,
+    /// such as a hidden staging directory.
+    /// </summary>
+    /// <remarks>
+    /// Files are written below <paramref name="writePath" />, but their line endings are determined for the same path
+    /// below <paramref name="targetPath" />. Nothing is created until the first write.
+    /// </remarks>
+    /// <param name="writePath">
+    /// The path of the directory relative to <see cref="RootPath" /> into which the files are written, for example
+    /// <c>features/.login.1a2b3c4d.tmp</c>.
+    /// </param>
+    /// <param name="targetPath">
+    /// The path of the directory relative to <see cref="RootPath" /> to which the directory is moved later, for
+    /// example <c>features/login</c>.
+    /// </param>
+    /// <returns>The writer for the files of the directory.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="writePath" /> or <paramref name="targetPath" /> is empty, rooted, or points outside
+    /// <see cref="RootPath" />.
+    /// </exception>
+    IKitDirectoryWriter CreateDirectoryWriter(string writePath, string targetPath);
+
+    /// <summary>
+    /// Prepares the line endings of several files of the store that are written next, so determining each of them
+    /// later takes fewer <c>git</c> processes.
+    /// </summary>
+    /// <remarks>
+    /// Optional; it does not change the results of later writes. A file that is written through
+    /// <see cref="CreateDirectoryWriter" /> is prepared with its path below the target directory, the path for which
+    /// its line ending is determined.
+    /// </remarks>
+    /// <param name="relativePaths">
+    /// The paths of the files relative to <see cref="RootPath" />, for example <c>features/login/feature.json</c>.
+    /// </param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="relativePaths" /> is <see langword="null" />.</exception>
+    /// <exception cref="ArgumentException">
+    /// A path of <paramref name="relativePaths" /> is <see langword="null" />, empty, rooted, or points outside
+    /// <see cref="RootPath" />.
+    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
+    Task PrepareLineEndingsAsync(IReadOnlyCollection<string> relativePaths,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a directory of the store, together with its missing parent directories.
@@ -163,24 +224,29 @@ public interface IKitStore
     void CreateDirectory(string relativePath);
 
     /// <summary>
-    /// Reads a file of the store that is not a versioned JSON file, for example a template.
+    /// Reads a text file of the store that is not a versioned JSON file, for example a template.
     /// </summary>
     /// <remarks>
-    /// The bytes are returned as they are, without decoding or format check. A directory at
-    /// <paramref name="relativePath" /> counts as a missing file.
+    /// Decoded strictly as UTF-8; content that is not UTF-8 is reported as an invalid kit file.
     /// </remarks>
     /// <param name="relativePath">
     /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/request.md</c>.
     /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
-    /// A task that represents the asynchronous read operation. The task result contains the bytes of the file, or
+    /// A task that represents the asynchronous read operation. The task result contains the content of the file, or
     /// <see langword="null" /> if the file does not exist.
     /// </returns>
     /// <exception cref="ArgumentException">
     /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
     /// </exception>
-    Task<byte[]?> ReadFileAsync(string relativePath, CancellationToken cancellationToken = default);
+    /// <exception cref="PathNotAFileException">A directory exists at <paramref name="relativePath" />.</exception>
+    /// <exception cref="InvalidKitFileException">
+    /// The file is not UTF-8 text: it starts with a UTF-16 or UTF-32 byte order mark, contains a NUL byte, or contains
+    /// bytes that are not valid UTF-8. The file path of the exception is relative to the repository root, for example
+    /// <c>.shadekit/templates/request.md</c>.
+    /// </exception>
+    Task<TextFileContent?> ReadFileAsync(string relativePath, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Determines whether a file of the store exists.
@@ -216,8 +282,7 @@ public interface IKitStore
     /// Gets the paths of all files below a directory of the store, including the files of its subdirectories.
     /// </summary>
     /// <remarks>
-    /// Hidden files are included. A symbolic link to a file is returned like a file; a symbolic link to a directory is
-    /// neither returned nor followed, so the result never contains files outside the directory. A file at
+    /// Hidden files are included; symbolic links to directories are neither returned nor followed. A file at
     /// <paramref name="relativePath" /> counts as a missing directory.
     /// </remarks>
     /// <param name="relativePath">
@@ -251,10 +316,8 @@ public interface IKitStore
     /// Deletes a directory of the store together with all its files and subdirectories.
     /// </summary>
     /// <remarks>
-    /// Nothing happens if the directory does not exist. A file at <paramref name="relativePath" /> counts as a
-    /// missing directory and is not deleted. A symbolic link to a directory, at <paramref name="relativePath" /> or
-    /// below it, is removed as a link; the content of its target is kept. The SHADE kit root directory itself cannot
-    /// be deleted, because <paramref name="relativePath" /> must point below <see cref="RootPath" />.
+    /// Nothing happens if the directory does not exist; a file at <paramref name="relativePath" /> is not deleted.
+    /// Symbolic links to directories are removed as links; their targets are kept.
     /// </remarks>
     /// <param name="relativePath">
     /// The path of the directory relative to <see cref="RootPath" />, for example <c>features/login</c>.
@@ -268,19 +331,9 @@ public interface IKitStore
     /// Moves or renames a directory of the store together with all its files and subdirectories.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The move never replaces anything: if a file or directory exists at <paramref name="destinationRelativePath" />,
-    /// nothing is moved and an <see cref="IOException" /> is thrown. The parent directory of the destination is
-    /// created if it is missing.
-    /// </para>
-    /// <para>
-    /// Within one file system the move is a single rename: the directory appears at the destination with all its
-    /// content at once, and a failed move leaves the source unchanged. This makes the move suitable for creating a
-    /// directory exclusively (build it under a temporary name, then move it) and for removing a directory from view
-    /// before it is deleted. If another process creates the destination after the existence check, the operating
-    /// system refuses the rename because the destination is not empty; only an empty directory created in that moment
-    /// can be replaced on some systems.
-    /// </para>
+    /// Never replaces anything; the parent of the destination is created if missing. Within one file system the move
+    /// is a single rename, so it suits exclusive creation through a temporary name and hiding a directory before it is
+    /// deleted.
     /// </remarks>
     /// <param name="sourceRelativePath">
     /// The path of the directory to move relative to <see cref="RootPath" />, for example

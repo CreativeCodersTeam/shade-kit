@@ -1,3 +1,6 @@
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+
 namespace CreativeCoders.ShadeKit.Core.Formats;
 
 /// <summary>
@@ -10,11 +13,8 @@ public interface IVersionedJsonSerializer
     /// Parses the specified JSON text into a document of the specified file type.
     /// </summary>
     /// <remarks>
-    /// The text is checked in this order: valid JSON with an object at its root, an integer <c>schemaVersion</c> of
-    /// <c>1</c> or greater, a format version the engine supports, a non-empty <c>minEngineVersion</c> string, and
-    /// field values that match the document type. A document in an older format version is migrated in memory step
-    /// by step if <paramref name="migrateOutdated" /> is <see langword="true" />. Fields the document type does not
-    /// know end up in <see cref="VersionedDocument.ExtensionData" />.
+    /// An outdated document is migrated in memory if <paramref name="migrateOutdated" /> is <see langword="true" />.
+    /// Unknown fields end up in <see cref="VersionedDocument.ExtensionData" />.
     /// </remarks>
     /// <typeparam name="T">The type of the document.</typeparam>
     /// <param name="json">The JSON text to parse.</param>
@@ -43,10 +43,9 @@ public interface IVersionedJsonSerializer
     /// Converts the specified document of the specified file type into JSON text.
     /// </summary>
     /// <remarks>
-    /// The text always carries the current format version of the file type as <c>schemaVersion</c> and the matching
-    /// <c>minEngineVersion</c>, whatever values <paramref name="document" /> holds. Both fields come first, followed
-    /// by the known fields and then the unknown fields from <see cref="VersionedDocument.ExtensionData" />. The text
-    /// is indented with two spaces, uses LF line endings, and ends with a line break.
+    /// Writes the current <c>schemaVersion</c> and <c>minEngineVersion</c> first, whatever <paramref name="document" />
+    /// holds, then the known and the unknown fields; indented with two spaces, with LF line endings and a final line
+    /// break.
     /// </remarks>
     /// <typeparam name="T">The type of the document.</typeparam>
     /// <param name="document">The document to convert.</param>

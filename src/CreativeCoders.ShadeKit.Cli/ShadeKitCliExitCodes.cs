@@ -4,27 +4,16 @@ namespace CreativeCoders.ShadeKit.Cli;
 /// Defines the process exit codes that SHADE kit CLI commands return for expected failures.
 /// </summary>
 /// <remarks>
-/// A successful run returns <c>0</c>, also when warnings were reported. The codes are grouped in ranges per area:
-/// 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, and 255 for failures
-/// of the CLI host itself. <see cref="InvalidArguments" /> (<c>2</c>), the conventional usage error code of
-/// command-line tools, stands outside these ranges because it belongs to no area: it reports command-line arguments
-/// that the option parser rejects before any command runs. <see cref="Canceled" /> (<c>130</c>), the conventional exit
-/// code of a process interrupted by <c>SIGINT</c>, stands outside them for the same reason: any command can be
-/// canceled. In JSON mode, every exit code comes with the matching error code from
-/// <see cref="ShadeKitCliErrorCodes" />.
+/// <c>0</c> means success, also with warnings. Ranges per area: 10–19 store, 20–29 format, 30–39 features, 40–49
+/// phases and gates, 255 host. <see cref="InvalidArguments" /> (<c>2</c>) and <see cref="Canceled" /> (<c>130</c>)
+/// belong to no area. Every exit code has an error code in <see cref="ShadeKitCliErrorCodes" />.
 /// </remarks>
 public static class ShadeKitCliExitCodes
 {
     /// <summary>
-    /// Represents the exit code returned when the option parser rejects the command-line arguments of a command, for
-    /// example because a required argument such as the feature id of <c>shade-kit feature show</c> or the
-    /// <c>--source</c> of <c>shade-kit feature new</c> is missing. The error code is
-    /// <see cref="ShadeKitCliErrorCodes.InvalidArguments" />.
+    /// Represents the exit code returned when the option parser rejects the command-line arguments, for example a
+    /// missing required argument. The error code is <see cref="ShadeKitCliErrorCodes.InvalidArguments" />.
     /// </summary>
-    /// <remarks>
-    /// This is the usage error code. It is outside the area ranges because no command has run when the arguments
-    /// are rejected.
-    /// </remarks>
     public const int InvalidArguments = 2;
 
     /// <summary>
@@ -48,9 +37,9 @@ public static class ShadeKitCliExitCodes
     public const int KitAlreadyInitialized = 13;
 
     /// <summary>
-    /// Represents the exit code returned when a path at which a command must write a file, such as
-    /// <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root, is a directory. The error code
-    /// is <see cref="ShadeKitCliErrorCodes.PathNotAFile" />.
+    /// Represents the exit code returned when a path at which a command needs a file, such as <c>.gitignore</c>,
+    /// <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root, or the repository template of <c>request.md</c>, is
+    /// a directory. The error code is <see cref="ShadeKitCliErrorCodes.PathNotAFile" />.
     /// </summary>
     public const int PathNotAFile = 14;
 
@@ -157,10 +146,6 @@ public static class ShadeKitCliExitCodes
     /// Represents the exit code returned when the user cancels a running command, for example by pressing Ctrl+C. The
     /// error code is <see cref="ShadeKitCliErrorCodes.Canceled" />.
     /// </summary>
-    /// <remarks>
-    /// This is the conventional exit code of a process that ends because of <c>SIGINT</c> (128 + 2). It is outside
-    /// the area ranges because a command of any area can be canceled.
-    /// </remarks>
     public const int Canceled = 130;
 
     /// <summary>
@@ -168,9 +153,8 @@ public static class ShadeKitCliExitCodes
     /// cannot be created, or its options are invalid. The error code is <see cref="ShadeKitCliErrorCodes.HostError" />.
     /// </summary>
     /// <remarks>
-    /// The CLI host reports such failures with negative exit codes based on <see cref="int.MinValue" />. Operating
-    /// systems that keep only the lowest byte of an exit code, such as macOS and Linux, would turn these codes into
-    /// <c>0</c>. The CLI therefore maps every negative exit code to this value.
+    /// The host reports such failures with negative exit codes, which become <c>0</c> on systems that keep only the
+    /// lowest byte, so every negative exit code is mapped to this value.
     /// </remarks>
     public const int HostError = 255;
 

@@ -33,27 +33,14 @@ public class FeatureShowCommand(
     /// <summary>
     /// Reads the feature and writes its state, as plain text or as a JSON envelope.
     /// </summary>
-    /// <remarks>
-    /// Plain output is one line <c>Warning: &lt;message&gt;</c> per warning, then the key/value lines <c>Id</c>,
-    /// <c>Title</c>, <c>Profile</c>, <c>Status</c>, <c>Source</c> (<c>&lt;kind&gt; &lt;value&gt;</c>), <c>Created</c>
-    /// (<c>&lt;createdAt&gt; by &lt;name&gt; &lt;&lt;email&gt;&gt;</c>), <c>Feature directory</c>,
-    /// <c>Feature file</c>, and <c>Request</c>. JSON output is an envelope whose <c>data</c> is a
-    /// <see cref="FeatureShowCommandData" /> and whose <c>warnings</c> contain the format warnings and the feature
-    /// warnings, such as <c>feature-id-mismatch</c>. In JSON mode, an expected failure is written as an error envelope
-    /// and the abort message is not printed.
-    /// </remarks>
     /// <param name="options">The options of the command.</param>
     /// <returns>
     /// A task that represents the asynchronous operation. The task result is <see cref="CommandResult.Success" />.
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// No SHADE kit store is found (exit codes <see cref="ShadeKitCliExitCodes.NotAGitRepository" />,
-    /// <see cref="ShadeKitCliExitCodes.KitRootNotFound" />, or <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />);
-    /// the id is not valid (exit code <see cref="ShadeKitCliExitCodes.InvalidFeatureId" />); the feature does not exist
-    /// (exit code <see cref="ShadeKitCliExitCodes.FeatureNotFound" />); or its <c>feature.json</c> is missing,
-    /// invalid, or too new (exit codes <see cref="ShadeKitCliExitCodes.InvalidFile" /> and
-    /// <see cref="ShadeKitCliExitCodes.FormatTooNew" />).
+    /// No SHADE kit store is found, the id is not valid, the feature does not exist, or its <c>feature.json</c> is
+    /// missing, invalid, or too new.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(FeatureShowCommandOptions options)

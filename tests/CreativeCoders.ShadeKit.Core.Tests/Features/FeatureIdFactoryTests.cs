@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using System.Text;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using Microsoft.Extensions.Time.Testing;
 
@@ -19,12 +20,12 @@ public sealed class FeatureIdFactoryTests : IDisposable
     private static readonly TimeZoneInfo UtcPlusTwo =
         TimeZoneInfo.CreateCustomTimeZone("Test UTC+02", TimeSpan.FromHours(2), "Test UTC+02", "Test UTC+02");
 
-    private static readonly Dictionary<string, string> GitHubTrackers = new() { ["github.com"] = "gh" };
+    private static readonly Dictionary<string, string> GitHubTrackers = new Dictionary<string, string> { ["github.com"] = "gh" };
 
     // 2026-10-20 13:30:45.678 UTC is 15:30:45.678 in UTC+02.
-    private static readonly DateTimeOffset UtcNow = new(2026, 10, 20, 13, 30, 45, 678, TimeSpan.Zero);
+    private static readonly DateTimeOffset UtcNow = new DateTimeOffset(2026, 10, 20, 13, 30, 45, 678, TimeSpan.Zero);
 
-    private readonly TempKitDirectory _repository = new();
+    private readonly TempKitDirectory _repository = new TempKitDirectory();
 
     public void Dispose()
     {

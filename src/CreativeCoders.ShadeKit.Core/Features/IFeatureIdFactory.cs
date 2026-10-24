@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+
 namespace CreativeCoders.ShadeKit.Core.Features;
 
 /// <summary>
@@ -10,35 +12,19 @@ public interface IFeatureIdFactory
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The kind of <paramref name="source" /> is detected in this order: an absolute <c>http</c> or <c>https</c> URL is
-    /// a URL source; otherwise a path, relative to <paramref name="workingDirectory" /> or absolute, for which
-    /// <see cref="File.Exists" /> is <see langword="true" /> is a file source; otherwise <paramref name="source" /> is a
-    /// text source. The path of a directory, or of no existing entry, is therefore a text source. On Unix,
-    /// <see cref="File.Exists" /> is also <see langword="true" /> for FIFOs, devices, sockets, and symbolic links whose
-    /// target does not exist; such an entry is read like a file, and an entry that cannot be opened or read is refused.
-    /// Opening a FIFO that no process writes to blocks; this is not detected.
+    /// <paramref name="source" /> is a URL source if it is an absolute <c>http</c> or <c>https</c> URL, a file
+    /// source if <see cref="File.Exists" /> is <see langword="true" /> for it, and a text source otherwise. A file must
+    /// be UTF-8 text of at most <see cref="FeatureIdFactory.MaxSourceFileSize" /> bytes; a byte order mark is removed.
     /// </para>
     /// <para>
-    /// The file of a file source must have at most <see cref="FeatureIdFactory.MaxSourceFileSize" /> bytes (1 MiB); at
-    /// most one byte more is read, so a larger file or an endless device such as <c>/dev/zero</c> is refused without
-    /// being read completely. An entry that reads no bytes, such as <c>/dev/null</c>, is an empty file.
-    /// The file must be UTF-8 text, with or without byte order mark; the byte order mark is removed.
-    /// A file that starts with a UTF-16 or UTF-32 byte order mark, contains a NUL byte, or contains bytes that are not
-    /// valid UTF-8 is refused, so the original input is never stored with replacement characters.
+    /// A URL whose host is a key of <paramref name="trackers" /> (ignoring case) gives the id
+    /// <c>&lt;prefix&gt;-&lt;number&gt;-&lt;slug&gt;</c>, with the number from the last path segment; every other
+    /// source gives <c>&lt;yyyyMMdd&gt;-&lt;HHmm&gt;-&lt;slug&gt;</c> in local time.
     /// </para>
     /// <para>
-    /// A URL whose host is a key of <paramref name="trackers" /> (compared exactly but ignoring case) gives the
-    /// issue-based id <c>&lt;prefix&gt;-&lt;number&gt;-&lt;slug&gt;</c>, where the number is the last non-empty
-    /// segment of the URL path if it consists only of ASCII digits; the query and the fragment are ignored. Every
-    /// other source gives the time-based id <c>&lt;yyyyMMdd&gt;-&lt;HHmm&gt;-&lt;slug&gt;</c> in local time.
-    /// </para>
-    /// <para>
-    /// <paramref name="title" /> is used if it is not <see langword="null" />, empty, or whitespace. Otherwise the
-    /// title is the first non-empty line of a text source, or the first level-1 ATX heading (<c># …</c>) of a file
-    /// source, else the file name without extension. A URL source needs <paramref name="title" />. The title, given or
-    /// derived, is trimmed and must not contain a control character (<see cref="char.IsControl(char)" />), such as a
-    /// line feed, a carriage return, or a tab. The slug is built from the title by the rules of the feature slug: ASCII
-    /// lower case, at most 40 characters.
+    /// Without <paramref name="title" />, the title is the first non-empty line of a text, the first level-1 heading of
+    /// a file, else the file name; a URL source needs <paramref name="title" />. A title must not contain control
+    /// characters.
     /// </para>
     /// </remarks>
     /// <param name="source">The value of <c>--source</c>: free text, a URL, or a file path.</param>

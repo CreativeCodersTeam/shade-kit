@@ -88,10 +88,8 @@ internal static class CliCommandAbort
     /// Reports the specified error and creates the exception that aborts the command with its exit code.
     /// </summary>
     /// <remarks>
-    /// In plain mode, nothing is written; the returned exception carries the markup-escaped message, which the CLI
-    /// host prints. In JSON mode, a failure envelope with the error is written to <paramref name="jsonWriter" />, and
-    /// the returned exception carries the raw message and does not print it, so that standard output contains only the
-    /// envelope.
+    /// In JSON mode, a failure envelope is written and the exception does not print its message. In plain mode, the
+    /// exception carries the markup-escaped message for the CLI host to print.
     /// </remarks>
     /// <param name="error">The mapped error that stops the command.</param>
     /// <param name="exception">The exception that caused the error.</param>

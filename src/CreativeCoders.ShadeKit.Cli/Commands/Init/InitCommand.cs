@@ -34,25 +34,14 @@ public class InitCommand(
     /// <summary>
     /// Initialises the repository and writes what was created or changed, as plain text or as a JSON envelope.
     /// </summary>
-    /// <remarks>
-    /// The initialisation works at the root of the git repository that contains the current directory. Plain output is
-    /// the line <c>Initialised SHADE kit in &lt;root&gt;.</c>, one line <c>&lt;action&gt;  &lt;path&gt;</c> per file,
-    /// and a hint to commit the files. JSON output is an envelope whose <c>data</c> is an
-    /// <see cref="InitCommandData" />. In JSON mode, an expected failure is written as an error envelope and the abort
-    /// message is not printed.
-    /// </remarks>
     /// <param name="options">The options of the command.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result is <see cref="CommandResult.Success" />.</returns>
+    /// <returns>
+    /// A task that represents the asynchronous operation. The task result is <see cref="CommandResult.Success" />.
+    /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// The current directory is not inside a git repository (exit code
-    /// <see cref="ShadeKitCliExitCodes.NotAGitRepository" />); the repository is already initialised (exit code
-    /// <see cref="ShadeKitCliExitCodes.KitAlreadyInitialized" />); <c>.shadekit</c> at the repository root is a file
-    /// (exit code <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />); <c>.gitignore</c>, <c>CLAUDE.md</c>, or
-    /// <c>AGENTS.md</c> is a directory (exit code <see cref="ShadeKitCliExitCodes.PathNotAFile" />) or not UTF-8
-    /// (exit code <see cref="ShadeKitCliExitCodes.UnsupportedFileEncoding" />); or the managed section markers in
-    /// <c>CLAUDE.md</c> or <c>AGENTS.md</c> are invalid (exit code
-    /// <see cref="ShadeKitCliExitCodes.InvalidManagedSection" />).
+    /// The current directory is not inside a git repository, the repository is already initialised, or
+    /// <c>.shadekit</c>, <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c> cannot be used.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(InitCommandOptions options)
@@ -65,7 +54,7 @@ public class InitCommand(
             .ConfigureAwait(false);
         var data = InitCommandData.FromResult(result);
 
-        _context.WriteSuccess(options.Json, data, () => WriteSummary(data));
+        _context.WriteSuccess(options.Json, data, result.Warnings, () => WriteSummary(data));
 
         return CommandResult.Success;
     }

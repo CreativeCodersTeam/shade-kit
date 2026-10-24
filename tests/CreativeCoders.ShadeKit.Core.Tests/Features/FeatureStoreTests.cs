@@ -1,9 +1,17 @@
 using System.Runtime.Versioning;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
+using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
-using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
+using CreativeCoders.ShadeKit.Core.Tests.Store;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Features;
@@ -17,7 +25,7 @@ public sealed class FeatureStoreTests : IDisposable
     // A folder whose name differs from FeatureId only in case; it is not the feature on any file system.
     private const string CaseVariantFolderName = "GH-142-Login-SSO";
 
-    private readonly FeatureStoreTestContext _context = new();
+    private readonly FeatureStoreTestContext _context = new FeatureStoreTestContext();
 
     public void Dispose()
     {
@@ -353,6 +361,71 @@ public sealed class FeatureStoreTests : IDisposable
 
         (await _context.ReadOverrideFeatureIdAsync())
             .Should().Be(FeatureId);
+    }
+
+    [Fact]
+    public async Task SetCurrentAsync_StoreWritesWithWarnings_ReturnsMismatchWarningFirstAndEachStoreWarningOnce()
+    {
+        // Arrange
+        var editorConfigWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        _context.WriteWarnings = [editorConfigWarning, editorConfigWarning];
+        _context.WriteFeature(FeatureId);
+        _context.WriteFeature(OtherFeatureId);
+        _context.SetBranch($"feature/{OtherFeatureId}");
+
+        // Act
+        var result = await _context.CreateFeatureStore().SetCurrentAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(new CurrentFeatureMismatchWarning(FeatureId, OtherFeatureId), editorConfigWarning);
+    }
+
+    [Fact]
+    public async Task SetCurrentAsync_StoreUsedBeforeWithWarnings_ReturnsNoWarningOfEarlierOperation()
+    {
+        // Arrange
+        var earlierWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        var store = TestKitStores.Create(Path.Combine(_context.RepositoryRootPath, KitStorePaths.RootPath),
+            FixedLineEnding.CreateWriterWithWarningsOnFirstWrite(LineEnding.Lf, earlierWarning), _context.Registry);
+        var featureStore = _context.CreateFeatureStore();
+        var earlierResult = await featureStore.CreateAsync(store,
+            _context.CreateRequest("https://github.com/acme/shop/issues/142", "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Act
+        var result = await featureStore.SetCurrentAsync(store, FeatureId, TestContext.Current.CancellationToken);
+
+        // Assert
+        earlierResult.Warnings
+            .Should().Equal(earlierWarning);
+
+        result.Warnings
+            .Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(LineEnding.Lf, "\n")]
+    [InlineData(LineEnding.CrLf, "\r\n")]
+    public async Task SetCurrentAsync_ExistingFeature_WritesOverrideWithResolvedLineEnding(LineEnding lineEnding,
+        string newLine)
+    {
+        // Arrange
+        _context.LineEnding = lineEnding;
+        _context.WriteFeature(FeatureId);
+
+        // Act
+        await _context.CreateFeatureStore().SetCurrentAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var overrideJson = _context.Repository.ReadFileText(".shadekit", "features", "current-feature.json");
+
+        overrideJson
+            .Should().Be(overrideJson.ReplaceLineEndings(newLine), "every line ends with the resolved line ending")
+            .And.Contain(newLine + "  \"featureId\"")
+            .And.EndWith("}" + newLine);
     }
 
     [Fact]
@@ -1402,12 +1475,8 @@ public sealed class FeatureStoreTests : IDisposable
 
         Exception? thrown;
 
-        using (var readOnlyScope = new ReadOnlyDirectoryScope(
-                   Path.Combine(_context.RepositoryRootPath, ".shadekit", "features")))
+        using (UnixFileModeScope.MakeReadOnly(Path.Combine(_context.RepositoryRootPath, ".shadekit", "features")))
         {
-            Assert.SkipWhen(!readOnlyScope.IsEffective(),
-                "The features folder is writable without permissions, for example because the tests run as root.");
-
             // Act
             thrown = await Record.ExceptionAsync(() => featureStore.DropAsync(_context.CreateStore(), FeatureId,
                 TestContext.Current.CancellationToken));

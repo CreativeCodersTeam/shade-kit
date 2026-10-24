@@ -4,8 +4,7 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Defines the names of the workflow profiles that a feature can follow.
 /// </summary>
 /// <remarks>
-/// The names are part of the agent contract: they are written to <c>feature.json</c>, read from the
-/// <c>defaultProfile</c> field of <c>config.json</c>, and passed with <c>--profile</c>.
+/// The names are part of the agent contract (<c>feature.json</c>, <c>defaultProfile</c>, <c>--profile</c>).
 /// </remarks>
 public static class WorkflowProfiles
 {
