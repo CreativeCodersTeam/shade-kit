@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Git;

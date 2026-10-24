@@ -1,4 +1,4 @@
-using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Init;
 
@@ -12,20 +12,9 @@ public interface IGitIgnorePlanner
     /// <see cref="KitGitIgnoreEntries.All" />, without writing it.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// An entry is present if a line, without trailing spaces, equals the entry or the entry prefixed with <c>/</c>.
-    /// This follows git, which ignores trailing spaces of a pattern but treats leading whitespace and trailing tabs
-    /// as part of it, so a line with leading whitespace or a trailing tab does not count. Missing entries are
-    /// appended without a leading <c>/</c>, under the comment line <c># SHADE kit: local-only files</c>; one blank
-    /// line separates them from existing content, unless the file already ends with an empty line.
-    /// </para>
-    /// <para>
-    /// A missing file gets new content without byte order mark that ends with a line ending. In an existing file, the
-    /// existing lines are kept, a leading UTF-8 byte order mark is kept, and a missing final line ending is added. The
-    /// content holds no line endings: the line ending is decided when the file is written (see
-    /// <see cref="ITextFileWriter.WriteAsync" />), and the whole file, existing lines included, is written with it. A
-    /// file that is not UTF-8 is refused.
-    /// </para>
+    /// An entry is present if a line without trailing spaces equals it, with or without a leading <c>/</c>, as git
+    /// matches patterns. Missing entries are appended under <c># SHADE kit: local-only files</c> after one blank line.
+    /// Existing lines and a byte order mark are kept.
     /// </remarks>
     /// <param name="filePath">The absolute path of the <c>.gitignore</c> file.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>

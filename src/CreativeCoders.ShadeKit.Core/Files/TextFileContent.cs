@@ -1,4 +1,5 @@
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Files;
 
@@ -6,16 +7,9 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// Represents the content of a UTF-8 text file as a list of lines.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The content holds the lines without their line endings, whether the file starts with a UTF-8 byte order mark, and
-/// whether its last line ends with a line ending. The line ending itself is not part of the content: it is decided
-/// when the file is written by an <see cref="ITextFileWriter" />, which joins the lines with one line ending for the
-/// whole file.
-/// </para>
-/// <para>
-/// Text is split into lines only at <c>\n</c> and <c>\r\n</c>; a lone <c>\r</c> stays part of the line. Instances
-/// are immutable; every method that changes the content returns a new instance.
-/// </para>
+/// Holds the lines without line endings, the UTF-8 byte order mark flag, and the final line ending flag; the line
+/// ending is decided by the <see cref="ITextFileWriter" />. Lines are split only at <c>\n</c> and <c>\r\n</c>.
+/// Instances are immutable.
 /// </remarks>
 public sealed class TextFileContent
 {

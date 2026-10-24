@@ -3,7 +3,7 @@ using AwesomeAssertions;
 using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Engine;
-using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests.Output;

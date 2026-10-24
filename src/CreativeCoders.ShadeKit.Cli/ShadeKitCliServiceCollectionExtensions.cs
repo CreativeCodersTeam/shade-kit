@@ -15,14 +15,9 @@ internal static class ShadeKitCliServiceCollectionExtensions
     /// user canceled the run.
     /// </summary>
     /// <remarks>
-    /// <paramref name="jsonWriter" /> is registered as the <see cref="ICliJsonWriter" /> singleton,
-    /// <paramref name="cancellation" /> as the <see cref="ICliCancellation" /> singleton, <see cref="CliErrorMapper" />
-    /// as a singleton, <see cref="ConsoleConfirmation" /> as the <see cref="IConsoleConfirmation" /> singleton, and
-    /// <see cref="ShadeKitCommandContext" /> as a singleton. <see cref="ConsoleConfirmation" /> and
-    /// <see cref="ShadeKitCommandContext" /> need an <see cref="Spectre.Console.IAnsiConsole" /> registration, which the
-    /// caller provides; <see cref="ShadeKitCommandContext" /> and <see cref="CliErrorMapper" /> also need the services of
-    /// <see cref="CreativeCoders.ShadeKit.Core.ShadeKitCoreServiceCollectionExtensions.AddShadeKitCore" />. Existing
-    /// registrations are kept.
+    /// All services are singletons; existing registrations are kept. The caller registers an
+    /// <see cref="Spectre.Console.IAnsiConsole" /> and the services of
+    /// <see cref="CreativeCoders.ShadeKit.Core.ShadeKitCoreServiceCollectionExtensions.AddShadeKitCore" />.
     /// </remarks>
     /// <param name="services">The service collection to add the services to.</param>
     /// <param name="jsonWriter">The writer that commands use for their JSON output.</param>

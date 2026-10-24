@@ -40,26 +40,8 @@ public class FeatureDropCommand(
     /// envelope.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// With <see cref="FeatureDropCommandOptions.Yes" />, the feature folder is deleted at once, and the local override
-    /// is deleted if it selects the feature. Plain output is <c>Dropped feature &lt;id&gt;.</c>, plus a line if the
-    /// override was cleared. In JSON mode, <c>overrideAffected</c> tells whether the override selected the feature and
-    /// <c>overrideCleared</c> whether it was deleted.
-    /// </para>
-    /// <para>
-    /// Without <see cref="FeatureDropCommandOptions.Yes" />, JSON mode deletes nothing and returns the files that would
-    /// be deleted with <c>dropped</c> and <c>overrideCleared</c> set to <see langword="false" />, and
-    /// <c>overrideAffected</c> set to <see langword="true" /> if the override selects the feature and would be
-    /// cleared. Plain mode writes the files that would be deleted and, if the override selects the feature, that it
-    /// would be cleared. If the user can be asked (<see cref="IConsoleConfirmation.CanAsk" />), the command asks for a
-    /// confirmation with the default No and deletes only after a yes; otherwise it writes a hint to run the command
-    /// with <c>--yes</c> and returns without waiting for input. Either way, a run that deletes nothing writes
-    /// <c>Nothing was dropped.</c> and succeeds.
-    /// </para>
-    /// <para>
-    /// JSON output is an envelope whose <c>data</c> is a <see cref="FeatureDropCommandData" />. In JSON mode, an
-    /// expected failure is written as an error envelope and the abort message is not printed.
-    /// </para>
+    /// Without <see cref="FeatureDropCommandOptions.Yes" />, JSON mode only describes the drop; plain mode asks for a
+    /// confirmation (default No) if <see cref="IConsoleConfirmation.CanAsk" />, otherwise it hints at <c>--yes</c>.
     /// </remarks>
     /// <param name="options">The options of the command.</param>
     /// <returns>
@@ -68,10 +50,7 @@ public class FeatureDropCommand(
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// No SHADE kit store is found (exit codes <see cref="ShadeKitCliExitCodes.NotAGitRepository" />,
-    /// <see cref="ShadeKitCliExitCodes.KitRootNotFound" />, or <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />);
-    /// the id is not valid (exit code <see cref="ShadeKitCliExitCodes.InvalidFeatureId" />); or the feature does not
-    /// exist (exit code <see cref="ShadeKitCliExitCodes.FeatureNotFound" />).
+    /// No SHADE kit store is found, the id is not valid, or the feature does not exist.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(FeatureDropCommandOptions options)

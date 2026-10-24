@@ -5,6 +5,9 @@ using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
 
@@ -12,17 +15,8 @@ namespace CreativeCoders.ShadeKit.Core.Store;
 /// Provides access to the content of a SHADE kit store in the file system.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The <c>outdatedFormatOnRead</c> setting of <c>config.json</c> and the warnings of an outdated <c>config.json</c>
-/// are read once and then reused by later reads of the same instance, so reading many outdated files does not read
-/// <c>config.json</c> again for each of them. A failed read of the setting is not reused, and every change that the
-/// instance makes to the store discards the reused setting, so it is read again on the next read that needs it.
-/// </para>
-/// <para>
-/// Text files are written with an <see cref="ITextFileWriter" /> for the repository root, the parent directory of
-/// <see cref="RootPath" />, so the line ending of a file is determined for its path relative to the repository root,
-/// for example <c>.shadekit/templates/spec.md</c>. Each write returns its own warnings; the instance keeps none.
-/// </para>
+/// The <c>outdatedFormatOnRead</c> setting is read once and reused until the instance changes the store; a failed
+/// read is not reused. Line endings are determined for paths relative to the repository root.
 /// </remarks>
 public class KitStore : IKitStore
 {

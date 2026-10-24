@@ -7,9 +7,7 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Represents the git user who created a feature, stored as the <c>createdBy</c> field of <c>feature.json</c>.
 /// </summary>
 /// <remarks>
-/// <see cref="Name" /> and <see cref="Email" /> are required: a file in which one of them is missing or
-/// <see langword="null" /> cannot be read. Fields the engine does not know are kept in <see cref="ExtensionData" />
-/// and written back unchanged.
+/// <see cref="Name" /> and <see cref="Email" /> are required. Unknown fields are kept in <see cref="ExtensionData" />.
 /// </remarks>
 public sealed class FeatureCreator
 {

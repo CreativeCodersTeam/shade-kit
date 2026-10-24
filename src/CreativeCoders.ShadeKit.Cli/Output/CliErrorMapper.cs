@@ -1,14 +1,20 @@
 using System.Reflection;
 using CreativeCoders.Cli.Core;
 using CreativeCoders.Core;
-using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Files;
-using CreativeCoders.ShadeKit.Core.Formats;
-using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Init;
+using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
+using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
 
@@ -18,15 +24,7 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// Maps the exceptions and warnings of the SHADE kit core to the exit codes, error codes, and messages of the CLI.
 /// </summary>
 /// <remarks>
-/// <para>
-/// This is the only place that knows which core exception belongs to which exit code. Commands catch the core
-/// exceptions, map them here, and report the result as text or as a JSON envelope.
-/// </para>
-/// <para>
-/// The failures of the option parser, which rejects command-line arguments before any command runs, are mapped here
-/// too, by <see cref="MapArgumentError" />, and so is the cancellation of a run, by <see cref="MapCancellation" />, so
-/// that every exit code of the CLI is assigned in one class.
-/// </para>
+/// The only place that assigns exit codes, including those of option parser failures and of a canceled run.
 /// </remarks>
 /// <param name="engineVersionProvider">The provider of the running engine version, which messages mention.</param>
 public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
@@ -135,30 +133,10 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     /// <see cref="ShadeKitCliExitCodes.InvalidArguments" />.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The option parser of <c>CreativeCoders.SysConsole.Cli.Parsing</c> reads the arguments of a command into its
-    /// options before the command runs, and the CLI host lets its exceptions escape. They are not core exceptions, and
-    /// no command can catch them, so <see cref="Program" /> maps them with this method. It is <see langword="static" />
-    /// because the failure happens inside the CLI host, where no service of the run can be resolved.
-    /// </para>
-    /// <para>
-    /// A <see cref="RequiredArgumentMissingException" /> names the missing option (<c>--&lt;long name&gt;</c>, else
-    /// <c>-&lt;short name&gt;</c>) or the missing positional argument (<c>&lt;name&gt;</c>, as the help shows it). A
-    /// <see cref="NotAllArgumentsMatchException" /> names the arguments that match no option. An
-    /// <see cref="OptionParserException" />, whose message names only the type of the options, gets a generic text.
-    /// Each of them is also mapped when it is wrapped in one or more <see cref="TargetInvocationException" />
-    /// instances. Arguments without a name or a value are left out of the text.
-    /// </para>
-    /// <para>
-    /// An <see cref="CreativeCoders.SysConsole.Cli.Parsing.Exceptions.OptionCreationFailedException" /> is not mapped:
-    /// it means that the options type of a command cannot be created, which is a defect of the CLI and not of the
-    /// arguments, so it remains an unexpected failure of the run.
-    /// </para>
-    /// <para>
-    /// The message has the form <c>Invalid arguments: &lt;detail&gt;. Run 'shade-kit &lt;command&gt; --help' for
-    /// usage.</c>. The command is the longest command path of the CLI that <paramref name="args" /> start with; if
-    /// there is none, the hint names <c>shade-kit --help</c>.
-    /// </para>
+    /// <see langword="static" />, because the failure happens in the CLI host before any service of the run exists.
+    /// Exceptions wrapped in <see cref="TargetInvocationException" /> are unwrapped. An
+    /// <see cref="CreativeCoders.SysConsole.Cli.Parsing.Exceptions.OptionCreationFailedException" /> is not mapped: it
+    /// is a defect of the CLI, not of the arguments.
     /// </remarks>
     /// <param name="exception">The exception that ended the run.</param>
     /// <param name="args">The command-line arguments of the run.</param>
@@ -193,20 +171,8 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     /// <see cref="ShadeKitCliExitCodes.Canceled" />.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// A command passes the token of <see cref="ICliCancellation" /> to the core, and a core call that stops because of
-    /// it throws an <see cref="OperationCanceledException" />. That exception is not a core exception and escapes the
-    /// command, so <see cref="Program" /> maps it with this method. It is <see langword="static" /> for the same reason
-    /// as <see cref="MapArgumentError" />.
-    /// </para>
-    /// <para>
-    /// An <see cref="OperationCanceledException" /> counts as a cancellation of the run if
-    /// <paramref name="cancellationToken" /> is canceled, or if the token of the exception is canceled. The second
-    /// case covers a replaced <see cref="ICliCancellation" /> and tokens that are linked to the token of the run. The
-    /// CLI has no other source of cancellation, such as a timeout. An <see cref="OperationCanceledException" />
-    /// without a canceled token is not mapped and remains an unexpected failure. The exception is also mapped when it
-    /// is wrapped in one or more <see cref="TargetInvocationException" /> instances.
-    /// </para>
+    /// It counts as a cancellation if <paramref name="cancellationToken" /> or the token of the exception is canceled,
+    /// also when the exception is wrapped in <see cref="TargetInvocationException" />.
     /// </remarks>
     /// <param name="exception">The exception that ended the run.</param>
     /// <param name="cancellationToken">The cancellation token of the run.</param>

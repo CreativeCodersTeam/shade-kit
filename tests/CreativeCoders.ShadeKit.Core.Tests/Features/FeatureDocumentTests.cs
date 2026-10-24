@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Features;
 

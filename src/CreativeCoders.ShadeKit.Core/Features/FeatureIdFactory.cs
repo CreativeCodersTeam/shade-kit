@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Files;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
@@ -9,23 +10,9 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Derives the id, title, and source of a new feature from the input of <c>shade-kit feature new</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The creation time is read once per call with <see cref="TimeProvider.GetLocalNow" /> and truncated to whole
-/// seconds; it is used both for a time-based id and for <see cref="FeatureIdentity.CreatedAt" />.
-/// </para>
-/// <para>
-/// Every path for which <see cref="File.Exists" /> is <see langword="true" /> is a file source; on Unix this includes
-/// FIFOs, devices, sockets, and symbolic links whose target does not exist. The file is read through a
-/// <see cref="FileStream" />, at most <see cref="MaxSourceFileSize" /> + 1 bytes, without relying on the reported
-/// length, because devices such as <c>/dev/zero</c> report a length of 0. A file with more bytes is refused, so a
-/// device that never ends or a huge file is not read completely. An entry that cannot be opened or read, such as a
-/// socket or a symbolic link whose target does not exist, is refused with the reason of the IO error; an entry that
-/// reads no bytes, such as <c>/dev/null</c>, is an empty file.
-/// </para>
-/// <para>
-/// A FIFO (named pipe) is not detected: opening a FIFO that no process writes to blocks until a writer opens it, so
-/// the command waits. This is a known residual risk.
-/// </para>
+/// The creation time is read once per call and truncated to whole seconds. A file source is read through a
+/// <see cref="FileStream" /> up to <see cref="MaxSourceFileSize" /> + 1 bytes, so an endless device such as
+/// <c>/dev/zero</c> is refused. Known residual risk: opening a FIFO without a writer blocks.
 /// </remarks>
 /// <param name="timeProvider">The provider of the local time.</param>
 public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFactory
@@ -33,10 +20,6 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
     /// <summary>
     /// Represents the maximum size, in bytes, of the file of a file source.
     /// </summary>
-    /// <remarks>
-    /// The limit is 1 MiB (1,048,576 bytes). A file source with more bytes is refused with an
-    /// <see cref="InvalidFeatureSourceException" />.
-    /// </remarks>
     public const int MaxSourceFileSize = 1_048_576;
 
     private const string TimeBasedIdFormat = "yyyyMMdd-HHmm";
@@ -289,9 +272,7 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
     /// Finds the text of the first level-1 ATX heading of a Markdown text that is not empty.
     /// </summary>
     /// <remarks>
-    /// Lines in a leading front matter block and in fenced code blocks are no headings; a code block that is not
-    /// closed runs to the end of the text. An optional closing sequence of <c>#</c> characters is not part of the
-    /// heading text.
+    /// Front matter and fenced code blocks are skipped; an unclosed code block runs to the end of the text.
     /// </remarks>
     /// <returns>The heading text, or <see langword="null" /> if the text has no such heading.</returns>
     private static string? FindLevelOneHeading(string text)

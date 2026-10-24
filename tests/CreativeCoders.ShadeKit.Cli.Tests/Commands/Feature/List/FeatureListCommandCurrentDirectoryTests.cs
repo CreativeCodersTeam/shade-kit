@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.List;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Spectre.Console;

@@ -1,4 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -6,16 +9,9 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Represents the result of <see cref="IFeatureStore.GetCurrentAsync" />.
 /// </summary>
 /// <remarks>
-/// <para>
-/// A current feature that cannot be resolved is a result, not an error: <paramref name="FeatureId" />,
-/// <paramref name="Feature" />, <paramref name="Origin" />, and <see cref="Paths" /> are then all
-/// <see langword="null" />.
-/// </para>
-/// <para>
-/// The name of the feature folder is the id of the feature. <paramref name="Feature" /> is the document as it is
-/// stored, so its <see cref="FeatureDocument.Id" /> can differ from <paramref name="FeatureId" />;
-/// <paramref name="Warnings" /> then contains a <see cref="FeatureIdMismatchWarning" /> warning.
-/// </para>
+/// If no current feature is resolved, <paramref name="FeatureId" />, <paramref name="Feature" />,
+/// <paramref name="Origin" />, and <see cref="Paths" /> are <see langword="null" />. A
+/// <see cref="FeatureDocument.Id" /> that differs from the folder name gives a <see cref="FeatureIdMismatchWarning" />.
 /// </remarks>
 /// <param name="FeatureId">
 /// The id of the current feature, which is the name of its folder; or <see langword="null" /> if no current feature is

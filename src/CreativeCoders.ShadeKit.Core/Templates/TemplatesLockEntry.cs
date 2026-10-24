@@ -10,9 +10,8 @@ namespace CreativeCoders.ShadeKit.Core.Templates;
 /// Represents one installed template in <c>.shadekit/templates.lock.json</c>.
 /// </summary>
 /// <remarks>
-/// <see cref="Path" />, <see cref="KitVersion" />, and <see cref="Hash" /> are required: a lock file in which one of
-/// them is missing or <see langword="null" /> cannot be read. Fields the engine does not know are kept in
-/// <see cref="ExtensionData" /> and written back unchanged.
+/// <see cref="Path" />, <see cref="KitVersion" />, and <see cref="Hash" /> are required. Unknown fields are kept in
+/// <see cref="ExtensionData" />.
 /// </remarks>
 public sealed class TemplatesLockEntry
 {
@@ -55,18 +54,8 @@ public sealed class TemplatesLockEntry
     /// Computes the <see cref="Hash" /> of the content of a template.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The hash is computed over the UTF-8 bytes of the lines joined by LF, followed by one more LF if
-    /// <see cref="TextFileContent.HasFinalLineEnding" /> is <see langword="true" /> and preceded by the UTF-8 byte order
-    /// mark if <see cref="TextFileContent.HasUtf8Bom" /> is <see langword="true" />. The line ending with which the
-    /// template is written, or with which Git checks it out, therefore does not change the hash, and an unchanged
-    /// template keeps the hash of its lock entry.
-    /// </para>
-    /// <para>
-    /// This equals the hash of the written bytes with every CRLF line ending counted as LF, so lock entries written
-    /// before the content was held as lines stay valid. A carriage return that is not followed by a line feed is part
-    /// of its line and is hashed as it is.
-    /// </para>
+    /// Hashes the UTF-8 bytes of the lines joined by LF, with the byte order mark and final line ending as recorded, so
+    /// the line ending of the written file does not change the hash and older lock entries stay valid.
     /// </remarks>
     /// <param name="content">The content of the template.</param>
     /// <returns>

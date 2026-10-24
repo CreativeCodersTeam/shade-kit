@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
+
 namespace CreativeCoders.ShadeKit.Core.Git;
 
 /// <summary>
@@ -31,9 +33,7 @@ public interface IGitRepositoryInfo
     /// Gets the git identity that is configured for the specified repository.
     /// </summary>
     /// <remarks>
-    /// The values are read with <c>git config user.name</c> and <c>git config user.email</c>, run in
-    /// <paramref name="repositoryRootPath" />, so the repository, global, and system configuration all apply. A key
-    /// counts as missing if <c>git</c> exits with exit code 1 (not set) or the value is empty or whitespace.
+    /// A key counts as missing if it is not set or its value is empty or whitespace.
     /// </remarks>
     /// <param name="repositoryRootPath">The root directory of the repository.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>

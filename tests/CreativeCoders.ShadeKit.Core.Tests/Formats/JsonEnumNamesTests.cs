@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Init;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Formats;

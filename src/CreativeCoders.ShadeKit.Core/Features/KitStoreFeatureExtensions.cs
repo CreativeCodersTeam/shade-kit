@@ -12,15 +12,8 @@ internal static class KitStoreFeatureExtensions
     /// Determines whether the specified store has a feature with the specified id.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The id is checked before the store is accessed, so an invalid id never leads to a file system access.
-    /// </para>
-    /// <para>
-    /// The id is compared ordinally with the real names of the feature folders from
-    /// <see cref="IKitStore.GetFeatureNames" />, the same source the feature list uses. A check of the folder path
-    /// would ignore case on a case-insensitive file system (macOS, Windows), so a folder whose name differs from the
-    /// id only in case would be taken as the feature, although its name is not a valid feature id.
-    /// </para>
+    /// The id is compared ordinally with the real folder names, because a path check would ignore case on
+    /// case-insensitive file systems. An invalid id never leads to a file system access.
     /// </remarks>
     /// <param name="store">The SHADE kit store.</param>
     /// <param name="featureId">The id of the feature.</param>

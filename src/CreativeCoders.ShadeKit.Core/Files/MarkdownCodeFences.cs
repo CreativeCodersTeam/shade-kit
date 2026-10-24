@@ -6,9 +6,8 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// Provides the detection of fenced code blocks in Markdown text, as CommonMark defines them.
 /// </summary>
 /// <remarks>
-/// A fenced code block starts with a line of at least three backticks or tildes, indented by at most three spaces.
-/// The info string after a backtick fence must not contain a backtick. The block ends with a line that contains only
-/// the same character, at least as many times as the opening fence, or at the end of the text.
+/// A fence is at least three backticks or tildes, indented by at most three spaces; it closes with at least as
+/// many of the same character, or at the end of the text.
 /// </remarks>
 internal static class MarkdownCodeFences
 {

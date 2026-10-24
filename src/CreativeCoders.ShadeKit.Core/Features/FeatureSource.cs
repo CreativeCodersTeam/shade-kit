@@ -8,10 +8,8 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// <c>feature.json</c>.
 /// </summary>
 /// <remarks>
-/// <see cref="Kind" /> is required: a file in which it is missing, <see langword="null" />, or not one of
-/// <c>text</c>, <c>url</c>, and <c>file</c> cannot be read. A <c>url</c> or <c>file</c> source without a non-empty
-/// <see cref="Value" /> cannot be read either. Fields the engine does not know are kept in
-/// <see cref="ExtensionData" /> and written back unchanged.
+/// <see cref="Kind" /> is required; a <c>url</c> or <c>file</c> source also needs a non-empty <see cref="Value" />.
+/// Unknown fields are kept in <see cref="ExtensionData" />.
 /// </remarks>
 public sealed class FeatureSource : IJsonOnDeserialized
 {

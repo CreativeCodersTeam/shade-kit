@@ -1,10 +1,12 @@
 using System.Runtime.Versioning;
-using System.Text;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;

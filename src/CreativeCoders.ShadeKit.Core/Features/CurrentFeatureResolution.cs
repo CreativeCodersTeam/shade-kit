@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 

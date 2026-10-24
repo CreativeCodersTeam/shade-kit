@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using EditorConfig.Core;
 
 namespace CreativeCoders.ShadeKit.Core.Files;
@@ -9,19 +10,9 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// library.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Every call creates a new <see cref="EditorConfigParser" />, because a parser keeps the <c>.editorconfig</c> files
-/// it found for a directory until it is discarded and would not notice files that are created or deleted later. The
-/// parser reads each <c>.editorconfig</c> file through a factory of this class, so the path of a file that cannot be
-/// read is known for the warning, and the files that were read can be evaluated one by one to find a file whose
-/// content the parser cannot evaluate.
-/// </para>
-/// <para>
-/// The factory keeps every parsed <c>.editorconfig</c> file for the lifetime of the instance and parses it again only
-/// if its time of last write, its size, or, outside Windows, its Unix file mode has changed since. The class is
-/// registered as a singleton and the CLI builds one service container per command run, so a command that writes
-/// several files reads each <c>.editorconfig</c> file once.
-/// </para>
+/// Each call uses a new parser, so created or deleted <c>.editorconfig</c> files are noticed. Parsed files are kept
+/// for the lifetime of the instance (one command run) and parsed again only if their write time, size, or Unix
+/// mode changed.
 /// </remarks>
 public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingResolver
 {

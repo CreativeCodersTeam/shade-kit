@@ -1,10 +1,12 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
-using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
 using CreativeCoders.ShadeKit.Tests.Shared;

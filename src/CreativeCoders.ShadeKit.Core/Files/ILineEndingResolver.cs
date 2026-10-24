@@ -11,16 +11,9 @@ public interface ILineEndingResolver
     /// Gets the line ending with which the specified file is written.
     /// </summary>
     /// <remarks>
-    /// The first source that decides wins: the git checkout configuration (see
-    /// <see cref="IGitLineEndingResolver.GetLineEndingAsync" />), then the <c>end_of_line</c> property of the
-    /// <c>.editorconfig</c> files (see <see cref="IEditorConfigLineEndingResolver.GetLineEnding" />), and finally the
-    /// line ending of the operating system: <see cref="LineEnding.CrLf" /> on Windows and <see cref="LineEnding.Lf" />
-    /// everywhere else. The file does not need to exist.
-    /// <para>
-    /// If an <c>.editorconfig</c> file cannot be read or cannot be evaluated because of its content, the
-    /// <c>.editorconfig</c> files do not decide, the line ending of the operating system is used, and the result
-    /// carries an <see cref="EditorConfigUnreadableWarning" /> or an <see cref="EditorConfigInvalidWarning" />.
-    /// </para>
+    /// The first source that decides wins: git (<see cref="IGitLineEndingResolver.GetLineEndingAsync" />),
+    /// <c>.editorconfig</c> (<see cref="IEditorConfigLineEndingResolver.GetLineEnding" />), then the operating system.
+    /// An unusable <c>.editorconfig</c> file adds a warning to the result. The file need not exist.
     /// </remarks>
     /// <param name="repositoryRootPath">The root directory of the repository.</param>
     /// <param name="relativePath">
@@ -46,9 +39,7 @@ public interface ILineEndingResolver
     /// fewer <c>git</c> processes.
     /// </summary>
     /// <remarks>
-    /// The git attributes of all files are read at once (see
-    /// <see cref="IGitLineEndingResolver.PreloadAttributesAsync" />). Calling this method is optional; it does not
-    /// change which line ending <see cref="GetLineEndingAsync" /> returns.
+    /// Optional; it reads the git attributes of all files at once and does not change the results.
     /// </remarks>
     /// <param name="repositoryRootPath">The root directory of the repository.</param>
     /// <param name="relativePaths">

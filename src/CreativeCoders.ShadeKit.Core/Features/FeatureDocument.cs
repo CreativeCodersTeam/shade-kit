@@ -6,13 +6,9 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Represents the identity and status of a feature, stored in <c>.shadekit/features/&lt;id&gt;/feature.json</c>.
 /// </summary>
 /// <remarks>
-/// This model holds the fields of format version <c>1</c> (format id <see cref="FormatIds.Feature" />).
-/// <see cref="Id" />, <see cref="Title" />, <see cref="Profile" />, <see cref="Source" />, <see cref="CreatedAt" />,
-/// and <see cref="CreatedBy" /> are required: a file in which one of them is missing, <see langword="null" />, or of
-/// the wrong type cannot be read. Fields the engine does not know, for example those of later packages, are kept in
-/// <see cref="VersionedDocument.ExtensionData" /> and written back unchanged. The fields are written in the order in
-/// which the properties are declared, after <see cref="VersionedDocument.SchemaVersion" /> and
-/// <see cref="VersionedDocument.MinEngineVersion" />.
+/// Format version <c>1</c>. <see cref="Id" />, <see cref="Title" />, <see cref="Profile" />, <see cref="Source" />,
+/// <see cref="CreatedAt" />, and <see cref="CreatedBy" /> are required. Unknown fields, for example those of later
+/// packages, are kept in <see cref="VersionedDocument.ExtensionData" />.
 /// </remarks>
 public sealed class FeatureDocument : VersionedDocument
 {

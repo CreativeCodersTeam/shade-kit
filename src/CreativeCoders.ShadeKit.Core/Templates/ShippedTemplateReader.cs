@@ -7,9 +7,8 @@ namespace CreativeCoders.ShadeKit.Core.Templates;
 /// Reads shipped templates from the resources embedded in the SHADE kit core assembly.
 /// </summary>
 /// <remarks>
-/// A template source is embedded under the name <c>templates/</c> followed by its
-/// <see cref="ShippedTemplate.ResourcePath" />. The name is the same on every operating system, and embedded
-/// resources are also available in a self-contained single-file build.
+/// A template is embedded as <c>templates/</c> followed by its <see cref="ShippedTemplate.ResourcePath" />, which
+/// also works in a self-contained single-file build.
 /// </remarks>
 public sealed class ShippedTemplateReader : IShippedTemplateReader
 {

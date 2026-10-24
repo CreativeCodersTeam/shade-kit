@@ -1,4 +1,5 @@
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
 
@@ -8,11 +9,9 @@ namespace CreativeCoders.ShadeKit.Core.Store;
 /// directory after it has been renamed to a hidden dropping directory.
 /// </summary>
 /// <remarks>
-/// The hidden directories lie next to the directory they belong to and are named
-/// <c>.&lt;name&gt;.&lt;8 hex digits&gt;.tmp</c> (staging) or <c>.&lt;name&gt;.&lt;8 hex digits&gt;.dropping</c>
-/// (dropping); the random part keeps concurrent runs apart. A directory that a failed run leaves behind keeps its
-/// hidden name, so a listing that skips the names for which <see cref="IsHiddenName" /> is <see langword="true" />
-/// never shows it.
+/// The hidden directories lie next to their directory, named <c>.&lt;name&gt;.&lt;8 hex digits&gt;.tmp</c> or
+/// <c>.&lt;name&gt;.&lt;8 hex digits&gt;.dropping</c>; leftovers of a failed run stay hidden
+/// (<see cref="IsHiddenName" />).
 /// </remarks>
 internal static class KitStoreDirectoryExtensions
 {
@@ -41,10 +40,7 @@ internal static class KitStoreDirectoryExtensions
     /// created by a concurrent run, is never touched.
     /// </summary>
     /// <remarks>
-    /// The steps are: create the staging directory, call <paramref name="populate" />, check for cancellation, and
-    /// move the staging directory to <paramref name="relativePath" /> with <see cref="IKitStore.MoveDirectory" />. If
-    /// any step fails or the operation is canceled, only the staging directory is deleted (best effort; a staging
-    /// directory that cannot be deleted stays hidden) and the failure is thrown.
+    /// On failure or cancellation, only the staging directory is deleted (best effort) and the failure is thrown.
     /// </remarks>
     /// <param name="store">The SHADE kit store.</param>
     /// <param name="relativePath">

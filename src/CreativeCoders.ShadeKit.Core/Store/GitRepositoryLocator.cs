@@ -1,4 +1,5 @@
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
 

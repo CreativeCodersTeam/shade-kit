@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Tests.Shared;

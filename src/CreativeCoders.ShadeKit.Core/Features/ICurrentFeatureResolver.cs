@@ -1,5 +1,6 @@
-using CreativeCoders.ShadeKit.Core.Formats;
-using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
@@ -8,18 +9,9 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Resolves the current feature of a SHADE kit store from the current git branch and the local override.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The repository root is the parent directory of <see cref="IKitStore.RootPath" />, because the SHADE kit root
-/// directory <c>.shadekit</c> lies at the root of the git repository. <c>git</c> is run there to read the current
-/// branch.
-/// </para>
-/// <para>
-/// The current branch selects the feature whose id is the part of the branch name after its last <c>/</c>, for example
-/// <c>gh-142-login-sso</c> for <c>feature/gh-142-login-sso</c>, or the whole name if it contains no <c>/</c>. The
-/// branch counts only if that part is a valid feature id (<see cref="FeatureIds.IsValid" />) and the folder
-/// <c>features/&lt;id&gt;</c> of the store exists; otherwise, and for a detached <c>HEAD</c>, the branch selects no
-/// feature and no warning is reported.
-/// </para>
+/// The branch selects the feature named by the part after its last <c>/</c>, for example <c>gh-142-login-sso</c>
+/// for <c>feature/gh-142-login-sso</c>, if that is a valid id whose folder exists; otherwise, and for a detached
+/// <c>HEAD</c>, it selects no feature and no warning is reported.
 /// </remarks>
 public interface ICurrentFeatureResolver
 {
@@ -27,25 +19,10 @@ public interface ICurrentFeatureResolver
     /// Resolves the current feature of the specified store.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The feature selected by the current branch wins. Otherwise the local override
-    /// <c>features/current-feature.json</c>, read with <see cref="FormatAccess.Read" /> access, selects the feature.
-    /// Otherwise no current feature is resolved.
-    /// </para>
-    /// <para>
-    /// An override whose id is not a valid feature id or whose folder does not exist is ignored with a
-    /// <see cref="CurrentFeatureMissingWarning" /> warning, also when the branch selects a feature; no path
-    /// is built from an invalid id. If the branch and the override select different existing features, the branch
-    /// wins with a <see cref="CurrentFeatureMismatchWarning" /> warning. The override is read even when
-    /// the branch selects a feature, so its problems are always reported.
-    /// </para>
-    /// <para>
-    /// An override that cannot be used because of its own format (invalid, a format version newer than the engine
-    /// supports, or an older format version while <c>outdatedFormatOnRead</c> is <c>stop</c>) is ignored with a
-    /// <see cref="CurrentFeatureInvalidWarning" /> warning that describes the problem; the branch can
-    /// still select a feature, and the file is left unchanged. A format problem of <c>config.json</c>, which is read
-    /// for the policy of an outdated override, still stops the resolution.
-    /// </para>
+    /// The branch wins over the local override. The override is always read and never changed; an invalid or missing
+    /// feature gives a <see cref="CurrentFeatureMissingWarning" />, an unusable format a
+    /// <see cref="CurrentFeatureInvalidWarning" />, and a feature other than the branch's a
+    /// <see cref="CurrentFeatureMismatchWarning" />. Format problems of <c>config.json</c> still stop the resolution.
     /// </remarks>
     /// <param name="store">The SHADE kit store whose current feature is resolved.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
@@ -77,10 +54,6 @@ public interface ICurrentFeatureResolver
     /// Resolves the feature that the current git branch selects in the specified store, without reading the local
     /// override.
     /// </summary>
-    /// <remarks>
-    /// <c>shade-kit feature set</c> uses this method to warn when the branch selects a feature other than the one it
-    /// sets.
-    /// </remarks>
     /// <param name="store">The SHADE kit store whose features the branch is matched against.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>

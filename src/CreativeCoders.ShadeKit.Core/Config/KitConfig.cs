@@ -9,10 +9,8 @@ namespace CreativeCoders.ShadeKit.Core.Config;
 /// Represents the repository configuration stored in <c>.shadekit/config.json</c>.
 /// </summary>
 /// <remarks>
-/// The team owns the values; the engine owns the schema. This model holds the fields of format version <c>1</c>.
-/// Fields the engine does not know are kept in <see cref="VersionedDocument.ExtensionData" /> and written back
-/// unchanged. The fields are written in the order in which the properties are declared, after
-/// <see cref="VersionedDocument.SchemaVersion" /> and <see cref="VersionedDocument.MinEngineVersion" />.
+/// The team owns the values; the engine owns the schema (format version <c>1</c>). Unknown fields are kept in
+/// <see cref="VersionedDocument.ExtensionData" />.
 /// </remarks>
 public sealed class KitConfig : VersionedDocument, IJsonOnDeserialized
 {
@@ -47,11 +45,9 @@ public sealed class KitConfig : VersionedDocument, IJsonOnDeserialized
     /// Gets or sets the mapping from issue URL host to the id prefix of feature ids created from such an issue.
     /// </summary>
     /// <value>
-    /// The id prefixes keyed by host name. The default maps <c>github.com</c> to <c>gh</c>, which also applies when the
-    /// field is missing; an empty mapping turns issue-based ids off. Host names are written exactly as given. A
-    /// <see langword="null" /> field, a host with a <see langword="null" /> id prefix, or an id prefix that does not
-    /// consist of lowercase letters <c>a</c>–<c>z</c> and digits joined by single hyphens (for example <c>gh</c> or
-    /// <c>jira-1</c>, the pattern of <see cref="FeatureIds" />) makes the file invalid.
+    /// The id prefixes keyed by host name. The default maps <c>github.com</c> to <c>gh</c>; an empty mapping turns
+    /// issue-based ids off. A <see langword="null" /> field or prefix, or a prefix that does not match the pattern of
+    /// <see cref="FeatureIds" />, makes the file invalid.
     /// </value>
     public Dictionary<string, string> Trackers { get; set; } = new Dictionary<string, string> { ["github.com"] = "gh" };
 

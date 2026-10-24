@@ -1,5 +1,6 @@
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
 
@@ -7,8 +8,8 @@ namespace CreativeCoders.ShadeKit.Core.Store;
 /// Writes the files of a directory of the SHADE kit store that is moved to its final path after it is complete.
 /// </summary>
 /// <remarks>
-/// The paths are relative to the directory. Each file is written below the directory, but its line ending is
-/// determined for the path where it ends up; see <see cref="IKitStore.CreateDirectoryWriter" />.
+/// Paths are relative to the directory; line endings are determined for the final path, see
+/// <see cref="IKitStore.CreateDirectoryWriter" />.
 /// </remarks>
 public interface IKitDirectoryWriter
 {

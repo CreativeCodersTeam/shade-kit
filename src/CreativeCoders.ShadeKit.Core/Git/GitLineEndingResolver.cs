@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Git;
 
@@ -10,21 +11,9 @@ namespace CreativeCoders.ShadeKit.Core.Git;
 /// through an <see cref="IGitCommandRunner" />.
 /// </summary>
 /// <remarks>
-/// <para>
-/// A call starts one <c>git check-attr</c> process for the attributes <c>eol</c>, <c>text</c>, and <c>crlf</c>, and
-/// only if the attributes do not decide, one <c>git config</c> process for <c>core.autocrlf</c> and, if the file is
-/// marked as text, one for <c>core.eol</c>.
-/// </para>
-/// <para>
-/// The values of <c>core.autocrlf</c> and <c>core.eol</c> are read at most once per repository root and instance and
-/// then kept for the lifetime of the instance, because they are the same for every file of a repository. The class is
-/// registered as a singleton and the CLI builds one service container per command run, so the values are read once
-/// per command run and a later run reads them again; another container gets another instance with its own values.
-/// A value is kept only after <c>git config</c> succeeded or reported the key as not set; a failed or canceled read is
-/// not kept. Two calls that run at the same time can both read a value that is not kept yet. The attributes are read
-/// for every call, because they depend on the path, unless <see cref="PreloadAttributesAsync" /> has read them for the
-/// file before; those are kept for the lifetime of the instance as well.
-/// </para>
+/// Runs one <c>git check-attr</c> per file, unless <see cref="PreloadAttributesAsync" /> read the attributes, and
+/// <c>git config</c> only if the attributes do not decide. Configuration values are cached per repository root for
+/// the lifetime of the instance, i.e. one command run; failed or canceled reads are not cached.
 /// </remarks>
 public sealed class GitLineEndingResolver : IGitLineEndingResolver
 {

@@ -1,3 +1,6 @@
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
+using CreativeCoders.ShadeKit.Core.Warnings;
+
 namespace CreativeCoders.ShadeKit.Core.Files;
 
 /// <summary>
@@ -9,9 +12,8 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// <c>.editorconfig</c> files do not decide.
 /// </param>
 /// <param name="Warning">
-/// The warning about the <c>.editorconfig</c> file that could not be used, or <see langword="null" /> if all files were
-/// read and evaluated: an <see cref="EditorConfigUnreadableWarning" /> if a file could not be read, or an
-/// <see cref="EditorConfigInvalidWarning" /> if a file could not be evaluated because of its content. If it is set,
-/// <paramref name="LineEnding" /> is <see langword="null" />.
+/// An <see cref="EditorConfigUnreadableWarning" /> or <see cref="EditorConfigInvalidWarning" /> if a file could
+/// not be used, in which case <paramref name="LineEnding" /> is <see langword="null" />; otherwise,
+/// <see langword="null" />.
 /// </param>
 public sealed record EditorConfigLineEndingResult(LineEnding? LineEnding, KitWarning? Warning);

@@ -4,8 +4,11 @@ using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Gates;
+using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Init;
 

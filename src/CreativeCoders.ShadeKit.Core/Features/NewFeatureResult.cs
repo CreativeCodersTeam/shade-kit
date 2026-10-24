@@ -1,3 +1,7 @@
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
+using CreativeCoders.ShadeKit.Core.Warnings;
+
 namespace CreativeCoders.ShadeKit.Core.Features;
 
 /// <summary>
@@ -9,7 +13,7 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// </param>
 /// <param name="Warnings">
 /// The format warnings from reading <c>config.json</c>, followed by the warnings of the files that the create operation
-/// wrote, for example an <see cref="Files.EditorConfigUnreadableWarning" />; each warning only once.
+/// wrote, for example an <see cref="EditorConfigUnreadableWarning" />; each warning only once.
 /// </param>
 public sealed record NewFeatureResult(
     FeatureDocument Feature,

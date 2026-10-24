@@ -1,6 +1,6 @@
 using System.Text.Json;
 using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
 using FakeItEasy;
 using Spectre.Console.Testing;

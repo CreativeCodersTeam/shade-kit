@@ -40,12 +40,7 @@ public class FeatureNewCommand(
     /// </summary>
     /// <remarks>
     /// A relative file path in <see cref="FeatureNewCommandOptions.Source" /> is resolved against the current
-    /// directory. Plain output is one line <c>Warning: &lt;message&gt;</c> per warning, the line
-    /// <c>Created feature &lt;id&gt; (&lt;profile&gt;).</c>, one indented line each for the paths of
-    /// <c>feature.json</c> and <c>request.md</c>, and the line <c>Suggested branch: feature/&lt;id&gt;</c>. JSON output
-    /// is an envelope whose <c>data</c> is a <see cref="FeatureNewCommandData" /> and whose <c>warnings</c> contain the
-    /// format warnings of the files read. In JSON mode, an expected failure is written as an error envelope and the
-    /// abort message is not printed.
+    /// directory.
     /// </remarks>
     /// <param name="options">The options of the command.</param>
     /// <returns>
@@ -53,15 +48,8 @@ public class FeatureNewCommand(
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// No SHADE kit store is found (exit codes <see cref="ShadeKitCliExitCodes.NotAGitRepository" />,
-    /// <see cref="ShadeKitCliExitCodes.KitRootNotFound" />, or <see cref="ShadeKitCliExitCodes.KitRootNotADirectory" />);
-    /// the feature exists already (exit code <see cref="ShadeKitCliExitCodes.FeatureAlreadyExists" />); the source is
-    /// empty or a tracker URL without an issue number (exit code <see cref="ShadeKitCliExitCodes.InvalidFeatureSource" />);
-    /// no usable title is given or derived (exit code <see cref="ShadeKitCliExitCodes.InvalidFeatureTitle" />); the
-    /// profile is unknown (exit code <see cref="ShadeKitCliExitCodes.UnknownProfile" />); the git identity is not set
-    /// (exit code <see cref="ShadeKitCliExitCodes.GitIdentityMissing" />); <c>git</c> cannot be run (exit code
-    /// <see cref="ShadeKitCliExitCodes.GitUnavailable" />); or a kit file is invalid or too new (exit codes
-    /// <see cref="ShadeKitCliExitCodes.InvalidFile" /> and <see cref="ShadeKitCliExitCodes.FormatTooNew" />).
+    /// No SHADE kit store is found, the feature exists already, the source, title, or profile cannot be used, the git
+    /// identity is not set, <c>git</c> cannot be run, or a kit file is invalid or too new.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(FeatureNewCommandOptions options)

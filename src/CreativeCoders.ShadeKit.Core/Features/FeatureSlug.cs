@@ -20,12 +20,8 @@ internal static class FeatureSlug
     /// Creates the slug of the specified title.
     /// </summary>
     /// <remarks>
-    /// The title is normalized to Unicode form D, non-spacing marks are removed (so <c>ä</c> becomes <c>a</c>), and
-    /// the result is converted to lower case with the invariant culture. Every run of characters other than
-    /// <c>a</c>–<c>z</c> and <c>0</c>–<c>9</c> becomes one <c>-</c>, and leading and trailing <c>-</c> are removed.
-    /// A slug longer than <see cref="MaxLength" /> is cut at the last <c>-</c> at or before position
-    /// <see cref="MaxLength" />, so that no word is split; if there is no such <c>-</c>, it is cut after
-    /// <see cref="MaxLength" /> characters. Leading and trailing <c>-</c> are removed again.
+    /// Removes diacritics, lowercases, turns every run of other characters into one <c>-</c>, and cuts a slug longer
+    /// than <see cref="MaxLength" /> at the last <c>-</c> within the limit, so no word is split.
     /// </remarks>
     /// <param name="title">The title to build the slug from.</param>
     /// <returns>

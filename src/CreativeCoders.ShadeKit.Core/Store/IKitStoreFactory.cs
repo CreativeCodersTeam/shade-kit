@@ -1,14 +1,13 @@
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
+
 namespace CreativeCoders.ShadeKit.Core.Store;
 
 /// <summary>
 /// Creates <see cref="IKitStore" /> instances for the SHADE kit root of a git repository.
 /// </summary>
 /// <remarks>
-/// <see cref="Create()" /> and <see cref="Create(string)" /> search for the root of the git repository that contains a
-/// directory with <see cref="IGitRepositoryLocator" />: the closest directory that contains a <c>.git</c> directory
-/// or file (a worktree or submodule). Only a <c>.shadekit</c> directory at that repository root is a SHADE kit root;
-/// <c>.shadekit</c> directories below it are ignored. <see cref="CreateForRepositoryRoot" /> skips the search for
-/// callers that already know the repository root, for example while the SHADE kit root is being created.
+/// Only a <c>.shadekit</c> directory at the root of the git repository is a SHADE kit root; that root is the
+/// closest directory with a <c>.git</c> directory or file. <see cref="CreateForRepositoryRoot" /> skips the search.
 /// </remarks>
 public interface IKitStoreFactory
 {

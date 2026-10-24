@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.Versioning;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Files;
-using EditorConfig.Core;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Files;

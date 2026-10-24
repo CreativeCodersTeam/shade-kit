@@ -5,9 +5,8 @@ namespace CreativeCoders.ShadeKit.Cli;
 /// no matching error.
 /// </summary>
 /// <remarks>
-/// Skills branch on these codes instead of parsing messages. A warning code never stops a command and therefore has
-/// no exit code in <see cref="ShadeKitCliExitCodes" />. Warnings that also exist as errors, such as
-/// <see cref="ShadeKitCliErrorCodes.UpgradeNeeded" />, use the code from <see cref="ShadeKitCliErrorCodes" />.
+/// Skills branch on these codes instead of parsing messages. Warnings that also exist as errors use the code from
+/// <see cref="ShadeKitCliErrorCodes" />.
 /// </remarks>
 public static class ShadeKitCliWarningCodes
 {

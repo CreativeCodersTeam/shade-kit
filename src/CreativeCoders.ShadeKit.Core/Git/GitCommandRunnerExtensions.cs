@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
+
 namespace CreativeCoders.ShadeKit.Core.Git;
 
 /// <summary>

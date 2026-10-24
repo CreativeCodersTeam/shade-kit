@@ -8,23 +8,12 @@ namespace CreativeCoders.ShadeKit.Core.Git;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The entries of <c>PATH</c> are separated by <c>;</c> on Windows and by <c>:</c> on other operating systems and are
-/// searched in order. Empty entries and entries that are not fully qualified, such as <c>.</c> or <c>bin</c>, are
-/// skipped, because they would be resolved against the current directory, which is usually the repository root.
-/// This prevents a <c>git</c> executable that is committed to a repository from being started.
+/// Empty and relative <c>PATH</c> entries are skipped, so a <c>git</c> committed to a repository is never started.
+/// The first existing file wins; with the Unix rules it also needs an execute bit.
 /// </para>
 /// <para>
-/// On Windows the executable is named <c>git.exe</c>. Double quotation marks are removed from the entries, and a
-/// <c>;</c> between double quotation marks does not separate entries, so <c>"C:\Tools;Git\cmd"</c> is one directory;
-/// <c>PATHEXT</c> is not evaluated, so shims such as <c>git.cmd</c> are not found. On other operating systems the
-/// executable is named <c>git</c> and double quotation marks are part of the directory name. Entries are not trimmed.
-/// The first candidate that is an existing file (not a directory) is returned; symbolic links are followed. With the
-/// Unix rules, the file must also have at least one execute bit (owner, group, or others), like in the <c>PATH</c>
-/// search of a shell; a file without one is skipped and the search goes on with the next entry.
-/// </para>
-/// <para>
-/// The first path that is found is kept and returned by every later call without searching <c>PATH</c> again. As long
-/// as no executable is found, every call searches <c>PATH</c> again with its current value.
+/// On Windows the executable is <c>git.exe</c>, double quotes are removed, and a quoted <c>;</c> does not separate
+/// entries; <c>PATHEXT</c> is not evaluated, so <c>git.cmd</c> is not found. The first path found is cached.
 /// </para>
 /// </remarks>
 public sealed class GitExecutableLocator : IGitExecutableLocator
@@ -134,9 +123,7 @@ public sealed class GitExecutableLocator : IGitExecutableLocator
     /// Determines whether the file at the specified path has at least one Unix execute bit.
     /// </summary>
     /// <remarks>
-    /// This is the execute check of the parameterless constructor. On Windows, which has no execute bits, it always
-    /// returns <see langword="true" />. A file whose mode cannot be read, for example because it was removed in the
-    /// meantime, counts as not executable.
+    /// A file whose mode cannot be read counts as not executable.
     /// </remarks>
     /// <param name="path">The absolute path of an existing file.</param>
     /// <returns>

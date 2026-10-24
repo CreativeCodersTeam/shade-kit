@@ -21,9 +21,8 @@ internal static class RepositoryFilePath
     /// <param name="repositoryRootPath">The root directory of the repository.</param>
     /// <param name="relativePath">The path of the file, relative to <paramref name="repositoryRootPath" />.</param>
     /// <param name="paramName">
-    /// The name of the caller's parameter that holds <paramref name="relativePath" />, which an
-    /// <see cref="ArgumentException" /> for an invalid <paramref name="relativePath" /> reports as its
-    /// <see cref="ArgumentException.ParamName" />. The compiler fills it in from the argument expression.
+    /// The name of the caller's parameter for <paramref name="relativePath" />, reported by an
+    /// <see cref="ArgumentException" />; the compiler fills it in.
     /// </param>
     /// <returns>The absolute, normalized path of the file.</returns>
     /// <exception cref="ArgumentException">
@@ -47,9 +46,8 @@ internal static class RepositoryFilePath
     /// <param name="relativePath">The path of the file, relative to <paramref name="rootPath" />.</param>
     /// <param name="rootDescription">The description of the root directory, for example <c>the SHADE kit root</c>.</param>
     /// <param name="paramName">
-    /// The name of the caller's parameter that holds <paramref name="relativePath" />, which an
-    /// <see cref="ArgumentException" /> for an invalid <paramref name="relativePath" /> reports as its
-    /// <see cref="ArgumentException.ParamName" />.
+    /// The name of the caller's parameter for <paramref name="relativePath" />, reported by an
+    /// <see cref="ArgumentException" />.
     /// </param>
     /// <returns>The absolute, normalized path of the file.</returns>
     /// <exception cref="ArgumentException">
@@ -70,9 +68,8 @@ internal static class RepositoryFilePath
     /// <param name="repositoryRootPath">The root directory of the repository.</param>
     /// <param name="relativePath">The path of the file, relative to <paramref name="repositoryRootPath" />.</param>
     /// <param name="paramName">
-    /// The name of the caller's parameter that holds <paramref name="relativePath" />, which an
-    /// <see cref="ArgumentException" /> for an invalid <paramref name="relativePath" /> reports as its
-    /// <see cref="ArgumentException.ParamName" />. The compiler fills it in from the argument expression.
+    /// The name of the caller's parameter for <paramref name="relativePath" />, reported by an
+    /// <see cref="ArgumentException" />; the compiler fills it in.
     /// </param>
     /// <returns>
     /// The normalized path of the file relative to <paramref name="repositoryRootPath" />, with forward slashes as

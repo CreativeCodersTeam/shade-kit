@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
 

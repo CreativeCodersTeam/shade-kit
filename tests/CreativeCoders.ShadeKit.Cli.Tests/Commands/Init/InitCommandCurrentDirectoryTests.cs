@@ -1,4 +1,3 @@
-using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Commands.Init;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Tests.Shared;

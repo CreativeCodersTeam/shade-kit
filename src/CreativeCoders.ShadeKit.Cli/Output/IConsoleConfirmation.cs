@@ -18,8 +18,7 @@ public interface IConsoleConfirmation
     /// Asks the user the specified yes/no question and waits for the answer.
     /// </summary>
     /// <remarks>
-    /// The default answer is <em>no</em>: pressing Enter without an answer declines. The question is shown as plain
-    /// text; markup characters in it are not interpreted. Callers check <see cref="CanAsk" /> first.
+    /// The default answer is no. Markup in <paramref name="question" /> is not interpreted.
     /// </remarks>
     /// <param name="question">The question to show, without the choices.</param>
     /// <param name="cancellationToken">A token to cancel the wait for the answer.</param>

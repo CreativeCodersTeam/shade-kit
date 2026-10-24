@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using System.Text;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using Microsoft.Extensions.Time.Testing;
 

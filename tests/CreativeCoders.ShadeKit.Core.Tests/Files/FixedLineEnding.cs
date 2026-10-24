@@ -1,5 +1,6 @@
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Init;
+using CreativeCoders.ShadeKit.Core.Warnings;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Files;

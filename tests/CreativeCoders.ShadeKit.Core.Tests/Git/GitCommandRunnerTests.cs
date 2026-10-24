@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 

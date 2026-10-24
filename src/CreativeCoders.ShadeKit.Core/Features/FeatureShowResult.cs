@@ -1,13 +1,15 @@
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
+using CreativeCoders.ShadeKit.Core.Warnings;
+
 namespace CreativeCoders.ShadeKit.Core.Features;
 
 /// <summary>
 /// Represents the result of <see cref="IFeatureStore.ShowAsync" />.
 /// </summary>
 /// <remarks>
-/// The name of the feature folder is the id of the feature. <paramref name="Feature" /> is the document as it is
-/// stored, so its <see cref="FeatureDocument.Id" /> can differ from <paramref name="FeatureId" />, for example after
-/// the folder was copied or renamed; <paramref name="Warnings" /> then contains a
-/// <see cref="FeatureIdMismatchWarning" /> warning.
+/// The <see cref="FeatureDocument.Id" /> of <paramref name="Feature" /> can differ from the folder name, for
+/// example after a rename; <paramref name="Warnings" /> then contains a <see cref="FeatureIdMismatchWarning" />.
 /// </remarks>
 /// <param name="FeatureId">The id of the feature, which is the name of its folder.</param>
 /// <param name="Feature">The <c>feature.json</c> document of the feature, as it is stored.</param>

@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;

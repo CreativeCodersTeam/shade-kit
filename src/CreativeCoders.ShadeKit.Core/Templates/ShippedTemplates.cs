@@ -6,9 +6,7 @@ namespace CreativeCoders.ShadeKit.Core.Templates;
 /// Provides the catalog of templates that ship with SHADE kit.
 /// </summary>
 /// <remarks>
-/// The catalog is an explicit list: repository paths are not derived from the names of the template sources. Every
-/// entry has exactly one embedded template resource in the SHADE kit core assembly, and every embedded template
-/// resource has exactly one entry.
+/// An explicit list with exactly one entry per embedded template resource.
 /// </remarks>
 public static class ShippedTemplates
 {

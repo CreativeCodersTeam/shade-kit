@@ -88,9 +88,7 @@ public static class KitStorePaths
     /// it is shown in messages and in the file path of exceptions.
     /// </summary>
     /// <remarks>
-    /// The store builds the file path of every exception about a file with this method, so code that tells files
-    /// apart by that file path uses this method as well. The path is not normalised beyond the separator: callers pass
-    /// a path without <c>.</c> or <c>..</c> segments, as the store does after it resolves a path against its root.
+    /// The store builds the file path of every exception with this method. Only the separators are normalised.
     /// </remarks>
     /// <param name="kitRelativePath">
     /// The normalised path relative to the SHADE kit root directory, with <c>/</c> or the directory separator of the

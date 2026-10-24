@@ -1,4 +1,5 @@
-using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Init;
 

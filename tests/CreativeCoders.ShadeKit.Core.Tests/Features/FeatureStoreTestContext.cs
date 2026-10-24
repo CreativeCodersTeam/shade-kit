@@ -7,6 +7,7 @@ using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.Time.Testing;

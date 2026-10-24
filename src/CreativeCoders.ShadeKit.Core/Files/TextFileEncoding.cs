@@ -7,9 +7,7 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// Provides the rules by which SHADE kit tells UTF-8 text files from text files in other Unicode encodings.
 /// </summary>
 /// <remarks>
-/// SHADE kit reads and writes text as UTF-8, with or without byte order mark. A file that starts with a UTF-16 or
-/// UTF-32 byte order mark, or that contains a NUL byte, which UTF-16 and UTF-32 without byte order mark do for every
-/// ASCII character, is not UTF-8 text.
+/// A file with a UTF-16 or UTF-32 byte order mark, or with a NUL byte, is not UTF-8 text.
 /// </remarks>
 internal static class TextFileEncoding
 {
@@ -98,9 +96,8 @@ internal static class TextFileEncoding
     /// Decodes the specified content strictly as UTF-8 text, without a leading UTF-8 byte order mark.
     /// </summary>
     /// <remarks>
-    /// The content is rejected if <see cref="FindUnsupportedEncodingName" /> finds another Unicode encoding or if it
-    /// contains bytes that are not valid UTF-8. The reason passed to <paramref name="createException" /> is a sentence
-    /// that ends with the advice to save the file as UTF-8 and to run the command again.
+    /// The reason passed to <paramref name="createException" /> advises to save the file as UTF-8 and to run the
+    /// command again.
     /// </remarks>
     /// <param name="bytes">The content of a text file.</param>
     /// <param name="createException">

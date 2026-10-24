@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Git;
 using FakeItEasy;
 

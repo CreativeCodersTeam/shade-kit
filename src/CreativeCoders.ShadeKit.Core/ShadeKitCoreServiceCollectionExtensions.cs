@@ -22,18 +22,8 @@ public static class ShadeKitCoreServiceCollectionExtensions
     /// <see cref="IRepositoryInitializer" />, in the specified service collection.
     /// </summary>
     /// <remarks>
-    /// <see cref="IKitStoreFactory" />, <see cref="IGitRepositoryLocator" />, <see cref="IFormatRegistry" /> (with the
-    /// file types of <see cref="FormatRegistry.CreateDefault" />), <see cref="IVersionedJsonSerializer" />,
-    /// <see cref="IEngineVersionProvider" />, <see cref="IRepositoryInitializer" />,
-    /// <see cref="IShippedTemplateReader" />, <see cref="IGitIgnorePlanner" />,
-    /// <see cref="IInstructionSectionPlanner" />, <see cref="IGitExecutableLocator" />,
-    /// <see cref="IGitCommandRunner" />, <see cref="IGitRepositoryInfo" />, <see cref="IGitLineEndingResolver" />,
-    /// <see cref="IEditorConfigLineEndingResolver" />, <see cref="ILineEndingResolver" />,
-    /// <see cref="ITextFileWriter" />, <see cref="IFeatureIdFactory" />, <see cref="ICurrentFeatureResolver" />,
-    /// <see cref="IFeatureStore" />, and <see cref="TimeProvider" /> (as <see cref="TimeProvider.System" />) are
-    /// registered as singletons. Existing registrations are kept, so calling
-    /// this method more than once has no additional effect, and a registration made before the call replaces the
-    /// default.
+    /// All services are singletons. Existing registrations are kept, so a registration made before the call replaces
+    /// the default and repeated calls have no effect.
     /// </remarks>
     /// <param name="services">The service collection to add the services to.</param>
     /// <returns>The same <see cref="IServiceCollection" /> instance so that additional calls can be chained.</returns>

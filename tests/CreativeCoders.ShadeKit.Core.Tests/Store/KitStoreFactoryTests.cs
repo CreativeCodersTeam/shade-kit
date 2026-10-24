@@ -1,8 +1,10 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;

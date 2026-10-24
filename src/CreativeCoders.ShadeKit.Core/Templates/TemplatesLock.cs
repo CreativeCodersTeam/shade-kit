@@ -9,9 +9,8 @@ namespace CreativeCoders.ShadeKit.Core.Templates;
 /// <c>.shadekit/templates.lock.json</c>.
 /// </summary>
 /// <remarks>
-/// <c>shade-kit init</c> writes one entry per shipped template; <c>shade-kit upgrade</c> uses the entries to tell
-/// templates the team changed from unchanged ones. Fields the engine does not know are kept in
-/// <see cref="VersionedDocument.ExtensionData" /> and written back unchanged.
+/// <c>shade-kit upgrade</c> uses the entries to tell changed templates from unchanged ones. Unknown fields are
+/// kept in <see cref="VersionedDocument.ExtensionData" />.
 /// </remarks>
 public sealed class TemplatesLock : VersionedDocument, IJsonOnDeserialized
 {

@@ -1,7 +1,7 @@
 using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
-using CreativeCoders.ShadeKit.Core;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Warnings;
 using Spectre.Console;
 
 namespace CreativeCoders.ShadeKit.Cli.Output;
@@ -11,13 +11,8 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// expected failure as plain text or as one JSON envelope.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The run methods pass the token of the run's <see cref="ICliCancellation" /> to the operation and report an
-/// expected failure through <see cref="CliCommandAbort" /> with the <see cref="CliErrorMapper" />: in JSON mode a
-/// failure envelope is written and the abort exception does not print its message. The write methods write the
-/// success result: in JSON mode one success envelope, in plain mode the warnings and then the result lines. A command
-/// that runs and writes through this context therefore writes exactly one envelope in JSON mode.
-/// </para>
+/// A command that runs and writes through this context writes exactly one envelope in JSON mode: a failure
+/// envelope for an expected failure, otherwise a success envelope.
 /// </remarks>
 /// <param name="ansiConsole">The console that receives the plain output.</param>
 /// <param name="kitStoreFactory">The factory that locates the SHADE kit store of the current repository.</param>
@@ -150,20 +145,13 @@ public sealed class ShadeKitCommandContext(
     /// Writes the successful result of a command as one JSON envelope or as plain text after the warnings.
     /// </summary>
     /// <remarks>
-    /// The warnings are mapped with <see cref="CliErrorMapper.MapWarning" /> and keep the order of
-    /// <paramref name="warnings" />. In JSON mode, the envelope carries <paramref name="data" /> and the mapped
-    /// warnings, and <paramref name="writePlain" /> is not called. In plain mode, every warning is written as one line
-    /// <c>Warning: &lt;message&gt;</c> with the message written literally, followed by the lines of
-    /// <paramref name="writePlain" />.
+    /// In plain mode, each warning is written as a line <c>Warning: &lt;message&gt;</c> before the result lines.
     /// </remarks>
     /// <param name="json">
     /// <see langword="true" /> if the command runs in JSON mode; otherwise, <see langword="false" />.
     /// </param>
     /// <param name="data">The <c>data</c> object of the envelope.</param>
-    /// <param name="warnings">
-    /// The warnings of the core result, already in the order in which they are reported: the format warnings first,
-    /// then the other warnings.
-    /// </param>
+    /// <param name="warnings">The warnings of the core result, in the order in which they are reported.</param>
     /// <param name="writePlain">The action that writes the plain result lines.</param>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="data" />, <paramref name="warnings" />, or <paramref name="writePlain" /> is

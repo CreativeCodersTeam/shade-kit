@@ -1,5 +1,7 @@
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -7,10 +9,8 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Reads and writes the local override <c>features/current-feature.json</c> of a SHADE kit store.
 /// </summary>
 /// <remarks>
-/// The override is a pure pointer to a feature that is local to a clone and holds no other data. An override that
-/// cannot be used because of its own format is therefore reported to the caller instead of stopping the command, and
-/// it is replaced when it is written. Format problems of every other file, for example of <c>config.json</c> while the
-/// policy for an outdated override is read, still stop the command.
+/// The override is a pure pointer, so a format problem of the override itself is reported instead of stopping the
+/// command, and the override is replaced when written. Format problems of other files still stop the command.
 /// </remarks>
 internal static class CurrentFeatureOverride
 {
@@ -56,9 +56,8 @@ internal static class CurrentFeatureOverride
     /// Writes the local override of the specified store so that it selects the specified feature.
     /// </summary>
     /// <remarks>
-    /// The override is written with <see cref="FormatAccess.Replace" /> access, so an existing override that cannot be
-    /// used because of its own format (invalid, too new, or outdated) is deleted and written again instead of stopping
-    /// the write.
+    /// Uses <see cref="FormatAccess.Replace" />, so an existing override that is invalid, too new, or outdated is
+    /// replaced.
     /// </remarks>
     /// <param name="store">The SHADE kit store whose override is written.</param>
     /// <param name="featureId">The id of the feature the override selects.</param>

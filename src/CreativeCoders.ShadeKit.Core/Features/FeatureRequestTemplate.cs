@@ -8,8 +8,7 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Fills the <c>request.md</c> template with the <c>feature.json</c> document and the original input of a new feature.
 /// </summary>
 /// <remarks>
-/// Only the placeholders that <c>shade-kit feature new</c> owns are replaced; every other part of the template, the
-/// guidance comment included, stays as it is, because the skill of package 09 completes the file.
+/// Only the placeholders of <c>shade-kit feature new</c> are replaced; a skill completes the rest of the file.
 /// </remarks>
 internal static partial class FeatureRequestTemplate
 {

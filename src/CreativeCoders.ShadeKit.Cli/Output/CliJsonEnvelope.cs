@@ -6,10 +6,8 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// Represents the JSON document that every agent-facing command writes to standard output in JSON mode.
 /// </summary>
 /// <remarks>
-/// All four fields are always present. On success, <see cref="Ok" /> is <see langword="true" />,
-/// <see cref="Data" /> holds the result, and <see cref="Error" /> is <see langword="null" />. On failure,
-/// <see cref="Ok" /> is <see langword="false" />, <see cref="Data" /> is <see langword="null" />, and
-/// <see cref="Error" /> describes the failure.
+/// All four fields are always written. <see cref="Ok" /> tells whether <see cref="Data" /> or
+/// <see cref="Error" /> is set.
 /// </remarks>
 public sealed record CliJsonEnvelope
 {

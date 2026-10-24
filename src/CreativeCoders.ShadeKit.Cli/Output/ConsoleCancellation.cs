@@ -5,15 +5,8 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// <see cref="Token" />.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <see cref="ListenToCancelKeyPress" /> subscribes to <see cref="Console.CancelKeyPress" />, and
-/// <see cref="Dispose" /> unsubscribes again. The first key press cancels <see cref="Token" /> and keeps the process
-/// alive, so that the command can stop at its next check and roll back. Every later key press uses the default
-/// handling of the runtime, which ends the process, so a command that does not stop can still be terminated.
-/// </para>
-/// <para>
-/// The instance belongs to one run of <see cref="Program" />. A key press after <see cref="Dispose" /> is not handled.
-/// </para>
+/// The first key press cancels <see cref="Token" /> and keeps the process alive, so the command can roll back; a
+/// later one ends the process with the default handling of the runtime.
 /// </remarks>
 public sealed class ConsoleCancellation : ICliCancellation, IDisposable
 {
@@ -59,8 +52,7 @@ public sealed class ConsoleCancellation : ICliCancellation, IDisposable
     /// Handles one cancel key press and returns whether the runtime must keep the process alive.
     /// </summary>
     /// <remarks>
-    /// The first call cancels <see cref="Token" />. Every later call, and every call after <see cref="Dispose" />,
-    /// changes nothing. The result is the value for <see cref="ConsoleCancelEventArgs.Cancel" />.
+    /// Only the first call before <see cref="Dispose" /> cancels <see cref="Token" />.
     /// </remarks>
     /// <returns>
     /// <see langword="true" /> if this call canceled <see cref="Token" /> and the process must be kept alive;

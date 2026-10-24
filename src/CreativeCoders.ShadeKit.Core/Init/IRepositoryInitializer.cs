@@ -1,5 +1,6 @@
-using CreativeCoders.ShadeKit.Core.Files;
-using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
+using CreativeCoders.ShadeKit.Core.Init.Exceptions;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Init;
 
@@ -12,26 +13,9 @@ public interface IRepositoryInitializer
     /// Initialises the git repository that contains the specified directory.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The initialisation works at the root of the git repository, also when <paramref name="path" /> is a
-    /// subdirectory. Before anything is written, it checks that the repository root contains no <c>.shadekit</c>
-    /// directory or file; that <c>.gitignore</c>, <c>CLAUDE.md</c>, and <c>AGENTS.md</c> are files or missing, and
-    /// UTF-8 if they exist; and that the managed section markers in <c>CLAUDE.md</c> and <c>AGENTS.md</c> are valid.
-    /// </para>
-    /// <para>
-    /// It then creates <c>.shadekit/</c> with <c>config.json</c>, <c>gates.json</c>, every shipped template,
-    /// <c>templates.lock.json</c>, and an empty <c>features/</c> directory; adds the local-only files to
-    /// <c>.gitignore</c>; and writes the managed section into <c>CLAUDE.md</c> and <c>AGENTS.md</c>, in this order.
-    /// If a write fails or the operation is canceled after <c>.shadekit/</c> was created, <c>.shadekit/</c> is
-    /// removed again, so that the next initialisation can start over. Repository files that are already written stay
-    /// in place; the next initialisation recognises their changes and does not repeat them.
-    /// </para>
-    /// <para>
-    /// <c>.gitignore</c>, <c>CLAUDE.md</c>, and <c>AGENTS.md</c> are written through <see cref="ITextFileWriter" />,
-    /// so each file is written as a whole with the line ending that the repository prescribes for it. Warnings of
-    /// these writes, such as an <see cref="EditorConfigUnreadableWarning" />, are returned in
-    /// <see cref="RepositoryInitResult.Warnings" />.
-    /// </para>
+    /// Works at the repository root, also from a subdirectory, and checks everything before anything is written. If a
+    /// write fails or is canceled after <c>.shadekit/</c> was created, <c>.shadekit/</c> is removed again; repository
+    /// files already written stay, and the next run does not repeat their changes.
     /// </remarks>
     /// <param name="path">The directory at which the search for the repository root starts.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>

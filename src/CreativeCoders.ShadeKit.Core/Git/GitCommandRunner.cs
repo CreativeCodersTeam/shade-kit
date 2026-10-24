@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Git;
 
@@ -9,11 +10,8 @@ namespace CreativeCoders.ShadeKit.Core.Git;
 /// Runs the <c>git</c> executable as a child process and captures its output.
 /// </summary>
 /// <remarks>
-/// Before each run, the absolute path of the executable is resolved through the <see cref="IGitExecutableLocator" />
-/// and that path is started, so the operating system never searches the current directory for <c>git</c>. A path
-/// that is not fully qualified is rejected with a <see cref="GitUnavailableException" /> instead of being started.
-/// The process runs without a shell and without a window; standard output and standard error are redirected, read
-/// concurrently, and decoded as UTF-8.
+/// Starts only the absolute path from the <see cref="IGitExecutableLocator" />, never a <c>git</c> in the current
+/// directory, and runs it without a shell; the output is read concurrently and decoded as UTF-8.
 /// </remarks>
 /// <param name="gitExecutableLocator">The locator that resolves the absolute path of the <c>git</c> executable.</param>
 public sealed class GitCommandRunner(IGitExecutableLocator gitExecutableLocator) : IGitCommandRunner

@@ -1,3 +1,6 @@
+using CreativeCoders.ShadeKit.Core.Files.Warnings;
+using CreativeCoders.ShadeKit.Core.Warnings;
+
 namespace CreativeCoders.ShadeKit.Core.Files;
 
 /// <summary>
@@ -10,21 +13,10 @@ public interface ITextFileWriter
     /// Writes the specified content to a file in a repository.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The line ending is determined with <see cref="ILineEndingResolver.GetLineEndingAsync" /> and used for every line
-    /// of the file, so an existing file is replaced by normalised content. The lines are joined with the line ending,
-    /// followed by one more line ending if <see cref="TextFileContent.HasFinalLineEnding" /> is
-    /// <see langword="true" />, and encoded as UTF-8, prefixed with the UTF-8 byte order mark if
-    /// <see cref="TextFileContent.HasUtf8Bom" /> is <see langword="true" />.
-    /// </para>
-    /// <para>
-    /// The line ending is determined for <paramref name="lineEndingPath" /> if it is specified, otherwise for
-    /// <paramref name="relativePath" />. This lets a file that is written to a temporary location, for example a
-    /// hidden staging directory that is moved into place later, get the line ending of the path where it ends up.
-    /// </para>
-    /// <para>
-    /// Missing parent directories of the file are created. An existing file is overwritten.
-    /// </para>
+    /// One line ending, determined with <see cref="ILineEndingResolver.GetLineEndingAsync" /> for
+    /// <paramref name="lineEndingPath" /> or else <paramref name="relativePath" />, is used for every line. The content
+    /// is encoded as UTF-8, with a byte order mark if <see cref="TextFileContent.HasUtf8Bom" /> is
+    /// <see langword="true" />. Missing parent directories are created; an existing file is overwritten.
     /// </remarks>
     /// <param name="repositoryRootPath">The root directory of the repository.</param>
     /// <param name="relativePath">

@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -7,10 +8,8 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Provides the rules for valid feature ids.
 /// </summary>
 /// <remarks>
-/// A valid feature id consists of one or more groups of lowercase ASCII letters (<c>a</c>–<c>z</c>) and digits,
-/// joined by single hyphens, for example <c>gh-142-login-sso</c> or <c>20261013-1530-login-sso</c>. Because such an id
-/// contains no path separator and no dot, it is safe to use as a directory name; every id is checked before a path is
-/// built from it.
+/// A valid id is groups of lowercase ASCII letters and digits joined by single hyphens, for example
+/// <c>gh-142-login-sso</c>, and therefore safe as a directory name.
 /// </remarks>
 public static partial class FeatureIds
 {

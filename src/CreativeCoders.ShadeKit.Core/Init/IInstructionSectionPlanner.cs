@@ -1,4 +1,5 @@
-using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
+using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Init;
 
@@ -7,15 +8,9 @@ namespace CreativeCoders.ShadeKit.Core.Init;
 /// <c>AGENTS.md</c>.
 /// </summary>
 /// <remarks>
-/// The section starts with a line whose text, without leading and trailing whitespace, starts with
-/// <see cref="ManagedInstructionSection.BeginMarkerPrefix" /> followed by whitespace or <c>--&gt;</c>, and ends with a
-/// line whose text, without leading and trailing whitespace, is <see cref="ManagedInstructionSection.EndMarker" />.
-/// Lines in a fenced code block (opened by at least three backticks or tildes, indented by at most three spaces) are
-/// no markers, so the markers can be documented in a code example. A code block that is still open at the end of the
-/// file makes the file invalid, because a section appended after it would be part of the block. The markers are
-/// invalid if a file
-/// contains more than one begin or end marker, a begin marker without an end marker, an end marker without a begin
-/// marker, or an end marker before the begin marker.
+/// The section runs from a line starting with <see cref="ManagedInstructionSection.BeginMarkerPrefix" /> to the
+/// line <see cref="ManagedInstructionSection.EndMarker" />, both trimmed. Lines in fenced code blocks are no
+/// markers. A file with more than one pair, an unpaired or reversed marker, or an unclosed code block is invalid.
 /// </remarks>
 public interface IInstructionSectionPlanner
 {
@@ -24,20 +19,9 @@ public interface IInstructionSectionPlanner
     /// instruction file, without writing it.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// A missing file gets only the section, without byte order mark and with a final line ending. To a file without
-    /// markers, the section is appended after one blank line, or directly if the file already ends with an empty line.
-    /// In a file with one valid pair of markers, the lines from the begin marker to the end marker are replaced by the
-    /// section.
-    /// </para>
-    /// <para>
-    /// In an existing file, every line outside the inserted or replaced part is kept, a leading UTF-8 byte order mark
-    /// is kept, and a missing final line ending is added when the section is appended. The content holds no line
-    /// endings: the line ending is decided when the file is written (see <see cref="ITextFileWriter.WriteAsync" />),
-    /// and the whole file, existing lines included, is written with it. A file whose section is already current needs
-    /// no change, even if its line endings differ from the ones it would be written with. A file with invalid markers
-    /// or that is not UTF-8 is refused.
-    /// </para>
+    /// A missing file gets only the section; otherwise the section is appended after one blank line or replaces the
+    /// lines between the markers. Existing lines and a byte order mark are kept. A file whose section is already
+    /// current needs no change, whatever its line endings.
     /// </remarks>
     /// <param name="filePath">The absolute path of the instruction file.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
