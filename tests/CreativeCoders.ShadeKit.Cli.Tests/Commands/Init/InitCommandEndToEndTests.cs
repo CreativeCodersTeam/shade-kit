@@ -13,9 +13,9 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Init;
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed partial class InitCommandEndToEndTests : IDisposable
 {
-    private readonly CurrentDirectoryScope _currentDirectory = new();
+    private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
 
-    private readonly TempKitDirectory _tempDirectory = new("shade-kit-init-tests-");
+    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-init-tests-");
 
     [Fact]
     [Trait("Requirement", "FP02-AC1")]

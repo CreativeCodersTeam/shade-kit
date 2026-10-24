@@ -14,7 +14,7 @@ public class TextFileContentTests
 
     private const string InvalidUtf8EncodingName = "an unknown encoding with bytes that are not valid UTF-8";
 
-    public static TheoryData<byte[], string> UnsupportedEncodingFiles { get; } = new()
+    public static TheoryData<byte[], string> UnsupportedEncodingFiles { get; } = new TheoryData<byte[], string>
     {
         { [0xFF, 0xFE, (byte)'a', 0x00, (byte)'\n', 0x00], "UTF-16 LE" },
         { [0xFE, 0xFF, 0x00, (byte)'a', 0x00, (byte)'\n'], "UTF-16 BE" },

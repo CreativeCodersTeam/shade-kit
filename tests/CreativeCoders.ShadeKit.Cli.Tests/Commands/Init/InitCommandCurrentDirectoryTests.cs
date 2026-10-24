@@ -10,9 +10,9 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Init;
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed class InitCommandCurrentDirectoryTests : IDisposable
 {
-    private readonly CurrentDirectoryScope _currentDirectory = new();
+    private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
 
-    private readonly TempKitDirectory _tempDirectory = new("shade-kit-[init]-");
+    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-[init]-");
 
     [Fact]
     public async Task ExecuteAsync_CurrentDirectory_PassesCurrentDirectoryToInitializer()

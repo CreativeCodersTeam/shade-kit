@@ -19,7 +19,7 @@ public static class ShippedTemplates
     /// </summary>
     /// <value>The shipped template <c>request.template.md</c>, written to <c>templates/request.md</c>.</value>
     // Declared before All, because static initializers run in the order of declaration.
-    public static ShippedTemplate Request { get; } = new("request.template.md",
+    public static ShippedTemplate Request { get; } = new ShippedTemplate("request.template.md",
         TemplatesDir + KitStorePaths.RequestFileName);
 
     /// <summary>
@@ -29,17 +29,17 @@ public static class ShippedTemplates
     public static IReadOnlyList<ShippedTemplate> All { get; } =
     [
         Request,
-        new("discussion.template.md", TemplatesDir + "discussion.md"),
-        new("spec.template.md", TemplatesDir + "spec.md"),
-        new("researches.template.md", TemplatesDir + "researches.md"),
-        new("plan.template.md", TemplatesDir + "plan.md"),
-        new("tasks.template.md", TemplatesDir + "tasks.md"),
-        new("review.template.md", TemplatesDir + "review.md"),
-        new("verification.template.md", TemplatesDir + "verification.md"),
-        new("playbook.template.md", TemplatesDir + "playbook.md"),
-        new("report.template.md", TemplatesDir + "report.md"),
-        new("diagnosis.template.md", TemplatesDir + "diagnosis.md"),
-        new("checks/definition-of-ready.template.md", TemplatesDir + "checks/definition-of-ready.md"),
-        new("checks/definition-of-done.template.md", TemplatesDir + "checks/definition-of-done.md")
+        new ShippedTemplate("discussion.template.md", TemplatesDir + "discussion.md"),
+        new ShippedTemplate("spec.template.md", TemplatesDir + "spec.md"),
+        new ShippedTemplate("researches.template.md", TemplatesDir + "researches.md"),
+        new ShippedTemplate("plan.template.md", TemplatesDir + "plan.md"),
+        new ShippedTemplate("tasks.template.md", TemplatesDir + "tasks.md"),
+        new ShippedTemplate("review.template.md", TemplatesDir + "review.md"),
+        new ShippedTemplate("verification.template.md", TemplatesDir + "verification.md"),
+        new ShippedTemplate("playbook.template.md", TemplatesDir + "playbook.md"),
+        new ShippedTemplate("report.template.md", TemplatesDir + "report.md"),
+        new ShippedTemplate("diagnosis.template.md", TemplatesDir + "diagnosis.md"),
+        new ShippedTemplate("checks/definition-of-ready.template.md", TemplatesDir + "checks/definition-of-ready.md"),
+        new ShippedTemplate("checks/definition-of-done.template.md", TemplatesDir + "checks/definition-of-done.md")
     ];
 }

@@ -47,7 +47,16 @@ public sealed class TextFileWriter(ILineEndingResolver lineEndingResolver) : ITe
         return resolution.Warnings;
     }
 
-    private static byte[] Encode(TextFileContent content, LineEnding lineEnding)
+    /// <summary>
+    /// Encodes the specified content as the bytes of a file with the specified line ending.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="lineEnding">The line ending that separates the lines and ends the last line.</param>
+    /// <returns>
+    /// The UTF-8 bytes of the lines joined by <paramref name="lineEnding" />, preceded by the UTF-8 byte order mark if
+    /// <see cref="TextFileContent.HasUtf8Bom" /> is <see langword="true" />.
+    /// </returns>
+    internal static byte[] Encode(TextFileContent content, LineEnding lineEnding)
     {
         var textBytes = TextFileEncoding.Utf8WithoutBom.GetBytes(content.ToText(lineEnding));
 

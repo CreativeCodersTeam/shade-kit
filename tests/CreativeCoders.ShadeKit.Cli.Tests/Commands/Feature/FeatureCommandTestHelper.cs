@@ -15,7 +15,7 @@ internal static class FeatureCommandTestHelper
     public const string FeatureId = "gh-142-login-sso";
 
     public static FormatWarning UpgradeWarning { get; } =
-        new(FormatWarningKind.UpgradeNeeded, ".shadekit/config.json", 1, 2);
+        new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/config.json", 1, 2);
 
     /// <summary>
     /// Creates a test console that is wide enough that long warning messages are not wrapped.

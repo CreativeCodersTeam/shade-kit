@@ -11,9 +11,9 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
 {
     private const string EditorConfigFileName = ".editorconfig";
 
-    private readonly TempKitDirectory _directory = new();
+    private readonly TempKitDirectory _directory = new TempKitDirectory();
 
-    private readonly EditorConfigLineEndingResolver _sut = new();
+    private readonly EditorConfigLineEndingResolver _sut = new EditorConfigLineEndingResolver();
 
     public void Dispose()
     {

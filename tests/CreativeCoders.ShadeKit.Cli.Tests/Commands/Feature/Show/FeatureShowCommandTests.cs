@@ -238,7 +238,8 @@ public class FeatureShowCommandTests
             .Should().Be(errorCode);
     }
 
-    public static TheoryData<Exception, int, string> MappedShowFailures() => new()
+    public static TheoryData<Exception, int, string> MappedShowFailures() =>
+        new TheoryData<Exception, int, string>
     {
         { new FeatureNotFoundException(Id), ShadeKitCliExitCodes.FeatureNotFound, ShadeKitCliErrorCodes.FeatureNotFound },
         { new InvalidFeatureIdException("Bad"), ShadeKitCliExitCodes.InvalidFeatureId, ShadeKitCliErrorCodes.InvalidFeatureId },

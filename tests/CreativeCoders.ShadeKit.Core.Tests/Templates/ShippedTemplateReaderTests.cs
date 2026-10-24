@@ -7,10 +7,10 @@ namespace CreativeCoders.ShadeKit.Core.Tests.Templates;
 public class ShippedTemplateReaderTests
 {
     private static readonly ShippedTemplate SampleTemplate =
-        new("checks/sample.template.md", "templates/checks/sample.md");
+        new ShippedTemplate("checks/sample.template.md", "templates/checks/sample.md");
 
     public static TheoryData<string> ShippedResourcePaths =>
-        new(ShippedTemplates.All.Select(x => x.ResourcePath));
+        new TheoryData<string>(ShippedTemplates.All.Select(x => x.ResourcePath));
 
     [Theory]
     [MemberData(nameof(ShippedResourcePaths))]

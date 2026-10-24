@@ -18,7 +18,7 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Init;
 
 public class InitCommandTests
 {
-    private static readonly RepositoryInitResult Result = new("/repo",
+    private static readonly RepositoryInitResult Result = new RepositoryInitResult("/repo",
     [
         new InitializedFile(".shadekit/config.json", InitializedFileAction.Created),
         new InitializedFile(".shadekit/features/", InitializedFileAction.Created),

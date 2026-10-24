@@ -151,11 +151,9 @@ public sealed class TextFileContent
 
         var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
 
-        // DecodeUtf8 calls the factory without decoder exception for another Unicode encoding, which
-        // FindUnsupportedEncodingName names, and with one for invalid UTF-8.
-        var text = TextFileEncoding.DecodeUtf8(bytes, createEncodingException ??
-            ((_, _) => new UnsupportedFileEncodingException(filePath,
-                TextFileEncoding.FindUnsupportedEncodingName(bytes) ?? TextFileEncoding.InvalidUtf8EncodingName)));
+        var text = TextFileEncoding.DecodeUtf8(bytes, (encodingName, reason, decoderException) =>
+            createEncodingException?.Invoke(reason, decoderException)
+            ?? new UnsupportedFileEncodingException(filePath, encodingName));
 
         return FromText(text, bytes.AsSpan().StartsWith(TextFileEncoding.Utf8Bom));
     }

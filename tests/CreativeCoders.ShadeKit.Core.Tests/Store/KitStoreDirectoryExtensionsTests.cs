@@ -13,7 +13,7 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
 {
     private const string DirectoryPath = "features/login";
 
-    private readonly TempKitDirectory _tempDirectory = new();
+    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory();
 
     private readonly KitStore _realStore;
 

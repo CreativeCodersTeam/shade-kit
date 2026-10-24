@@ -18,7 +18,7 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// <param name="output">The text writer that receives the JSON documents.</param>
 public sealed class CliJsonWriter(TextWriter output) : ICliJsonWriter
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DictionaryKeyPolicy = null,

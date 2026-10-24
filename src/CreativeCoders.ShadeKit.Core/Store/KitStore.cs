@@ -27,7 +27,7 @@ namespace CreativeCoders.ShadeKit.Core.Store;
 public class KitStore : IKitStore
 {
     // Every entry below the directory, hidden and system files included; inaccessible entries are not skipped silently.
-    private static readonly EnumerationOptions AllFilesEnumerationOptions = new()
+    private static readonly EnumerationOptions AllFilesEnumerationOptions = new EnumerationOptions
     {
         RecurseSubdirectories = true,
         AttributesToSkip = 0,

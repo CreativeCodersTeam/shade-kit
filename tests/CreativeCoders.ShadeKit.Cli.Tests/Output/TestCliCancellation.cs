@@ -11,12 +11,12 @@ internal sealed class TestCliCancellation(CancellationToken token) : ICliCancell
     /// <summary>
     /// Gets an instance whose token can never be canceled.
     /// </summary>
-    public static TestCliCancellation None { get; } = new(CancellationToken.None);
+    public static TestCliCancellation None { get; } = new TestCliCancellation(CancellationToken.None);
 
     /// <summary>
     /// Gets an instance whose token is canceled already.
     /// </summary>
-    public static TestCliCancellation Canceled { get; } = new(new CancellationToken(true));
+    public static TestCliCancellation Canceled { get; } = new TestCliCancellation(new CancellationToken(true));
 
     /// <inheritdoc />
     public CancellationToken Token => token;

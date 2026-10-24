@@ -15,11 +15,12 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Output;
 
 public sealed class ShadeKitCommandContextTests : IDisposable
 {
-    private static readonly KitRootPathNotFoundException KitRootNotFound = new("/repo/src", "/repo");
+    private static readonly KitRootPathNotFoundException KitRootNotFound =
+        new KitRootPathNotFoundException("/repo/src", "/repo");
 
     private readonly TestConsole _console = FeatureCommandTestHelper.CreateWideConsole();
 
-    private readonly StringWriter _jsonOutput = new();
+    private readonly StringWriter _jsonOutput = new StringWriter();
 
     [Theory]
     [InlineData(0, "ansiConsole")]

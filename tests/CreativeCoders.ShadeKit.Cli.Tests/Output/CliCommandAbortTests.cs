@@ -10,8 +10,8 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Output;
 
 public class CliCommandAbortTests
 {
-    private static readonly CliError Error = new(ShadeKitCliExitCodes.InvalidFile, ShadeKitCliErrorCodes.InvalidFile,
-        "'/kit/[nested]/config.json' is invalid: Broken.");
+    private static readonly CliError Error = new CliError(ShadeKitCliExitCodes.InvalidFile,
+        ShadeKitCliErrorCodes.InvalidFile, "'/kit/[nested]/config.json' is invalid: Broken.");
 
     [Fact]
     public void Create_PlainMode_ReturnsPrintedAbortExceptionWithEscapedMessageAndWritesNoJson()

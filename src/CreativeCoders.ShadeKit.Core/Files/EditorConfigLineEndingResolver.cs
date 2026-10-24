@@ -16,11 +16,14 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// </remarks>
 public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingResolver
 {
-    private static readonly EditorConfigLineEndingResult NoLineEndingResult = new(null, null);
+    private static readonly EditorConfigLineEndingResult NoLineEndingResult =
+        new EditorConfigLineEndingResult(null, null);
 
-    private static readonly EditorConfigLineEndingResult LfResult = new(LineEnding.Lf, null);
+    private static readonly EditorConfigLineEndingResult LfResult =
+        new EditorConfigLineEndingResult(LineEnding.Lf, null);
 
-    private static readonly EditorConfigLineEndingResult CrLfResult = new(LineEnding.CrLf, null);
+    private static readonly EditorConfigLineEndingResult CrLfResult =
+        new EditorConfigLineEndingResult(LineEnding.CrLf, null);
 
     private readonly Func<EditorConfigParser, string, FileConfiguration> _parse;
 

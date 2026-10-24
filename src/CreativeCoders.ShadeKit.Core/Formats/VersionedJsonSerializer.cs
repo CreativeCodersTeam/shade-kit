@@ -17,9 +17,9 @@ public sealed class VersionedJsonSerializer(IFormatRegistry formatRegistry) : IV
 
     private const string MinEngineVersionField = "minEngineVersion";
 
-    private static readonly JsonDocumentOptions DocumentOptions = new() { AllowDuplicateProperties = false };
+    private static readonly JsonDocumentOptions DocumentOptions = new JsonDocumentOptions { AllowDuplicateProperties = false };
 
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,

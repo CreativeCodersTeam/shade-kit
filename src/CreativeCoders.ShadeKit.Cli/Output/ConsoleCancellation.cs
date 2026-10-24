@@ -17,9 +17,9 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// </remarks>
 public sealed class ConsoleCancellation : ICliCancellation, IDisposable
 {
-    private readonly Lock _lock = new();
+    private readonly Lock _lock = new Lock();
 
-    private readonly CancellationTokenSource _source = new();
+    private readonly CancellationTokenSource _source = new CancellationTokenSource();
 
     private bool _isDisposed;
 

@@ -57,7 +57,7 @@ public class TextFileEncodingTests
     public void DecodeUtf8_ValidUtf8_ReturnsTextWithoutByteOrderMark(byte[] content, string expected)
     {
         // Act
-        var text = TextFileEncoding.DecodeUtf8(content, (_, _) => new InvalidOperationException());
+        var text = TextFileEncoding.DecodeUtf8(content, (_, _, _) => new InvalidOperationException());
 
         // Assert
         text
@@ -74,7 +74,7 @@ public class TextFileEncodingTests
     {
         // Act
         var act = () => TextFileEncoding.DecodeUtf8(content,
-            (reason, innerException) => new InvalidOperationException(reason, innerException));
+            (_, reason, innerException) => new InvalidOperationException(reason, innerException));
 
         // Assert
         act.Should().Throw<InvalidOperationException>()
@@ -89,7 +89,7 @@ public class TextFileEncodingTests
     {
         // Act
         var act = () => TextFileEncoding.DecodeUtf8([0x23, 0x00, 0x20, 0x00],
-            (reason, innerException) => new InvalidOperationException(reason, innerException));
+            (_, reason, innerException) => new InvalidOperationException(reason, innerException));
 
         // Assert
         act.Should().Throw<InvalidOperationException>()
@@ -107,7 +107,7 @@ public class TextFileEncodingTests
     {
         // Act
         var act = () => TextFileEncoding.DecodeUtf8(content,
-            (reason, innerException) => new InvalidOperationException(reason, innerException));
+            (_, reason, innerException) => new InvalidOperationException(reason, innerException));
 
         // Assert
         act.Should().Throw<InvalidOperationException>()

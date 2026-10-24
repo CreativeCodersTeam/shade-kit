@@ -32,7 +32,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
         """.ReplaceLineEndings("\n");
 
-    private readonly FeatureStoreTestContext _context = new();
+    private readonly FeatureStoreTestContext _context = new FeatureStoreTestContext();
 
     public void Dispose()
     {

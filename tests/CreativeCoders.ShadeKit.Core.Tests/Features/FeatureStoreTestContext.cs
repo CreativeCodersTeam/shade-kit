@@ -25,7 +25,7 @@ internal sealed class FeatureStoreTestContext : IDisposable
     public const string UserEmail = "jane@example.com";
 
     // 2026-10-20 13:30:45 UTC is 15:30:45 in UTC+02.
-    public static readonly DateTimeOffset UtcNow = new(2026, 10, 20, 13, 30, 45, TimeSpan.Zero);
+    public static readonly DateTimeOffset UtcNow = new DateTimeOffset(2026, 10, 20, 13, 30, 45, TimeSpan.Zero);
 
     public const string LocalCreatedAt = "2026-10-20T15:30:45+02:00";
 
@@ -44,7 +44,7 @@ internal sealed class FeatureStoreTestContext : IDisposable
             .Returns(new GitIdentity(UserName, UserEmail));
     }
 
-    public TempKitDirectory Repository { get; } = new();
+    public TempKitDirectory Repository { get; } = new TempKitDirectory();
 
     public string RepositoryRootPath { get; }
 

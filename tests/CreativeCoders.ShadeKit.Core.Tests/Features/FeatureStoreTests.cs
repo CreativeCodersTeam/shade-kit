@@ -19,7 +19,7 @@ public sealed class FeatureStoreTests : IDisposable
     // A folder whose name differs from FeatureId only in case; it is not the feature on any file system.
     private const string CaseVariantFolderName = "GH-142-Login-SSO";
 
-    private readonly FeatureStoreTestContext _context = new();
+    private readonly FeatureStoreTestContext _context = new FeatureStoreTestContext();
 
     public void Dispose()
     {

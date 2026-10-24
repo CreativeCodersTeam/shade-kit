@@ -268,7 +268,7 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
     private static string DecodeUtf8(string source, ReadOnlySpan<byte> content)
     {
         return TextFileEncoding.DecodeUtf8(content,
-            (reason, innerException) => new InvalidFeatureSourceException(source, reason, innerException));
+            (_, reason, innerException) => new InvalidFeatureSourceException(source, reason, innerException));
     }
 
     private static void EnsureNoControlCharacter(string title, string titleOrigin)

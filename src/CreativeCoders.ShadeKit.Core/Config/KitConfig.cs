@@ -53,7 +53,7 @@ public sealed class KitConfig : VersionedDocument, IJsonOnDeserialized
     /// consist of lowercase letters <c>a</c>–<c>z</c> and digits joined by single hyphens (for example <c>gh</c> or
     /// <c>jira-1</c>, the pattern of <see cref="FeatureIds" />) makes the file invalid.
     /// </value>
-    public Dictionary<string, string> Trackers { get; set; } = new() { ["github.com"] = "gh" };
+    public Dictionary<string, string> Trackers { get; set; } = new Dictionary<string, string> { ["github.com"] = "gh" };
 
     /// <summary>
     /// Gets or sets whether the <c>finish</c> phase writes a <c>report.md</c> for a feature.

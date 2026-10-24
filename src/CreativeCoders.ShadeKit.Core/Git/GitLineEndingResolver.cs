@@ -65,7 +65,8 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
 
     private readonly LineEnding _nativeLineEnding;
 
-    private readonly ConcurrentDictionary<(string RepositoryRootPath, string Key), string?> _configValues = new();
+    private readonly ConcurrentDictionary<(string RepositoryRootPath, string Key), string?> _configValues =
+        new ConcurrentDictionary<(string RepositoryRootPath, string Key), string?>();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GitLineEndingResolver" /> class that resolves

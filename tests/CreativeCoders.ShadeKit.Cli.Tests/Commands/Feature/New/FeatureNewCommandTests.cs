@@ -341,7 +341,8 @@ public class FeatureNewCommandTests
             .Should().Be(errorCode);
     }
 
-    public static TheoryData<Exception, int, string> MappedCreateFailures() => new()
+    public static TheoryData<Exception, int, string> MappedCreateFailures() =>
+        new TheoryData<Exception, int, string>
     {
         { new FeatureAlreadyExistsException(Id), ShadeKitCliExitCodes.FeatureAlreadyExists, ShadeKitCliErrorCodes.FeatureAlreadyExists },
         { new InvalidFeatureSourceException(" ", "It is empty."), ShadeKitCliExitCodes.InvalidFeatureSource, ShadeKitCliErrorCodes.InvalidFeatureSource },

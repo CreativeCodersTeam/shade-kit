@@ -6,7 +6,7 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Output;
 
 public sealed class ConsoleConfirmationTests : IDisposable
 {
-    private readonly TestConsole _console = new();
+    private readonly TestConsole _console = new TestConsole();
 
     [Fact]
     public void CanAsk_InteractiveConsoleWithoutRedirectedInput_ReturnsTrue()

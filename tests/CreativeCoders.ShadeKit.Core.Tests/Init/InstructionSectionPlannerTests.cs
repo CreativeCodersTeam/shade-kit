@@ -17,7 +17,7 @@ public class InstructionSectionPlannerTests
 
     private const string ExpectedSection = ManagedInstructionSection.Text;
 
-    public static TheoryData<string, string> InvalidMarkerFiles { get; } = new()
+    public static TheoryData<string, string> InvalidMarkerFiles { get; } = new TheoryData<string, string>
     {
         { $"# Title\n{Begin}\nold\n", "The begin marker in line 2 has no end marker." },
         { $"# Title\n{End}\n", "The end marker in line 2 has no begin marker." },
@@ -41,7 +41,7 @@ public class InstructionSectionPlannerTests
     };
 
     // Files whose marker lines are no markers: examples in a fenced code block, or lines that only look like one.
-    public static TheoryData<string> FilesWithoutMarkers { get; } = new()
+    public static TheoryData<string> FilesWithoutMarkers { get; } = new TheoryData<string>
     {
         $"# Docs\n```\n{Begin}\nexample\n{End}\n```\n",
         $"~~~ markdown\n{Begin}\n{End}\n~~~\n",
@@ -59,7 +59,7 @@ public class InstructionSectionPlannerTests
     };
 
     // Files with one section outside any fenced code block, and the expected file after the update.
-    public static TheoryData<string, string> FilesWithSection { get; } = new()
+    public static TheoryData<string, string> FilesWithSection { get; } = new TheoryData<string, string>
     {
         { $"```\n{Begin}\nexample\n{End}\n```\n{Begin}\nold\n{End}\n", $"```\n{Begin}\nexample\n{End}\n```\n{ExpectedSection}\n" },
         { $"<!-- shade-kit:beginning -->\n{Begin}\nold\n{End}\n", $"<!-- shade-kit:beginning -->\n{ExpectedSection}\n" },
@@ -72,7 +72,7 @@ public class InstructionSectionPlannerTests
         { $"{Begin}\nold\n```\n{End}\n```\n{End}\nrest\n", $"{ExpectedSection}\nrest\n" }
     };
 
-    public static TheoryData<byte[], string> UnsupportedEncodingFiles { get; } = new()
+    public static TheoryData<byte[], string> UnsupportedEncodingFiles { get; } = new TheoryData<byte[], string>
     {
         { [0xFF, 0xFE, .. Encoding.Unicode.GetBytes("# Project\r\n")], "UTF-16 LE" },
         { [0xFE, 0xFF, .. Encoding.BigEndianUnicode.GetBytes("# Project\n")], "UTF-16 BE" },

@@ -25,9 +25,9 @@ public sealed class ProgramTests : IDisposable
 
     private const string StackTraceLinePrefix = "   at ";
 
-    private readonly CurrentDirectoryScope _currentDirectory = new();
+    private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
 
-    private readonly TempKitDirectory _tempDirectory = new("shade-kit-program-tests-");
+    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-program-tests-");
 
     [Fact]
     [Trait("Requirement", "FP01-AC7")]

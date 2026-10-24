@@ -15,7 +15,7 @@ public sealed class CurrentFeatureResolverTests : IDisposable
 {
     private const string CurrentFeatureDisplayPath = ".shadekit/features/current-feature.json";
 
-    private readonly TempKitDirectory _repository = new();
+    private readonly TempKitDirectory _repository = new TempKitDirectory();
 
     private readonly IGitRepositoryInfo _gitRepositoryInfo = A.Fake<IGitRepositoryInfo>();
 

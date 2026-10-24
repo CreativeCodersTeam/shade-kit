@@ -38,7 +38,7 @@ internal static class TextFileEncoding
 
     // Decodes strictly, so invalid bytes stop the caller instead of being replaced with U+FFFD.
     private static readonly UTF8Encoding StrictUtf8 =
-        new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>
     /// Gets the encoding with which SHADE kit writes text: UTF-8 without byte order mark.
@@ -46,7 +46,7 @@ internal static class TextFileEncoding
     /// <value>
     /// A UTF-8 encoding that emits no byte order mark and replaces invalid bytes with U+FFFD when it decodes.
     /// </value>
-    public static UTF8Encoding Utf8WithoutBom { get; } = new(encoderShouldEmitUTF8Identifier: false);
+    public static UTF8Encoding Utf8WithoutBom { get; } = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
     /// <summary>
     /// Gets the UTF-8 byte order mark.
@@ -104,8 +104,10 @@ internal static class TextFileEncoding
     /// </remarks>
     /// <param name="bytes">The content of a text file.</param>
     /// <param name="createException">
-    /// The function that creates the exception that is thrown when the content is not UTF-8 text, from the reason and
-    /// the exception of the decoder, which is <see langword="null" /> if the content has another encoding.
+    /// The function that creates the exception that is thrown when the content is not UTF-8 text, from the name of the
+    /// encoding (the one <see cref="FindUnsupportedEncodingName" /> finds, or <see cref="InvalidUtf8EncodingName" />),
+    /// the reason, and the exception of the decoder, which is <see langword="null" /> if the content has another
+    /// encoding.
     /// </param>
     /// <returns>The decoded text.</returns>
     /// <exception cref="ArgumentNullException">
@@ -114,7 +116,8 @@ internal static class TextFileEncoding
     /// <exception cref="Exception">
     /// The content is not UTF-8 text; the exception is the one that <paramref name="createException" /> returns.
     /// </exception>
-    public static string DecodeUtf8(ReadOnlySpan<byte> bytes, Func<string, Exception?, Exception> createException)
+    public static string DecodeUtf8(ReadOnlySpan<byte> bytes,
+        Func<string, string, Exception?, Exception> createException)
     {
         Ensure.NotNull(createException);
 
@@ -122,14 +125,15 @@ internal static class TextFileEncoding
 
         if (encodingName == UnmarkedWideEncodingName)
         {
-            throw createException(
+            throw createException(encodingName,
                 "The file contains a NUL byte, so it is not UTF-8 text; it may be UTF-16 or UTF-32 without byte " +
                 $"order mark, or a binary file. {SaveAsUtf8Hint}", null);
         }
 
         if (encodingName is not null)
         {
-            throw createException($"The file is encoded as {encodingName}, not as UTF-8. {SaveAsUtf8Hint}", null);
+            throw createException(encodingName,
+                $"The file is encoded as {encodingName}, not as UTF-8. {SaveAsUtf8Hint}", null);
         }
 
         try
@@ -138,7 +142,8 @@ internal static class TextFileEncoding
         }
         catch (DecoderFallbackException exception)
         {
-            throw createException($"The file contains bytes that are not valid UTF-8. {SaveAsUtf8Hint}", exception);
+            throw createException(InvalidUtf8EncodingName,
+                $"The file contains bytes that are not valid UTF-8. {SaveAsUtf8Hint}", exception);
         }
     }
 }

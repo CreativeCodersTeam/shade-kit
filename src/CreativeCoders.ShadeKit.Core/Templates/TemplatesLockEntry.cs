@@ -78,15 +78,6 @@ public sealed class TemplatesLockEntry
     {
         Ensure.NotNull(content);
 
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-
-        if (content.HasUtf8Bom)
-        {
-            hash.AppendData(TextFileEncoding.Utf8Bom);
-        }
-
-        hash.AppendData(TextFileEncoding.Utf8WithoutBom.GetBytes(content.ToText(LineEnding.Lf)));
-
-        return HashPrefix + Convert.ToHexStringLower(hash.GetHashAndReset());
+        return HashPrefix + Convert.ToHexStringLower(SHA256.HashData(TextFileWriter.Encode(content, LineEnding.Lf)));
     }
 }
