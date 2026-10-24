@@ -1,3 +1,4 @@
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Store;
 
 namespace CreativeCoders.ShadeKit.Core.Init;
@@ -25,12 +26,18 @@ public interface IRepositoryInitializer
     /// removed again, so that the next initialisation can start over. Repository files that are already written stay
     /// in place; the next initialisation recognises their changes and does not repeat them.
     /// </para>
+    /// <para>
+    /// <c>.gitignore</c>, <c>CLAUDE.md</c>, and <c>AGENTS.md</c> are written through <see cref="ITextFileWriter" />,
+    /// so each file is written as a whole with the line ending that the repository prescribes for it. Warnings of
+    /// these writes, such as an <see cref="EditorConfigUnreadableWarning" />, are returned in
+    /// <see cref="RepositoryInitResult.Warnings" />.
+    /// </para>
     /// </remarks>
     /// <param name="path">The directory at which the search for the repository root starts.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
-    /// A task that represents the asynchronous initialisation. The task result contains the repository root and the
-    /// files that were created or changed.
+    /// A task that represents the asynchronous initialisation. The task result contains the repository root, the
+    /// files that were created or changed, and the warnings of the writes.
     /// </returns>
     /// <exception cref="ArgumentException">
     /// <paramref name="path" /> is <see langword="null" />, empty, or whitespace.
@@ -49,7 +56,7 @@ public interface IRepositoryInitializer
     /// </exception>
     /// <exception cref="UnsupportedFileEncodingException">
     /// <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root starts with a UTF-16 or UTF-32
-    /// byte order mark or contains a NUL byte.
+    /// byte order mark, contains a NUL byte, or contains bytes that are not valid UTF-8.
     /// </exception>
     /// <exception cref="InvalidManagedSectionException">
     /// The managed section markers in <c>CLAUDE.md</c> or <c>AGENTS.md</c> are invalid.

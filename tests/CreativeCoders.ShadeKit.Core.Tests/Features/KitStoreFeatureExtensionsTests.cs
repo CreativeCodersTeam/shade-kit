@@ -1,7 +1,9 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
@@ -69,7 +71,8 @@ public class KitStoreFeatureExtensionsTests
         var kitStorePath = repository.CreateDirectory(".shadekit");
         repository.CreateDirectory(".shadekit", "features", "GH-142-Login-SSO");
         var registry = FormatRegistry.CreateDefault();
-        var store = new KitStore(kitStorePath, new VersionedJsonSerializer(registry), registry);
+        var store = new KitStore(kitStorePath, new VersionedJsonSerializer(registry), registry,
+            FixedLineEnding.CreateWriter(LineEnding.Lf));
 
         // Act
         var exists = store.FeatureExists("gh-142-login-sso");

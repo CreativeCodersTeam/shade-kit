@@ -4,10 +4,12 @@ using System.Text.Json;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
@@ -674,10 +676,14 @@ public sealed class FeatureStoreCreateTests : IDisposable
                  """.ReplaceLineEndings("\n"));
     }
 
-    [Fact]
-    public async Task CreateAsync_FileSource_FillsRequestWithRepositoryRelativePathAndUnchangedFileContent()
+    [Theory]
+    [InlineData(LineEnding.Lf, "\n")]
+    [InlineData(LineEnding.CrLf, "\r\n")]
+    public async Task CreateAsync_FileSource_FillsRequestWithRepositoryRelativePathAndNormalisedFileContent(
+        LineEnding lineEnding, string newLine)
     {
         // Arrange
+        _context.LineEnding = lineEnding;
         _context.WriteRequestTemplate(TestTemplate);
         _context.Repository.WriteFile("# Login SSO\r\nUsers sign in with the company account.\r\n", "docs",
             "login.md");
@@ -691,13 +697,14 @@ public sealed class FeatureStoreCreateTests : IDisposable
         result.Feature.Source.Value
             .Should().Be("docs/login.md");
 
+        // The original input keeps its text, but not its line endings: the whole file is written with one.
         _context.ReadRequest(result.Feature.Id)
             .Should().Be(
-                "# Login SSO\n" +
-                $"id: {FeatureStoreTestContext.TimeBasedIdPrefix}login-sso\n" +
-                "source: file: docs/login.md\n" +
-                "input: # Login SSO\r\nUsers sign in with the company account.\r\n\n" +
-                $"created: {FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>\n");
+                $"# Login SSO{newLine}" +
+                $"id: {FeatureStoreTestContext.TimeBasedIdPrefix}login-sso{newLine}" +
+                $"source: file: docs/login.md{newLine}" +
+                $"input: # Login SSO{newLine}Users sign in with the company account.{newLine}{newLine}" +
+                $"created: {FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>{newLine}");
     }
 
     [Fact]
@@ -895,7 +902,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         A.CallTo(() => store.GetFeatureNames()).Returns([]);
         A.CallTo(() => store.DirectoryExists(A<string>._)).Returns(false);
         A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._, A<FormatAccess>._,
-                A<CancellationToken>._))
+                A<string?>._, A<CancellationToken>._))
             .ThrowsAsync(new IOException("The disk is full."));
         A.CallTo(() => store.DeleteDirectory(A<string>._)).Throws(new IOException("The folder is locked."));
         var featureStore = _context.CreateFeatureStore();
@@ -1000,7 +1007,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .MustNotHaveHappened();
 
         A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._, A<FormatAccess>._,
-                A<CancellationToken>._))
+                A<string?>._, A<CancellationToken>._))
             .MustNotHaveHappened();
 
         Directory.EnumerateFileSystemEntries(Path.Combine(_context.RepositoryRootPath, ".shadekit", "features"))
@@ -1040,11 +1047,11 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .MustNotHaveHappened();
 
         A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<FeatureDocument>._, A<FormatAccess>._,
-                A<CancellationToken>._))
+                A<string?>._, A<CancellationToken>._))
             .MustNotHaveHappened();
 
         A.CallTo(() => store.WriteJsonAsync(A<string>._, A<string>._, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<CancellationToken>._))
+                A<FormatAccess>._, A<string?>._, A<CancellationToken>._))
             .MustNotHaveHappened();
 
         _context.KitDirectoryExists("features", IssueFeatureId)
@@ -1153,11 +1160,20 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().BeEquivalentTo(snapshot);
     }
 
-    [Fact]
-    public async Task CreateAsync_TemplateWithCrLfLineEndings_KeepsLineEndings()
+    [Theory]
+    [InlineData("# {{feature-title}}\r\n\r\n{{feature-id}}\r\n", LineEnding.Lf,
+        "# Login SSO\n\ngh-142-login-sso\n")]
+    [InlineData("# {{feature-title}}\r\n\r\n{{feature-id}}\r\n", LineEnding.CrLf,
+        "# Login SSO\r\n\r\ngh-142-login-sso\r\n")]
+    [InlineData("# {{feature-title}}\n\n{{feature-id}}\n", LineEnding.CrLf, "# Login SSO\r\n\r\ngh-142-login-sso\r\n")]
+    [InlineData("# {{feature-title}}\r\n{{feature-id}}\n", LineEnding.Lf, "# Login SSO\ngh-142-login-sso\n")]
+    [InlineData("# {{feature-title}}\r\n{{feature-id}}", LineEnding.CrLf, "# Login SSO\r\ngh-142-login-sso")]
+    public async Task CreateAsync_TemplateLineEndings_WritesRequestWithResolvedLineEnding(string template,
+        LineEnding lineEnding, string expectedRequest)
     {
         // Arrange
-        _context.WriteRequestTemplate("# {{feature-title}}\r\n\r\n{{feature-id}}\r\n");
+        _context.LineEnding = lineEnding;
+        _context.WriteRequestTemplate(template);
         var featureStore = _context.CreateFeatureStore();
 
         // Act
@@ -1166,7 +1182,161 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
         // Assert
         _context.ReadRequest(IssueFeatureId)
-            .Should().Be("# Login SSO\r\n\r\ngh-142-login-sso\r\n");
+            .Should().Be(expectedRequest);
+    }
+
+    [Fact]
+    public async Task CreateAsync_NewFeature_ResolvesLineEndingOfEachFileForItsFinalPathNotTheStagingPath()
+    {
+        // Arrange
+        List<string> requestedPaths = [];
+        _context.LineEndingResolver = FixedLineEnding.CreateRecordingResolver(
+            $".shadekit/features/{IssueFeatureId}/", requestedPaths);
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        requestedPaths
+            .Should().Equal(
+                $".shadekit/features/{IssueFeatureId}/feature.json",
+                $".shadekit/features/{IssueFeatureId}/request.md",
+                ".shadekit/features/current-feature.json");
+    }
+
+    [Fact]
+    public async Task CreateAsync_EachWriteReturnsOtherWarning_ReturnsWarningsOfAllWritesInWriteOrder()
+    {
+        // Arrange
+        var resolver = A.Fake<ILineEndingResolver>();
+        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+            .ReturnsLazily((string _, string relativePath, CancellationToken _) => new LineEndingResolution(
+                LineEnding.Lf,
+                [new EditorConfigUnreadableWarning(relativePath.Replace('\\', '/'), "Access denied.")]));
+        _context.LineEndingResolver = resolver;
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(_context.CreateStore(),
+            _context.CreateRequest(IssueUrl, "Login SSO"), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(
+                new EditorConfigUnreadableWarning($".shadekit/features/{IssueFeatureId}/feature.json",
+                    "Access denied."),
+                new EditorConfigUnreadableWarning($".shadekit/features/{IssueFeatureId}/request.md",
+                    "Access denied."),
+                new EditorConfigUnreadableWarning(".shadekit/features/current-feature.json", "Access denied."));
+    }
+
+    [Fact]
+    public async Task CreateAsync_FinalFeaturePathPrescribesOtherLineEnding_WritesFeatureFilesWithLineEndingOfFinalPath()
+    {
+        // Arrange
+        _context.LineEndingResolver = FixedLineEnding.CreateRecordingResolver(
+            $".shadekit/features/{IssueFeatureId}/", []);
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var featureJson = _context.Repository.ReadFileText(".shadekit", "features", IssueFeatureId, "feature.json");
+
+        featureJson
+            .Should().Be(featureJson.ReplaceLineEndings("\r\n"), "feature.json gets the line ending of its final path")
+            .And.EndWith("}\r\n");
+
+        var request = _context.ReadRequest(IssueFeatureId);
+
+        request
+            .Should().Be(request.ReplaceLineEndings("\r\n"), "request.md gets the line ending of its final path")
+            .And.Contain("\r\n");
+
+        _context.Repository.ReadFileText(".shadekit", "features", "current-feature.json")
+            .Should().NotContain("\r");
+    }
+
+    [Fact]
+    public async Task CreateAsync_StoreUsedBeforeWithWarnings_ReturnsNoWarningOfEarlierOperation()
+    {
+        // Arrange
+        var earlierWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        _context.WriteFeature("other-feature");
+        _context.SetBranch(null);
+        var store = new KitStore(Path.Combine(_context.RepositoryRootPath, KitStorePaths.RootPath),
+            new VersionedJsonSerializer(_context.Registry), _context.Registry,
+            FixedLineEnding.CreateWriterWithWarningsOnFirstWrite(LineEnding.Lf, earlierWarning));
+        var featureStore = _context.CreateFeatureStore();
+        var earlierResult = await featureStore.SetCurrentAsync(store, "other-feature",
+            TestContext.Current.CancellationToken);
+
+        // Act
+        var result = await featureStore.CreateAsync(store, _context.CreateRequest(IssueUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        earlierResult.Warnings
+            .Should().Equal(earlierWarning);
+
+        result.Warnings
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CreateAsync_CrLfLineEnding_WritesJsonFilesWithCrLfThatCanBeReadBack()
+    {
+        // Arrange
+        _context.LineEnding = LineEnding.CrLf;
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var featureJson = _context.Repository.ReadFileText(".shadekit", "features", IssueFeatureId, "feature.json");
+
+        featureJson
+            .Should().Be(featureJson.ReplaceLineEndings("\r\n"), "every line ends with CRLF")
+            .And.EndWith("}\r\n");
+
+        var overrideJson = _context.Repository.ReadFileText(".shadekit", "features", "current-feature.json");
+
+        overrideJson
+            .Should().Be(overrideJson.ReplaceLineEndings("\r\n"), "every line ends with CRLF")
+            .And.EndWith("}\r\n");
+
+        (await _context.ReadFeatureFileAsync(IssueFeatureId)).Id
+            .Should().Be(IssueFeatureId);
+
+        (await _context.ReadOverrideFeatureIdAsync())
+            .Should().Be(IssueFeatureId);
+    }
+
+    [Fact]
+    public async Task CreateAsync_StoreWritesWithWarnings_ReturnsFormatWarningsFirstAndEachStoreWarningOnce()
+    {
+        // Arrange
+        var editorConfigWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        _context.WriteWarnings = [editorConfigWarning];
+        _context.Registry = FeatureStoreTestContext.CreateRegistryWithVersion2(FormatIds.Config);
+        _context.WriteConfig(""", "defaultProfile": "bugfix" """);
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(_context.CreateStore(),
+            _context.CreateRequest(IssueUrl, "Login SSO"), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(
+                new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/config.json", 1, 2),
+                editorConfigWarning);
     }
 
     [Fact]
@@ -1314,7 +1484,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().BeEquivalentTo(snapshot, "the staging folder is removed and the override is not written");
 
         A.CallTo(() => store.WriteJsonAsync(A<string>._, FormatIds.CurrentFeature, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<CancellationToken>._))
+                A<FormatAccess>._, A<string?>._, A<CancellationToken>._))
             .MustNotHaveHappened();
     }
 
@@ -1476,7 +1646,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
     {
         // Arrange
         var store = A.Fake<IKitStore>(options => options.Wrapping(_context.CreateStore()));
-        A.CallTo(() => store.WriteFileAsync(A<string>._, A<byte[]>._, A<CancellationToken>._))
+        A.CallTo(() => store.WriteFileAsync(A<string>._, A<TextFileContent>._, A<string?>._, A<CancellationToken>._))
             .ThrowsAsync(new IOException("The disk is full."));
         var featureStore = _context.CreateFeatureStore();
 
@@ -1543,7 +1713,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         var realStore = _context.CreateStore();
         var store = A.Fake<IKitStore>(options => options.Wrapping(realStore));
         A.CallTo(() => store.WriteJsonAsync(A<string>._, FormatIds.CurrentFeature, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<CancellationToken>._))
+                A<FormatAccess>._, A<string?>._, A<CancellationToken>._))
             .ThrowsAsync(new IOException("The disk is full."));
         A.CallTo(() => store.MoveDirectory($"features/{IssueFeatureId}", A<string>._))
             .Throws(new IOException("The folder is locked."));
@@ -1602,7 +1772,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
         var realStore = _context.CreateStore();
         var store = A.Fake<IKitStore>(options => options.Wrapping(realStore));
         A.CallTo(() => store.WriteJsonAsync(A<string>._, FormatIds.CurrentFeature, A<CurrentFeatureDocument>._,
-                A<FormatAccess>._, A<CancellationToken>._))
+                A<FormatAccess>._, A<string?>._, A<CancellationToken>._))
             .ThrowsAsync(new IOException("The disk is full."));
         A.CallTo(() => store.DeleteDirectory(A<string>._)).Throws(new IOException("The folder is locked."));
         var featureStore = _context.CreateFeatureStore();

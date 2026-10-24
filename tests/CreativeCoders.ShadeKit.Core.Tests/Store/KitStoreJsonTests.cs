@@ -3,10 +3,13 @@ using System.Text;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Config;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
 using CreativeCoders.ShadeKit.Tests.Shared;
+using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Store;
 
@@ -539,7 +542,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(Path.Combine("features", "login", SampleFileName), SampleFormat.Id, document,
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         var bytes = tempDirectory.ReadFileBytes(".shadekit", "features", "login", SampleFileName);
@@ -577,6 +580,230 @@ public class KitStoreJsonTests
             .Should().Be("Grüße");
     }
 
+    [Theory]
+    [InlineData(LineEnding.Lf, "\n")]
+    [InlineData(LineEnding.CrLf, "\r\n")]
+    public async Task WriteJsonAsync_ResolvedLineEnding_WritesEveryLineWithItAndEndsWithLineEnding(
+        LineEnding lineEnding, string newLine)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitStore = CreateStore(tempDirectory, textFileWriter: FixedLineEnding.CreateWriter(lineEnding));
+        var document = new SampleDocument { SchemaVersion = 1, MinEngineVersion = "9.9.9", Title = "Login" };
+
+        // Act
+        await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, document, FormatAccess.Write,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        var json = tempDirectory.ReadFileText(".shadekit", SampleFileName);
+
+        json
+            .Should().Be(json.ReplaceLineEndings(newLine), "every line ends with the resolved line ending")
+            .And.StartWith("{" + newLine)
+            .And.EndWith("}" + newLine);
+    }
+
+    [Fact]
+    public async Task ReadJsonAsync_FileWithCrLfLineEndings_ReturnsDocument()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile(
+            "{\r\n  \"schemaVersion\": 2,\r\n  \"minEngineVersion\": \"0.2.0\",\r\n  \"title\": \"Login\"\r\n}\r\n",
+            ".shadekit", SampleFileName);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        var result = await kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Should().NotBeNull();
+
+        result.Document.Title
+            .Should().Be("Login");
+
+        result.Warnings
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task WriteJsonAsync_ExistingFileWrittenWithCrLf_ReadsAndReplacesIt()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var crLfStore = CreateStore(tempDirectory, textFileWriter: FixedLineEnding.CreateWriter(LineEnding.CrLf));
+        await crLfStore.WriteJsonAsync(SampleFileName, SampleFormat.Id,
+            new SampleDocument { SchemaVersion = 2, MinEngineVersion = "0.2.0", Title = "Login" }, FormatAccess.Write,
+            cancellationToken: TestContext.Current.CancellationToken);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id,
+            new SampleDocument { SchemaVersion = 2, MinEngineVersion = "0.2.0", Title = "Checkout" },
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        var result = await kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        result.Should().NotBeNull();
+
+        result.Document.Title
+            .Should().Be("Checkout");
+
+        tempDirectory.ReadFileText(".shadekit", SampleFileName)
+            .Should().NotContain("\r");
+    }
+
+    [Fact]
+    public async Task WriteJsonAsync_WriterReturnsWarnings_ReturnsThemForEachWrite()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var warning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        var kitStore = CreateStore(tempDirectory,
+            textFileWriter: FixedLineEnding.CreateWriter(LineEnding.Lf, warning));
+        var document = new SampleDocument { SchemaVersion = 2, MinEngineVersion = "0.2.0", Title = "Login" };
+
+        // Act
+        var writeWarnings = await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, document,
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
+        var replaceWarnings = await kitStore.WriteJsonAsync("other.json", SampleFormat.Id, document,
+            FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        writeWarnings
+            .Should().Equal(warning);
+
+        replaceWarnings
+            .Should().Equal(warning);
+    }
+
+    [Fact]
+    public async Task WriteJsonAsync_LineEndingPath_WritesFileAtRelativePathWithLineEndingResolvedForLineEndingPath()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var lineEndingResolver = A.Fake<ILineEndingResolver>();
+        A.CallTo(() => lineEndingResolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+            .Returns(new LineEndingResolution(LineEnding.Lf, []));
+        A.CallTo(() => lineEndingResolver.GetLineEndingAsync(A<string>._,
+                Path.Combine(".shadekit", "final", SampleFileName), A<CancellationToken>._))
+            .Returns(new LineEndingResolution(LineEnding.CrLf, []));
+        var kitStore = CreateStore(tempDirectory, textFileWriter: new TextFileWriter(lineEndingResolver));
+        var document = new SampleDocument { SchemaVersion = 2, MinEngineVersion = "0.2.0", Title = "Login" };
+
+        // Act
+        await kitStore.WriteJsonAsync($"staging/{SampleFileName}", SampleFormat.Id, document, FormatAccess.Write,
+            $"final/{SampleFileName}", TestContext.Current.CancellationToken);
+
+        // Assert
+        tempDirectory.ReadFileText(".shadekit", "staging", SampleFileName)
+            .Should().Contain("\r\n").And.NotMatchRegex("[^\r]\n");
+
+        File.Exists(Path.Combine(tempDirectory.RootPath, ".shadekit", "final", SampleFileName))
+            .Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(FormatAccess.Write, "../outside.json")]
+    [InlineData(FormatAccess.Upgrade, "/absolute.json")]
+    [InlineData(FormatAccess.Replace, " ")]
+    [InlineData(FormatAccess.Replace, ".")]
+    public async Task WriteJsonAsync_InvalidLineEndingPath_ThrowsArgumentExceptionAndWritesNothing(
+        FormatAccess access, string lineEndingPath)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var textFileWriter = A.Fake<ITextFileWriter>();
+        var kitStore = CreateStore(tempDirectory, textFileWriter: textFileWriter);
+
+        // Act
+        var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(), access,
+            lineEndingPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<ArgumentException>())
+            .WithParameterName(nameof(lineEndingPath));
+
+        A.CallTo(textFileWriter)
+            .MustNotHaveHappened();
+    }
+
+    [Theory]
+    [InlineData(FormatAccess.Write, "../outside.json")]
+    [InlineData(FormatAccess.Upgrade, "/absolute.json")]
+    [InlineData(FormatAccess.Replace, " ")]
+    [InlineData(FormatAccess.Replace, ".")]
+    public async Task WriteJsonAsync_InvalidRelativePathAndValidLineEndingPath_ThrowsNamingRelativePathAndWritesNothing(
+        FormatAccess access, string relativePath)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var textFileWriter = A.Fake<ITextFileWriter>();
+        var kitStore = CreateStore(tempDirectory, textFileWriter: textFileWriter);
+
+        // Act
+        var act = () => kitStore.WriteJsonAsync(relativePath, SampleFormat.Id, new SampleDocument(), access,
+            $"final/{SampleFileName}", TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<ArgumentException>())
+            .WithParameterName(nameof(relativePath));
+
+        A.CallTo(textFileWriter)
+            .MustNotHaveHappened();
+    }
+
+    [Theory]
+    [InlineData(FormatAccess.Write)]
+    [InlineData(FormatAccess.Upgrade)]
+    [InlineData(FormatAccess.Replace)]
+    public async Task WriteJsonAsync_InvalidRelativePathAndInvalidLineEndingPath_ThrowsNamingRelativePath(
+        FormatAccess access)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var textFileWriter = A.Fake<ITextFileWriter>();
+        var kitStore = CreateStore(tempDirectory, textFileWriter: textFileWriter);
+
+        // Act
+        var act = () => kitStore.WriteJsonAsync("../outside.json", SampleFormat.Id, new SampleDocument(), access,
+            "/absolute.json", TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<ArgumentException>())
+            .WithParameterName("relativePath");
+
+        A.CallTo(textFileWriter)
+            .MustNotHaveHappened();
+    }
+
+    [Theory]
+    [InlineData("{")]
+    [InlineData(StoreTestFormats.SampleV1)]
+    public async Task WriteJsonAsync_ReplaceAccessUnusableFileAndInvalidLineEndingPath_ThrowsAndKeepsFile(
+        string existingContent)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile(existingContent, ".shadekit", SampleFileName);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
+            FormatAccess.Replace, "../outside.json", TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<ArgumentException>())
+            .WithParameterName("lineEndingPath");
+
+        tempDirectory.ReadFileText(".shadekit", SampleFileName)
+            .Should().Be(existingContent);
+    }
+
     [Fact]
     [Trait("Requirement", "FP01-AC3")]
     public async Task WriteJsonAsync_DocumentReadWithUnknownFields_KeepsEveryUnknownFieldAndValue()
@@ -604,7 +831,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, result!.Document,
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         var written = tempDirectory.ReadFileText(".shadekit", SampleFileName);
@@ -625,7 +852,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument { Title = "Logout" },
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         var root = JsonNode.Parse(tempDirectory.ReadFileText(".shadekit", SampleFileName));
@@ -655,7 +882,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument { Title = "New" },
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UpgradeNeededException>())
@@ -679,7 +906,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, result!.Document, FormatAccess.Upgrade,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         var root = JsonNode.Parse(tempDirectory.ReadFileText(".shadekit", SampleFileName));
@@ -726,7 +953,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
-            FormatAccess.Upgrade, TestContext.Current.CancellationToken);
+            FormatAccess.Upgrade, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<FormatTooNewException>();
@@ -747,7 +974,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(Path.Combine("features", "login", SampleFileName), SampleFormat.Id,
-            new SampleDocument(), access, TestContext.Current.CancellationToken);
+            new SampleDocument(), access, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<ArgumentOutOfRangeException>())
@@ -770,7 +997,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<FormatTooNewException>();
@@ -791,7 +1018,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<InvalidKitFileException>();
@@ -809,7 +1036,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, null!,
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<ArgumentNullException>())
@@ -825,7 +1052,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync("../outside.json", SampleFormat.Id, new SampleDocument(),
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>();
@@ -843,7 +1070,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
-            FormatAccess.Write, new CancellationToken(true));
+            FormatAccess.Write, cancellationToken: new CancellationToken(true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -874,7 +1101,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(Path.Combine("features", "login", SampleFileName), "unknown",
-            new SampleDocument(), FormatAccess.Write, TestContext.Current.CancellationToken);
+            new SampleDocument(), FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<ArgumentException>())
@@ -1037,7 +1264,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<InvalidKitFileException>();
@@ -1078,10 +1305,11 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(relativePath!, SampleFormat.Id, new SampleDocument(),
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        await act.Should().ThrowAsync<ArgumentException>();
+        (await act.Should().ThrowAsync<ArgumentException>())
+            .WithParameterName(nameof(relativePath));
 
         Directory.Exists(Path.Combine(tempDirectory.RootPath, ".shadekit-evil"))
             .Should().BeFalse();
@@ -1116,7 +1344,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, document,
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileText(".shadekit", SampleFileName)
@@ -1136,7 +1364,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument { Title = "Login" },
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes(".shadekit", SampleFileName).Take(3)
@@ -1215,8 +1443,8 @@ public class KitStoreJsonTests
         await kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
             TestContext.Current.CancellationToken);
 
-        await kitStore.WriteFileAsync("config.json", Encoding.UTF8.GetBytes(StoreTestFormats.Config(1, "stop")),
-            TestContext.Current.CancellationToken);
+        await kitStore.WriteFileAsync("config.json", TextFileContent.FromText(StoreTestFormats.Config(1, "stop")),
+            cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
         var act = () => kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
@@ -1281,7 +1509,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(relativePath, SampleFormat.Id, new SampleDocument { Title = "Logout" },
-            FormatAccess.Replace, TestContext.Current.CancellationToken);
+            FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await ReadTitleAsync(kitStore, relativePath))
@@ -1306,7 +1534,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument { Title = "Logout" },
-            FormatAccess.Replace, TestContext.Current.CancellationToken);
+            FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await ReadTitleAsync(kitStore, SampleFileName))
@@ -1329,7 +1557,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument { Title = "Logout" },
-            FormatAccess.Replace, TestContext.Current.CancellationToken);
+            FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await ReadTitleAsync(kitStore, SampleFileName))
@@ -1349,7 +1577,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
-            FormatAccess.Replace, TestContext.Current.CancellationToken);
+            FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<Exception>())
@@ -1370,7 +1598,7 @@ public class KitStoreJsonTests
 
         // Act
         var act = () => kitStore.WriteJsonAsync(SampleFileName, "unknown", new SampleDocument(),
-            FormatAccess.Replace, TestContext.Current.CancellationToken);
+            FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<ArgumentException>())
@@ -1398,7 +1626,7 @@ public class KitStoreJsonTests
 
             // Act
             var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
-                FormatAccess.Replace, TestContext.Current.CancellationToken);
+                FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
             // Assert
             await act.Should().ThrowAsync<UnauthorizedAccessException>();
@@ -1425,7 +1653,7 @@ public class KitStoreJsonTests
 
         // Act
         await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument { Title = "Logout" },
-            FormatAccess.Replace, TestContext.Current.CancellationToken);
+            FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         (await ReadTitleAsync(kitStore, SampleFileName))
@@ -1450,7 +1678,7 @@ public class KitStoreJsonTests
 
             // Act
             var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
-                FormatAccess.Replace, TestContext.Current.CancellationToken);
+                FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
             // Assert
             await act.Should().ThrowAsync<UnauthorizedAccessException>(
@@ -1507,11 +1735,13 @@ public class KitStoreJsonTests
         }
     }
 
-    private static KitStore CreateStore(TempKitDirectory tempDirectory, int configVersion = 1)
+    private static KitStore CreateStore(TempKitDirectory tempDirectory, int configVersion = 1,
+        ITextFileWriter? textFileWriter = null)
     {
         var kitStorePath = tempDirectory.CreateDirectory(".shadekit");
         var formatRegistry = StoreTestFormats.CreateRegistry(configVersion: configVersion);
 
-        return new KitStore(kitStorePath, new VersionedJsonSerializer(formatRegistry), formatRegistry);
+        return new KitStore(kitStorePath, new VersionedJsonSerializer(formatRegistry), formatRegistry,
+            textFileWriter ?? FixedLineEnding.CreateWriter(LineEnding.Lf));
     }
 }

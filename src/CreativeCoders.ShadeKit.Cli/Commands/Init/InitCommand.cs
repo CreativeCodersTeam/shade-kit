@@ -36,9 +36,11 @@ public class InitCommand(
     /// </summary>
     /// <remarks>
     /// The initialisation works at the root of the git repository that contains the current directory. Plain output is
-    /// the line <c>Initialised SHADE kit in &lt;root&gt;.</c>, one line <c>&lt;action&gt;  &lt;path&gt;</c> per file,
-    /// and a hint to commit the files. JSON output is an envelope whose <c>data</c> is an
-    /// <see cref="InitCommandData" />. In JSON mode, an expected failure is written as an error envelope and the abort
+    /// one line <c>Warning: &lt;message&gt;</c> per warning of the initialisation, the line
+    /// <c>Initialised SHADE kit in &lt;root&gt;.</c>, one line <c>&lt;action&gt;  &lt;path&gt;</c> per file, and a hint
+    /// to commit the files. JSON output is an envelope whose <c>data</c> is an <see cref="InitCommandData" /> and whose
+    /// <c>warnings</c> contain the warnings of the initialisation, for example <c>editorconfig-unreadable</c> or
+    /// <c>editorconfig-invalid</c>. In JSON mode, an expected failure is written as an error envelope and the abort
     /// message is not printed.
     /// </remarks>
     /// <param name="options">The options of the command.</param>
@@ -65,7 +67,7 @@ public class InitCommand(
             .ConfigureAwait(false);
         var data = InitCommandData.FromResult(result);
 
-        _context.WriteSuccess(options.Json, data, () => WriteSummary(data));
+        _context.WriteSuccess(options.Json, data, result.Warnings, () => WriteSummary(data));
 
         return CommandResult.Success;
     }

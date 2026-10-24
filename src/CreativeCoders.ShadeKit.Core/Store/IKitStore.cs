@@ -1,3 +1,4 @@
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
@@ -94,7 +95,10 @@ public interface IKitStore
     /// </para>
     /// <para>
     /// The written file carries the current format version and its <c>minEngineVersion</c>, is UTF-8 encoded without
-    /// byte order mark, and is written directly, not atomically. Missing directories are created.
+    /// byte order mark, ends with a line ending, and is written directly, not atomically, like a file of
+    /// <see cref="WriteFileAsync" />: its lines are joined with the line ending that the repository prescribes for
+    /// the file (see <see cref="WriteFileAsync" /> for <paramref name="lineEndingPath" />). Missing directories are
+    /// created.
     /// </para>
     /// </remarks>
     /// <typeparam name="T">The type of the document.</typeparam>
@@ -106,16 +110,25 @@ public interface IKitStore
     /// for a command that migrates it to the current format, or <see cref="FormatAccess.Replace" /> for a command
     /// that replaces it whatever it contains.
     /// </param>
+    /// <param name="lineEndingPath">
+    /// The path relative to <see cref="RootPath" /> for which the line ending is determined, or
+    /// <see langword="null" /> to determine it for <paramref name="relativePath" />.
+    /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous write operation.</returns>
+    /// <returns>
+    /// A task that represents the asynchronous write operation. The task result contains the warnings that occurred
+    /// while the line ending of the file was determined, for example an <see cref="EditorConfigUnreadableWarning" />;
+    /// empty if there were none.
+    /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="document" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="access" /> is not <see cref="FormatAccess.Write" />, <see cref="FormatAccess.Upgrade" />, or
     /// <see cref="FormatAccess.Replace" />.
     /// </exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />; or no file type
-    /// with the id <paramref name="formatId" /> is registered.
+    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />;
+    /// <paramref name="lineEndingPath" /> is not <see langword="null" /> and is empty, rooted, or points outside
+    /// <see cref="RootPath" />; or no file type with the id <paramref name="formatId" /> is registered.
     /// </exception>
     /// <exception cref="InvalidKitFileException">
     /// The existing file is invalid and <paramref name="access" /> is not <see cref="FormatAccess.Replace" />.
@@ -128,28 +141,49 @@ public interface IKitStore
     /// The existing file uses an older format version and <paramref name="access" /> is
     /// <see cref="FormatAccess.Write" />.
     /// </exception>
-    Task WriteJsonAsync<T>(string relativePath, string formatId, T document, FormatAccess access,
-        CancellationToken cancellationToken = default)
+    Task<IReadOnlyList<KitWarning>> WriteJsonAsync<T>(string relativePath, string formatId, T document,
+        FormatAccess access, string? lineEndingPath = null, CancellationToken cancellationToken = default)
         where T : VersionedDocument;
 
     /// <summary>
-    /// Writes a file of the store that is not a versioned JSON file, for example a template.
+    /// Writes a text file of the store that is not a versioned JSON file, for example a template.
     /// </summary>
     /// <remarks>
-    /// The bytes are written as they are, directly, not atomically; an existing file is replaced. Missing directories
-    /// are created.
+    /// <para>
+    /// The file is written with an <see cref="ITextFileWriter" />, so its lines are joined with the line ending that
+    /// the repository prescribes for the file. The file is written directly, not atomically; an existing file is
+    /// replaced. Missing directories are created.
+    /// </para>
+    /// <para>
+    /// The line ending is determined for <paramref name="lineEndingPath" /> if it is specified, otherwise for
+    /// <paramref name="relativePath" />, in both cases for the path relative to the repository root, for example
+    /// <c>.shadekit/features/login/request.md</c>. A file that is written into a hidden staging directory and moved
+    /// into place later passes its final path, so it gets the line ending of the path where it ends up.
+    /// </para>
     /// </remarks>
     /// <param name="relativePath">
     /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/spec.md</c>.
     /// </param>
-    /// <param name="content">The bytes of the file.</param>
+    /// <param name="content">The content of the file.</param>
+    /// <param name="lineEndingPath">
+    /// The path relative to <see cref="RootPath" /> for which the line ending is determined, for example
+    /// <c>features/login/request.md</c>, or <see langword="null" /> to determine it for
+    /// <paramref name="relativePath" />. The file at this path is neither read nor written.
+    /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous write operation.</returns>
+    /// <returns>
+    /// A task that represents the asynchronous write operation. The task result contains the warnings that occurred
+    /// while the line ending of the file was determined, for example an <see cref="EditorConfigUnreadableWarning" />;
+    /// empty if there were none.
+    /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="content" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
+    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />; or
+    /// <paramref name="lineEndingPath" /> is not <see langword="null" /> and is empty, rooted, or points outside
+    /// <see cref="RootPath" />.
     /// </exception>
-    Task WriteFileAsync(string relativePath, byte[] content, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<KitWarning>> WriteFileAsync(string relativePath, TextFileContent content,
+        string? lineEndingPath = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a directory of the store, together with its missing parent directories.
@@ -163,24 +197,31 @@ public interface IKitStore
     void CreateDirectory(string relativePath);
 
     /// <summary>
-    /// Reads a file of the store that is not a versioned JSON file, for example a template.
+    /// Reads a text file of the store that is not a versioned JSON file, for example a template.
     /// </summary>
     /// <remarks>
-    /// The bytes are returned as they are, without decoding or format check. A directory at
-    /// <paramref name="relativePath" /> counts as a missing file.
+    /// The file is decoded strictly as UTF-8; a leading UTF-8 byte order mark is recorded in
+    /// <see cref="TextFileContent.HasUtf8Bom" />. Every file of the store is a kit file, so a file that is not UTF-8
+    /// text is reported as an invalid kit file, with a reason that ends with the advice to save the file as UTF-8.
+    /// There is no format check. A directory at <paramref name="relativePath" /> counts as a missing file.
     /// </remarks>
     /// <param name="relativePath">
     /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/request.md</c>.
     /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
-    /// A task that represents the asynchronous read operation. The task result contains the bytes of the file, or
+    /// A task that represents the asynchronous read operation. The task result contains the content of the file, or
     /// <see langword="null" /> if the file does not exist.
     /// </returns>
     /// <exception cref="ArgumentException">
     /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
     /// </exception>
-    Task<byte[]?> ReadFileAsync(string relativePath, CancellationToken cancellationToken = default);
+    /// <exception cref="InvalidKitFileException">
+    /// The file is not UTF-8 text: it starts with a UTF-16 or UTF-32 byte order mark, contains a NUL byte, or contains
+    /// bytes that are not valid UTF-8. The file path of the exception is relative to the repository root, for example
+    /// <c>.shadekit/templates/request.md</c>.
+    /// </exception>
+    Task<TextFileContent?> ReadFileAsync(string relativePath, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Determines whether a file of the store exists.

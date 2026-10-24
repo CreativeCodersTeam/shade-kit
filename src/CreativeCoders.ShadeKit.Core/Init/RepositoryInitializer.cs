@@ -1,7 +1,7 @@
-using System.Text;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Engine;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Store;
@@ -20,13 +20,18 @@ namespace CreativeCoders.ShadeKit.Core.Init;
 /// The planner that computes the managed section to add to <c>CLAUDE.md</c> and <c>AGENTS.md</c>.
 /// </param>
 /// <param name="engineVersionProvider">The provider of the engine version recorded as kit version.</param>
+/// <param name="textFileWriter">
+/// The writer that writes <c>.gitignore</c>, <c>CLAUDE.md</c>, and <c>AGENTS.md</c> with the line ending of the
+/// repository.
+/// </param>
 public sealed class RepositoryInitializer(
     IGitRepositoryLocator gitRepositoryLocator,
     IKitStoreFactory kitStoreFactory,
     IShippedTemplateReader shippedTemplateReader,
     IGitIgnorePlanner gitIgnorePlanner,
     IInstructionSectionPlanner instructionSectionPlanner,
-    IEngineVersionProvider engineVersionProvider)
+    IEngineVersionProvider engineVersionProvider,
+    ITextFileWriter textFileWriter)
     : IRepositoryInitializer
 {
     private const string GitIgnoreFileName = ".gitignore";
@@ -46,6 +51,8 @@ public sealed class RepositoryInitializer(
     private readonly IInstructionSectionPlanner _instructionSectionPlanner = Ensure.NotNull(instructionSectionPlanner);
 
     private readonly IEngineVersionProvider _engineVersionProvider = Ensure.NotNull(engineVersionProvider);
+
+    private readonly ITextFileWriter _textFileWriter = Ensure.NotNull(textFileWriter);
 
     /// <inheritdoc />
     public async Task<RepositoryInitResult> InitializeAsync(string path, CancellationToken cancellationToken = default)
@@ -76,12 +83,13 @@ public sealed class RepositoryInitializer(
         cancellationToken.ThrowIfCancellationRequested();
 
         var files = new List<InitializedFile>();
+        var warnings = new List<KitWarning>();
 
         try
         {
-            await WriteKitRootAsync(kitStore, files, cancellationToken).ConfigureAwait(false);
-            await WriteRepositoryFilesAsync(repositoryRootPath, repositoryFileChanges, files, cancellationToken)
-                .ConfigureAwait(false);
+            await WriteKitRootAsync(kitStore, files, warnings, cancellationToken).ConfigureAwait(false);
+            await WriteRepositoryFilesAsync(repositoryRootPath, repositoryFileChanges, files, warnings,
+                cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -91,7 +99,9 @@ public sealed class RepositoryInitializer(
             throw;
         }
 
-        return new RepositoryInitResult(repositoryRootPath, files);
+        // Every write resolves the line ending again, so an unreadable .editorconfig file is reported by each of them.
+        // The kit root is written first, so its warnings come first.
+        return new RepositoryInitResult(repositoryRootPath, files, [.. warnings.Distinct()]);
     }
 
     private static void DeleteKitRoot(string kitRootPath)
@@ -152,7 +162,7 @@ public sealed class RepositoryInitializer(
             : filePath;
     }
 
-    private async Task WriteKitRootAsync(IKitStore kitStore, List<InitializedFile> files,
+    private async Task WriteKitRootAsync(IKitStore kitStore, List<InitializedFile> files, List<KitWarning> warnings,
         CancellationToken cancellationToken)
     {
         var kitVersion = _engineVersionProvider.Version;
@@ -165,7 +175,7 @@ public sealed class RepositoryInitializer(
         await WriteDocumentAsync(KitStorePaths.GatesFileName, FormatIds.Gates, new GatesConfig())
             .ConfigureAwait(false);
 
-        var templatesLock = await WriteTemplatesAsync(kitStore, kitVersion, files, cancellationToken)
+        var templatesLock = await WriteTemplatesAsync(kitStore, kitVersion, files, warnings, cancellationToken)
             .ConfigureAwait(false);
 
         await WriteDocumentAsync(KitStorePaths.TemplatesLockFileName, FormatIds.TemplatesLock, templatesLock)
@@ -177,27 +187,34 @@ public sealed class RepositoryInitializer(
         async Task WriteDocumentAsync<T>(string relativePath, string formatId, T document)
             where T : VersionedDocument
         {
-            await kitStore.WriteJsonAsync(relativePath, formatId, document, FormatAccess.Write, cancellationToken)
+            var writeWarnings = await kitStore
+                .WriteJsonAsync(relativePath, formatId, document, FormatAccess.Write,
+                    cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             files.Add(CreatedInKitRoot(relativePath));
+            warnings.AddRange(writeWarnings);
         }
     }
 
     /// <summary>
-    /// Writes every shipped template as UTF-8 without byte order mark, in catalog order.
+    /// Writes every shipped template as UTF-8 without byte order mark, with the line ending of the repository, in
+    /// catalog order.
     /// </summary>
     /// <returns>The lock with one entry per template, sorted ordinally by path.</returns>
     private async Task<TemplatesLock> WriteTemplatesAsync(IKitStore kitStore, string kitVersion,
-        List<InitializedFile> files, CancellationToken cancellationToken)
+        List<InitializedFile> files, List<KitWarning> warnings, CancellationToken cancellationToken)
     {
         var lockEntries = new List<TemplatesLockEntry>();
 
         foreach (var shippedTemplate in ShippedTemplates.All)
         {
-            var content = Encoding.UTF8.GetBytes(_shippedTemplateReader.ReadContent(shippedTemplate));
+            var content = TextFileContent.FromText(_shippedTemplateReader.ReadContent(shippedTemplate));
 
-            await kitStore.WriteFileAsync(shippedTemplate.KitPath, content, cancellationToken).ConfigureAwait(false);
+            var writeWarnings = await kitStore
+                .WriteFileAsync(shippedTemplate.KitPath, content, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
             files.Add(CreatedInKitRoot(shippedTemplate.KitPath));
+            warnings.AddRange(writeWarnings);
 
             lockEntries.Add(new TemplatesLockEntry
             {
@@ -210,15 +227,18 @@ public sealed class RepositoryInitializer(
         return new TemplatesLock { Templates = [.. lockEntries.OrderBy(entry => entry.Path, StringComparer.Ordinal)] };
     }
 
-    private static async Task WriteRepositoryFilesAsync(string repositoryRootPath,
+    private async Task WriteRepositoryFilesAsync(string repositoryRootPath,
         List<(string FileName, PlannedFileChange Change)> changes, List<InitializedFile> files,
-        CancellationToken cancellationToken)
+        List<KitWarning> warnings, CancellationToken cancellationToken)
     {
         foreach (var (fileName, change) in changes)
         {
-            await File.WriteAllBytesAsync(Path.Combine(repositoryRootPath, fileName), change.Content,
-                cancellationToken).ConfigureAwait(false);
+            var writeWarnings = await _textFileWriter
+                .WriteAsync(repositoryRootPath, fileName, change.Content, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
             files.Add(new InitializedFile(fileName, change.Action));
+            warnings.AddRange(writeWarnings);
         }
     }
 

@@ -1,8 +1,9 @@
-using System.Text;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
@@ -22,7 +23,7 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
     {
         var formatRegistry = FormatRegistry.CreateDefault();
         _realStore = new KitStore(_tempDirectory.RootPath, new VersionedJsonSerializer(formatRegistry),
-            formatRegistry);
+            formatRegistry, FixedLineEnding.CreateWriter(LineEnding.Lf));
         _store = A.Fake<IKitStore>(options => options.Wrapping(_realStore));
     }
 
@@ -74,7 +75,7 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
             _realStore.DirectoryExists(DirectoryPath)
                 .Should().BeFalse();
 
-            await _realStore.WriteFileAsync($"{path}/a.txt", "a"u8.ToArray(), cancellationToken);
+            await _realStore.WriteFileAsync($"{path}/a.txt", TextFileContent.FromText("a"), cancellationToken: cancellationToken);
         }, TestContext.Current.CancellationToken);
 
         // Assert
@@ -163,7 +164,7 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
         {
             _tempDirectory.WriteFile("other run", "features", "login", "other.txt");
 
-            return _realStore.WriteFileAsync($"{path}/a.txt", "a"u8.ToArray(), cancellationToken);
+            return _realStore.WriteFileAsync($"{path}/a.txt", TextFileContent.FromText("a"), cancellationToken: cancellationToken);
         }
 
         // Act
@@ -677,7 +678,7 @@ public sealed class KitStoreDirectoryExtensionsTests : IDisposable
 
     private Task WriteFileAsync(string directoryPath, CancellationToken cancellationToken)
     {
-        return _realStore.WriteFileAsync($"{directoryPath}/a.txt", Encoding.UTF8.GetBytes("a"), cancellationToken);
+        return _realStore.WriteFileAsync($"{directoryPath}/a.txt", TextFileContent.FromText("a"), cancellationToken: cancellationToken);
     }
 
     private IEnumerable<string> GetDirectoryNames(string relativePath)

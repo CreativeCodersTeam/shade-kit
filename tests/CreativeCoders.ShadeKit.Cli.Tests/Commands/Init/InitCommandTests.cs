@@ -7,6 +7,7 @@ using CreativeCoders.ShadeKit.Cli.Commands;
 using CreativeCoders.ShadeKit.Cli.Commands.Init;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 using FakeItEasy;
@@ -23,7 +24,7 @@ public class InitCommandTests
         new InitializedFile(".shadekit/features/", InitializedFileAction.Created),
         new InitializedFile(".gitignore", InitializedFileAction.Appended),
         new InitializedFile("CLAUDE.md", InitializedFileAction.Updated)
-    ]);
+    ], []);
 
     [Fact]
     [Trait("Requirement", "FP02-AC1")]
@@ -48,6 +49,95 @@ public class InitCommandTests
 
         result.ExitCode
             .Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeWithWarnings_WritesWarningsBeforeSummary()
+    {
+        // Arrange
+        // A wide console keeps the long warning on one line.
+        var console = new TestConsole().Width(1000);
+        var warning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        var command = CreateCommand(console, CreateInitializer(new RepositoryInitResult("/repo",
+            [new InitializedFile(".gitignore", InitializedFileAction.Created)], [warning])));
+
+        // Act
+        var result = await command.ExecuteAsync(new InitCommandOptions());
+
+        // Assert
+        console.Lines
+            .Should().Equal(
+                $"Warning: {CliErrorMapper.MapWarning(warning).Message}",
+                "Initialised SHADE kit in /repo.",
+                "created  .gitignore",
+                "Commit '.shadekit/' and the changed files together with your code.");
+
+        result.ExitCode
+            .Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeWithWarnings_WritesWarningsIntoEnvelopeAndNotIntoData()
+    {
+        // Arrange
+        var console = new TestConsole();
+        using var jsonOutput = new StringWriter();
+        var warning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        var command = CreateCommand(console,
+            CreateInitializer(new RepositoryInitResult("/repo", [], [warning])), jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(new InitCommandOptions { Json = true });
+
+        // Assert
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        var warnings = document.RootElement.GetProperty("warnings");
+
+        warnings.GetArrayLength()
+            .Should().Be(1);
+
+        warnings[0].GetProperty("code").GetString()
+            .Should().Be("editorconfig-unreadable");
+
+        warnings[0].GetProperty("message").GetString()
+            .Should().Be(CliErrorMapper.MapWarning(warning).Message);
+
+        document.RootElement.GetProperty("data").TryGetProperty("warnings", out _)
+            .Should().BeFalse();
+
+        console.Output
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SeveralWarnings_WritesEachOnceInResultOrder()
+    {
+        // Arrange
+        var console = new TestConsole().Width(1000);
+        using var jsonOutput = new StringWriter();
+        var firstWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        var secondWarning = new EditorConfigUnreadableWarning("/repo/docs/.editorconfig", "Access denied.");
+        var initResult = new RepositoryInitResult("/repo", [], [firstWarning, secondWarning]);
+        var plainCommand = CreateCommand(console, CreateInitializer(initResult));
+        var jsonCommand = CreateCommand(new TestConsole(), CreateInitializer(initResult), jsonOutput);
+
+        // Act
+        await plainCommand.ExecuteAsync(new InitCommandOptions());
+        await jsonCommand.ExecuteAsync(new InitCommandOptions { Json = true });
+
+        // Assert
+        console.Lines.Take(3)
+            .Should().Equal(
+                $"Warning: {CliErrorMapper.MapWarning(firstWarning).Message}",
+                $"Warning: {CliErrorMapper.MapWarning(secondWarning).Message}",
+                "Initialised SHADE kit in /repo.");
+
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+
+        document.RootElement.GetProperty("warnings").EnumerateArray()
+            .Select(x => x.GetProperty("message").GetString())
+            .Should().Equal(CliErrorMapper.MapWarning(firstWarning).Message,
+                CliErrorMapper.MapWarning(secondWarning).Message);
     }
 
     [Fact]
@@ -88,7 +178,7 @@ public class InitCommandTests
         // Arrange
         var console = new TestConsole();
         var initializer = CreateInitializer(new RepositoryInitResult("/repo/[red]x[/]",
-            [new InitializedFile("[docs]/CLAUDE.md", InitializedFileAction.Created)]));
+            [new InitializedFile("[docs]/CLAUDE.md", InitializedFileAction.Created)], []));
 
         var command = CreateCommand(console, initializer);
 
@@ -158,7 +248,7 @@ public class InitCommandTests
         // Arrange
         using var jsonOutput = new StringWriter();
         var initializer = CreateInitializer(new RepositoryInitResult("/repo/[red]x[/]",
-            [new InitializedFile("[docs]/CLAUDE.md", InitializedFileAction.Created)]));
+            [new InitializedFile("[docs]/CLAUDE.md", InitializedFileAction.Created)], []));
 
         var command = CreateCommand(new TestConsole(), initializer, jsonOutput);
 
@@ -181,7 +271,7 @@ public class InitCommandTests
     {
         // Arrange
         var console = new TestConsole();
-        var command = CreateCommand(console, CreateInitializer(new RepositoryInitResult("/repo", [])));
+        var command = CreateCommand(console, CreateInitializer(new RepositoryInitResult("/repo", [], [])));
 
         // Act
         await command.ExecuteAsync(new InitCommandOptions());
@@ -198,7 +288,7 @@ public class InitCommandTests
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), CreateInitializer(new RepositoryInitResult("/repo", [])),
+        var command = CreateCommand(new TestConsole(), CreateInitializer(new RepositoryInitResult("/repo", [], [])),
             jsonOutput);
 
         // Act

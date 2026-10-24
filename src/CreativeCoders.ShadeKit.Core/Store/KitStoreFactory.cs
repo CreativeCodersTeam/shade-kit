@@ -1,4 +1,5 @@
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
@@ -9,10 +10,14 @@ namespace CreativeCoders.ShadeKit.Core.Store;
 /// <param name="gitRepositoryLocator">The locator that finds the root of the git repository that contains a directory.</param>
 /// <param name="serializer">The serializer that the created stores use for versioned JSON files.</param>
 /// <param name="formatRegistry">The registry that defines the file types the created stores accept.</param>
+/// <param name="textFileWriter">
+/// The writer with which the created stores write their files with the line ending of the repository.
+/// </param>
 public class KitStoreFactory(
     IGitRepositoryLocator gitRepositoryLocator,
     IVersionedJsonSerializer serializer,
-    IFormatRegistry formatRegistry)
+    IFormatRegistry formatRegistry,
+    ITextFileWriter textFileWriter)
     : IKitStoreFactory
 {
     private readonly IGitRepositoryLocator _gitRepositoryLocator = Ensure.NotNull(gitRepositoryLocator);
@@ -20,6 +25,8 @@ public class KitStoreFactory(
     private readonly IVersionedJsonSerializer _serializer = Ensure.NotNull(serializer);
 
     private readonly IFormatRegistry _formatRegistry = Ensure.NotNull(formatRegistry);
+
+    private readonly ITextFileWriter _textFileWriter = Ensure.NotNull(textFileWriter);
 
     /// <inheritdoc />
     public IKitStore Create()
@@ -50,6 +57,7 @@ public class KitStoreFactory(
     {
         Ensure.IsNotNullOrWhitespace(repositoryRootPath);
 
-        return new KitStore(Path.Combine(repositoryRootPath, KitStorePaths.RootPath), _serializer, _formatRegistry);
+        return new KitStore(Path.Combine(repositoryRootPath, KitStorePaths.RootPath), _serializer, _formatRegistry,
+            _textFileWriter);
     }
 }

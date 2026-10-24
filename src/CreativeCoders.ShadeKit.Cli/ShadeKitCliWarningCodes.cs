@@ -45,4 +45,16 @@ public static class ShadeKitCliWarningCodes
     /// ignored.
     /// </summary>
     public const string CurrentFeatureInvalid = "current-feature-invalid";
+
+    /// <summary>
+    /// Represents the warning code reported when an <c>.editorconfig</c> file cannot be read, so the line ending of the
+    /// operating system is used for a file instead.
+    /// </summary>
+    public const string EditorConfigUnreadable = "editorconfig-unreadable";
+
+    /// <summary>
+    /// Represents the warning code reported when an <c>.editorconfig</c> file can be read but not evaluated because of
+    /// its content, so the line ending of the operating system is used for a file instead.
+    /// </summary>
+    public const string EditorConfigInvalid = "editorconfig-invalid";
 }

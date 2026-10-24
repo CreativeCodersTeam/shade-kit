@@ -44,7 +44,9 @@ public interface IFeatureStore
     /// </para>
     /// <para>
     /// <c>request.md</c> is created from the repository template <c>templates/request.md</c>, or from the shipped
-    /// template if the repository has none, and written as UTF-8 without byte order mark.
+    /// template if the repository has none, and written as UTF-8 without byte order mark. The whole file, the original
+    /// input included, is written with the line ending that the repository prescribes for it, as are
+    /// <c>feature.json</c> and the local override.
     /// </para>
     /// <para>
     /// If a step up to the move fails or is cancelled, only the staging folder is deleted (best effort) and the
@@ -61,7 +63,9 @@ public interface IFeatureStore
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous create operation. The task result contains the new
-    /// <c>feature.json</c> document, the paths of the feature, the suggested branch name, and the format warnings.
+    /// <c>feature.json</c> document, the paths of the feature, the suggested branch name, the format warnings, and the
+    /// warnings of the files that this call wrote (see <see cref="IKitStore.WriteFileAsync" />); warnings of earlier
+    /// writes of <paramref name="store" /> are not included.
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="store" /> or <paramref name="request" /> is <see langword="null" />.
@@ -215,7 +219,8 @@ public interface IFeatureStore
     /// unchanged. If the branch selects another existing feature, the override is written anyway and a
     /// <see cref="CurrentFeatureMismatchWarning" /> warning is returned, because the branch wins. An
     /// existing override that cannot be used because of its own format (invalid, too new, or outdated) is replaced:
-    /// it is deleted, then written.
+    /// it is deleted, then written. The warnings of writing the override (see <see cref="IKitStore.WriteJsonAsync{T}" />)
+    /// are returned as well; warnings of earlier writes of <paramref name="store" /> are not included.
     /// </remarks>
     /// <param name="store">The SHADE kit store that contains the feature.</param>
     /// <param name="featureId">The id of the feature to make current.</param>

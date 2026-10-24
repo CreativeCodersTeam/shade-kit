@@ -20,10 +20,11 @@ public interface IGitIgnorePlanner
     /// line separates them from existing content, unless the file already ends with an empty line.
     /// </para>
     /// <para>
-    /// A missing file gets new content as UTF-8 without byte order mark and with <c>\n</c> line terminators. In an
-    /// existing file, every existing byte stays unchanged, a leading UTF-8 byte order mark is kept, a missing final
-    /// line terminator is added, and the appended lines end with <c>\r\n</c> if the file contains one. A file that is
-    /// not UTF-8 is refused.
+    /// A missing file gets new content without byte order mark that ends with a line ending. In an existing file, the
+    /// existing lines are kept, a leading UTF-8 byte order mark is kept, and a missing final line ending is added. The
+    /// content holds no line endings: the line ending is decided when the file is written (see
+    /// <see cref="ITextFileWriter.WriteAsync" />), and the whole file, existing lines included, is written with it. A
+    /// file that is not UTF-8 is refused.
     /// </para>
     /// </remarks>
     /// <param name="filePath">The absolute path of the <c>.gitignore</c> file.</param>
@@ -39,7 +40,8 @@ public interface IGitIgnorePlanner
     /// </exception>
     /// <exception cref="PathNotAFileException"><paramref name="filePath" /> is an existing directory.</exception>
     /// <exception cref="UnsupportedFileEncodingException">
-    /// The file starts with a UTF-16 or UTF-32 byte order mark or contains a NUL byte.
+    /// The file starts with a UTF-16 or UTF-32 byte order mark, contains a NUL byte, or contains bytes that are not
+    /// valid UTF-8.
     /// </exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
     Task<PlannedFileChange?> PlanAsync(string filePath, CancellationToken cancellationToken = default);

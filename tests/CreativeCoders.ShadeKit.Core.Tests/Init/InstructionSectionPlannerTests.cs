@@ -2,6 +2,7 @@ using System.Text;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Init;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Init;
@@ -144,26 +145,85 @@ public class InstructionSectionPlannerTests
             .Should().Equal(original);
     }
 
-    [Fact]
-    public async Task PlanAsync_LfSectionInFileWithCrLf_UpdatesSectionToCrLfOnce()
+    [Theory]
+    [InlineData(LineEnding.Lf)]
+    [InlineData(LineEnding.CrLf)]
+    public async Task PlanAsync_CurrentSectionWithOtherOrMixedLineEndings_ReturnsNullAndLeavesFileUnchanged(
+        LineEnding lineEnding)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFile($"intro\r\n{ExpectedSection}\n", FileName);
+        var original = tempDirectory.ReadFileBytes(FileName);
 
         // Act
-        var firstAction = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
-        var secondAction = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, lineEnding);
 
         // Assert
-        firstAction
-            .Should().Be(InitializedFileAction.Updated);
-
-        secondAction
+        action
             .Should().BeNull();
 
+        tempDirectory.ReadFileBytes(FileName)
+            .Should().Equal(original);
+    }
+
+    [Theory]
+    [InlineData(LineEnding.Lf, "\n")]
+    [InlineData(LineEnding.CrLf, "\r\n")]
+    public async Task PlanAsync_OutdatedSectionInMixedFile_WritesWholeFileWithTargetLineEnding(LineEnding lineEnding,
+        string newLine)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var filePath = tempDirectory.WriteFile($"intro\r\n{Begin}\nold\r\n{End}\noutro", FileName);
+
+        // Act
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, lineEnding);
+
+        // Assert
+        action
+            .Should().Be(InitializedFileAction.Updated);
+
         tempDirectory.ReadFileText(FileName)
-            .Should().Be($"intro\r\n{ToCrLf(ExpectedSection)}\n");
+            .Should().Be($"intro{newLine}{ExpectedSection.Replace("\n", newLine, StringComparison.Ordinal)}" +
+                         $"{newLine}outro");
+    }
+
+    [Theory]
+    [InlineData(LineEnding.Lf, "\n")]
+    [InlineData(LineEnding.CrLf, "\r\n")]
+    public async Task PlanAsync_FileMissingWithLineEnding_CreatesSectionWithTargetLineEnding(LineEnding lineEnding,
+        string newLine)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var filePath = Path.Combine(tempDirectory.RootPath, FileName);
+
+        // Act
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, lineEnding);
+
+        // Assert
+        tempDirectory.ReadFileText(FileName)
+            .Should().Be(ExpectedSection.Replace("\n", newLine, StringComparison.Ordinal) + newLine);
+    }
+
+    [Fact]
+    public async Task PlanAsync_InvalidUtf8File_ThrowsUnsupportedFileEncodingExceptionAndLeavesFileUnchanged()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        byte[] original = [(byte)'#', (byte)' ', 0xC3, (byte)'\n'];
+        var filePath = tempDirectory.WriteFileBytes(original, FileName);
+
+        // Act
+        var act = () => new InstructionSectionPlanner().PlanAsync(filePath, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<UnsupportedFileEncodingException>())
+            .Which.FilePath.Should().Be(filePath);
+
+        tempDirectory.ReadFileBytes(FileName)
+            .Should().Equal(original);
     }
 
     [Theory]
@@ -270,7 +330,7 @@ public class InstructionSectionPlannerTests
         var filePath = tempDirectory.WriteFile(text, FileName);
 
         // Act
-        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, ToLineEnding(newLine));
 
         // Assert
         action
@@ -323,21 +383,26 @@ public class InstructionSectionPlannerTests
             .Should().BeTrue();
     }
 
-    [Fact]
-    public async Task PlanAsync_CrLfFileWithBomWithoutMarkers_AppendsWithCrLfAndKeepsBom()
+    [Theory]
+    [InlineData(LineEnding.CrLf, "\r\n")]
+    [InlineData(LineEnding.Lf, "\n")]
+    public async Task PlanAsync_CrLfFileWithBomWithoutMarkers_AppendsWithTargetLineEndingAndKeepsBom(
+        LineEnding lineEnding, string newLine)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var filePath = tempDirectory.WriteFileBytes([.. TestText.Utf8Bom, .. "# Project\r\n"u8], FileName);
 
         // Act
-        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, lineEnding);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
             .Should().Equal([
                 .. TestText.Utf8Bom,
-                .. Encoding.UTF8.GetBytes("# Project\r\n\r\n" + ToCrLf(ExpectedSection) + "\r\n")
+                .. Encoding.UTF8.GetBytes(
+                    $"# Project{newLine}{newLine}" + ExpectedSection.Replace("\n", newLine, StringComparison.Ordinal) +
+                    newLine)
             ]);
     }
 
@@ -403,8 +468,11 @@ public class InstructionSectionPlannerTests
             .Should().Be($"intro\n{ExpectedSection}");
     }
 
-    [Fact]
-    public async Task PlanAsync_CrLfFileWithBomAndOtherSection_ReplacesWithCrLfAndKeepsBom()
+    [Theory]
+    [InlineData(LineEnding.CrLf, "\r\n")]
+    [InlineData(LineEnding.Lf, "\n")]
+    public async Task PlanAsync_CrLfFileWithBomAndOtherSection_ReplacesWithTargetLineEndingAndKeepsBom(
+        LineEnding lineEnding, string newLine)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -412,13 +480,15 @@ public class InstructionSectionPlannerTests
             [.. TestText.Utf8Bom, .. Encoding.UTF8.GetBytes($"intro\r\n{Begin}\r\nold\r\n{End}\r\noutro\r\n")], FileName);
 
         // Act
-        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+        await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, lineEnding);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
             .Should().Equal([
                 .. TestText.Utf8Bom,
-                .. Encoding.UTF8.GetBytes($"intro\r\n{ToCrLf(ExpectedSection)}\r\noutro\r\n")
+                .. Encoding.UTF8.GetBytes(
+                    $"intro{newLine}{ExpectedSection.Replace("\n", newLine, StringComparison.Ordinal)}{newLine}" +
+                    $"outro{newLine}")
             ]);
     }
 
@@ -479,7 +549,7 @@ public class InstructionSectionPlannerTests
         var newLine = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
 
         // Act
-        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken);
+        var action = await PlanAndWriteAsync(filePath, TestContext.Current.CancellationToken, ToLineEnding(newLine));
 
         // Assert
         action
@@ -605,23 +675,24 @@ public class InstructionSectionPlannerTests
             .Should().BeFalse();
     }
 
-    private static string ToCrLf(string text)
+    private static LineEnding ToLineEnding(string newLine)
     {
-        return text.Replace("\n", "\r\n", StringComparison.Ordinal);
+        return newLine == "\r\n" ? LineEnding.CrLf : LineEnding.Lf;
     }
 
     /// <summary>
-    /// Plans the change of an instruction file and writes it, as the initialisation does.
+    /// Plans the change of an instruction file and writes it through a <see cref="TextFileWriter" /> with a fixed
+    /// line ending, as the initialisation does.
     /// </summary>
     /// <returns>The action of the planned change, or <see langword="null" /> if the file needs no change.</returns>
     private static async Task<InitializedFileAction?> PlanAndWriteAsync(string filePath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, LineEnding lineEnding = LineEnding.Lf)
     {
         var change = await new InstructionSectionPlanner().PlanAsync(filePath, cancellationToken);
 
         if (change is not null)
         {
-            await File.WriteAllBytesAsync(filePath, change.Content, cancellationToken);
+            await FixedLineEnding.WriteAsync(filePath, change.Content, lineEnding, cancellationToken);
         }
 
         return change?.Action;

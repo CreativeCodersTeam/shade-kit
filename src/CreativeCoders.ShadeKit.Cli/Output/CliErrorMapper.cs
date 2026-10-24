@@ -274,6 +274,13 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 $"The local override '{currentFeaturePath}' cannot be used and is ignored: " +
                 $"{CreateOverrideProblemSentence(w.Problem)} Run 'shade-kit feature set <id>' to replace it."),
 
+            EditorConfigUnreadableWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.EditorConfigUnreadable,
+                CreateEditorConfigMessage(w.FilePath, w.IsEditorConfigFilePath, "cannot be read", w.Reason)),
+
+            EditorConfigInvalidWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.EditorConfigInvalid,
+                CreateEditorConfigMessage(w.FilePath, w.IsEditorConfigFilePath,
+                    "cannot be evaluated because of its content", w.Reason)),
+
             _ => throw new ArgumentOutOfRangeException(nameof(warning), warning,
                 "The warning is not supported.")
         };
@@ -386,6 +393,39 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     {
         return $"'{KitStorePaths.GetRepositoryPath(KitStorePaths.GetFeatureFilePath(folderFeatureId))}' has the id " +
                $"'{fileFeatureId}'; the folder name '{folderFeatureId}' is used.";
+    }
+
+    // Names the path exactly once: the reason, usually the message of an exception, often contains the quoted path
+    // of the .editorconfig file already ("Access to the path '...' is denied."), so that path is only added when the
+    // reason does not quote it. The quotes keep a reason that names another file, such as '<path>.bak', from hiding
+    // the path. If the failing .editorconfig file is not known, the path is that of the written file, which the
+    // message names as the file the .editorconfig files apply to. An empty reason gives a sentence without a reason.
+    private static string CreateEditorConfigMessage(string filePath, bool isEditorConfigFilePath, string problem,
+        string reason)
+    {
+        const string fallbackSentence =
+            " The .editorconfig files were ignored and the line ending of the operating system was used instead.";
+
+        var trimmedReason = reason.Trim().TrimEnd('.').TrimEnd();
+
+        var subject = CreateEditorConfigSubject(filePath, isEditorConfigFilePath, trimmedReason);
+
+        return trimmedReason.Length == 0
+            ? $"{subject} {problem}.{fallbackSentence}"
+            : $"{subject} {problem}: {trimmedReason}.{fallbackSentence}";
+    }
+
+    private static string CreateEditorConfigSubject(string filePath, bool isEditorConfigFilePath,
+        string trimmedReason)
+    {
+        if (!isEditorConfigFilePath)
+        {
+            return $"An .editorconfig file that applies to '{filePath}'";
+        }
+
+        return trimmedReason.Contains($"'{filePath}'", StringComparison.OrdinalIgnoreCase)
+            ? "An .editorconfig file"
+            : $"The .editorconfig file '{filePath}'";
     }
 
     private static string CreateSentence(string text)

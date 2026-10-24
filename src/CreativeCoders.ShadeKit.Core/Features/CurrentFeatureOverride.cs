@@ -63,12 +63,17 @@ internal static class CurrentFeatureOverride
     /// <param name="store">The SHADE kit store whose override is written.</param>
     /// <param name="featureId">The id of the feature the override selects.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous write operation.</returns>
-    public static async Task WriteAsync(IKitStore store, string featureId, CancellationToken cancellationToken)
+    /// <returns>
+    /// A task that represents the asynchronous write operation. The task result contains the warnings of the write
+    /// (see <see cref="IKitStore.WriteJsonAsync{T}" />).
+    /// </returns>
+    public static async Task<IReadOnlyList<KitWarning>> WriteAsync(IKitStore store, string featureId,
+        CancellationToken cancellationToken)
     {
-        await store
+        return await store
             .WriteJsonAsync(KitStorePaths.CurrentFeatureFilePath, FormatIds.CurrentFeature,
-                new CurrentFeatureDocument { FeatureId = featureId }, FormatAccess.Replace, cancellationToken)
+                new CurrentFeatureDocument { FeatureId = featureId }, FormatAccess.Replace,
+                cancellationToken: cancellationToken)
             .ConfigureAwait(false);
     }
 }

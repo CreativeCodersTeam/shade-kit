@@ -19,6 +19,11 @@ internal static class TextFileEncoding
     /// </summary>
     public const string UnmarkedWideEncodingName = "UTF-16 or UTF-32 without byte order mark";
 
+    /// <summary>
+    /// Represents the encoding name that is reported for content that contains bytes that are not valid UTF-8.
+    /// </summary>
+    public const string InvalidUtf8EncodingName = "an unknown encoding with bytes that are not valid UTF-8";
+
     private const string SaveAsUtf8Hint = "Save the file as UTF-8 and run the command again.";
 
     // The byte order marks of the encodings that are not compatible with UTF-8. UTF-32 LE starts with the UTF-16 LE

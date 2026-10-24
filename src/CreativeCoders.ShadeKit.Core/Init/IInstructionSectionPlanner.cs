@@ -25,16 +25,18 @@ public interface IInstructionSectionPlanner
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A missing file gets only the section, as UTF-8 without byte order mark and with <c>\n</c> line
-    /// terminators. To a file without markers, the section is appended after one blank line, or directly if the file
-    /// already ends with an empty line. In a file with one valid pair of markers, the lines from the begin marker to
-    /// the end marker are replaced by the section.
+    /// A missing file gets only the section, without byte order mark and with a final line ending. To a file without
+    /// markers, the section is appended after one blank line, or directly if the file already ends with an empty line.
+    /// In a file with one valid pair of markers, the lines from the begin marker to the end marker are replaced by the
+    /// section.
     /// </para>
     /// <para>
-    /// In an existing file, every byte outside the inserted or replaced part stays unchanged, a leading UTF-8 byte
-    /// order mark is kept, a missing final line terminator is added before appending, and the section uses
-    /// <c>\r\n</c> line terminators if the file contains one. A file with invalid markers or that is not UTF-8 is
-    /// refused.
+    /// In an existing file, every line outside the inserted or replaced part is kept, a leading UTF-8 byte order mark
+    /// is kept, and a missing final line ending is added when the section is appended. The content holds no line
+    /// endings: the line ending is decided when the file is written (see <see cref="ITextFileWriter.WriteAsync" />),
+    /// and the whole file, existing lines included, is written with it. A file whose section is already current needs
+    /// no change, even if its line endings differ from the ones it would be written with. A file with invalid markers
+    /// or that is not UTF-8 is refused.
     /// </para>
     /// </remarks>
     /// <param name="filePath">The absolute path of the instruction file.</param>
@@ -43,14 +45,15 @@ public interface IInstructionSectionPlanner
     /// A task that represents the asynchronous read operation. The task result contains the new content with
     /// <see cref="InitializedFileAction.Created" />, <see cref="InitializedFileAction.Appended" />, or
     /// <see cref="InitializedFileAction.Updated" />, or <see langword="null" /> if the file already contains the
-    /// section exactly and needs no change.
+    /// section with the same lines and needs no change.
     /// </returns>
     /// <exception cref="ArgumentException">
     /// <paramref name="filePath" /> is <see langword="null" />, empty, whitespace, or not an absolute path.
     /// </exception>
     /// <exception cref="PathNotAFileException"><paramref name="filePath" /> is an existing directory.</exception>
     /// <exception cref="UnsupportedFileEncodingException">
-    /// The file starts with a UTF-16 or UTF-32 byte order mark or contains a NUL byte.
+    /// The file starts with a UTF-16 or UTF-32 byte order mark, contains a NUL byte, or contains bytes that are not
+    /// valid UTF-8.
     /// </exception>
     /// <exception cref="InvalidManagedSectionException">The markers in the file are invalid.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>

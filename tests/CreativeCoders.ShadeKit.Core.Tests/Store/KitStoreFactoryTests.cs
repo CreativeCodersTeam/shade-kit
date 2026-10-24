@@ -1,7 +1,9 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Config;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
@@ -298,7 +300,7 @@ public class KitStoreFactoryTests
 
         // Act
         await kitStore.WriteJsonAsync(KitStorePaths.ConfigFileName, FormatIds.Config, new KitConfig(),
-            FormatAccess.Write, TestContext.Current.CancellationToken);
+            FormatAccess.Write, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         File.Exists(Path.Combine(kitRootPath, KitStorePaths.ConfigFileName))
@@ -364,7 +366,8 @@ public class KitStoreFactoryTests
         var formatRegistry = FormatRegistry.CreateDefault();
 
         // Act
-        var act = () => new KitStoreFactory(null!, new VersionedJsonSerializer(formatRegistry), formatRegistry);
+        var act = () => new KitStoreFactory(null!, new VersionedJsonSerializer(formatRegistry), formatRegistry,
+            FixedLineEnding.CreateWriter(LineEnding.Lf));
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -375,7 +378,8 @@ public class KitStoreFactoryTests
     public void Ctor_NullSerializer_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new KitStoreFactory(new GitRepositoryLocator(), null!, FormatRegistry.CreateDefault());
+        var act = () => new KitStoreFactory(new GitRepositoryLocator(), null!, FormatRegistry.CreateDefault(),
+            FixedLineEnding.CreateWriter(LineEnding.Lf));
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -387,18 +391,63 @@ public class KitStoreFactoryTests
     {
         // Act
         var act = () => new KitStoreFactory(new GitRepositoryLocator(),
-            new VersionedJsonSerializer(FormatRegistry.CreateDefault()), null!);
+            new VersionedJsonSerializer(FormatRegistry.CreateDefault()), null!,
+            FixedLineEnding.CreateWriter(LineEnding.Lf));
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("formatRegistry");
     }
 
-    internal static KitStoreFactory CreateFactory(IGitRepositoryLocator? gitRepositoryLocator = null)
+    [Fact]
+    public void Ctor_NullTextFileWriter_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var formatRegistry = FormatRegistry.CreateDefault();
+
+        // Act
+        var act = () => new KitStoreFactory(new GitRepositoryLocator(), new VersionedJsonSerializer(formatRegistry),
+            formatRegistry, null!);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("textFileWriter");
+    }
+
+    [Fact]
+    public async Task CreateForRepositoryRoot_StoreWritesFile_WritesThroughInjectedWriterWithRepositoryRoot()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var textFileWriter = A.Fake<ITextFileWriter>();
+        var warning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
+                A<string?>._, A<CancellationToken>._))
+            .Returns([warning]);
+        var factory = CreateFactory(textFileWriter: textFileWriter);
+        var kitStore = factory.CreateForRepositoryRoot(tempDirectory.RootPath);
+        var content = TextFileContent.FromText("# Spec\n");
+
+        // Act
+        var warnings = await kitStore.WriteFileAsync("templates/spec.md", content,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        A.CallTo(() => textFileWriter.WriteAsync(tempDirectory.RootPath,
+                Path.Combine(".shadekit", "templates", "spec.md"), content, A<string?>._, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+
+        warnings
+            .Should().Equal(warning);
+    }
+
+    internal static KitStoreFactory CreateFactory(IGitRepositoryLocator? gitRepositoryLocator = null,
+        ITextFileWriter? textFileWriter = null)
     {
         var formatRegistry = FormatRegistry.CreateDefault();
 
         return new KitStoreFactory(gitRepositoryLocator ?? new GitRepositoryLocator(),
-            new VersionedJsonSerializer(formatRegistry), formatRegistry);
+            new VersionedJsonSerializer(formatRegistry), formatRegistry,
+            textFileWriter ?? FixedLineEnding.CreateWriter(LineEnding.Lf));
     }
 }

@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Files;
 
 namespace CreativeCoders.ShadeKit.Core.Templates;
 
@@ -35,8 +37,8 @@ public sealed class TemplatesLockEntry
     /// Gets the hash of the template content as installed.
     /// </summary>
     /// <value>
-    /// The SHA-256 hash of the bytes written with CRLF line endings counted as LF, in the form <c>sha256:</c> followed
-    /// by 64 lowercase hexadecimal digits.
+    /// The SHA-256 hash of the content with its lines joined by LF, whatever line ending the file was written with, in
+    /// the form <c>sha256:</c> followed by 64 lowercase hexadecimal digits.
     /// </value>
     public required string Hash { get; init; }
 
@@ -53,31 +55,37 @@ public sealed class TemplatesLockEntry
     /// Computes the <see cref="Hash" /> of the content of a template.
     /// </summary>
     /// <remarks>
-    /// Every CRLF line ending counts as LF, because Git checks a template out with CRLF on Windows when
-    /// <c>core.autocrlf</c> is set; an unchanged template then still has the hash of its lock entry. A carriage return
-    /// that is not followed by a line feed is hashed as it is.
+    /// <para>
+    /// The hash is computed over the UTF-8 bytes of the lines joined by LF, followed by one more LF if
+    /// <see cref="TextFileContent.HasFinalLineEnding" /> is <see langword="true" /> and preceded by the UTF-8 byte order
+    /// mark if <see cref="TextFileContent.HasUtf8Bom" /> is <see langword="true" />. The line ending with which the
+    /// template is written, or with which Git checks it out, therefore does not change the hash, and an unchanged
+    /// template keeps the hash of its lock entry.
+    /// </para>
+    /// <para>
+    /// This equals the hash of the written bytes with every CRLF line ending counted as LF, so lock entries written
+    /// before the content was held as lines stay valid. A carriage return that is not followed by a line feed is part
+    /// of its line and is hashed as it is.
+    /// </para>
     /// </remarks>
-    /// <param name="content">The bytes of the template as written to the repository.</param>
+    /// <param name="content">The content of the template.</param>
     /// <returns>
     /// The SHA-256 hash of <paramref name="content" /> with LF line endings, in the form <c>sha256:</c> followed by 64
     /// lowercase hexadecimal digits.
     /// </returns>
-    public static string ComputeHash(ReadOnlySpan<byte> content)
+    /// <exception cref="ArgumentNullException"><paramref name="content" /> is <see langword="null" />.</exception>
+    public static string ComputeHash(TextFileContent content)
     {
+        Ensure.NotNull(content);
+
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
-        var remaining = content;
-        var crLfIndex = remaining.IndexOf("\r\n"u8);
-
-        while (crLfIndex >= 0)
+        if (content.HasUtf8Bom)
         {
-            // The carriage return is skipped; the line feed starts the next part.
-            hash.AppendData(remaining[..crLfIndex]);
-            remaining = remaining[(crLfIndex + 1)..];
-            crLfIndex = remaining.IndexOf("\r\n"u8);
+            hash.AppendData(TextFileEncoding.Utf8Bom);
         }
 
-        hash.AppendData(remaining);
+        hash.AppendData(TextFileEncoding.Utf8WithoutBom.GetBytes(content.ToText(LineEnding.Lf)));
 
         return HashPrefix + Convert.ToHexStringLower(hash.GetHashAndReset());
     }

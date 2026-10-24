@@ -1,8 +1,10 @@
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
@@ -12,8 +14,9 @@ namespace CreativeCoders.ShadeKit.Core.Tests.Features;
 
 /// <summary>
 /// Provides a temporary git repository with a <c>.shadekit</c> directory, a real <see cref="KitStore" />, and a
-/// <see cref="FeatureStore" /> with real collaborators; only <see cref="IGitRepositoryInfo" /> is faked, so no test
-/// starts <c>git</c>.
+/// <see cref="FeatureStore" /> with real collaborators; only <see cref="IGitRepositoryInfo" /> and the line ending
+/// resolver of the store are faked, so no test starts <c>git</c> and the written line ending does not depend on the
+/// operating system.
 /// </summary>
 internal sealed class FeatureStoreTestContext : IDisposable
 {
@@ -53,6 +56,22 @@ internal sealed class FeatureStoreTestContext : IDisposable
     public FormatRegistry Registry { get; set; } = FormatRegistry.CreateDefault();
 
     /// <summary>
+    /// Gets or sets the line ending with which the stores that <see cref="CreateStore" /> creates write every file.
+    /// </summary>
+    public LineEnding LineEnding { get; set; } = LineEnding.Lf;
+
+    /// <summary>
+    /// Gets or sets the warnings that the line ending resolver of the stores returns for every written file.
+    /// </summary>
+    public KitWarning[] WriteWarnings { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the line ending resolver of the stores that <see cref="CreateStore" /> creates; if it is
+    /// <see langword="null" />, <see cref="LineEnding" /> and <see cref="WriteWarnings" /> apply to every file.
+    /// </summary>
+    public ILineEndingResolver? LineEndingResolver { get; set; }
+
+    /// <summary>
     /// Creates the default registry, except that the specified file types are at format version 2 with a no-op
     /// migration from version 1, so the version 1 files of the tests are outdated.
     /// </summary>
@@ -73,7 +92,7 @@ internal sealed class FeatureStoreTestContext : IDisposable
     public KitStore CreateStore()
     {
         return new KitStore(Path.Combine(RepositoryRootPath, KitStorePaths.RootPath),
-            new VersionedJsonSerializer(Registry), Registry);
+            new VersionedJsonSerializer(Registry), Registry, CreateWriter());
     }
 
     /// <summary>
@@ -87,7 +106,8 @@ internal sealed class FeatureStoreTestContext : IDisposable
         A.CallTo(() => serializer.Serialize(A<CurrentFeatureDocument>._, FormatIds.CurrentFeature))
             .Throws(exception);
 
-        return new KitStore(Path.Combine(RepositoryRootPath, KitStorePaths.RootPath), serializer, Registry);
+        return new KitStore(Path.Combine(RepositoryRootPath, KitStorePaths.RootPath), serializer, Registry,
+            CreateWriter());
     }
 
     public FeatureStore CreateFeatureStore(IShippedTemplateReader? shippedTemplateReader = null)
@@ -197,6 +217,13 @@ internal sealed class FeatureStoreTestContext : IDisposable
                 FormatAccess.Read, TestContext.Current.CancellationToken);
 
         return result?.Document.FeatureId;
+    }
+
+    private TextFileWriter CreateWriter()
+    {
+        return LineEndingResolver is null
+            ? FixedLineEnding.CreateWriter(LineEnding, WriteWarnings)
+            : new TextFileWriter(LineEndingResolver);
     }
 
     private string GetKitPath(string[] kitRelativePathParts)

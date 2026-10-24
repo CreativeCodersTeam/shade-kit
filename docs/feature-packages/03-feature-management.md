@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (`feature drop` confirmation, `status` in `feature current`, `feature list` implemented), 2026-10-21 (implementation state; implementation clarification of 2026-10-20; code review rework: `git` only from absolute `PATH` entries, exit codes 2 and 130, rules for file sources and titles, atomic `new` and `drop`, folder name as id, unusable override, `overrideAffected`, Ctrl+C, warning codes; second code review: exit code 35 `feature-io-failed` for a feature folder that cannot be created or renamed, execute bit for `git` on Unix), and 2026-10-22 (code review verification: exact folder name match, tracker prefix validation, heading detection, override check through the format layer, shared display path, concurrent `drop` as open point). Implemented except the phase fields and the approval history (package 04; FP03-AC11 "`done` after `phase complete`" waits for it) and trackers beyond GitHub (**Open**). |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (`feature drop` confirmation, `status` in `feature current`, `feature list` implemented), 2026-10-21 (implementation state; implementation clarification of 2026-10-20; code review rework: `git` only from absolute `PATH` entries, exit codes 2 and 130, rules for file sources and titles, atomic `new` and `drop`, folder name as id, unusable override, `overrideAffected`, Ctrl+C, warning codes; second code review: exit code 35 `feature-io-failed` for a feature folder that cannot be created or renamed, execute bit for `git` on Unix), 2026-10-22 (code review verification: exact folder name match, tracker prefix validation, heading detection, override check through the format layer, shared display path, concurrent `drop` as open point), and 2026-10-23 (rework of file content handling: line endings of `request.md` and the JSON files, `editorconfig-unreadable` and `editorconfig-invalid` warnings). Implemented except the phase fields and the approval history (package 04; FP03-AC11 "`done` after `phase complete`" waits for it) and trackers beyond GitHub (**Open**). |
 | Source | Concept §3.1, §3.2, §4.1–4.3, §5.1 (`new`, `drop`), §11.4 |
 | Depends on | 01, 02 |
 | Enables | 04 and every phase package |
@@ -133,11 +133,12 @@ In `current`, `set`, and `new`, a format problem of any other file, for example 
   | `{{feature-title}}` | The title. |
   | `{{feature-id}}` | The id. |
   | `{{source kind and source reference}}` | `<kind>: <value>`, for example `url: https://github.com/acme/shop/issues/142`; `text: n/a` for text. |
-  | `{{original input, unchanged}}` | The text, the file content (UTF-8, line endings kept), or the URL. |
+  | `{{original input, unchanged}}` | The text, the file content (UTF-8; its line endings are not kept, see below), or the URL. |
   | `{{created at and created by}}` | `<createdAt> by <name> <<email>>`. |
 
 - Everything else, including the guidance comment, stays. The `new` skill (package 09) completes the file, for example with the issue title and body for a URL source, and removes the guidance comment.
 - Written as UTF-8 without byte order mark.
+- Line endings: `request.md`, `feature.json`, and `current-feature.json` are written as a whole with the line ending decided for each file when it is written (git attributes and configuration for the path, then `.editorconfig`, then the operating system; package 02), so the original input in `request.md` takes that line ending too. If an `.editorconfig` file cannot be read or evaluated, the `.editorconfig` files do not decide and the warning `editorconfig-unreadable` or `editorconfig-invalid` (package 02) is reported, which `new` and `set` report once, after the format and feature warnings. **Decided** on 2026-10-23 (rework of file content handling), replacing "the original input keeps its line endings". **Implemented** (`FeatureStore`, `IKitStore.WriteFileAsync` / `WriteJsonAsync` through `ITextFileWriter`, `CreateAsync_FileSource_FillsRequestWithRepositoryRelativePathAndNormalisedFileContent`, `CreateAsync_StoreWritesWithWarnings_ReturnsFormatWarningsFirstAndEachStoreWarningOnce`, `SetCurrentAsync_StoreWritesWithWarnings_ReturnsMismatchWarningFirstAndEachStoreWarningOnce`). `feature.json` and `request.md` are written into the hidden staging folder, but their line ending is decided for their final path `.shadekit/features/<id>/...`, so git attributes and `.editorconfig` sections for the feature folder apply; a result carries only the warnings of its own writes, not those of earlier operations on the same store. **Decided** on 2026-10-23 (code review of the rework). **Implemented** (`lineEndingPath` of `IKitStore.WriteFileAsync` / `WriteJsonAsync` and `ITextFileWriter.WriteAsync`, `CreateAsync_NewFeature_ResolvesLineEndingOfEachFileForItsFinalPathNotTheStagingPath`, `CreateAsync_FinalFeaturePathPrescribesOtherLineEnding_WritesFeatureFilesWithLineEndingOfFinalPath`, `CreateAsync_StoreUsedBeforeWithWarnings_ReturnsNoWarningOfEarlierOperation`, `SetCurrentAsync_StoreUsedBeforeWithWarnings_ReturnsNoWarningOfEarlierOperation`).
 
 ### Commands
 
@@ -229,7 +230,7 @@ The engine does not create or switch branches in v1. `feature new` returns the s
   }
   ```
 
-  `warnings` holds the format warnings (`upgrade-needed`, package 01) first, then the feature warnings.
+  `warnings` holds the format warnings (`upgrade-needed`, package 01) first, then the feature warnings, then the warnings of the written files (`editorconfig-unreadable`, `editorconfig-invalid`, see [request.md](#requestmd)).
 - Plain: each warning as `Warning: <message>` before the result, then:
   - `new`: `Created feature <id> (<profile>).`, the paths of `feature.json` and `request.md`, `Suggested branch: feature/<id>`.
   - `list`: one line `<id>  <status>  <profile>  <title>` per feature, or `No features found.`

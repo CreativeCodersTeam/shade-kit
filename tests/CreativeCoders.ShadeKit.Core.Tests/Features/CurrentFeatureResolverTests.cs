@@ -1,8 +1,10 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
@@ -1000,7 +1002,8 @@ public sealed class CurrentFeatureResolverTests : IDisposable
         var kitStorePath = _repository.CreateDirectory(".shadekit");
         var registry = formatRegistry ?? FormatRegistry.CreateDefault();
 
-        return new KitStore(kitStorePath, new VersionedJsonSerializer(registry), registry);
+        return new KitStore(kitStorePath, new VersionedJsonSerializer(registry), registry,
+            FixedLineEnding.CreateWriter(LineEnding.Lf));
     }
 
     private IKitStore CreateFakeStore()

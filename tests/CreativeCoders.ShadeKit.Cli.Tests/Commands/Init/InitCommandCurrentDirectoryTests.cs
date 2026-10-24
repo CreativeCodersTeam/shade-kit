@@ -18,7 +18,7 @@ public sealed class InitCommandCurrentDirectoryTests : IDisposable
     public async Task ExecuteAsync_CurrentDirectory_PassesCurrentDirectoryToInitializer()
     {
         // Arrange
-        var initializer = InitCommandTests.CreateInitializer(new RepositoryInitResult("/repo", []));
+        var initializer = InitCommandTests.CreateInitializer(new RepositoryInitResult("/repo", [], []));
         var command = InitCommandTests.CreateCommand(new TestConsole(), initializer);
 
         Directory.SetCurrentDirectory(_tempDirectory.RootPath);

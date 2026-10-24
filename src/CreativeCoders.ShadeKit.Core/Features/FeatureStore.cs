@@ -95,11 +95,14 @@ public sealed class FeatureStore(
             Status = FeatureStatus.Active
         };
 
-        await CreateFeatureDirAsync(store, feature, identity.OriginalInput, cancellationToken).ConfigureAwait(false);
+        var featureDirWarnings = await CreateFeatureDirAsync(store, feature, identity.OriginalInput, cancellationToken)
+            .ConfigureAwait(false);
 
-        await WriteOverrideOrRemoveFeatureAsync(store, identity.Id, cancellationToken).ConfigureAwait(false);
+        var overrideWarnings = await WriteOverrideOrRemoveFeatureAsync(store, identity.Id, cancellationToken)
+            .ConfigureAwait(false);
 
-        return new NewFeatureResult(feature, configResult?.Warnings ?? []);
+        return new NewFeatureResult(feature,
+            KitWarningOrder.Arrange([.. configResult?.Warnings ?? [], .. featureDirWarnings, .. overrideWarnings]));
     }
 
     /// <inheritdoc />
@@ -193,14 +196,16 @@ public sealed class FeatureStore(
         var branchFeatureId = await _currentFeatureResolver.ResolveBranchFeatureIdAsync(store, cancellationToken)
             .ConfigureAwait(false);
 
-        await CurrentFeatureOverride.WriteAsync(store, featureId, cancellationToken).ConfigureAwait(false);
+        var overrideWarnings = await CurrentFeatureOverride.WriteAsync(store, featureId, cancellationToken)
+            .ConfigureAwait(false);
 
-        IReadOnlyList<KitWarning> warnings =
+        IReadOnlyList<KitWarning> mismatchWarnings =
             branchFeatureId is not null && !string.Equals(branchFeatureId, featureId, StringComparison.Ordinal)
                 ? [new CurrentFeatureMismatchWarning(featureId, branchFeatureId)]
                 : [];
 
-        return new SetCurrentFeatureResult(featureId, warnings);
+        return new SetCurrentFeatureResult(featureId,
+            KitWarningOrder.Arrange([.. mismatchWarnings, .. overrideWarnings]));
     }
 
     /// <inheritdoc />
@@ -327,17 +332,24 @@ public sealed class FeatureStore(
 
     // Builds the feature in a hidden staging folder and moves it into place, so the feature folder appears only when
     // it is complete, and an existing folder, also one created by a concurrent run, is never touched. The names of
-    // the hidden folders start with a dot, so they are never valid feature ids and ListAsync ignores them.
-    private async Task CreateFeatureDirAsync(IKitStore store, FeatureDocument feature, string originalInput,
-        CancellationToken cancellationToken)
+    // the hidden folders start with a dot, so they are never valid feature ids and ListAsync ignores them. Returns the
+    // warnings of the written files.
+    private async Task<IReadOnlyList<KitWarning>> CreateFeatureDirAsync(IKitStore store, FeatureDocument feature,
+        string originalInput, CancellationToken cancellationToken)
     {
+        List<KitWarning> warnings = [];
+
         try
         {
             await store
                 .CreateDirectoryExclusiveAsync(KitStorePaths.GetFeatureDirPath(feature.Id),
-                    (stagingDir, token) => WriteFeatureFilesAsync(store, stagingDir, feature, originalInput, token),
+                    async (stagingDir, token) => warnings.AddRange(
+                        await WriteFeatureFilesAsync(store, stagingDir, feature, originalInput, token)
+                            .ConfigureAwait(false)),
                     cancellationToken)
                 .ConfigureAwait(false);
+
+            return warnings;
         }
         catch (KitDirectoryExistsException exception)
         {
@@ -353,24 +365,31 @@ public sealed class FeatureStore(
         }
     }
 
-    private async Task WriteFeatureFilesAsync(IKitStore store, string featureDir, FeatureDocument feature,
-        string originalInput, CancellationToken cancellationToken)
+    // The files are written into the staging folder, but their line endings are determined for the feature folder in
+    // which they end up, so git attributes and .editorconfig sections for that path apply.
+    private async Task<IReadOnlyList<KitWarning>> WriteFeatureFilesAsync(IKitStore store, string stagingDir,
+        FeatureDocument feature, string originalInput, CancellationToken cancellationToken)
     {
-        await store
-            .WriteJsonAsync($"{featureDir}/{KitStorePaths.FeatureFileName}", FormatIds.Feature, feature,
-                FormatAccess.Write, cancellationToken)
+        var featureDir = KitStorePaths.GetFeatureDirPath(feature.Id);
+
+        var featureFileWarnings = await store
+            .WriteJsonAsync($"{stagingDir}/{KitStorePaths.FeatureFileName}", FormatIds.Feature, feature,
+                FormatAccess.Write, $"{featureDir}/{KitStorePaths.FeatureFileName}", cancellationToken)
             .ConfigureAwait(false);
 
-        await WriteRequestAsync(store, $"{featureDir}/{KitStorePaths.RequestFileName}", feature, originalInput,
-            cancellationToken).ConfigureAwait(false);
+        var requestWarnings = await WriteRequestAsync(store, $"{stagingDir}/{KitStorePaths.RequestFileName}",
+            $"{featureDir}/{KitStorePaths.RequestFileName}", feature, originalInput, cancellationToken)
+            .ConfigureAwait(false);
+
+        return [.. featureFileWarnings, .. requestWarnings];
     }
 
-    private static async Task WriteOverrideOrRemoveFeatureAsync(IKitStore store, string featureId,
-        CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<KitWarning>> WriteOverrideOrRemoveFeatureAsync(IKitStore store,
+        string featureId, CancellationToken cancellationToken)
     {
         try
         {
-            await CurrentFeatureOverride.WriteAsync(store, featureId, cancellationToken).ConfigureAwait(false);
+            return await CurrentFeatureOverride.WriteAsync(store, featureId, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -382,23 +401,26 @@ public sealed class FeatureStore(
         }
     }
 
-    private async Task WriteRequestAsync(IKitStore store, string requestPath, FeatureDocument feature,
-        string originalInput, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<KitWarning>> WriteRequestAsync(IKitStore store, string requestPath,
+        string lineEndingPath, FeatureDocument feature, string originalInput, CancellationToken cancellationToken)
     {
         var template = await ReadRequestTemplateAsync(store, cancellationToken).ConfigureAwait(false);
         var content = FeatureRequestTemplate.Fill(template, feature, originalInput);
 
-        await store.WriteFileAsync(requestPath, TextFileEncoding.Utf8WithoutBom.GetBytes(content), cancellationToken)
+        // The whole file, the original input included, is written with the line ending of the repository.
+        return await store
+            .WriteFileAsync(requestPath, TextFileContent.FromText(content), lineEndingPath, cancellationToken)
             .ConfigureAwait(false);
     }
 
+    // The store reports a repository template that is not UTF-8 text as an invalid kit file. Its byte order mark is
+    // not kept, so request.md is written without one.
     private async Task<string> ReadRequestTemplateAsync(IKitStore store, CancellationToken cancellationToken)
     {
         var repositoryTemplate = await store.ReadFileAsync(ShippedTemplates.Request.KitPath, cancellationToken)
             .ConfigureAwait(false);
 
-        return repositoryTemplate is not null
-            ? FeatureRequestTemplate.Decode(repositoryTemplate, ShippedTemplates.Request.RepositoryPath)
-            : _shippedTemplateReader.ReadContent(ShippedTemplates.Request);
+        return repositoryTemplate?.ToText(LineEnding.Lf)
+               ?? _shippedTemplateReader.ReadContent(ShippedTemplates.Request);
     }
 }

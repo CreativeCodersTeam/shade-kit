@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Enumeration;
+using System.Runtime.CompilerServices;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Files;
@@ -10,10 +12,17 @@ namespace CreativeCoders.ShadeKit.Core.Store;
 /// Provides access to the content of a SHADE kit store in the file system.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The <c>outdatedFormatOnRead</c> setting of <c>config.json</c> and the warnings of an outdated <c>config.json</c>
 /// are read once and then reused by later reads of the same instance, so reading many outdated files does not read
 /// <c>config.json</c> again for each of them. A failed read of the setting is not reused, and every change that the
 /// instance makes to the store discards the reused setting, so it is read again on the next read that needs it.
+/// </para>
+/// <para>
+/// Text files are written with an <see cref="ITextFileWriter" /> for the repository root, the parent directory of
+/// <see cref="RootPath" />, so the line ending of a file is determined for its path relative to the repository root,
+/// for example <c>.shadekit/templates/spec.md</c>. Each write returns its own warnings; the instance keeps none.
+/// </para>
 /// </remarks>
 public class KitStore : IKitStore
 {
@@ -29,6 +38,10 @@ public class KitStore : IKitStore
 
     private readonly IFormatRegistry _formatRegistry;
 
+    private readonly ITextFileWriter _textFileWriter;
+
+    private readonly string _repositoryRootPath;
+
     private OutdatedFormatPolicy? _outdatedFormatPolicy;
 
     /// <summary>
@@ -37,19 +50,31 @@ public class KitStore : IKitStore
     /// <param name="kitStorePath">The path of the <c>.shadekit</c> directory.</param>
     /// <param name="serializer">The serializer that reads and writes the versioned JSON files.</param>
     /// <param name="formatRegistry">The registry that defines the file types the store accepts.</param>
+    /// <param name="textFileWriter">
+    /// The writer that writes the text files and the versioned JSON files of the store with the line ending of the
+    /// repository.
+    /// </param>
     /// <exception cref="ArgumentException">
-    /// <paramref name="kitStorePath" /> is <see langword="null" />, empty, or whitespace.
+    /// <paramref name="kitStorePath" /> is <see langword="null" />, empty, or whitespace, or it is a root directory,
+    /// which has no parent directory that could be the repository root.
     /// </exception>
     /// <exception cref="ArgumentNullException">
-    /// <paramref name="serializer" /> or <paramref name="formatRegistry" /> is <see langword="null" />.
+    /// <paramref name="serializer" />, <paramref name="formatRegistry" />, or <paramref name="textFileWriter" /> is
+    /// <see langword="null" />.
     /// </exception>
-    public KitStore(string kitStorePath, IVersionedJsonSerializer serializer, IFormatRegistry formatRegistry)
+    public KitStore(string kitStorePath, IVersionedJsonSerializer serializer, IFormatRegistry formatRegistry,
+        ITextFileWriter textFileWriter)
     {
         Ensure.IsNotNullOrWhitespace(kitStorePath);
 
         RootPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(kitStorePath));
+        _repositoryRootPath = Path.GetDirectoryName(RootPath)
+                              ?? throw new ArgumentException(
+                                  $"The SHADE kit root directory '{RootPath}' has no parent directory.",
+                                  nameof(kitStorePath));
         _serializer = Ensure.NotNull(serializer);
         _formatRegistry = Ensure.NotNull(formatRegistry);
+        _textFileWriter = Ensure.NotNull(textFileWriter);
     }
 
     /// <inheritdoc />
@@ -114,8 +139,8 @@ public class KitStore : IKitStore
     }
 
     /// <inheritdoc />
-    public async Task WriteJsonAsync<T>(string relativePath, string formatId, T document, FormatAccess access,
-        CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<KitWarning>> WriteJsonAsync<T>(string relativePath, string formatId, T document,
+        FormatAccess access, string? lineEndingPath = null, CancellationToken cancellationToken = default)
         where T : VersionedDocument
     {
         Ensure.NotNull(document);
@@ -125,6 +150,15 @@ public class KitStore : IKitStore
             throw new ArgumentOutOfRangeException(nameof(access), access,
                 $"A file can only be written with {nameof(FormatAccess.Write)}, {nameof(FormatAccess.Upgrade)}, or " +
                 $"{nameof(FormatAccess.Replace)} access.");
+        }
+
+        // Checked before the format check, which may delete an unusable file with Replace access; relativePath first,
+        // as in WriteFileAsync and the text file writer.
+        GetFullPath(relativePath);
+
+        if (lineEndingPath is not null)
+        {
+            GetFullPath(lineEndingPath);
         }
 
         if (access == FormatAccess.Replace)
@@ -139,24 +173,26 @@ public class KitStore : IKitStore
 
         var json = _serializer.Serialize(document, formatId);
 
-        await WriteFileAsync(relativePath, TextFileEncoding.Utf8WithoutBom.GetBytes(json), cancellationToken)
+        // The serializer ends the JSON with a line ending, so the file does as well.
+        return await WriteFileAsync(relativePath, TextFileContent.FromText(json), lineEndingPath, cancellationToken)
             .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public async Task WriteFileAsync(string relativePath, byte[] content,
-        CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<KitWarning>> WriteFileAsync(string relativePath, TextFileContent content,
+        string? lineEndingPath = null, CancellationToken cancellationToken = default)
     {
         Ensure.NotNull(content);
 
-        var fullPath = GetFullPath(relativePath);
+        var repositoryPath = GetRepositoryRelativePath(relativePath);
+        var lineEndingRepositoryPath = lineEndingPath is null ? null : GetRepositoryRelativePath(lineEndingPath);
 
         DiscardOutdatedFormatPolicy();
 
-        // GetFullPath only returns paths below RootPath, so the file always has a parent directory.
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-
-        await File.WriteAllBytesAsync(fullPath, content, cancellationToken).ConfigureAwait(false);
+        // The writer creates the missing directories.
+        return await _textFileWriter
+            .WriteAsync(_repositoryRootPath, repositoryPath, content, lineEndingRepositoryPath, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -170,13 +206,25 @@ public class KitStore : IKitStore
     }
 
     /// <inheritdoc />
-    public async Task<byte[]?> ReadFileAsync(string relativePath, CancellationToken cancellationToken = default)
+    public async Task<TextFileContent?> ReadFileAsync(string relativePath,
+        CancellationToken cancellationToken = default)
     {
         var fullPath = GetFullPath(relativePath);
 
-        return File.Exists(fullPath)
-            ? await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false)
-            : null;
+        if (Directory.Exists(fullPath))
+        {
+            return null;
+        }
+
+        // Every file of the store is a kit file, so content that is not UTF-8 text makes it an invalid kit file
+        // rather than a file with an unsupported encoding.
+        var displayPath = GetDisplayPath(relativePath);
+
+        return await TextFileContent
+            .ReadAsync(fullPath,
+                (reason, innerException) => new InvalidKitFileException(displayPath, reason, innerException),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -343,14 +391,20 @@ public class KitStore : IKitStore
         return new UpgradeNeededException(warning.FilePath, warning.FileVersion, warning.CurrentVersion);
     }
 
-    private string GetFullPath(string relativePath)
+    // An invalid path throws an ArgumentException whose ParamName is the caller's parameter that holds the path
+    // (relativePath, lineEndingPath, sourceRelativePath, ...), filled in by the compiler.
+    [SuppressMessage("Minor Code Smell", "S3236:Caller information arguments should not be provided explicitly",
+        Justification = "The caller's parameter name is forwarded on purpose, so an invalid path names the caller's " +
+                        "parameter instead of this helper's.")]
+    private string GetFullPath(string relativePath,
+        [CallerArgumentExpression(nameof(relativePath))] string paramName = "")
     {
-        Ensure.IsNotNullOrWhitespace(relativePath);
+        Ensure.IsNotNullOrWhitespace(relativePath, paramName);
 
         if (Path.IsPathRooted(relativePath))
         {
             throw new ArgumentException($"The path '{relativePath}' must be relative to the SHADE kit root.",
-                nameof(relativePath));
+                paramName);
         }
 
         var fullPath = Path.GetFullPath(Path.Combine(RootPath, relativePath));
@@ -358,7 +412,18 @@ public class KitStore : IKitStore
         return fullPath.StartsWith(RootPath + Path.DirectorySeparatorChar, StringComparison.Ordinal)
             ? fullPath
             : throw new ArgumentException($"The path '{relativePath}' points outside the SHADE kit root.",
-                nameof(relativePath));
+                paramName);
+    }
+
+    // The path relative to the repository root keeps the name of the kit root, so git attributes and .editorconfig
+    // sections for .shadekit/ apply.
+    [SuppressMessage("Minor Code Smell", "S3236:Caller information arguments should not be provided explicitly",
+        Justification = "The caller's parameter name is forwarded on purpose, so an invalid path names the caller's " +
+                        "parameter instead of this helper's.")]
+    private string GetRepositoryRelativePath(string relativePath,
+        [CallerArgumentExpression(nameof(relativePath))] string paramName = "")
+    {
+        return Path.GetRelativePath(_repositoryRootPath, GetFullPath(relativePath, paramName));
     }
 
     private string GetDisplayPath(string relativePath)
