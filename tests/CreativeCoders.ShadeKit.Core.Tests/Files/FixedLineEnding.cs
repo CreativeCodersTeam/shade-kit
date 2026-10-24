@@ -18,7 +18,7 @@ internal static class FixedLineEnding
     {
         var resolver = A.Fake<ILineEndingResolver>();
 
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .ReturnsLazily(() => new LineEndingResolution(lineEnding, warnings));
 
         return resolver;
@@ -43,7 +43,7 @@ internal static class FixedLineEnding
         var resolver = A.Fake<ILineEndingResolver>();
         var calls = 0;
 
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .ReturnsLazily(() =>
                 new LineEndingResolution(lineEnding, Interlocked.Increment(ref calls) == 1 ? warnings : []));
 
@@ -63,10 +63,10 @@ internal static class FixedLineEnding
     {
         var resolver = A.Fake<ILineEndingResolver>();
 
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
-            .ReturnsLazily((string _, string relativePath, CancellationToken _) =>
+        A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .ReturnsLazily((RepositoryFile file, CancellationToken _) =>
             {
-                var path = relativePath.Replace('\\', '/');
+                var path = file.GitPath;
                 requestedPaths.Add(path);
 
                 return new LineEndingResolution(
@@ -110,7 +110,8 @@ internal static class FixedLineEnding
     public static async Task WriteAsync(string filePath, TextFileContent content, LineEnding lineEnding,
         CancellationToken cancellationToken)
     {
-        await CreateWriter(lineEnding).WriteAsync(Path.GetDirectoryName(filePath)!, Path.GetFileName(filePath),
-            content, cancellationToken: cancellationToken);
+        await CreateWriter(lineEnding).WriteAsync(
+            RepositoryFile.Resolve(Path.GetDirectoryName(filePath)!, Path.GetFileName(filePath)), content,
+            cancellationToken: cancellationToken);
     }
 }

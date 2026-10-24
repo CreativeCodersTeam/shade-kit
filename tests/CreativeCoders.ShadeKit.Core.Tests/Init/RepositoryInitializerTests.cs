@@ -200,8 +200,8 @@ public class RepositoryInitializerTests
         // Assert
         foreach (var fileName in new[] { GitIgnore, ClaudeMd, AgentsMd })
         {
-            A.CallTo(() => textFileWriter.WriteAsync(tempDirectory.RootPath, fileName, A<TextFileContent>._,
-                    A<string?>._, A<CancellationToken>._))
+            A.CallTo(() => textFileWriter.WriteAsync(RepositoryFile.Resolve(tempDirectory.RootPath, fileName),
+                    A<TextFileContent>._, A<RepositoryFile?>._, A<CancellationToken>._))
                 .MustHaveHappenedOnceExactly();
         }
     }
@@ -234,8 +234,9 @@ public class RepositoryInitializerTests
         await initializer.InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
 
         // Assert
-        A.CallTo(() => lineEndingResolver.PrepareAsync(tempDirectory.RootPath,
-                A<IReadOnlyCollection<string>>.That.IsSameSequenceAs(expectedPaths),
+        A.CallTo(() => lineEndingResolver.PrepareAsync(
+                A<IReadOnlyCollection<RepositoryFile>>.That.IsSameSequenceAs(
+                    expectedPaths.Select(path => RepositoryFile.Resolve(tempDirectory.RootPath, path))),
                 TestContext.Current.CancellationToken))
             .MustHaveHappenedOnceExactly()
             .Then(CallToWrite(kitStoreTextFileWriter)
@@ -349,8 +350,8 @@ public class RepositoryInitializerTests
 
         var textFileWriter = A.Fake<ITextFileWriter>();
         CallToWrite(textFileWriter)
-            .ReturnsLazily((string root, string relativePath, TextFileContent content, string? lineEndingPath,
-                CancellationToken token) => realWriter.WriteAsync(root, relativePath, content, lineEndingPath, token));
+            .ReturnsLazily((RepositoryFile file, TextFileContent content, RepositoryFile? lineEndingFile,
+                CancellationToken token) => realWriter.WriteAsync(file, content, lineEndingFile, token));
         CallToWrite(textFileWriter, failingFileName)
             .ThrowsAsync(new IOException("disk full"));
 
@@ -408,8 +409,8 @@ public class RepositoryInitializerTests
         await CreateInitializer(textFileWriter).InitializeAsync(tempDirectory.RootPath, cancellationTokenSource.Token);
 
         // Assert
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, cancellationTokenSource.Token))
+        A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
+                A<RepositoryFile?>._, cancellationTokenSource.Token))
             .MustHaveHappened(3, Times.Exactly);
     }
 
@@ -424,8 +425,8 @@ public class RepositoryInitializerTests
         var writtenContents = new Dictionary<string, TextFileContent>();
         var textFileWriter = A.Fake<ITextFileWriter>();
         CallToWrite(textFileWriter)
-            .Invokes((string _, string relativePath, TextFileContent content, string? _, CancellationToken _) =>
-                writtenContents[relativePath] = content)
+            .Invokes((RepositoryFile file, TextFileContent content, RepositoryFile? _, CancellationToken _) =>
+                writtenContents[file.GitPath] = content)
             .Returns(Warnings());
 
         // Act
@@ -468,8 +469,8 @@ public class RepositoryInitializerTests
         CallToWrite(textFileWriter)
             .MustHaveHappenedOnceExactly();
 
-        A.CallTo(() => textFileWriter.WriteAsync(tempDirectory.RootPath, AgentsMd, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
+        A.CallTo(() => textFileWriter.WriteAsync(RepositoryFile.Resolve(tempDirectory.RootPath, AgentsMd),
+                A<TextFileContent>._, A<RepositoryFile?>._, A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
 
         result.Warnings
@@ -1726,10 +1727,10 @@ public class RepositoryInitializerTests
         ITextFileWriter textFileWriter, string? fileName = null)
     {
         return fileName is null
-            ? A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._, A<string?>._,
-                A<CancellationToken>._))
-            : A.CallTo(() => textFileWriter.WriteAsync(A<string>._, fileName, A<TextFileContent>._, A<string?>._,
-                A<CancellationToken>._));
+            ? A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
+                A<RepositoryFile?>._, A<CancellationToken>._))
+            : A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>.That.Matches(file => file.GitPath == fileName),
+                A<TextFileContent>._, A<RepositoryFile?>._, A<CancellationToken>._));
     }
 
     private static Task<IReadOnlyList<KitWarning>> Warnings(params KitWarning[] warnings)

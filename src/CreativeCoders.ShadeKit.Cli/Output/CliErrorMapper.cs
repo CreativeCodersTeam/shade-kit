@@ -10,6 +10,7 @@ using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
+using CreativeCoders.ShadeKit.Core.Git.Warnings;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
@@ -246,6 +247,10 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             EditorConfigInvalidWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.EditorConfigInvalid,
                 CreateEditorConfigMessage(w.FilePath, w.IsEditorConfigFilePath,
                     "cannot be evaluated because of its content", w.Reason)),
+
+            GitAttributesUnavailableWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.GitAttributesUnavailable,
+                $"git cannot read the line ending settings of the repository '{w.RepositoryRootPath}', so the line " +
+                $"endings come from .editorconfig or the operating system. '{w.Command}' failed: {w.Reason}"),
 
             _ => throw new ArgumentOutOfRangeException(nameof(warning), warning,
                 "The warning is not supported.")

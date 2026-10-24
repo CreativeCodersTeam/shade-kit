@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.Versioning;
 using AwesomeAssertions;
@@ -556,10 +557,16 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
     }
 
     [Theory]
-    [InlineData("[{1..99999999999}]")] // OverflowException: the number does not fit into an int
-    [InlineData("[{0..-2147483647}]")] // OverflowException: the length of the range overflows
-    [InlineData("[x{1..2147483647}]")] // OutOfMemoryException: the range exceeds the maximum array length
-    [InlineData("[{1..1000000}{1..3000}]")] // ArgumentOutOfRangeException: the combined count overflows
+    // Each header is stopped before the parser expands it. Without that check, the parser would throw for the first
+    // four (OverflowException, OverflowException, OutOfMemoryException, ArgumentOutOfRangeException) and build
+    // hundreds of millions of strings for the last three.
+    [InlineData("[{1..99999999999}]")]
+    [InlineData("[{0..-2147483647}]")]
+    [InlineData("[x{1..2147483647}]")]
+    [InlineData("[{1..1000000}{1..3000}]")]
+    [InlineData("[{1..20000}{1..20000}]")]
+    [InlineData("[{1..100000000}]")]
+    [InlineData("[{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}]")]
     public void GetLineEnding_EditorConfigWithMalformedNumericRange_ReturnsNoLineEndingAndInvalidWarning(
         string sectionHeader)
     {
@@ -585,6 +592,70 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
 
         warning.Reason
             .Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void GetLineEnding_SectionGlobTooLarge_ReturnsWarningNamingGlobWithoutExpandingIt()
+    {
+        // Arrange
+        var editorConfigPath = _directory.WriteFile("root = true\n\n[{1..20000}{1..20000}]\nend_of_line = crlf\n",
+            EditorConfigFileName);
+        var stopwatch = Stopwatch.StartNew();
+
+        // Act
+        var result = _sut.GetLineEnding(GetPath("readme.md"));
+
+        // Assert
+        stopwatch.Elapsed
+            .Should().BeLessThan(TimeSpan.FromSeconds(5));
+
+        result.LineEnding
+            .Should().BeNull();
+
+        var warning = result.Warning
+            .Should().BeOfType<EditorConfigInvalidWarning>().Subject;
+
+        warning.FilePath
+            .Should().Be(editorConfigPath);
+
+        warning.IsEditorConfigFilePath
+            .Should().BeTrue();
+
+        warning.Reason
+            .Should().StartWith("The section glob '").And.Contain("{1..20000}{1..20000}")
+            .And.EndWith($"' expands into more than {EditorConfigGlobExpansion.MaxPatternCount} patterns.");
+    }
+
+    [Fact]
+    public void GetLineEnding_SectionGlobAtLimit_EvaluatesFile()
+    {
+        // Arrange
+        _directory.WriteFile("root = true\n\n[{1..100}{1..100}.md]\nend_of_line = crlf\n", EditorConfigFileName);
+
+        // Act
+        var result = _sut.GetLineEnding(GetPath("5050.md"));
+
+        // Assert
+        result
+            .Should().Be(new EditorConfigLineEndingResult(LineEnding.CrLf, null));
+    }
+
+    [Fact]
+    public void GetLineEnding_NestedAndParentGlobTooLarge_ReturnsWarningForNestedFileReadFirst()
+    {
+        // Arrange
+        _directory.WriteFile("root = true\n\n[{1..99999999999}x]\nend_of_line = crlf\n", EditorConfigFileName);
+        var nestedEditorConfigPath = _directory.WriteFile("[{1..20000}{1..20000}]\nend_of_line = lf\n", "docs",
+            EditorConfigFileName);
+
+        // Act
+        var result = _sut.GetLineEnding(GetPath("docs", "setup.md"));
+
+        // Assert
+        result.Warning
+            .Should().BeOfType<EditorConfigInvalidWarning>()
+            .Which.FilePath
+            .Should().Be(nestedEditorConfigPath);
     }
 
     [Fact]
@@ -773,6 +844,21 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
     }
 
     [Fact]
+    [SuppressMessage("Usage", "CA2201:Do not raise reserved exception types",
+        Justification = "The test checks that a real lack of memory is not reported as invalid content.")]
+    public void GetLineEnding_ParseFunctionThrowsOutOfMemoryException_PropagatesIt()
+    {
+        // Arrange
+        var sut = new EditorConfigLineEndingResolver((_, _) => throw new OutOfMemoryException("Out of memory."));
+
+        // Act
+        var act = () => sut.GetLineEnding(GetPath("readme.md"));
+
+        // Assert
+        act.Should().Throw<OutOfMemoryException>();
+    }
+
+    [Fact]
     public void GetLineEnding_ParseFunctionThrowsOtherException_PropagatesIt()
     {
         // Arrange
@@ -863,14 +949,10 @@ public sealed class EditorConfigLineEndingResolverTests : IDisposable
     ];
 
     // The exceptions with which the EditorConfig core library fails on content it cannot evaluate.
-    [SuppressMessage("Usage", "CA2201:Do not raise reserved exception types",
-        Justification = "The test simulates the OutOfMemoryException that the EditorConfig core library throws for a " +
-                        "numeric range above the maximum array length.")]
     public static TheoryData<Exception> InvalidContentExceptions =>
     [
         new OverflowException("Value was either too large or too small for an Int32."),
-        new ArgumentOutOfRangeException("Non-negative number required.", innerException: null),
-        new OutOfMemoryException("Array dimensions exceeded supported range.")
+        new ArgumentOutOfRangeException("Non-negative number required.", innerException: null)
     ];
 
     [Theory]

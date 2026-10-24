@@ -9,6 +9,8 @@ trim_trailing_whitespace = true
 
 [*.cs]
 indent_size = 4
+# Object creation names the type (new Foo() instead of new()); IDEs then stop suggesting the target-typed form.
+csharp_style_implicit_object_creation_when_type_is_apparent = false:warning
 
 [*.md]
 trim_trailing_whitespace = false

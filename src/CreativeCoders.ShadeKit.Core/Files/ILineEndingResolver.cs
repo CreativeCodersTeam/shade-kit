@@ -13,26 +13,18 @@ public interface ILineEndingResolver
     /// <remarks>
     /// The first source that decides wins: git (<see cref="IGitLineEndingResolver.GetLineEndingAsync" />),
     /// <c>.editorconfig</c> (<see cref="IEditorConfigLineEndingResolver.GetLineEnding" />), then the operating system.
-    /// An unusable <c>.editorconfig</c> file adds a warning to the result. The file need not exist.
+    /// A <c>git</c> that is installed but fails and an unusable <c>.editorconfig</c> file each add a warning to the
+    /// result.
     /// </remarks>
-    /// <param name="repositoryRootPath">The root directory of the repository.</param>
-    /// <param name="relativePath">
-    /// The path of the file relative to <paramref name="repositoryRootPath" />, with forward slashes or the directory
-    /// separator of the operating system.
-    /// </param>
+    /// <param name="file">The file whose line ending is determined; the file need not exist.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous operation. The task result contains the line ending for the file and
     /// the warnings that occurred while it was determined.
     /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="repositoryRootPath" /> or <paramref name="relativePath" /> is <see langword="null" />, empty,
-    /// or whitespace, or <paramref name="relativePath" /> is rooted or does not name a path below
-    /// <paramref name="repositoryRootPath" />.
-    /// </exception>
+    /// <exception cref="ArgumentNullException"><paramref name="file" /> is <see langword="null" />.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
-    Task<LineEndingResolution> GetLineEndingAsync(string repositoryRootPath, string relativePath,
-        CancellationToken cancellationToken = default);
+    Task<LineEndingResolution> GetLineEndingAsync(RepositoryFile file, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Prepares the line endings of several files that are written next, so determining each of them later takes
@@ -41,20 +33,12 @@ public interface ILineEndingResolver
     /// <remarks>
     /// Optional; it reads the git attributes of all files at once and does not change the results.
     /// </remarks>
-    /// <param name="repositoryRootPath">The root directory of the repository.</param>
-    /// <param name="relativePaths">
-    /// The paths of the files relative to <paramref name="repositoryRootPath" />, with forward slashes or the
-    /// directory separator of the operating system.
-    /// </param>
+    /// <param name="files">The files, which may belong to different repositories.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="relativePaths" /> is <see langword="null" />.</exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="repositoryRootPath" /> is <see langword="null" />, empty, or whitespace, or a path of
-    /// <paramref name="relativePaths" /> is <see langword="null" />, empty, whitespace, rooted, or does not name a
-    /// path below <paramref name="repositoryRootPath" />.
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="files" /> is <see langword="null" /> or contains <see langword="null" />.
     /// </exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
-    Task PrepareAsync(string repositoryRootPath, IReadOnlyCollection<string> relativePaths,
-        CancellationToken cancellationToken = default);
+    Task PrepareAsync(IReadOnlyCollection<RepositoryFile> files, CancellationToken cancellationToken = default);
 }

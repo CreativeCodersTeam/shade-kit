@@ -423,8 +423,8 @@ public class KitStoreFactoryTests
         using var tempDirectory = new TempKitDirectory();
         var textFileWriter = A.Fake<ITextFileWriter>();
         var warning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
-        A.CallTo(() => textFileWriter.WriteAsync(A<string>._, A<string>._, A<TextFileContent>._,
-                A<string?>._, A<CancellationToken>._))
+        A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
+                A<RepositoryFile?>._, A<CancellationToken>._))
             .Returns([warning]);
         var factory = CreateFactory(textFileWriter: textFileWriter);
         var kitStore = factory.CreateForRepositoryRoot(tempDirectory.RootPath);
@@ -435,8 +435,9 @@ public class KitStoreFactoryTests
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        A.CallTo(() => textFileWriter.WriteAsync(tempDirectory.RootPath,
-                Path.Combine(".shadekit", "templates", "spec.md"), content, A<string?>._, A<CancellationToken>._))
+        A.CallTo(() => textFileWriter.WriteAsync(
+                RepositoryFile.Resolve(tempDirectory.RootPath, Path.Combine(".shadekit", "templates", "spec.md")),
+                content, A<RepositoryFile?>._, A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
 
         warnings

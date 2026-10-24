@@ -384,10 +384,10 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
         // Assert
         await using var serviceProvider = services.BuildServiceProvider();
 
-        var lineEnding = await serviceProvider.GetRequiredService<IGitLineEndingResolver>()
-            .GetLineEndingAsync("/repo", "readme.md", TestContext.Current.CancellationToken);
+        var result = await serviceProvider.GetRequiredService<IGitLineEndingResolver>()
+            .GetLineEndingAsync(RepositoryFile.Resolve("/repo", "readme.md"), TestContext.Current.CancellationToken);
 
-        lineEnding
+        result.LineEnding
             .Should().Be(LineEnding.CrLf);
     }
 
@@ -396,8 +396,8 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     {
         // Arrange
         var existingGitResolver = A.Fake<IGitLineEndingResolver>();
-        A.CallTo(() => existingGitResolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
-            .Returns((LineEnding?)null);
+        A.CallTo(() => existingGitResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .Returns(new GitLineEndingResult(null, null));
 
         var existingEditorConfigResolver = A.Fake<IEditorConfigLineEndingResolver>();
         A.CallTo(() => existingEditorConfigResolver.GetLineEnding(A<string>._))
@@ -414,12 +414,13 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
         await using var serviceProvider = services.BuildServiceProvider();
 
         var resolution = await serviceProvider.GetRequiredService<ILineEndingResolver>()
-            .GetLineEndingAsync("/repo", "readme.md", TestContext.Current.CancellationToken);
+            .GetLineEndingAsync(RepositoryFile.Resolve("/repo", "readme.md"), TestContext.Current.CancellationToken);
 
         resolution.LineEnding
             .Should().Be(LineEnding.CrLf);
 
-        A.CallTo(() => existingGitResolver.GetLineEndingAsync("/repo", "readme.md", A<CancellationToken>._))
+        A.CallTo(() => existingGitResolver.GetLineEndingAsync(RepositoryFile.Resolve("/repo", "readme.md"),
+                A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
     }
 
@@ -429,7 +430,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var existingResolver = A.Fake<ILineEndingResolver>();
-        A.CallTo(() => existingResolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => existingResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .Returns(new LineEndingResolution(LineEnding.CrLf, []));
 
         var services = new ServiceCollection();
@@ -441,8 +442,9 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
         // Assert
         await using var serviceProvider = services.BuildServiceProvider();
 
-        await serviceProvider.GetRequiredService<ITextFileWriter>().WriteAsync(tempDirectory.RootPath, "notes.txt",
-            TextFileContent.FromText("a\nb\n"), cancellationToken: TestContext.Current.CancellationToken);
+        await serviceProvider.GetRequiredService<ITextFileWriter>().WriteAsync(
+            RepositoryFile.Resolve(tempDirectory.RootPath, "notes.txt"), TextFileContent.FromText("a\nb\n"),
+            cancellationToken: TestContext.Current.CancellationToken);
 
         tempDirectory.ReadFileText("notes.txt")
             .Should().Be("a\r\nb\r\n");

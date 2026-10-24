@@ -17,22 +17,14 @@ public sealed class TextFileWriter(ILineEndingResolver lineEndingResolver) : ITe
     private readonly ILineEndingResolver _lineEndingResolver = Ensure.NotNull(lineEndingResolver);
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<KitWarning>> WriteAsync(string repositoryRootPath, string relativePath,
-        TextFileContent content, string? lineEndingPath = null, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<KitWarning>> WriteAsync(RepositoryFile file, TextFileContent content,
+        RepositoryFile? lineEndingFile = null, CancellationToken cancellationToken = default)
     {
-        // Validates every path before anything is resolved or written.
-        var fullPath = RepositoryFilePath.GetFullPath(repositoryRootPath, relativePath);
-
-        if (lineEndingPath is not null)
-        {
-            RepositoryFilePath.GetFullPath(repositoryRootPath, lineEndingPath);
-        }
-
+        Ensure.NotNull(file);
         Ensure.NotNull(content);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var resolution = await _lineEndingResolver
-            .GetLineEndingAsync(repositoryRootPath, lineEndingPath ?? relativePath, cancellationToken)
+        var resolution = await _lineEndingResolver.GetLineEndingAsync(lineEndingFile ?? file, cancellationToken)
             .ConfigureAwait(false);
 
         var bytes = Encode(content, resolution.LineEnding);
@@ -40,12 +32,18 @@ public sealed class TextFileWriter(ILineEndingResolver lineEndingResolver) : ITe
         // Nothing, not even a parent directory, is created once the operation is canceled.
         cancellationToken.ThrowIfCancellationRequested();
 
-        // The full path lies below the repository root, so it always has a parent directory.
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        // The file lies below the repository root, so it always has a parent directory.
+        Directory.CreateDirectory(Path.GetDirectoryName(file.FullPath)!);
 
-        await File.WriteAllBytesAsync(fullPath, bytes, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(file.FullPath, bytes, cancellationToken).ConfigureAwait(false);
 
         return resolution.Warnings;
+    }
+
+    /// <inheritdoc />
+    public Task PrepareAsync(IReadOnlyCollection<RepositoryFile> files, CancellationToken cancellationToken = default)
+    {
+        return _lineEndingResolver.PrepareAsync(files, cancellationToken);
     }
 
     /// <summary>

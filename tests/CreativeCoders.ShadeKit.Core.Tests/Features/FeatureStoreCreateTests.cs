@@ -6,6 +6,7 @@ using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
@@ -1214,14 +1215,60 @@ public sealed class FeatureStoreCreateTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateAsync_NewFeature_PreparesLineEndingsOfAllFinalPathsOnceBeforeFirstWrite()
+    {
+        // Arrange
+        var resolver = FixedLineEnding.CreateResolver(LineEnding.Lf);
+        _context.LineEndingResolver = resolver;
+        var featureStore = _context.CreateFeatureStore();
+        string[] expectedGitPaths =
+        [
+            $".shadekit/features/{IssueFeatureId}/feature.json",
+            $".shadekit/features/{IssueFeatureId}/request.md",
+            ".shadekit/features/current-feature.json"
+        ];
+
+        // Act
+        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        A.CallTo(() => resolver.PrepareAsync(
+                A<IReadOnlyCollection<RepositoryFile>>.That.Matches(files =>
+                    files.Select(file => file.GitPath).SequenceEqual(expectedGitPaths)),
+                A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly()
+            .Then(A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+                .MustHaveHappened(3, Times.Exactly));
+    }
+
+    [Fact]
+    public async Task CreateAsync_RequestTemplateIsDirectory_ThrowsPathNotAFileExceptionAndCreatesNoFeature()
+    {
+        // Arrange
+        _context.Repository.CreateDirectory(".shadekit", "templates", "request.md");
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(),
+            _context.CreateRequest(IssueUrl, "Login SSO"), TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowAsync<PathNotAFileException>();
+
+        _context.KitDirectoryExists("features", IssueFeatureId)
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public async Task CreateAsync_EachWriteReturnsOtherWarning_ReturnsWarningsOfAllWritesInWriteOrder()
     {
         // Arrange
         var resolver = A.Fake<ILineEndingResolver>();
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
-            .ReturnsLazily((string _, string relativePath, CancellationToken _) => new LineEndingResolution(
+        A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .ReturnsLazily((RepositoryFile file, CancellationToken _) => new LineEndingResolution(
                 LineEnding.Lf,
-                [new EditorConfigUnreadableWarning(relativePath.Replace('\\', '/'), "Access denied.")]));
+                [new EditorConfigUnreadableWarning(file.GitPath, "Access denied.")]));
         _context.LineEndingResolver = resolver;
         var featureStore = _context.CreateFeatureStore();
 

@@ -56,4 +56,10 @@ public static class ShadeKitCliWarningCodes
     /// its content, so the line ending of the operating system is used for a file instead.
     /// </summary>
     public const string EditorConfigInvalid = "editorconfig-invalid";
+
+    /// <summary>
+    /// Represents the warning code reported when <c>git</c> is installed but fails to read the git attributes or the
+    /// git configuration of the repository, so the line endings come from <c>.editorconfig</c> or the operating system.
+    /// </summary>
+    public const string GitAttributesUnavailable = "git-attributes-unavailable";
 }

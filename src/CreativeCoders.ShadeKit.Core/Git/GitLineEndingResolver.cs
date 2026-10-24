@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
+using CreativeCoders.ShadeKit.Core.Git.Warnings;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Git;
 
@@ -12,8 +13,8 @@ namespace CreativeCoders.ShadeKit.Core.Git;
 /// </summary>
 /// <remarks>
 /// Runs one <c>git check-attr</c> per file, unless <see cref="PreloadAttributesAsync" /> read the attributes, and
-/// <c>git config</c> only if the attributes do not decide. Configuration values are cached per repository root for
-/// the lifetime of the instance, i.e. one command run; failed or canceled reads are not cached.
+/// <c>git config</c> only if the attributes do not decide. Configuration values and a failing <c>git</c> are cached
+/// per repository root for the lifetime of the instance, i.e. one command run; canceled reads are not cached.
 /// </remarks>
 public sealed class GitLineEndingResolver : IGitLineEndingResolver
 {
@@ -64,6 +65,11 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
         _preloadedAttributes =
             new ConcurrentDictionary<(string RepositoryRootPath, string GitPath), Dictionary<string, string>>();
 
+    // The repositories for which git failed, with the warning that each further file of the repository reports;
+    // null for a git that was not found.
+    private readonly ConcurrentDictionary<string, KitWarning?> _gitFailures =
+        new ConcurrentDictionary<string, KitWarning?>(StringComparer.Ordinal);
+
     /// <summary>
     /// Initializes a new instance of the <see cref="GitLineEndingResolver" /> class that resolves
     /// <c>core.eol=native</c> to the line ending of the current operating system.
@@ -108,42 +114,60 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
     }
 
     /// <inheritdoc />
-    public async Task<LineEnding?> GetLineEndingAsync(string repositoryRootPath, string relativePath,
+    public async Task<GitLineEndingResult> GetLineEndingAsync(RepositoryFile file,
         CancellationToken cancellationToken = default)
     {
-        var gitPath = RepositoryFilePath.GetGitPath(repositoryRootPath, relativePath);
+        Ensure.NotNull(file);
+
+        if (_gitFailures.TryGetValue(file.RepositoryRootPath, out var failureWarning))
+        {
+            return new GitLineEndingResult(null, failureWarning);
+        }
 
         try
         {
-            return await ResolveAsync(repositoryRootPath, gitPath, cancellationToken).ConfigureAwait(false);
+            var lineEnding = await ResolveAsync(file.RepositoryRootPath, file.GitPath, cancellationToken)
+                .ConfigureAwait(false);
+
+            return new GitLineEndingResult(lineEnding, null);
         }
-        catch (GitUnavailableException)
+        catch (GitUnavailableException exception)
         {
-            // git is missing or fails: the line ending is left to .editorconfig and the operating system.
-            return null;
+            // The line ending is left to .editorconfig and the operating system.
+            return new GitLineEndingResult(null, RecordGitFailure(file.RepositoryRootPath, exception));
         }
     }
 
     /// <inheritdoc />
-    [SuppressMessage("Minor Code Smell", "S3236:Caller information arguments should not be provided explicitly",
-        Justification = "An invalid path names the parameter that holds the collection, not the lambda's parameter.")]
-    public async Task PreloadAttributesAsync(string repositoryRootPath, IReadOnlyCollection<string> relativePaths,
+    public async Task PreloadAttributesAsync(IReadOnlyCollection<RepositoryFile> files,
         CancellationToken cancellationToken = default)
     {
-        Ensure.NotNull(relativePaths);
+        Ensure.NotNull(files);
 
-        string[] gitPaths =
-        [
-            .. relativePaths
-                .Select(relativePath => RepositoryFilePath.GetGitPath(repositoryRootPath, relativePath,
-                    nameof(relativePaths)))
-                .Distinct(StringComparer.Ordinal)
-        ];
+        if (files.Any(file => file is null))
+        {
+            throw new ArgumentNullException(nameof(files), "The collection contains null.");
+        }
 
-        var cacheRootPath = gitPaths.Length == 0 ? null : GetCacheRootPath(repositoryRootPath);
+        foreach (var repositoryFiles in files.GroupBy(file => file.RepositoryRootPath, StringComparer.Ordinal))
+        {
+            await PreloadAttributesAsync(repositoryFiles.Key,
+                    [.. repositoryFiles.Select(file => file.GitPath).Distinct(StringComparer.Ordinal)],
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
 
+    private async Task PreloadAttributesAsync(string repositoryRootPath, string[] gitPaths,
+        CancellationToken cancellationToken)
+    {
         foreach (var chunk in gitPaths.Chunk(MaxPathsPerCheckAttr))
         {
+            if (_gitFailures.ContainsKey(repositoryRootPath))
+            {
+                return;
+            }
+
             try
             {
                 var attributesByPath = await ReadAttributesAsync(repositoryRootPath, chunk, cancellationToken)
@@ -151,21 +175,36 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
 
                 foreach (var (gitPath, attributes) in attributesByPath)
                 {
-                    _preloadedAttributes.TryAdd((cacheRootPath!, gitPath), attributes);
+                    _preloadedAttributes.TryAdd((repositoryRootPath, gitPath), attributes);
                 }
             }
-            catch (GitUnavailableException)
+            catch (GitUnavailableException exception)
             {
-                // Each file of the chunk reads its attributes when its line ending is determined.
+                // Each file of the repository then reports the failure when its line ending is determined.
+                RecordGitFailure(repositoryRootPath, exception);
             }
         }
+    }
+
+    // Keeps the first failure of a repository, so every further file reports the same warning and starts no git.
+    private KitWarning? RecordGitFailure(string repositoryRootPath, GitUnavailableException exception)
+    {
+        return _gitFailures.GetOrAdd(repositoryRootPath,
+            exception is GitNotFoundException
+                ? null
+                : new GitAttributesUnavailableWarning(repositoryRootPath, GetCommandName(exception), exception.Reason));
+    }
+
+    // The command without its arguments, so a warning for a check-attr of many files stays short.
+    private static string GetCommandName(GitUnavailableException exception)
+    {
+        return exception.Arguments.Count == 0 ? "git" : $"git {exception.Arguments[0]}";
     }
 
     private async Task<LineEnding?> ResolveAsync(string repositoryRootPath, string gitPath,
         CancellationToken cancellationToken)
     {
-        var attributes = _preloadedAttributes.TryGetValue((GetCacheRootPath(repositoryRootPath), gitPath),
-                             out var preloadedAttributes)
+        var attributes = _preloadedAttributes.TryGetValue((repositoryRootPath, gitPath), out var preloadedAttributes)
             ? preloadedAttributes
             : await ReadAttributesAsync(repositoryRootPath, gitPath, cancellationToken).ConfigureAwait(false);
 
@@ -453,7 +492,7 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
     private async Task<string?> ReadConfigValueAsync(string repositoryRootPath, string key,
         CancellationToken cancellationToken)
     {
-        var cacheKey = (GetCacheRootPath(repositoryRootPath), key);
+        var cacheKey = (repositoryRootPath, key);
 
         if (_configValues.TryGetValue(cacheKey, out var cachedValue))
         {
@@ -467,12 +506,5 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
         _configValues.TryAdd(cacheKey, value);
 
         return value;
-    }
-
-    // Spellings of the same root, such as a trailing separator, share their values; other spellings, such as a
-    // different case on a case-insensitive file system, only read the values once more.
-    private static string GetCacheRootPath(string repositoryRootPath)
-    {
-        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(repositoryRootPath));
     }
 }

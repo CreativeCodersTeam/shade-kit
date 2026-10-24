@@ -176,11 +176,13 @@ public class TextFileContentTests
     }
 
     [Theory]
-    [InlineData("a\rb\n", new[] { "a\rb" }, true)]
-    [InlineData("a\r", new[] { "a\r" }, false)]
-    [InlineData("a\r\r\nb", new[] { "a\r", "b" }, false)]
-    [InlineData("\r", new[] { "\r" }, false)]
-    public async Task ReadAsync_LoneCarriageReturn_StaysPartOfLine(string text, string[] expectedLines,
+    [InlineData("a\rb\n", new[] { "a", "b" }, true)]
+    [InlineData("a\r", new[] { "a" }, true)]
+    [InlineData("a\r\r\nb", new[] { "a", "", "b" }, false)]
+    [InlineData("\r", new[] { "" }, true)]
+    [InlineData("a\n\rb", new[] { "a", "", "b" }, false)]
+    [InlineData("a\u2028b\n", new[] { "a\u2028b" }, true)]
+    public async Task ReadAsync_LoneCarriageReturn_EndsLine(string text, string[] expectedLines,
         bool expectedFinalLineEnding)
     {
         // Act
@@ -218,7 +220,8 @@ public class TextFileContentTests
     [Theory]
     [InlineData("a\nb\n", new[] { "a", "b" }, true)]
     [InlineData("a\r\nb", new[] { "a", "b" }, false)]
-    [InlineData("a\rb", new[] { "a\rb" }, false)]
+    [InlineData("a\rb", new[] { "a", "b" }, false)]
+    [InlineData("a\rb\r", new[] { "a", "b" }, true)]
     [InlineData("\n", new[] { "" }, true)]
     [InlineData("", new string[0], false)]
     public void FromText_Text_SplitsLinesWithoutBom(string text, string[] expectedLines,
@@ -306,7 +309,7 @@ public class TextFileContentTests
     [InlineData("a\n\n\n", "a\n\n\nx\ny\n")]
     [InlineData("\n", "\nx\ny\n")]
     [InlineData("a\n \n", "a\n \n\nx\ny\n")]
-    [InlineData("a\r", "a\r\n\nx\ny\n")]
+    [InlineData("a\r", "a\n\nx\ny\n")]
     public async Task AppendBlock_FileContent_AppendsBlockAfterSeparator(string text, string expectedLfText)
     {
         // Arrange
@@ -375,6 +378,53 @@ public class TextFileContentTests
 
         content.HasFinalLineEnding
             .Should().BeFalse();
+    }
+
+    [Fact]
+    public void AppendBlock_LinesCastToCollection_CannotBeChanged()
+    {
+        // Arrange
+        var content = TextFileContent.FromText("a\n").AppendBlock("x");
+        var lines = (ICollection<string>)content.Lines;
+
+        // Act
+        var act = () => lines.Add("y");
+
+        // Assert
+        act.Should().Throw<NotSupportedException>();
+
+        content.Lines
+            .Should().Equal("a", "", "x");
+    }
+
+    [Theory]
+    [InlineData("x\ry", new[] { "a", "", "x", "y" })]
+    [InlineData("x\r\ny", new[] { "a", "", "x", "y" })]
+    public void AppendBlock_BlockWithCarriageReturn_SplitsBlockAtEveryLineEnding(string block, string[] expectedLines)
+    {
+        // Arrange
+        var content = TextFileContent.FromText("a\n");
+
+        // Act
+        var result = content.AppendBlock(block);
+
+        // Assert
+        result.Lines
+            .Should().Equal(expectedLines);
+    }
+
+    [Fact]
+    public void ReplaceLines_LinesCastToCollection_CannotBeChanged()
+    {
+        // Arrange
+        var content = TextFileContent.FromText("a\nb\n").ReplaceLines(0, 0, "x");
+        var lines = (ICollection<string>)content.Lines;
+
+        // Act
+        var act = () => lines.Clear();
+
+        // Assert
+        act.Should().Throw<NotSupportedException>();
     }
 
     [Fact]
@@ -496,7 +546,8 @@ public class TextFileContentTests
     [InlineData("a\nb", false)]
     [InlineData("a\nc\n", false)]
     [InlineData("a\nb\n\n", false)]
-    [InlineData("a\rb\n", false)]
+    [InlineData("a\rb\n", true)]
+    [InlineData("a\rb\r", true)]
     public async Task HasSameContent_OtherContent_IgnoresOnlyLineEndings(string otherText, bool expected)
     {
         // Arrange
@@ -669,7 +720,7 @@ public class TextFileContentTests
     [InlineData("a\r\nb\n", LineEnding.Lf, "a\nb\n")]
     [InlineData("a\r\nb\n", LineEnding.CrLf, "a\r\nb\r\n")]
     [InlineData("a\nb", LineEnding.CrLf, "a\r\nb")]
-    [InlineData("a\rb\n\n", LineEnding.CrLf, "a\rb\r\n\r\n")]
+    [InlineData("a\rb\n\n", LineEnding.CrLf, "a\r\nb\r\n\r\n")]
     [InlineData("\n", LineEnding.CrLf, "\r\n")]
     [InlineData("", LineEnding.CrLf, "")]
     public void ToText_LineEnding_JoinsLinesAndEndsLastLineIfFinalLineEnding(string text, LineEnding lineEnding,

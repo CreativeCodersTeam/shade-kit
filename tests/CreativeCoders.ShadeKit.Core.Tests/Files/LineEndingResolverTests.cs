@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Git.Warnings;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Files;
@@ -13,6 +14,8 @@ public class LineEndingResolverTests
     private const string RelativePath = "docs/readme.md";
 
     private static readonly string FullPath = Path.GetFullPath(Path.Combine(RepositoryRootPath, "docs", "readme.md"));
+
+    private static readonly RepositoryFile File = RepositoryFile.Resolve(RepositoryRootPath, RelativePath);
 
     private readonly IGitLineEndingResolver _gitLineEndingResolver = A.Fake<IGitLineEndingResolver>();
 
@@ -246,28 +249,27 @@ public class LineEndingResolverTests
         var sut = CreateSut(LineEnding.Lf);
 
         // Act
-        await sut.GetLineEndingAsync(RepositoryRootPath, RelativePath, cancellationToken);
+        await sut.GetLineEndingAsync(File, cancellationToken);
 
         // Assert
-        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(RepositoryRootPath, RelativePath, cancellationToken))
+        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(File, cancellationToken))
             .MustHaveHappenedOnceExactly();
     }
 
     [Fact]
-    public async Task PrepareAsync_Paths_PreloadsTheirGitAttributesWithToken()
+    public async Task PrepareAsync_Files_PreloadsTheirGitAttributesWithToken()
     {
         // Arrange
         using var cancellationTokenSource = new CancellationTokenSource();
         var cancellationToken = cancellationTokenSource.Token;
-        string[] relativePaths = [RelativePath, "other.md"];
+        RepositoryFile[] files = [File, RepositoryFile.Resolve(RepositoryRootPath, "other.md")];
         var sut = CreateSut(LineEnding.Lf);
 
         // Act
-        await sut.PrepareAsync(RepositoryRootPath, relativePaths, cancellationToken);
+        await sut.PrepareAsync(files, cancellationToken);
 
         // Assert
-        A.CallTo(() => _gitLineEndingResolver.PreloadAttributesAsync(RepositoryRootPath, relativePaths,
-                cancellationToken))
+        A.CallTo(() => _gitLineEndingResolver.PreloadAttributesAsync(files, cancellationToken))
             .MustHaveHappenedOnceExactly();
 
         A.CallTo(_editorConfigLineEndingResolver)
@@ -284,7 +286,8 @@ public class LineEndingResolverTests
         var sut = CreateSut(LineEnding.Lf);
 
         // Act
-        await sut.GetLineEndingAsync(RepositoryRootPath, relativePath, TestContext.Current.CancellationToken);
+        await sut.GetLineEndingAsync(RepositoryFile.Resolve(RepositoryRootPath, relativePath),
+            TestContext.Current.CancellationToken);
 
         // Assert
         A.CallTo(() => _editorConfigLineEndingResolver.GetLineEnding(FullPath))
@@ -298,7 +301,7 @@ public class LineEndingResolverTests
         var sut = CreateSut(LineEnding.Lf);
 
         // Act
-        await sut.GetLineEndingAsync(RepositoryRootPath, Path.Combine("docs", "readme.md"),
+        await sut.GetLineEndingAsync(RepositoryFile.Resolve(RepositoryRootPath, Path.Combine("docs", "readme.md")),
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -311,13 +314,13 @@ public class LineEndingResolverTests
     {
         // Arrange
         using var cancellationTokenSource = new CancellationTokenSource();
-        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .Invokes(() => cancellationTokenSource.Cancel())
-            .Returns((LineEnding?)null);
+            .Returns(new GitLineEndingResult(null, null));
         var sut = CreateSut(LineEnding.Lf);
 
         // Act
-        var act = () => sut.GetLineEndingAsync(RepositoryRootPath, RelativePath, cancellationTokenSource.Token);
+        var act = () => sut.GetLineEndingAsync(File, cancellationTokenSource.Token);
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -330,7 +333,7 @@ public class LineEndingResolverTests
     public async Task GetLineEndingAsync_GitResolverCanceled_ThrowsOperationCanceledException()
     {
         // Arrange
-        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .Throws(new OperationCanceledException());
         var sut = CreateSut(LineEnding.Lf);
 
@@ -345,7 +348,7 @@ public class LineEndingResolverTests
     public async Task GetLineEndingAsync_GitResolverThrowsUnexpectedException_PropagatesWithoutReadingEditorConfig()
     {
         // Arrange
-        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .Throws(new InvalidOperationException("unexpected"));
         var sut = CreateSut(LineEnding.Lf);
 
@@ -374,22 +377,18 @@ public class LineEndingResolverTests
         await act.Should().ThrowAsync<IOException>();
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public async Task GetLineEndingAsync_InvalidRepositoryRootPath_ThrowsArgumentException(string? invalidRootPath)
+    [Fact]
+    public async Task GetLineEndingAsync_NullFile_ThrowsArgumentNullException()
     {
         // Arrange
         var sut = CreateSut(LineEnding.Lf);
 
         // Act
-        var act = () => sut.GetLineEndingAsync(invalidRootPath!, RelativePath,
-            TestContext.Current.CancellationToken);
+        var act = () => sut.GetLineEndingAsync(null!, TestContext.Current.CancellationToken);
 
         // Assert
-        await act.Should().ThrowAsync<ArgumentException>()
-            .WithParameterName("repositoryRootPath");
+        await act.Should().ThrowAsync<ArgumentNullException>()
+            .WithParameterName("file");
 
         A.CallTo(_gitLineEndingResolver)
             .MustNotHaveHappened();
@@ -399,30 +398,52 @@ public class LineEndingResolverTests
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData("/etc/passwd")]
-    [InlineData("../outside.md")]
-    [InlineData(".")]
-    public async Task GetLineEndingAsync_InvalidRelativePath_ThrowsArgumentException(string? invalidRelativePath)
+    [InlineData(LineEnding.Lf, LineEnding.CrLf)]
+    [InlineData(LineEnding.CrLf, LineEnding.Lf)]
+    public async Task GetLineEndingAsync_GitFailsWithWarning_ReturnsEditorConfigLineEndingAndGitWarning(
+        LineEnding editorConfigLineEnding, LineEnding operatingSystemLineEnding)
     {
         // Arrange
-        var sut = CreateSut(LineEnding.Lf);
+        var gitWarning = new GitAttributesUnavailableWarning("/repo", "git check-attr",
+            "git exited with the unexpected exit code 128.");
+        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .Returns(new GitLineEndingResult(null, gitWarning));
+        SetUpEditorConfigLineEnding(editorConfigLineEnding);
+        var sut = CreateSut(operatingSystemLineEnding);
 
         // Act
-        var act = () => sut.GetLineEndingAsync(RepositoryRootPath, invalidRelativePath!,
-            TestContext.Current.CancellationToken);
+        var resolution = await ResolveAsync(sut);
 
         // Assert
-        await act.Should().ThrowAsync<ArgumentException>()
-            .WithParameterName("relativePath");
+        resolution.LineEnding
+            .Should().Be(editorConfigLineEnding);
 
-        A.CallTo(_gitLineEndingResolver)
-            .MustNotHaveHappened();
+        resolution.Warnings
+            .Should().Equal(gitWarning);
+    }
 
-        A.CallTo(_editorConfigLineEndingResolver)
-            .MustNotHaveHappened();
+    [Fact]
+    public async Task GetLineEndingAsync_GitFailsAndEditorConfigUnreadable_ReturnsOperatingSystemLineEndingAndBothWarnings()
+    {
+        // Arrange
+        var gitWarning = new GitAttributesUnavailableWarning("/repo", "git check-attr",
+            "git exited with the unexpected exit code 128.");
+        var editorConfigWarning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
+        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .Returns(new GitLineEndingResult(null, gitWarning));
+        A.CallTo(() => _editorConfigLineEndingResolver.GetLineEnding(A<string>._))
+            .Returns(new EditorConfigLineEndingResult(null, editorConfigWarning));
+        var sut = CreateSut(LineEnding.CrLf);
+
+        // Act
+        var resolution = await ResolveAsync(sut);
+
+        // Assert
+        resolution.LineEnding
+            .Should().Be(LineEnding.CrLf);
+
+        resolution.Warnings
+            .Should().Equal(gitWarning, editorConfigWarning);
     }
 
     private static async Task<LineEnding> GetLineEndingAsync(LineEndingResolver sut)
@@ -434,7 +455,7 @@ public class LineEndingResolverTests
 
     private static Task<LineEndingResolution> ResolveAsync(LineEndingResolver sut)
     {
-        return sut.GetLineEndingAsync(RepositoryRootPath, RelativePath, TestContext.Current.CancellationToken);
+        return sut.GetLineEndingAsync(File, TestContext.Current.CancellationToken);
     }
 
     private LineEndingResolver CreateSut(LineEnding operatingSystemLineEnding)
@@ -445,8 +466,8 @@ public class LineEndingResolverTests
 
     private void SetUpGitLineEnding(LineEnding? lineEnding)
     {
-        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
-            .Returns(lineEnding);
+        A.CallTo(() => _gitLineEndingResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .Returns(new GitLineEndingResult(lineEnding, null));
     }
 
     private void SetUpEditorConfigLineEnding(LineEnding? lineEnding)

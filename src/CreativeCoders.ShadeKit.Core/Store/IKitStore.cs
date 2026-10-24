@@ -1,4 +1,5 @@
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
@@ -189,6 +190,29 @@ public interface IKitStore
     IKitDirectoryWriter CreateDirectoryWriter(string writePath, string targetPath);
 
     /// <summary>
+    /// Prepares the line endings of several files of the store that are written next, so determining each of them
+    /// later takes fewer <c>git</c> processes.
+    /// </summary>
+    /// <remarks>
+    /// Optional; it does not change the results of later writes. A file that is written through
+    /// <see cref="CreateDirectoryWriter" /> is prepared with its path below the target directory, the path for which
+    /// its line ending is determined.
+    /// </remarks>
+    /// <param name="relativePaths">
+    /// The paths of the files relative to <see cref="RootPath" />, for example <c>features/login/feature.json</c>.
+    /// </param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="relativePaths" /> is <see langword="null" />.</exception>
+    /// <exception cref="ArgumentException">
+    /// A path of <paramref name="relativePaths" /> is <see langword="null" />, empty, rooted, or points outside
+    /// <see cref="RootPath" />.
+    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
+    Task PrepareLineEndingsAsync(IReadOnlyCollection<string> relativePaths,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Creates a directory of the store, together with its missing parent directories.
     /// </summary>
     /// <param name="relativePath">
@@ -203,8 +227,7 @@ public interface IKitStore
     /// Reads a text file of the store that is not a versioned JSON file, for example a template.
     /// </summary>
     /// <remarks>
-    /// Decoded strictly as UTF-8; content that is not UTF-8 is reported as an invalid kit file. A directory at
-    /// <paramref name="relativePath" /> counts as a missing file.
+    /// Decoded strictly as UTF-8; content that is not UTF-8 is reported as an invalid kit file.
     /// </remarks>
     /// <param name="relativePath">
     /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/request.md</c>.
@@ -217,6 +240,7 @@ public interface IKitStore
     /// <exception cref="ArgumentException">
     /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
     /// </exception>
+    /// <exception cref="PathNotAFileException">A directory exists at <paramref name="relativePath" />.</exception>
     /// <exception cref="InvalidKitFileException">
     /// The file is not UTF-8 text: it starts with a UTF-16 or UTF-32 byte order mark, contains a NUL byte, or contains
     /// bytes that are not valid UTF-8. The file path of the exception is relative to the repository root, for example

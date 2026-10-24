@@ -22,7 +22,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(lineEnding);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("a\nb\n"),
+        await writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("a\nb\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -41,7 +41,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(lineEnding);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("a\r\nb"),
+        await writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("a\r\nb"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -61,7 +61,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(lineEnding);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, FileName, content!, cancellationToken: TestContext.Current.CancellationToken);
+        await writer.WriteAsync(FileIn(tempDirectory, FileName), content!, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
@@ -80,7 +80,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(lineEnding);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, FileName, content!, cancellationToken: TestContext.Current.CancellationToken);
+        await writer.WriteAsync(FileIn(tempDirectory, FileName), content!, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
@@ -99,7 +99,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.CrLf);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, FileName, content!, cancellationToken: TestContext.Current.CancellationToken);
+        await writer.WriteAsync(FileIn(tempDirectory, FileName), content!, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
@@ -107,19 +107,19 @@ public class TextFileWriterTests
     }
 
     [Fact]
-    public async Task WriteAsync_NonAsciiAndLoneCarriageReturn_WritesUtf8WithoutBomAndKeepsCarriageReturn()
+    public async Task WriteAsync_NonAsciiAndLoneCarriageReturn_WritesUtf8WithoutBomAndReplacesCarriageReturn()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("Grüße\rä\n"),
+        await writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("Grüße\rä\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes(FileName)
-            .Should().Equal(Encoding.UTF8.GetBytes("Grüße\rä\n"));
+            .Should().Equal(Encoding.UTF8.GetBytes("Grüße\nä\n"));
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("new\n"),
+        await writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("new\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -147,7 +147,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, "docs/sub/notes.md", TextFileContent.FromText("a\n"),
+        await writer.WriteAsync(FileIn(tempDirectory, "docs/sub/notes.md"), TextFileContent.FromText("a\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -164,7 +164,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf, warning);
 
         // Act
-        var warnings = await writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("a\n"),
+        var warnings = await writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("a\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -180,7 +180,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
 
         // Act
-        var warnings = await writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("a\n"),
+        var warnings = await writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("a\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -198,11 +198,11 @@ public class TextFileWriterTests
         using var cancellationTokenSource = new CancellationTokenSource();
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, "docs/notes.md", TextFileContent.FromText("a\n"),
+        await writer.WriteAsync(FileIn(tempDirectory, "docs/notes.md"), TextFileContent.FromText("a\n"),
             cancellationToken: cancellationTokenSource.Token);
 
         // Assert
-        A.CallTo(() => resolver.GetLineEndingAsync(tempDirectory.RootPath, "docs/notes.md",
+        A.CallTo(() => resolver.GetLineEndingAsync(FileIn(tempDirectory, "docs/notes.md"),
                 cancellationTokenSource.Token))
             .MustHaveHappenedOnceExactly();
     }
@@ -216,15 +216,16 @@ public class TextFileWriterTests
         var writer = new TextFileWriter(resolver);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, "staging/notes.md", TextFileContent.FromText("a\n"),
-            "final/notes.md", TestContext.Current.CancellationToken);
+        await writer.WriteAsync(FileIn(tempDirectory, "staging/notes.md"), TextFileContent.FromText("a\n"),
+            FileIn(tempDirectory, "final/notes.md"), TestContext.Current.CancellationToken);
 
         // Assert
-        A.CallTo(() => resolver.GetLineEndingAsync(tempDirectory.RootPath, "final/notes.md",
+        A.CallTo(() => resolver.GetLineEndingAsync(FileIn(tempDirectory, "final/notes.md"),
                 TestContext.Current.CancellationToken))
             .MustHaveHappenedOnceExactly();
 
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, "staging/notes.md", A<CancellationToken>._))
+        A.CallTo(() => resolver.GetLineEndingAsync(
+                A<RepositoryFile>.That.Matches(file => file.GitPath == "staging/notes.md"), A<CancellationToken>._))
             .MustNotHaveHappened();
     }
 
@@ -237,16 +238,18 @@ public class TextFileWriterTests
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var resolver = A.Fake<ILineEndingResolver>();
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, "staging/notes.md", A<CancellationToken>._))
+        A.CallTo(() => resolver.GetLineEndingAsync(
+                A<RepositoryFile>.That.Matches(file => file.GitPath == "staging/notes.md"), A<CancellationToken>._))
             .Returns(new LineEndingResolution(
                 finalLineEnding == LineEnding.Lf ? LineEnding.CrLf : LineEnding.Lf, []));
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, "final/notes.md", A<CancellationToken>._))
+        A.CallTo(() => resolver.GetLineEndingAsync(
+                A<RepositoryFile>.That.Matches(file => file.GitPath == "final/notes.md"), A<CancellationToken>._))
             .Returns(new LineEndingResolution(finalLineEnding, []));
         var writer = new TextFileWriter(resolver);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, "staging/notes.md", TextFileContent.FromText("a\nb\n"),
-            "final/notes.md", TestContext.Current.CancellationToken);
+        await writer.WriteAsync(FileIn(tempDirectory, "staging/notes.md"), TextFileContent.FromText("a\nb\n"),
+            FileIn(tempDirectory, "final/notes.md"), TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes("staging", "notes.md")
@@ -256,117 +259,23 @@ public class TextFileWriterTests
             .Should().BeFalse();
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData("/absolute/notes.txt")]
-    [InlineData("../notes.txt")]
-    [InlineData(".")]
-    public async Task WriteAsync_InvalidLineEndingPath_ThrowsArgumentExceptionAndWritesNothing(string lineEndingPath)
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var resolver = FixedLineEnding.CreateResolver(LineEnding.Lf);
-        var writer = new TextFileWriter(resolver);
-
-        // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("a\n"),
-            lineEndingPath, TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName(nameof(lineEndingPath));
-
-        A.CallTo(resolver)
-            .MustNotHaveHappened();
-
-        File.Exists(Path.Combine(tempDirectory.RootPath, FileName))
-            .Should().BeFalse();
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData("/absolute/notes.txt")]
-    [InlineData("../notes.txt")]
-    [InlineData(".")]
-    public async Task WriteAsync_InvalidRelativePath_ThrowsArgumentExceptionAndWritesNothing(string relativePath)
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var resolver = FixedLineEnding.CreateResolver(LineEnding.Lf);
-        var writer = new TextFileWriter(resolver);
-
-        // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, relativePath, TextFileContent.FromText("a\n"),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName(nameof(relativePath));
-
-        A.CallTo(resolver)
-            .MustNotHaveHappened();
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("/absolute/notes.txt")]
-    [InlineData("../notes.txt")]
-    public async Task WriteAsync_InvalidRelativePathAndValidLineEndingPath_ThrowsNamingRelativePathAndWritesNothing(
-        string relativePath)
-    {
-        // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var resolver = FixedLineEnding.CreateResolver(LineEnding.Lf);
-        var writer = new TextFileWriter(resolver);
-
-        // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, relativePath, TextFileContent.FromText("a\n"),
-            "final/notes.txt", TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName(nameof(relativePath));
-
-        A.CallTo(resolver)
-            .MustNotHaveHappened();
-
-        Directory.EnumerateFileSystemEntries(tempDirectory.RootPath)
-            .Should().BeEmpty();
-    }
-
     [Fact]
-    public async Task WriteAsync_InvalidRelativePathAndInvalidLineEndingPath_ThrowsNamingRelativePath()
+    public async Task WriteAsync_NullFile_ThrowsArgumentNullException()
     {
         // Arrange
-        using var tempDirectory = new TempKitDirectory();
-        var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
+        var resolver = FixedLineEnding.CreateResolver(LineEnding.Lf);
+        var writer = new TextFileWriter(resolver);
 
         // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, "../notes.txt", TextFileContent.FromText("a\n"),
-            "/absolute/notes.txt", TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithParameterName("relativePath");
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public async Task WriteAsync_InvalidRepositoryRootPath_ThrowsArgumentException(string? repositoryRootPath)
-    {
-        // Arrange
-        var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
-
-        // Act
-        var act = () => writer.WriteAsync(repositoryRootPath!, FileName, TextFileContent.FromText("a\n"),
+        var act = () => writer.WriteAsync(null!, TextFileContent.FromText("a\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        await act.Should().ThrowAsync<ArgumentException>();
+        (await act.Should().ThrowAsync<ArgumentNullException>())
+            .WithParameterName("file");
+
+        A.CallTo(resolver)
+            .MustNotHaveHappened();
     }
 
     [Fact]
@@ -377,7 +286,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
 
         // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, FileName, null!,
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, FileName), null!,
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -395,7 +304,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
 
         // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("a\n"),
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("a\n"),
             cancellationToken: new CancellationToken(true));
 
         // Assert
@@ -411,12 +320,12 @@ public class TextFileWriterTests
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var resolver = A.Fake<ILineEndingResolver>();
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .ThrowsAsync(new OperationCanceledException());
         var writer = new TextFileWriter(resolver);
 
         // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("a\n"),
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("a\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -428,16 +337,19 @@ public class TextFileWriterTests
 
     [Theory]
     [InlineData("\n", "\r\n")]
-    [InlineData("a\rb\nc", "a\rb\r\nc")]
+    [InlineData("a\rb\nc", "a\r\nb\r\nc")]
     [InlineData("\n\n", "\r\n\r\n")]
-    public async Task WriteAsync_CrLf_JoinsLinesWithCrLfAndKeepsLoneCarriageReturn(string text, string expectedText)
+    [InlineData("a\r", "a\r\n")]
+    [InlineData("a\r\rb", "a\r\n\r\nb")]
+    public async Task WriteAsync_CrLf_JoinsLinesWithCrLfAndTreatsLoneCarriageReturnAsLineEnding(string text,
+        string expectedText)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var writer = FixedLineEnding.CreateWriter(LineEnding.CrLf);
 
         // Act
-        await writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText(text),
+        await writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText(text),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -455,7 +367,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf, firstWarning, secondWarning);
 
         // Act
-        var warnings = await writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("a\n"),
+        var warnings = await writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("a\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -472,7 +384,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
 
         // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("a\n"),
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("a\n"),
             cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -492,7 +404,7 @@ public class TextFileWriterTests
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
 
         // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, $"{FileName}/sub.md",
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, $"{FileName}/sub.md"),
             TextFileContent.FromText("a\n"), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -510,13 +422,13 @@ public class TextFileWriterTests
         tempDirectory.WriteFile("old\n", FileName);
         using var cancellationTokenSource = new CancellationTokenSource();
         var resolver = A.Fake<ILineEndingResolver>();
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .Invokes(() => cancellationTokenSource.Cancel())
             .Returns(new LineEndingResolution(LineEnding.Lf, []));
         var writer = new TextFileWriter(resolver);
 
         // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, FileName, TextFileContent.FromText("new\n"),
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("new\n"),
             cancellationToken: cancellationTokenSource.Token);
 
         // Assert
@@ -533,13 +445,13 @@ public class TextFileWriterTests
         using var tempDirectory = new TempKitDirectory();
         using var cancellationTokenSource = new CancellationTokenSource();
         var resolver = A.Fake<ILineEndingResolver>();
-        A.CallTo(() => resolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .Invokes(() => cancellationTokenSource.Cancel())
             .Returns(new LineEndingResolution(LineEnding.Lf, []));
         var writer = new TextFileWriter(resolver);
 
         // Act
-        var act = () => writer.WriteAsync(tempDirectory.RootPath, "docs/notes.md", TextFileContent.FromText("a\n"),
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, "docs/notes.md"), TextFileContent.FromText("a\n"),
             cancellationToken: cancellationTokenSource.Token);
 
         // Assert
@@ -550,6 +462,23 @@ public class TextFileWriterTests
     }
 
     [Fact]
+    public async Task PrepareAsync_Files_ForwardsThemAndTokenToResolver()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var resolver = FixedLineEnding.CreateResolver(LineEnding.Lf);
+        var writer = new TextFileWriter(resolver);
+        RepositoryFile[] files = [FileIn(tempDirectory, "a.md"), FileIn(tempDirectory, "docs/b.md")];
+
+        // Act
+        await writer.PrepareAsync(files, TestContext.Current.CancellationToken);
+
+        // Assert
+        A.CallTo(() => resolver.PrepareAsync(files, TestContext.Current.CancellationToken))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
     public void Constructor_NullResolver_ThrowsArgumentNullException()
     {
         // Act
@@ -557,5 +486,10 @@ public class TextFileWriterTests
 
         // Assert
         act.Should().Throw<ArgumentNullException>();
+    }
+
+    private static RepositoryFile FileIn(TempKitDirectory tempDirectory, string relativePath)
+    {
+        return RepositoryFile.Resolve(tempDirectory.RootPath, relativePath);
     }
 }

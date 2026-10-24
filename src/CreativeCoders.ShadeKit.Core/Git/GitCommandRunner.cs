@@ -31,7 +31,7 @@ public sealed class GitCommandRunner(IGitExecutableLocator gitExecutableLocator)
 
         if (string.IsNullOrEmpty(gitExecutablePath))
         {
-            throw new GitUnavailableException(arguments,
+            throw new GitNotFoundException(arguments,
                 "git was not found in any absolute directory of the PATH environment variable.");
         }
 

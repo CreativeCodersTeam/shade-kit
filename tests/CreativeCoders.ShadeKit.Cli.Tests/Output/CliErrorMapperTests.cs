@@ -12,6 +12,7 @@ using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
+using CreativeCoders.ShadeKit.Core.Git.Warnings;
 using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
@@ -745,6 +746,23 @@ public class CliErrorMapperTests
         warning.Message
             .Should().Be("The .editorconfig file '/repo/.editorconfig' cannot be read. The .editorconfig files were " +
                          "ignored and the line ending of the operating system was used instead.");
+    }
+
+    [Fact]
+    public void MapWarning_GitAttributesUnavailable_ReturnsWarningNamingRepositoryCommandReasonAndFallback()
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new GitAttributesUnavailableWarning("/repo", "git check-attr",
+            "git exited with the unexpected exit code 128: fatal: detected dubious ownership in repository at '/repo'"));
+
+        // Assert
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.GitAttributesUnavailable);
+
+        warning.Message
+            .Should().Be("git cannot read the line ending settings of the repository '/repo', so the line endings " +
+                         "come from .editorconfig or the operating system. 'git check-attr' failed: git exited with " +
+                         "the unexpected exit code 128: fatal: detected dubious ownership in repository at '/repo'");
     }
 
     [Theory]

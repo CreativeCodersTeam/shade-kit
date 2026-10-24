@@ -100,6 +100,18 @@ public sealed class FeatureStore(
             Status = FeatureStatus.Active
         };
 
+        // The three files are known now, so their git attributes are read at once instead of once per write; the
+        // feature files are prepared with the paths of the feature folder, for which their line endings are
+        // determined.
+        await store
+            .PrepareLineEndingsAsync(
+            [
+                KitStorePaths.GetFeatureFilePath(feature.Id),
+                $"{KitStorePaths.GetFeatureDirPath(feature.Id)}/{KitStorePaths.RequestFileName}",
+                KitStorePaths.CurrentFeatureFilePath
+            ], cancellationToken)
+            .ConfigureAwait(false);
+
         var featureDirWarnings = await CreateFeatureDirAsync(store, feature, identity.OriginalInput, cancellationToken)
             .ConfigureAwait(false);
 

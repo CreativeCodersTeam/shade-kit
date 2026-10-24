@@ -231,9 +231,9 @@ public class TemplatesLockTests
     [InlineData("a\r\nb\r\n", "a\nb\n")]
     [InlineData("a\r\nb\nc", "a\nb\nc")]
     [InlineData("\r\n\r\n", "\n\n")]
-    [InlineData("a\rb\r", "a\rb\r")]
-    [InlineData("a\r\r\nb", "a\r\nb")]
-    public void ComputeHash_ContentWithCarriageReturns_HashesCrLfAsLf(string content, string hashedContent)
+    [InlineData("a\rb\r", "a\nb\n")]
+    [InlineData("a\r\r\nb", "a\n\nb")]
+    public void ComputeHash_ContentWithCarriageReturns_HashesEveryLineEndingAsLf(string content, string hashedContent)
     {
         // Arrange
         var expectedHash = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(hashedContent)));
@@ -260,7 +260,7 @@ public class TemplatesLockTests
     [Theory]
     [InlineData(LineEnding.Lf)]
     [InlineData(LineEnding.CrLf)]
-    public void ComputeHash_ShippedTemplates_EqualsHashOfWrittenBytesWithCrLfCountedAsLf(LineEnding lineEnding)
+    public void ComputeHash_ShippedTemplates_EqualsHashOfWrittenBytesWithLineEndingsCountedAsLf(LineEnding lineEnding)
     {
         // Arrange
         var reader = new ShippedTemplateReader();
@@ -279,7 +279,7 @@ public class TemplatesLockTests
 
             // Assert
             hash
-                .Should().Be(ComputeHashOfBytesWithCrLfAsLf(writtenBytes), shippedTemplate.KitPath);
+                .Should().Be(ComputeHashOfBytesWithLineEndingsAsLf(writtenBytes), shippedTemplate.KitPath);
         }
     }
 
@@ -290,7 +290,7 @@ public class TemplatesLockTests
     [InlineData(new byte[] { 0x0A })]
     [InlineData(new byte[] { 0xEF, 0xBB, 0xBF })]
     [InlineData(new byte[] { })]
-    public async Task ComputeHash_ContentReadFromFile_EqualsHashOfFileBytesWithCrLfCountedAsLf(byte[] fileBytes)
+    public async Task ComputeHash_ContentReadFromFile_EqualsHashOfFileBytesWithLineEndingsCountedAsLf(byte[] fileBytes)
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -302,7 +302,7 @@ public class TemplatesLockTests
 
         // Assert
         hash
-            .Should().Be(ComputeHashOfBytesWithCrLfAsLf(fileBytes));
+            .Should().Be(ComputeHashOfBytesWithLineEndingsAsLf(fileBytes));
     }
 
     [Theory]
@@ -327,10 +327,11 @@ public class TemplatesLockTests
 
     // The algorithm of the lock entries written before the content was held as lines: the SHA-256 hash of the written
     // bytes with every CRLF counted as LF.
-    private static string ComputeHashOfBytesWithCrLfAsLf(byte[] bytes)
+    private static string ComputeHashOfBytesWithLineEndingsAsLf(byte[] bytes)
     {
         var normalized = new List<byte>(bytes.Length);
 
+        // CRLF and a lone CR count as LF, as TextFileContent splits lines at both.
         for (var index = 0; index < bytes.Length; index++)
         {
             if (bytes[index] == 0x0D && index + 1 < bytes.Length && bytes[index + 1] == 0x0A)
@@ -338,7 +339,7 @@ public class TemplatesLockTests
                 continue;
             }
 
-            normalized.Add(bytes[index]);
+            normalized.Add(bytes[index] == 0x0D ? (byte)0x0A : bytes[index]);
         }
 
         return "sha256:" + Convert.ToHexStringLower(SHA256.HashData([.. normalized]));

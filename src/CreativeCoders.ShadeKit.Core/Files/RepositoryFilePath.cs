@@ -1,43 +1,17 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using CreativeCoders.Core;
 
 namespace CreativeCoders.ShadeKit.Core.Files;
 
 /// <summary>
-/// Combines the root directory of a repository with the path of a file relative to it.
+/// Combines a root directory with the path of a file relative to it.
 /// </summary>
 /// <remarks>
 /// A relative path may use forward slashes or the directory separator of the operating system, and it may contain
-/// <c>.</c> and <c>..</c> segments as long as it ends below the repository root.
+/// <c>.</c> and <c>..</c> segments as long as it ends below the root directory.
 /// </remarks>
 internal static class RepositoryFilePath
 {
-    private const string RepositoryRootDescription = "the repository root";
-
-    /// <summary>
-    /// Gets the full path of the specified file and checks that it lies below the repository root.
-    /// </summary>
-    /// <param name="repositoryRootPath">The root directory of the repository.</param>
-    /// <param name="relativePath">The path of the file, relative to <paramref name="repositoryRootPath" />.</param>
-    /// <param name="paramName">
-    /// The name of the caller's parameter for <paramref name="relativePath" />, reported by an
-    /// <see cref="ArgumentException" />; the compiler fills it in.
-    /// </param>
-    /// <returns>The absolute, normalized path of the file.</returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="repositoryRootPath" /> or <paramref name="relativePath" /> is <see langword="null" />, empty,
-    /// or whitespace, or <paramref name="relativePath" /> is rooted or does not name a path below
-    /// <paramref name="repositoryRootPath" />.
-    /// </exception>
-    public static string GetFullPath(string repositoryRootPath, string relativePath,
-        [CallerArgumentExpression(nameof(relativePath))] string paramName = "")
-    {
-        Ensure.IsNotNullOrWhitespace(repositoryRootPath);
-
-        return Resolve(repositoryRootPath, relativePath, RepositoryRootDescription, paramName).FullPath;
-    }
-
     /// <summary>
     /// Gets the full path of the specified file and checks that it lies below the specified root directory, which
     /// the message of an <see cref="ArgumentException" /> names with the specified description.
@@ -59,34 +33,6 @@ internal static class RepositoryFilePath
         string paramName)
     {
         return Resolve(rootPath, relativePath, rootDescription, paramName).FullPath;
-    }
-
-    /// <summary>
-    /// Gets the path of the specified file in the form that <c>git</c> expects for a path relative to the repository
-    /// root.
-    /// </summary>
-    /// <param name="repositoryRootPath">The root directory of the repository.</param>
-    /// <param name="relativePath">The path of the file, relative to <paramref name="repositoryRootPath" />.</param>
-    /// <param name="paramName">
-    /// The name of the caller's parameter for <paramref name="relativePath" />, reported by an
-    /// <see cref="ArgumentException" />; the compiler fills it in.
-    /// </param>
-    /// <returns>
-    /// The normalized path of the file relative to <paramref name="repositoryRootPath" />, with forward slashes as
-    /// separators, for example <c>docs/readme.md</c>.
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="repositoryRootPath" /> or <paramref name="relativePath" /> is <see langword="null" />, empty,
-    /// or whitespace, or <paramref name="relativePath" /> is rooted or does not name a path below
-    /// <paramref name="repositoryRootPath" />.
-    /// </exception>
-    public static string GetGitPath(string repositoryRootPath, string relativePath,
-        [CallerArgumentExpression(nameof(relativePath))] string paramName = "")
-    {
-        Ensure.IsNotNullOrWhitespace(repositoryRootPath);
-
-        return ToForwardSlashes(Resolve(repositoryRootPath, relativePath, RepositoryRootDescription, paramName)
-            .NormalizedRelativePath);
     }
 
     /// <summary>
@@ -116,10 +62,30 @@ internal static class RepositoryFilePath
                || Path.IsPathRooted(normalizedRelativePath);
     }
 
+    /// <summary>
+    /// Gets the full path of the specified file and its normalized path relative to the root directory, and checks
+    /// that it lies below the root directory.
+    /// </summary>
+    /// <param name="rootPath">The root directory.</param>
+    /// <param name="relativePath">The path of the file, relative to <paramref name="rootPath" />.</param>
+    /// <param name="rootDescription">The description of the root directory, for example <c>the repository root</c>.</param>
+    /// <param name="paramName">
+    /// The name of the caller's parameter for <paramref name="relativePath" />, reported by an
+    /// <see cref="ArgumentException" />.
+    /// </param>
+    /// <returns>
+    /// The absolute, normalized path of the file and its path relative to <paramref name="rootPath" />, with the
+    /// directory separator of the operating system.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="rootPath" /> or <paramref name="relativePath" /> is <see langword="null" />, empty, or
+    /// whitespace, or <paramref name="relativePath" /> is rooted or does not name a path below
+    /// <paramref name="rootPath" />.
+    /// </exception>
     [SuppressMessage("Minor Code Smell", "S3236:Caller information arguments should not be provided explicitly",
         Justification = "The caller's parameter name is forwarded on purpose, so an invalid path names the caller's " +
                         "parameter instead of this helper's.")]
-    private static (string FullPath, string NormalizedRelativePath) Resolve(string rootPath, string relativePath,
+    public static (string FullPath, string NormalizedRelativePath) Resolve(string rootPath, string relativePath,
         string rootDescription, string paramName)
     {
         Ensure.IsNotNullOrWhitespace(rootPath);

@@ -689,10 +689,11 @@ public class KitStoreJsonTests
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         var lineEndingResolver = A.Fake<ILineEndingResolver>();
-        A.CallTo(() => lineEndingResolver.GetLineEndingAsync(A<string>._, A<string>._, A<CancellationToken>._))
+        A.CallTo(() => lineEndingResolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
             .Returns(new LineEndingResolution(LineEnding.Lf, []));
-        A.CallTo(() => lineEndingResolver.GetLineEndingAsync(A<string>._,
-                Path.Combine(".shadekit", "final", SampleFileName), A<CancellationToken>._))
+        A.CallTo(() => lineEndingResolver.GetLineEndingAsync(
+                A<RepositoryFile>.That.Matches(file => file.RelativePath == Path.Combine(".shadekit", "final", SampleFileName)),
+                A<CancellationToken>._))
             .Returns(new LineEndingResolution(LineEnding.CrLf, []));
         var kitStore = CreateStore(tempDirectory, textFileWriter: new TextFileWriter(lineEndingResolver));
         var document = new SampleDocument { SchemaVersion = 2, MinEngineVersion = "0.2.0", Title = "Login" };
@@ -1207,6 +1208,70 @@ public class KitStoreJsonTests
 
         // Assert
         await act.Should().ThrowAsync<InvalidKitFileException>();
+    }
+
+    public static TheoryData<byte[]> NonUtf8JsonFiles => new TheoryData<byte[]>(
+        // "Grüße" with a Latin-1 ü, which is not valid UTF-8.
+        [.. """{ "schemaVersion": 2, "minEngineVersion": "0.2.0", "title": "Gr"""u8, 0xFC, .. "ße\" }"u8],
+        // UTF-16 LE with byte order mark.
+        [0xFF, 0xFE, .. System.Text.Encoding.Unicode.GetBytes(StoreTestFormats.SampleV2)]);
+
+    [Theory]
+    [MemberData(nameof(NonUtf8JsonFiles))]
+    public async Task ReadJsonAsync_FileNotUtf8_ThrowsInvalidKitFileExceptionForDisplayPath(byte[] fileBytes)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFileBytes(fileBytes, ".shadekit", SampleFileName);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        var act = () => kitStore.ReadJsonAsync<SampleDocument>(SampleFileName, SampleFormat.Id, FormatAccess.Read,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidKitFileException>())
+            .Which.FilePath.Should().Be(SampleDisplayPath);
+    }
+
+    [Theory]
+    [MemberData(nameof(NonUtf8JsonFiles))]
+    public async Task WriteJsonAsync_ExistingFileNotUtf8_ThrowsInvalidKitFileExceptionAndLeavesFileUnchanged(
+        byte[] fileBytes)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFileBytes(fileBytes, ".shadekit", SampleFileName);
+        var kitStore = CreateStore(tempDirectory);
+
+        // Act
+        var act = () => kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, new SampleDocument(),
+            FormatAccess.Upgrade, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidKitFileException>();
+
+        tempDirectory.ReadFileBytes(".shadekit", SampleFileName)
+            .Should().Equal(fileBytes);
+    }
+
+    [Theory]
+    [MemberData(nameof(NonUtf8JsonFiles))]
+    public async Task WriteJsonAsync_ExistingFileNotUtf8WithReplaceAccess_ReplacesFile(byte[] fileBytes)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFileBytes(fileBytes, ".shadekit", SampleFileName);
+        var kitStore = CreateStore(tempDirectory);
+        var document = new SampleDocument { SchemaVersion = 2, MinEngineVersion = "0.2.0", Title = "Login" };
+
+        // Act
+        await kitStore.WriteJsonAsync(SampleFileName, SampleFormat.Id, document, FormatAccess.Replace,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ReadTitleAsync(kitStore, SampleFileName))
+            .Should().Be("Login");
     }
 
     [Fact]

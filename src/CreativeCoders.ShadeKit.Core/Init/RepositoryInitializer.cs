@@ -92,7 +92,7 @@ public sealed class RepositoryInitializer(
         // Every written file is known now, so the git attributes of all of them are read at once instead of once per
         // write.
         await _lineEndingResolver
-            .PrepareAsync(repositoryRootPath, GetWrittenFilePaths(repositoryFileChanges), cancellationToken)
+            .PrepareAsync(GetWrittenFiles(repositoryRootPath, repositoryFileChanges), cancellationToken)
             .ConfigureAwait(false);
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -116,10 +116,11 @@ public sealed class RepositoryInitializer(
         return result.Build(repositoryRootPath);
     }
 
-    // The paths relative to the repository root of the files that InitializeAsync writes.
-    private static string[] GetWrittenFilePaths(List<(string FileName, PlannedFileChange Change)> repositoryFileChanges)
+    // The files that InitializeAsync writes.
+    private static RepositoryFile[] GetWrittenFiles(string repositoryRootPath,
+        List<(string FileName, PlannedFileChange Change)> repositoryFileChanges)
     {
-        return
+        string[] relativePaths =
         [
             KitStorePaths.GetRepositoryPath(KitStorePaths.ConfigFileName),
             KitStorePaths.GetRepositoryPath(KitStorePaths.GatesFileName),
@@ -127,6 +128,8 @@ public sealed class RepositoryInitializer(
             KitStorePaths.GetRepositoryPath(KitStorePaths.TemplatesLockFileName),
             .. repositoryFileChanges.Select(change => change.FileName)
         ];
+
+        return [.. relativePaths.Select(relativePath => RepositoryFile.Resolve(repositoryRootPath, relativePath))];
     }
 
     private static void DeleteKitRoot(string kitRootPath)
@@ -257,7 +260,8 @@ public sealed class RepositoryInitializer(
         foreach (var (fileName, change) in changes)
         {
             var writeWarnings = await _textFileWriter
-                .WriteAsync(repositoryRootPath, fileName, change.Content, cancellationToken: cancellationToken)
+                .WriteAsync(RepositoryFile.Resolve(repositoryRootPath, fileName), change.Content,
+                    cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
             result.Add(new InitializedFile(fileName, change.Action), writeWarnings);

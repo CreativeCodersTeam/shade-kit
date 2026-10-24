@@ -1,5 +1,6 @@
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Files;
 
@@ -54,33 +55,32 @@ public sealed class LineEndingResolver : ILineEndingResolver
     }
 
     /// <inheritdoc />
-    public async Task<LineEndingResolution> GetLineEndingAsync(string repositoryRootPath, string relativePath,
+    public async Task<LineEndingResolution> GetLineEndingAsync(RepositoryFile file,
         CancellationToken cancellationToken = default)
     {
-        // Validates both arguments before any source is asked.
-        var fullPath = RepositoryFilePath.GetFullPath(repositoryRootPath, relativePath);
+        Ensure.NotNull(file);
 
-        var gitLineEnding = await _gitLineEndingResolver
-            .GetLineEndingAsync(repositoryRootPath, relativePath, cancellationToken)
+        var gitResult = await _gitLineEndingResolver.GetLineEndingAsync(file, cancellationToken)
             .ConfigureAwait(false);
 
-        if (gitLineEnding is not null)
+        if (gitResult.LineEnding is { } gitLineEnding)
         {
-            return new LineEndingResolution(gitLineEnding.Value, []);
+            return new LineEndingResolution(gitLineEnding, []);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var editorConfigResult = _editorConfigLineEndingResolver.GetLineEnding(fullPath);
+        var editorConfigResult = _editorConfigLineEndingResolver.GetLineEnding(file.FullPath);
+
+        KitWarning?[] warnings = [gitResult.Warning, editorConfigResult.Warning];
 
         return new LineEndingResolution(editorConfigResult.LineEnding ?? _operatingSystemLineEnding,
-            editorConfigResult.Warning is null ? [] : [editorConfigResult.Warning]);
+            [.. warnings.OfType<KitWarning>()]);
     }
 
     /// <inheritdoc />
-    public Task PrepareAsync(string repositoryRootPath, IReadOnlyCollection<string> relativePaths,
-        CancellationToken cancellationToken = default)
+    public Task PrepareAsync(IReadOnlyCollection<RepositoryFile> files, CancellationToken cancellationToken = default)
     {
-        return _gitLineEndingResolver.PreloadAttributesAsync(repositoryRootPath, relativePaths, cancellationToken);
+        return _gitLineEndingResolver.PreloadAttributesAsync(files, cancellationToken);
     }
 }

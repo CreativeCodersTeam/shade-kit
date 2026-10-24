@@ -12,14 +12,16 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// <remarks>
 /// Each call uses a new parser, so created or deleted <c>.editorconfig</c> files are noticed. Parsed files are kept
 /// for the lifetime of the instance (one command run) and parsed again only if their write time, size, or Unix
-/// mode changed.
+/// mode changed. A file with a section glob that the parser would expand into more than
+/// <see cref="EditorConfigGlobExpansion.MaxPatternCount" /> patterns is reported as invalid before the parser
+/// expands it.
 /// </remarks>
 public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingResolver
 {
     private readonly Func<EditorConfigParser, string, FileConfiguration> _parse;
 
-    private readonly ConcurrentDictionary<string, (FileStamp Stamp, EditorConfigFile File)> _parsedFiles =
-        new ConcurrentDictionary<string, (FileStamp Stamp, EditorConfigFile File)>(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ParsedFile> _parsedFiles =
+        new ConcurrentDictionary<string, ParsedFile>(StringComparer.Ordinal);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="EditorConfigLineEndingResolver" /> class.
@@ -57,16 +59,30 @@ public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingReso
         }
 
         string? unreadableEditorConfigPath = null;
+        (string Path, string Reason)? tooLargeGlobError = null;
         var readEditorConfigFiles = new List<(string Path, EditorConfigFile File)>();
 
         var parser = new EditorConfigParser(editorConfigPath =>
         {
             try
             {
-                var editorConfigFile = GetEditorConfigFile(editorConfigPath);
-                readEditorConfigFiles.Add((editorConfigPath, editorConfigFile));
+                var parsedFile = GetEditorConfigFile(editorConfigPath);
 
-                return editorConfigFile;
+                // Thrown before the parser expands the glob, so the expansion never takes the memory or the time.
+                // The parser gets an empty file instead, so it never expands the glob, but still reads the other
+                // files; a file that cannot be read is then reported first, as for any other invalid content.
+                if (parsedFile.TooLargeGlob is { } tooLargeGlob)
+                {
+                    tooLargeGlobError ??= (editorConfigPath,
+                        $"The section glob '{tooLargeGlob}' expands into more than " +
+                        $"{EditorConfigGlobExpansion.MaxPatternCount} patterns.");
+
+                    return CreateEmptyEditorConfigFile(editorConfigPath);
+                }
+
+                readEditorConfigFiles.Add((editorConfigPath, parsedFile.File));
+
+                return parsedFile.File;
             }
             catch (Exception exception) when (IsReadException(exception))
             {
@@ -92,12 +108,25 @@ public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingReso
         }
         catch (Exception exception) when (IsInvalidContentException(exception))
         {
-            // As for an unreadable file, none of the .editorconfig files decides.
+            // As for an unreadable file, none of the .editorconfig files decides; a glob that is too large was found
+            // first, while the files were read.
+            if (tooLargeGlobError is { } error)
+            {
+                return new EditorConfigLineEndingResult(null, new EditorConfigInvalidWarning(error.Path, error.Reason));
+            }
+
             var invalidEditorConfigPath = FindInvalidEditorConfigPath(filePath, readEditorConfigFiles);
 
             return new EditorConfigLineEndingResult(null,
                 new EditorConfigInvalidWarning(invalidEditorConfigPath ?? filePath, exception.Message,
                     IsEditorConfigFilePath: invalidEditorConfigPath is not null));
+        }
+
+        // The other files were evaluated without the file with the glob that is too large, so none of them decides.
+        if (tooLargeGlobError is { } tooLargeError)
+        {
+            return new EditorConfigLineEndingResult(null,
+                new EditorConfigInvalidWarning(tooLargeError.Path, tooLargeError.Reason));
         }
 
         var lineEnding = configuration.EndOfLine switch
@@ -112,19 +141,24 @@ public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingReso
 
     // Returns the kept file while its stamp is unchanged; a file that cannot be read is not kept, so it is read again
     // by the next call.
-    private EditorConfigFile GetEditorConfigFile(string editorConfigPath)
+    private ParsedFile GetEditorConfigFile(string editorConfigPath)
     {
         var stamp = FileStamp.Read(editorConfigPath);
 
         if (_parsedFiles.TryGetValue(editorConfigPath, out var parsedFile) && parsedFile.Stamp == stamp)
         {
-            return parsedFile.File;
+            return parsedFile;
         }
 
         var editorConfigFile = EditorConfigFile.Parse(editorConfigPath);
-        _parsedFiles[editorConfigPath] = (stamp, editorConfigFile);
+        var tooLargeGlob = editorConfigFile.Sections
+            .Select(section => section.Glob)
+            .FirstOrDefault(EditorConfigGlobExpansion.IsTooLarge);
 
-        return editorConfigFile;
+        parsedFile = new ParsedFile(stamp, editorConfigFile, tooLargeGlob);
+        _parsedFiles[editorConfigPath] = parsedFile;
+
+        return parsedFile;
     }
 
     // Evaluates the sections of each .editorconfig file that was read on its own and returns the path of the first
@@ -155,18 +189,29 @@ public sealed class EditorConfigLineEndingResolver : IEditorConfigLineEndingReso
     }
 
     // The errors with which the parser fails on content that it reads but cannot evaluate. The parser reads the lines
-    // of a file leniently and ignores lines it does not understand, but it expands the numeric ranges of a section
-    // header ({1..3}) when it matches the header against a path: a number that does not fit into an int or a range
-    // whose length overflows throws OverflowException, a negative list capacity after an overflowing multiplication
-    // of several ranges throws ArgumentOutOfRangeException, and a list capacity above the maximum array length throws
-    // OutOfMemoryException ("Array dimensions exceeded supported range"), for example for [x{1..2147483647}].
-    // OutOfMemoryException is caught only because of this known parser behaviour: the parser asks for the oversized
-    // array before it allocates anything, so the process is not short of memory. OperationCanceledException is never
-    // caught.
+    // of a file leniently and ignores lines it does not understand, but it expands the braces of a section header
+    // ({a,b}, {1..3}) when it matches the header against a path: a number that does not fit into an int throws
+    // OverflowException, and a negative list capacity after an overflowing range throws ArgumentOutOfRangeException.
+    // A file with a header that expands into too many patterns never reaches the parser, so an OutOfMemoryException is a
+    // real lack of memory and is not caught. OperationCanceledException is never caught either.
     private static bool IsInvalidContentException(Exception exception)
     {
-        return exception is OverflowException or ArgumentOutOfRangeException or OutOfMemoryException;
+        return exception is OverflowException or ArgumentOutOfRangeException;
     }
+
+    // An .editorconfig file without sections or properties in the directory of the specified file, which the parser
+    // gets instead of a file with a glob that is too large.
+    private static EditorConfigFile CreateEmptyEditorConfigFile(string editorConfigPath)
+    {
+        using var reader = new StringReader(string.Empty);
+
+        return EditorConfigFile.Parse(reader, Path.GetDirectoryName(editorConfigPath),
+            Path.GetFileName(editorConfigPath));
+    }
+
+    // A parsed .editorconfig file with the stamp it had when it was parsed and its first section glob that is too
+    // large, or null if there is none.
+    private sealed record ParsedFile(FileStamp Stamp, EditorConfigFile File, string? TooLargeGlob);
 
     // What tells a changed .editorconfig file from the kept one: a new content changes the time of last write or the
     // size, and a change of permissions, which can make the file unreadable, changes the Unix file mode.

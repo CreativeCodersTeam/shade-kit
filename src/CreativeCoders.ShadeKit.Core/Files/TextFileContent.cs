@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 
@@ -8,18 +9,24 @@ namespace CreativeCoders.ShadeKit.Core.Files;
 /// </summary>
 /// <remarks>
 /// Holds the lines without line endings, the UTF-8 byte order mark flag, and the final line ending flag; the line
-/// ending is decided by the <see cref="ITextFileWriter" />. Lines are split only at <c>\n</c> and <c>\r\n</c>.
-/// Instances are immutable.
+/// ending is decided by the <see cref="ITextFileWriter" />. Lines are split at <c>\r\n</c>, <c>\n</c>, and a lone
+/// <c>\r</c>, so a file is always written with one line ending; other Unicode line separators stay part of a line.
+/// Instances are immutable; <see cref="Lines" /> cannot be changed through a cast either.
 /// </remarks>
 public sealed class TextFileContent
 {
-    private TextFileContent(IReadOnlyList<string> lines, bool hasUtf8Bom, bool hasFinalLineEnding)
+    private static readonly string[] LineSeparators = ["\r\n", "\r", "\n"];
+
+    private TextFileContent(IEnumerable<string> lines, bool hasUtf8Bom, bool hasFinalLineEnding)
     {
-        Lines = lines;
+        // An immutable copy, so neither the caller's collection nor a cast of Lines can change the content.
+        ImmutableArray<string> lineArray = [.. lines];
+
+        Lines = lineArray;
         HasUtf8Bom = hasUtf8Bom;
 
         // Without lines there is no line that could end with a line ending.
-        HasFinalLineEnding = hasFinalLineEnding && lines.Count > 0;
+        HasFinalLineEnding = hasFinalLineEnding && lineArray.Length > 0;
     }
 
     /// <summary>
@@ -52,8 +59,8 @@ public sealed class TextFileContent
     /// Creates the content of a file from its text.
     /// </summary>
     /// <remarks>
-    /// The text is split into lines at <c>\n</c> and <c>\r\n</c>. The content has no UTF-8 byte order mark, and it has
-    /// a final line ending if the text ends with <c>\n</c>.
+    /// The text is split into lines at <c>\r\n</c>, <c>\n</c>, and a lone <c>\r</c>. The content has no UTF-8 byte
+    /// order mark, and it has a final line ending if the text ends with <c>\n</c> or <c>\r</c>.
     /// </remarks>
     /// <param name="text">The text of the file.</param>
     /// <returns>The content with the lines of <paramref name="text" />.</returns>
@@ -155,7 +162,9 @@ public sealed class TextFileContent
     /// <summary>
     /// Creates the content of a new file that contains only a block of lines.
     /// </summary>
-    /// <param name="block">The lines of the file, separated by <c>\n</c>, without a final line ending.</param>
+    /// <param name="block">
+    /// The lines of the file, separated by <c>\r\n</c>, <c>\n</c>, or <c>\r</c>, without a final line ending.
+    /// </param>
     /// <returns>The lines of <paramref name="block" /> with a final line ending and without byte order mark.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="block" /> is <see langword="null" />.</exception>
     internal static TextFileContent CreateNew(string block)
@@ -173,7 +182,9 @@ public sealed class TextFileContent
     /// of the file is already empty. The result always has a final line ending, so a missing one is added. The byte
     /// order mark is kept.
     /// </remarks>
-    /// <param name="block">The lines to add, separated by <c>\n</c>, without a final line ending.</param>
+    /// <param name="block">
+    /// The lines to add, separated by <c>\r\n</c>, <c>\n</c>, or <c>\r</c>, without a final line ending.
+    /// </param>
     /// <returns>The content with the lines of the file followed by the lines of <paramref name="block" />.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="block" /> is <see langword="null" />.</exception>
     internal TextFileContent AppendBlock(string block)
@@ -201,7 +212,9 @@ public sealed class TextFileContent
     /// </remarks>
     /// <param name="firstLineIndex">The zero-based index of the first line to replace.</param>
     /// <param name="lastLineIndex">The zero-based index of the last line to replace.</param>
-    /// <param name="block">The replacement lines, separated by <c>\n</c>, without a final line ending.</param>
+    /// <param name="block">
+    /// The replacement lines, separated by <c>\r\n</c>, <c>\n</c>, or <c>\r</c>, without a final line ending.
+    /// </param>
     /// <returns>The content with the lines from <paramref name="firstLineIndex" /> to
     /// <paramref name="lastLineIndex" /> replaced by the lines of <paramref name="block" />.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="block" /> is <see langword="null" />.</exception>
@@ -269,29 +282,23 @@ public sealed class TextFileContent
         }
 
         var lines = SplitBlock(text);
-        var hasFinalLineEnding = text[^1] == '\n';
+        var hasFinalLineEnding = text[^1] is '\n' or '\r';
 
         // A final line ending does not start another line, so the empty text after it is no line.
         return new TextFileContent(hasFinalLineEnding ? lines[..^1] : lines, hasUtf8Bom, hasFinalLineEnding);
     }
 
     /// <summary>
-    /// Splits text into lines at <c>\n</c> and <c>\r\n</c>, so that text that ends with a line ending has an empty
-    /// last line.
+    /// Splits text into lines at <c>\r\n</c>, <c>\n</c>, and a lone <c>\r</c>, so that text that ends with a line
+    /// ending has an empty last line.
     /// </summary>
+    /// <remarks>
+    /// A lone <c>\r</c>, for example from a file with classic Mac line endings, ends a line as well, so no
+    /// <c>\r</c> is kept inside a line and the writer writes the whole file with one line ending.
+    /// </remarks>
     private static string[] SplitBlock(string text)
     {
-        var lines = text.Split('\n');
-
-        for (var index = 0; index < lines.Length - 1; index++)
-        {
-            // Only the \r directly before a \n belongs to the line ending; a lone \r stays part of the line.
-            if (lines[index].EndsWith('\r'))
-            {
-                lines[index] = lines[index][..^1];
-            }
-        }
-
-        return lines;
+        // \r\n comes first, so it is one line ending and not a \r followed by a \n.
+        return text.Split(LineSeparators, StringSplitOptions.None);
     }
 }
