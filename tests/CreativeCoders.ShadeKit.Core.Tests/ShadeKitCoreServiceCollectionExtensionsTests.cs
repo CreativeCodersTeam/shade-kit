@@ -372,7 +372,8 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     {
         // Arrange
         var existingRunner = A.Fake<IGitCommandRunner>();
-        A.CallTo(() => existingRunner.RunAsync("/repo", A<IReadOnlyList<string>>._, A<CancellationToken>._))
+        A.CallTo(() => existingRunner.RunAsync(Path.GetFullPath("/repo"), A<IReadOnlyList<string>>._,
+                A<CancellationToken>._))
             .Returns(new GitCommandResult(0, "readme.md: eol: crlf\n", ""));
 
         var services = new ServiceCollection();
