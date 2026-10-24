@@ -9,7 +9,7 @@ description: SHADE kit phase skill for `new`. Creates a feature with a workflow 
 
 ## Purpose
 
-Creates the feature folder (`feature.json`, `request.md`) so the work has lasting state. `new` is the first phase of every profile; `shade-kit feature new` sets it to `in-progress`, so there is no gate before it.
+Creates the feature folder (`feature.json`, `request.md`) so the work has lasting state. `new` is the first phase of every profile; `shade-kit feature new` sets it to `in-progress` (once package 04 exists; until then it writes no phase fields), so there is no gate before it.
 
 | Input | Output |
 |---|---|

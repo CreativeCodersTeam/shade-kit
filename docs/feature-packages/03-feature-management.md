@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (`feature drop` confirmation, `status` in `feature current`, `feature list` implemented), 2026-10-21 (implementation state; implementation clarification of 2026-10-20; code review rework: `git` only from absolute `PATH` entries, exit codes 2 and 130, rules for file sources and titles, atomic `new` and `drop`, folder name as id, unusable override, `overrideAffected`, Ctrl+C, warning codes; second code review: exit code 35 `feature-io-failed` for a feature folder that cannot be created or renamed, execute bit for `git` on Unix), 2026-10-22 (code review verification: exact folder name match, tracker prefix validation, heading detection, override check through the format layer, shared display path, concurrent `drop` as open point), and 2026-10-23 (rework of file content handling: line endings of `request.md` and the JSON files, `editorconfig-unreadable` and `editorconfig-invalid` warnings). Implemented except the phase fields and the approval history (package 04; FP03-AC11 "`done` after `phase complete`" waits for it) and trackers beyond GitHub (**Open**). |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (`feature drop` confirmation, `status` in `feature current`, `feature list` implemented), 2026-10-21 (implementation state; implementation clarification of 2026-10-20; code review rework: `git` only from absolute `PATH` entries, exit codes 2 and 130, rules for file sources and titles, atomic `new` and `drop`, folder name as id, unusable override, `overrideAffected`, Ctrl+C, warning codes; second code review: exit code 35 `feature-io-failed` for a feature folder that cannot be created or renamed, execute bit for `git` on Unix), 2026-10-22 (code review verification: exact folder name match, tracker prefix validation, heading detection, override check through the format layer, shared display path, concurrent `drop` as open point), 2026-10-23 (rework of file content handling: line endings of `request.md` and the JSON files, `editorconfig-unreadable` and `editorconfig-invalid` warnings), and 2026-10-24 (documentation check: git access for line endings, write warnings in the warnings table, `request.md` template that is not UTF-8 text, reused code 14). Implemented except the phase fields and the approval history (package 04; FP03-AC11 "`done` after `phase complete`" waits for it) and trackers beyond GitHub (**Open**). |
 | Source | Concept §3.1, §3.2, §4.1–4.3, §5.1 (`new`, `drop`), §11.4 |
 | Depends on | 01, 02 |
 | Enables | 04 and every phase package |
@@ -63,7 +63,7 @@ Several developers can create features in parallel on their own branches without
 
 - Size: at most `FeatureIdFactory.MaxSourceFileSize`, 1 MiB (1,048,576 bytes), counted on the raw bytes including a UTF-8 byte order mark. The file is read through a stream, at most the limit plus one byte, without trusting the reported length, so a larger file or an endless device such as `/dev/zero` is refused without being read completely. `/dev/null` is an empty file source (title `null`).
 - Read errors: a file that cannot be opened or read (`IOException`, `UnauthorizedAccessException`, for example missing permissions, a lock, a symbolic link whose target is missing, a link loop, or a socket) stops with "The file cannot be read: …".
-- Encoding: UTF-8 with or without byte order mark is accepted. A UTF-16 or UTF-32 byte order mark, a NUL byte (UTF-16 or UTF-32 without byte order mark, or a binary file), or bytes that are not valid UTF-8 stop the command. The detection is shared with package 02 (`Files/TextFileEncoding`, also used by `TextFileContent`, whose behaviour is unchanged).
+- Encoding: UTF-8 with or without byte order mark is accepted. A UTF-16 or UTF-32 byte order mark, a NUL byte (UTF-16 or UTF-32 without byte order mark, or a binary file), or bytes that are not valid UTF-8 stop the command. The detection is shared with package 02 (`Files/TextFileEncoding`, also used by `TextFileContent`, package 02).
 - Residual risk: a FIFO (named pipe) is not detected. Opening a FIFO that no process writes to blocks, so `feature new` waits until a writer opens it.
 
 ### Feature folder
@@ -125,7 +125,7 @@ In `current`, `set`, and `new`, a format problem of any other file, for example 
 
 **Decided** on 2026-10-20 (implementation clarification), replacing "filled with the original input" of this package and "the agent fills `request.md`" of package 09. **Implemented** (`FeatureRequestTemplate`).
 
-- The engine reads the repository template `.shadekit/templates/request.md`; if it is missing, it uses the shipped template (`request.template.md`, package 02). A directory at that path does not count as a missing template: `new` stops with exit code 14 (`path-not-a-file`, package 02) before the feature folder appears, so a customised template is never ignored without notice. **Decided** on 2026-10-24 (code review of the branch, finding 5), replacing "a directory counts as a missing file". **Implemented** (`KitStore.ReadFileAsync`, `ReadFileAsync_PathIsDirectory_ThrowsPathNotAFileException`, `CreateAsync_RequestTemplateIsDirectory_ThrowsPathNotAFileExceptionAndCreatesNoFeature`).
+- The engine reads the repository template `.shadekit/templates/request.md`; if it is missing, it uses the shipped template (`request.template.md`, package 02). A directory at that path does not count as a missing template: `new` stops with exit code 14 (`path-not-a-file`, package 02) before the feature folder appears, so a customised template is never ignored without notice. **Decided** on 2026-10-24 (code review of the branch, finding 5), replacing "a directory counts as a missing file". A repository template that is not UTF-8 text makes it an invalid kit file: `new` stops with exit code 22 (`invalid-file`) before the feature folder appears. **Implemented** (`KitStore.ReadFileAsync`, `ReadFileAsync_PathIsDirectory_ThrowsPathNotAFileException`, `CreateAsync_RequestTemplateIsDirectory_ThrowsPathNotAFileExceptionAndCreatesNoFeature`).
 - It replaces exactly these placeholders, every occurrence, in one pass, so a value that contains a placeholder is never replaced again:
 
   | Placeholder | Value |
@@ -198,7 +198,8 @@ If 1 and 2 both give a feature and they differ, the branch wins and the command 
 - The executable is resolved only from absolute `PATH` entries; empty and relative entries are skipped, and the first entry that contains the file wins. On Unix the file must also have at least one execute bit (owner, group, or others), like in the `PATH` search of a shell; a file without one is skipped and the next entry is checked (**Decided** on 2026-10-21, second code review, finding N02; before, a non-executable `git` in an earlier entry stopped the command with exit code 16). Windows: separator `;`, file `git.exe`, double-quoted entries supported; Unix: separator `:`, file `git`. `PATHEXT` is not used, so a `git.cmd` shim is not found. `GitCommandRunner` starts the resolved absolute path and refuses a relative one. If no entry contains a usable `git`, the command stops with exit code 16. **Decided** on 2026-10-21 (code review rework, finding F01): starting `git` by its bare name let Windows search the current directory, usually the repository, before `PATH`, so a `git.exe` committed to a cloned repository would have run.
 - Branch (`current`, `set`): `git symbolic-ref --short -q HEAD`; exit code 1 with empty output means a detached HEAD.
 - Identity (`new`): `git config user.name` and `git config user.email`; exit code 1 means not set (exit code 36).
-- If `git` cannot be started or fails unexpectedly, the command stops with exit code 16 (`git-unavailable`).
+- Line endings (`new`, `set`, for every file they write): `git check-attr eol text crlf -- <paths>` (at most 100 paths per call) and `git config core.autocrlf` / `git config core.eol` (once per run); rules in package 02, [`.gitignore`](02-repository-initialisation.md#gitignore). If `git` is missing, the line ending is left to `.editorconfig` and the operating system without a warning; if it fails, with the warning `git-attributes-unavailable`. Neither stops the command.
+- If `git` cannot be started or fails unexpectedly while the branch or the identity is read, the command stops with exit code 16 (`git-unavailable`).
 - `list`, `show`, and `drop` do not call git.
 
 ### Branches
@@ -207,7 +208,7 @@ The engine does not create or switch branches in v1. `feature new` returns the s
 
 ### Output
 
-**Decided** on 2026-10-20 (implementation clarification). **Implemented** (`Feature<X>CommandData`, `FeatureCommandOutput`).
+**Decided** on 2026-10-20 (implementation clarification). **Implemented** (`Feature<X>CommandData`).
 
 - `--json`: one envelope (package 01). Paths are relative to the repository root with `/` as separator; `null` values are written. `data` per command:
 
@@ -267,7 +268,7 @@ Exit codes owned by this package. **Decided** on 2026-10-20 (implementation clar
 | 40 | `unknown-profile` | `new`: the profile from `--profile` or `defaultProfile` is not `feature`, `bugfix`, or `quick` (`UnknownProfileException`). In package 04's range, because profiles belong to it; this package owns the check until 04 exists. | None |
 | 130 | `canceled` | Every command: the run was canceled with Ctrl+C. The message is `The command was canceled.`, without a stack trace. 128 + SIGINT, outside the area ranges like 2 (package 01). **Decided** on 2026-10-21 (code review rework). **Implemented** (`CliErrorMapper.MapCancellation`, `ICliCancellation` / `ConsoleCancellation`). | `new` and `init` (package 02) remove what they created in this run (best effort) |
 
-Reused codes: 10 (`kit-root-not-found`), 12 (`not-a-git-repository`), and 15 (`kit-root-not-a-directory`) when the store cannot be opened; 20 (`format-too-new`), 21 (`upgrade-needed`), and 22 (`invalid-file`) for kit files, following package 01. Any other failure is not mapped and ends with exit code 255 (`host-error`), for example an IO error while `drop` deletes the hidden folder after the rename (the override is still cleared), an IO error while `new` writes `feature.json` or `request.md` into its staging folder, a file (not a folder) at `features/<id>` during `new`, or an option class the parser cannot create (a defect of the CLI).
+Reused codes: 10 (`kit-root-not-found`), 12 (`not-a-git-repository`), and 15 (`kit-root-not-a-directory`) when the store cannot be opened; 14 (`path-not-a-file`) for a directory at the `request.md` template; 20 (`format-too-new`), 21 (`upgrade-needed`), and 22 (`invalid-file`) for kit files, following package 01. Any other failure is not mapped and ends with exit code 255 (`host-error`), for example an IO error while `drop` deletes the hidden folder after the rename (the override is still cleared), an IO error while `new` writes `feature.json` or `request.md` into its staging folder, a file (not a folder) at `features/<id>` during `new`, or an option class the parser cannot create (a defect of the CLI).
 
 ### Warnings
 
@@ -281,6 +282,9 @@ Reused codes: 10 (`kit-root-not-found`), 12 (`not-a-git-repository`), and 15 (`k
 | `feature-file-missing` | `feature list` found a feature folder without `feature.json`; the folder is skipped. |
 | `feature-folder-invalid` | `feature list` found a folder whose name is not a valid id; the folder is skipped. |
 | `feature-id-mismatch` | `feature list`, `show`, or `current`: the `id` in `feature.json` differs from the folder name; the folder name is used and the file is left unchanged. |
+| `editorconfig-unreadable` | `feature new` or `set`: an `.editorconfig` file cannot be read while a file is written; the line ending comes from the operating system ([package 02](02-repository-initialisation.md#output)). |
+| `editorconfig-invalid` | `feature new` or `set`: an `.editorconfig` file cannot be evaluated because of its content while a file is written; the line ending comes from the operating system ([package 02](02-repository-initialisation.md#output)). |
+| `git-attributes-unavailable` | `feature new` or `set`: `git` is installed but cannot read the line ending settings of the repository while a file is written; the line ending comes from `.editorconfig` or the operating system ([package 02](02-repository-initialisation.md#output)). |
 
 ### Store additions
 
@@ -304,7 +308,7 @@ The implementation on 2026-10-21 changed these statements of the earlier draft. 
 
 ### Review
 
-The implementation was reviewed on 2026-10-21 ([review report](../reviews/2026-10-21-feature-03-feature-management-uncommitted.md)): 1 Major, 10 Minor, 2 Suggestion, and 6 Nitpick findings (F01–F19). Every finding except F03 is fixed in the code review rework of 2026-10-21:
+The implementation was reviewed on 2026-10-21: 1 Major, 10 Minor, 2 Suggestion, and 6 Nitpick findings (F01–F19). Every finding except F03 is fixed in the code review rework of 2026-10-21:
 
 - F01 (Major): `git` is resolved only from absolute `PATH` entries ([Git access](#git-access)).
 - F02: `GitExecutableLocatorTests` and `GitCommandRunnerTests` cover the executable lookup and the refusal of a relative path without starting a process; the process run itself stays untested ([open points](#open-points)).
@@ -327,7 +331,7 @@ F03 (the standard output and error read tasks of `GitCommandRunner` are not obse
 
 Exit code 130 (`canceled`) for a canceled run was set in the rework and confirmed by the user on 2026-10-21, together with the other decisions of the rework (override write failing after the move in `new` moves the feature back and deletes it; a failing delete after the rename in `drop` still clears the override; `set` and `new` replace an unusable override without a warning; a file at `features/<id>` stays exit code 255; an option class the parser cannot create stays 255).
 
-The rework was reviewed a second time on 2026-10-21 ([second review report](../reviews/2026-10-21-feature-03-feature-management-uncommitted-2.md)): 0 Critical, 0 Major, 2 Minor, 1 Suggestion, and 4 Nitpick findings (N01–N07). It found F01, F02 (within the decided scope), and F04–F19 resolved; F03 stays accepted. The user decided on 2026-10-21:
+The rework was reviewed a second time on 2026-10-21: 0 Critical, 0 Major, 2 Minor, 1 Suggestion, and 4 Nitpick findings (N01–N07). It found F01, F02 (within the decided scope), and F04–F19 resolved; F03 stays accepted. The user decided on 2026-10-21:
 
 - N01 (Minor), fixed: a feature folder that `new` cannot create or move into place, or that `drop` cannot rename, ends with exit code 35 (`feature-io-failed`) instead of 255 ([Errors](#errors)). Without a retry on Windows.
 - N02 (Minor), fixed: on Unix, `git` is accepted only with an execute bit; otherwise the next `PATH` entry is checked ([Git access](#git-access)).
@@ -335,7 +339,7 @@ The rework was reviewed a second time on 2026-10-21 ([second review report](../r
 
 After this second rework, the build has 0 warnings and `dotnet test` runs 2029 tests: 2028 passed, 1 skipped (a Windows-only test), 0 failed. The user waived a third review run on 2026-10-21.
 
-The branch was reviewed against `main` on 2026-10-22: a `/code-review` reported 10 findings, which were verified in [the verification report](../reviews/2026-10-22-feature-03-feature-management-branch-verification.md). After the verification, 3 are Minor, 1 a Suggestion, and 4 Nitpicks; finding 9 is true but should not be acted on, and finding 1 was refuted: Spectre.Console already treats a redirected standard output as non-interactive, so `drop` does not ask. The user decided on 2026-10-22:
+The branch was reviewed against `main` on 2026-10-22: a `/code-review` reported 10 findings, which were verified in a verification report. After the verification, 3 are Minor, 1 a Suggestion, and 4 Nitpicks; finding 9 is true but should not be acted on, and finding 1 was refuted: Spectre.Console already treats a redirected standard output as non-interactive, so `drop` does not ask. The user decided on 2026-10-22:
 
 - Finding 3 (Minor), fixed: `set`, `show`, `drop`, the existence check of `new`, and the branch and override lookup match the folder name exactly ([Feature ids](#feature-ids)).
 - Finding 2 (Minor), fixed: every id prefix in `trackers` is validated when `config.json` is read; a bad prefix makes the file invalid (exit code 22) ([Feature ids](#feature-ids); package 02, [`config.json`](02-repository-initialisation.md#configjson-v1)).

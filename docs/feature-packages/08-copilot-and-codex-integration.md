@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14 |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`) and 2026-10-24 (documentation check: research note instead of an ADR in `docs/adr/`) |
 | Source | Concept §1 (Success, Constraint), §2 (Agents), §3.4, §10 open question 5, [concept §9](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 02, 06, 07 |
 | Enables | Phase packages 09–17 are built and accepted on all three agents |
@@ -35,11 +35,11 @@ Before any integration work, check for GitHub Copilot and OpenAI Codex CLI (**Un
 |---|---|
 | Can it load the `SKILL.md` format and the plugin layout unchanged? | Decides whether one skill source serves all agents. |
 | Does it have a plugin mechanism, and how is it installed at user level? | Decides between plugin install and writing to the user directory. **Decided** fallback (concept §3.1): user directory. |
-| Does it support subagents, and can they run in parallel? | The research skill (package 06) runs one subagent per focus; without subagents it runs the focuses one after another in the main session. The independent review in `implement` (package 13) runs in a subagent; without one, the fallback (for example a fresh session) has to be decided in the ADR. |
+| Does it support subagents, and can they run in parallel? | The research skill (package 06) runs one subagent per focus; without subagents it runs the focuses one after another in the main session. The independent review in `implement` (package 13) runs in a subagent; without one, the fallback (for example a fresh session) has to be decided in the research note. |
 | Does it have a structured question tool? | The interview skill (package 06) falls back to plain questions. |
 | Which instruction file does it read (`AGENTS.md`, `.github/copilot-instructions.md`, other)? | Decides which files package 02 writes the managed section into. |
 
-The result is an ADR in `docs/adr/` with a table per agent: supported, supported with a different format, not supported, and the chosen handling. For each "not supported", it states what is lost (concept §1 constraint).
+The result is a research note `research/shade-kit-agent-compatibility.md` with a table per agent: supported, supported with a different format, not supported, and the chosen handling. For each "not supported", it states what is lost (concept §1 constraint). Its decisions are taken over into the concept.
 
 ### Step 2: install and update
 
@@ -49,7 +49,7 @@ The result is an ADR in `docs/adr/` with a table per agent: supported, supported
 
 ### Step 3: degraded behaviour
 
-Where a capability is missing, the skill keeps its function and changes only how it runs, for example sequential research instead of parallel subagents. If a function would be lost, the ADR names it and the human decides whether it is acceptable for v1.
+Where a capability is missing, the skill keeps its function and changes only how it runs, for example sequential research instead of parallel subagents. If a function would be lost, the research note names it and the human decides whether it is acceptable for v1.
 
 ### Instruction file
 
@@ -57,16 +57,16 @@ If Copilot does not read `AGENTS.md`, package 02's `init` also writes the manage
 
 ### Rule for later packages
 
-From this package on, every phase package (09–17) counts as done only when its acceptance criteria pass on all three agents, with the degraded behaviour from the ADR where it applies. **Proposed.**
+From this package on, every phase package (09–17) counts as done only when its acceptance criteria pass on all three agents, with the degraded behaviour from the research note where it applies. **Proposed.**
 
 ## Acceptance criteria
 
-- **FP08-AC1** An ADR answers every research question for both agents, with sources.
+- **FP08-AC1** The research note answers every research question for both agents, with sources.
 - **FP08-AC2** After `integrations install --agent copilot`, a Copilot session can load `shade-kit-next-phase` and run the version handshake.
 - **FP08-AC3** After `integrations install --agent codex`, a Codex CLI session can load `shade-kit-next-phase` and run the version handshake.
 - **FP08-AC4** The kit repository holds one source per skill; agent-specific differences are produced at install time.
 - **FP08-AC5** The research skill (package 06) produces the same `researches.md` structure on every agent, also where it runs sequentially.
-- **FP08-AC6** `init` writes the managed section into every instruction file the ADR names.
+- **FP08-AC6** `init` writes the managed section into every instruction file the research note names.
 
 ## Open points
 

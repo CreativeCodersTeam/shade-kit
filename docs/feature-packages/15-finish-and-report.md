@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (report is optional) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (report is optional) and 2026-10-24 (documentation check: phases and approval history of `feature show` come from package 04) |
 | Source | Concept §5.1 (`finish`), §5.2 (DoD), §6 |
 | Depends on | 03, 04, 05, 06, 14 |
 | Enables | End-to-end `feature` profile; 16 and 17 reuse it |
@@ -30,7 +30,7 @@ A finished feature is closed with a recorded state, and on request leaves a sing
 ### Run
 
 1. Decide whether a report is written. The `phase start finish` result contains the `report` setting from `config.json`: `always` writes it, `never` skips it, `ask` (default) asks the human. **Decided** on 2026-10-18 (findings clarification): the report is optional.
-2. If a report is written: the report skill (package 06) reads the feature state with `shade-kit feature show <id> --json` (package 03: profile, phases, approval history) and the artifacts the profile produced (`spec.md`, `tasks.md`, `review.md`, `verification.md`, `playbook.md`, the filled `checks/definition-of-done.md`, and in `bugfix` `diagnosis.md`), writes `report.md`, and shows its summary to the human.
+2. If a report is written: the report skill (package 06) reads the feature state with `shade-kit feature show <id> --json` (package 03: profile, source, creation; package 04: phases, approval history) and the artifacts the profile produced (`spec.md`, `tasks.md`, `review.md`, `verification.md`, `playbook.md`, the filled `checks/definition-of-done.md`, and in `bugfix` `diagnosis.md`), writes `report.md`, and shows its summary to the human.
 3. Call `shade-kit phase complete`. The feature is `done`, with or without a report.
 
 ### `report.md`

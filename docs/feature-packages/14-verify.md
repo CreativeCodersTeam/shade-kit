@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (commands from `plan.md`, coverage matrix) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (commands from `plan.md`, coverage matrix) and 2026-10-24 (documentation check: `coverageThreshold` implemented, its value open) |
 | Source | Concept §5.1 (`verify`), §5.2 (DoD), §6 |
 | Depends on | 06, 12, 13 |
 | Enables | 15 (DoD gate and report) |
@@ -39,7 +39,7 @@ A developer or user works through `playbook.md` and checks the items off. The ag
 
 ### Coverage
 
-The coverage value is measured and recorded. The threshold it must reach is **Open**: the concept names coverage as a check but sets no value. Proposal: an optional `coverageThreshold` in `config.json`; without it, `verify` records the value and the DoD item only requires that coverage was measured.
+The coverage value is measured and recorded. The threshold it must reach is the optional `coverageThreshold` in `config.json` (package 02, **Implemented** as a number); without it, `verify` records the value and the DoD item only requires that coverage was measured. Its value and unit are **Open**: the concept names coverage as a check but sets no value.
 
 ### `bugfix`
 

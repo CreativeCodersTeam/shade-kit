@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14 |
+| Status | Draft, 2026-10-14, updated 2026-10-24 (documentation check: line endings of the instruction section follow package 02; staged multi-file write as open point) |
 | Source | Concept §2 (Lifecycle), §3.1 (`upgrade`), [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.2, §9.3, §9.5) |
 | Depends on | 01, 02, 05, 08 |
 | Enables | Kit releases that change a file format or a template, without stranding existing repositories |
@@ -62,11 +62,11 @@ For each template the running kit version ships (**Decided**, concept §9.5):
 
 ### Instruction section
 
-The managed section in `CLAUDE.md`, `AGENTS.md`, and any further instruction file from package 08 is replaced between its markers. Content outside the markers is unchanged. A file whose markers were removed is reported, not changed. **Proposed.**
+The managed section in `CLAUDE.md`, `AGENTS.md`, and any further instruction file from package 08 is replaced between its markers. Every line outside the markers is kept; a changed file is written as a whole with the line ending decided at write time (package 02, [Managed instruction section](02-repository-initialisation.md#managed-instruction-section)), so its other lines are normalised too. A file whose section is already identical is not written. A file whose markers were removed is reported, not changed. **Proposed.**
 
 ### All or nothing
 
-Every changed file is first written to a temporary file; only when all are written are they renamed into place. If anything fails, no file in `.shadekit/` or in the instruction files has changed. **Decided** (for `.shadekit/`, concept §9.3), **Proposed** (extended to the instruction files).
+Every changed file is first written to a temporary file; only when all are written are they renamed into place. If anything fails, no file in `.shadekit/` or in the instruction files has changed. **Decided** (for `.shadekit/`, concept §9.3), **Proposed** (extended to the instruction files). Every file is still written through `ITextFileWriter` with the line ending of its final path (package 02); the writer has no staged multi-file write yet, so this package adds one (**Open**).
 
 ### Output
 
@@ -80,9 +80,9 @@ A summary per file: migrated from version x to y, template replaced, `.new` writ
 - **FP18-AC4** An unchanged template is replaced; a changed template stays and gets a `<name>.new` next to it; the diff is shown.
 - **FP18-AC5** If one file fails to migrate, no file is changed.
 - **FP18-AC6** `--dry-run` writes nothing and reports the same actions as a real run.
-- **FP18-AC7** The managed section is replaced, and content outside the markers is byte-for-byte unchanged.
+- **FP18-AC7** The managed section is replaced, and every line outside the markers is unchanged (line endings follow package 02).
 - **FP18-AC8** Every migration step that exists has a test that migrates a fixture from the previous version (concept §9 consequence).
 
 ## Open points
 
-- None.
+- A staged write of several files (temporary file, then rename) through `ITextFileWriter` / `IKitStore`; the line ending is decided for the final path, as `IKitStore.CreateDirectoryWriter` does for `feature new` (package 03). **Open.**

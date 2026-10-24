@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-21 (package 03 implemented: the engine pre-fills `request.md`) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`), 2026-10-21 (package 03 implemented: the engine pre-fills `request.md`), and 2026-10-24 (documentation check: line endings in FP09-AC4) |
 | Source | Concept §5.1 (`discuss`, `new`), §5.4, §10 open question 2 |
 | Depends on | 03, 04, 06 |
 | Enables | 10 (`refine`), 16 (`diagnose`), 17 (`quick`) |
@@ -61,7 +61,7 @@ Runs when no feature exists for the work yet. `shade-kit-next-phase` (package 06
 - **FP09-AC1** `discuss` without a current feature writes its notes to `.shadekit/discussions/` and creates no feature.
 - **FP09-AC2** `discuss` with a current feature writes its notes into the feature's `discussions/` folder and leaves `feature.json` unchanged.
 - **FP09-AC3** `new` with an issue URL creates an issue-based id and puts the issue's title and body unchanged into `request.md`.
-- **FP09-AC4** `new` with a Markdown file or discussion notes copies their content unchanged into `request.md`.
+- **FP09-AC4** `new` with a Markdown file or discussion notes copies their content into `request.md`, unchanged except for the line endings, which follow package 03.
 - **FP09-AC5** `new` creates a branch only after the human agrees.
 - **FP09-AC6** After `new`, `shade-kit-next-phase` offers the next phase of the feature's profile.
 

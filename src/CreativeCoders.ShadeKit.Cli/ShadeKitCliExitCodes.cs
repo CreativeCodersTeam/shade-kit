@@ -37,9 +37,9 @@ public static class ShadeKitCliExitCodes
     public const int KitAlreadyInitialized = 13;
 
     /// <summary>
-    /// Represents the exit code returned when a path at which a command must write a file, such as
-    /// <c>.gitignore</c>, <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root, is a directory. The error code
-    /// is <see cref="ShadeKitCliErrorCodes.PathNotAFile" />.
+    /// Represents the exit code returned when a path at which a command needs a file, such as <c>.gitignore</c>,
+    /// <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root, or the repository template of <c>request.md</c>, is
+    /// a directory. The error code is <see cref="ShadeKitCliErrorCodes.PathNotAFile" />.
     /// </summary>
     public const int PathNotAFile = 14;
 

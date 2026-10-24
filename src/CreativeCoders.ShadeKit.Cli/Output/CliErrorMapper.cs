@@ -83,7 +83,7 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 "the file to UTF-8, then run the command again."),
 
             PathNotAFileException e => CliError.Create(ShadeKitCliExitCodes.PathNotAFile,
-                $"'{e.Path}' is a directory, but shade-kit must write a file at this path. Move or remove the " +
+                $"'{e.Path}' is a directory, but shade-kit needs a file at this path. Move or remove the " +
                 "directory, then run the command again."),
 
             GitUnavailableException e => CliError.Create(ShadeKitCliExitCodes.GitUnavailable,

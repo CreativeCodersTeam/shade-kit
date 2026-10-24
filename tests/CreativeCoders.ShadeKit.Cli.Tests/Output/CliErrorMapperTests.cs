@@ -216,7 +216,7 @@ public class CliErrorMapperTests
         // Assert
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.PathNotAFile, ShadeKitCliErrorCodes.PathNotAFile,
-                "'/repo/CLAUDE.md' is a directory, but shade-kit must write a file at this path. Move or remove " +
+                "'/repo/CLAUDE.md' is a directory, but shade-kit needs a file at this path. Move or remove " +
                 "the directory, then run the command again."));
     }
 
