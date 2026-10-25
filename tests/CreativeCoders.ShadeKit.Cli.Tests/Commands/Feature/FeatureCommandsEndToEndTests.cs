@@ -6,6 +6,8 @@ using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Trackers;
+using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,7 +16,8 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Feature;
 
 /// <summary>
 /// Runs the <c>shade-kit feature</c> commands through <see cref="Program.RunAsync(string[], TextWriter, TextWriter, Action{IServiceCollection})" />
-/// against a real temporary repository; git is answered by a fake <see cref="IGitCommandRunner" />.
+/// against a real temporary repository; git is answered by a fake <see cref="IGitCommandRunner" />, and the readers of
+/// URL sources are fakes, so no test starts <c>gh</c> or sends a request.
 /// </summary>
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed partial class FeatureCommandsEndToEndTests : IDisposable
@@ -22,6 +25,27 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     private const string IssueUrl = "https://github.com/acme/shop/issues/142";
 
     private const string IssueFeatureId = "gh-142-login-sso";
+
+    private const string WebUrl = "https://example.com/requests/login-sso";
+
+    private const string GhAuthFailureReason =
+        "The gh command exited with the exit code 4: To get started with GitHub CLI, please run: gh auth login.";
+
+    private const string GhNotFoundReason =
+        "The GitHub CLI gh was not found in any absolute directory of the PATH environment variable.";
+
+    private const string UrlFailureReason =
+        "The server answered with the status code 404 (Not Found), not with a success status code (2xx).";
+
+    private const string GhSignInHint =
+        "Check the issue URL and that gh is signed in for its host ('gh auth status'), then run the command again.";
+
+    private const string GhInstallHint =
+        "Install the GitHub CLI gh and make it available on the PATH, then run the command again.";
+
+    private const string UrlHint =
+        "Check the URL and run the command again, or save the content to a file and pass the path of the file with " +
+        "--source.";
 
     private const string UserName = "Jane Doe";
 
@@ -34,6 +58,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
 
     private readonly IGitCommandRunner _gitCommandRunner = A.Fake<IGitCommandRunner>();
+
+    private readonly ITrackerIssueReader _trackerIssueReader = A.Fake<ITrackerIssueReader>();
+
+    private readonly IUrlContentReader _urlContentReader = A.Fake<IUrlContentReader>();
 
     private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-feature-tests-");
 
@@ -52,6 +80,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
                 Task.FromResult(AnswerGit(arguments)));
 
         A.CallTo(() => _confirmation.CanAsk).Returns(false);
+
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(new TrackerIssue("Login with SSO", "Users sign in with the company account.", []));
+
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._))
+            .Returns("Login SSO\n");
     }
 
     [Fact]
@@ -89,8 +123,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         File.Exists(GetFeaturePath(IssueFeatureId, "feature.json"))
             .Should().BeTrue();
 
-        File.Exists(GetFeaturePath(IssueFeatureId, "request.md"))
-            .Should().BeTrue();
+        // The line ending depends on the operating system, because the fake git answers no attribute query.
+        (await File.ReadAllTextAsync(GetFeaturePath(IssueFeatureId, "request.md"),
+                TestContext.Current.CancellationToken)).ReplaceLineEndings("\n")
+            .Should().Be("# Login with SSO\n\nUsers sign in with the company account.\n");
     }
 
     [Fact]
@@ -118,8 +154,55 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         data.GetProperty("source").GetProperty("kind").GetString()
             .Should().Be("text");
 
-        data.GetProperty("source").GetProperty("value").ValueKind
-            .Should().Be(JsonValueKind.Null);
+        data.GetProperty("source").GetProperty("value").GetString()
+            .Should().Be("Login SSO via Azure");
+
+        var featureId = data.GetProperty("id").GetString()!;
+
+        (await File.ReadAllTextAsync(GetFeaturePath(featureId, "request.md"), TestContext.Current.CancellationToken))
+            .Should().Be("Login SSO via Azure");
+
+        File.Exists(Path.Combine(_tempDirectory.RootPath, ".shadekit", "templates", "request.md"))
+            .Should().BeFalse();
+
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task FeatureNew_FileSource_WritesFileContentAsRequest()
+    {
+        // Arrange
+        await InitAsync();
+        await File.WriteAllTextAsync(Path.Combine(_tempDirectory.RootPath, "login.md"),
+            "# Login SSO\n\nUsers sign in with the company account.\n", TestContext.Current.CancellationToken);
+
+        // Act
+        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", "login.md", "--json");
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        var data = root.GetProperty("data");
+        var featureId = data.GetProperty("id").GetString()!;
+
+        featureId
+            .Should().MatchRegex(@"^\d{8}-\d{4}-login-sso$");
+
+        data.GetProperty("source").GetProperty("kind").GetString()
+            .Should().Be("file");
+
+        data.GetProperty("source").GetProperty("value").GetString()
+            .Should().Be("login.md");
+
+        // The line ending depends on the operating system, because the fake git answers no attribute query.
+        (await File.ReadAllTextAsync(GetFeaturePath(featureId, "request.md"), TestContext.Current.CancellationToken))
+            .ReplaceLineEndings("\n")
+            .Should().Be("# Login SSO\n\nUsers sign in with the company account.\n");
+
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
     }
 
     [Fact]
@@ -150,6 +233,239 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().Equal(snapshot);
     }
 
+
+    [Fact]
+    public async Task FeatureNew_JsonIssueCannotBeRead_Returns33WithGhSignInHintAndChangesNothing()
+    {
+        // Arrange
+        await InitAsync();
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(new TrackerIssueReadFailedException(new Uri(IssueUrl), GhAuthFailureReason));
+        var snapshot = _tempDirectory.TakeSnapshot();
+
+        // Act
+        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--json");
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureSource);
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeFalse();
+
+        root.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.InvalidFeatureSource);
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().Be($"The source '{IssueUrl}' cannot be used: The issue cannot be read: {GhAuthFailureReason} " +
+                         GhSignInHint);
+
+        _tempDirectory.TakeSnapshot()
+            .Should().Equal(snapshot);
+    }
+
+    [Fact]
+    public async Task FeatureNew_PlainIssueCannotBeRead_Returns33WithGhSignInHint()
+    {
+        // Arrange
+        await InitAsync();
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(new TrackerIssueReadFailedException(new Uri(IssueUrl), GhAuthFailureReason));
+
+        // Act
+        var (exitCode, output, _) = await RunAsync("feature", "new", "--source", IssueUrl);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureSource);
+
+        GetPlainText(output)
+            .Should().Contain($"The issue cannot be read: {GhAuthFailureReason} {GhSignInHint}");
+
+        Directory.Exists(GetFeaturePath(IssueFeatureId))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task FeatureNew_JsonGhNotFound_Returns33WithGhInstallHint()
+    {
+        // Arrange
+        await InitAsync();
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(new GhNotFoundException(["issue", "view", IssueUrl, "--json", "title,body,comments"],
+                GhNotFoundReason));
+
+        // Act
+        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--json");
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureSource);
+
+        root.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.InvalidFeatureSource);
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().Be($"The source '{IssueUrl}' cannot be used: The issue cannot be read: {GhNotFoundReason} " +
+                         GhInstallHint);
+
+        Directory.Exists(GetFeaturePath(IssueFeatureId))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task FeatureNew_JsonUrlContentCannotBeRead_Returns33WithUrlHintAndChangesNothing()
+    {
+        // Arrange
+        await InitAsync();
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._))
+            .Throws(new UrlContentReadFailedException(new Uri(WebUrl), UrlFailureReason));
+        var snapshot = _tempDirectory.TakeSnapshot();
+
+        // Act
+        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO",
+            "--json");
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureSource);
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeFalse();
+
+        root.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.InvalidFeatureSource);
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().Be($"The source '{WebUrl}' cannot be used: The content of the URL cannot be read: " +
+                         $"{UrlFailureReason} {UrlHint}");
+
+        _tempDirectory.TakeSnapshot()
+            .Should().Equal(snapshot);
+    }
+
+    [Fact]
+    public async Task FeatureNew_PlainUrlContentCannotBeRead_Returns33WithUrlHint()
+    {
+        // Arrange
+        await InitAsync();
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._))
+            .Throws(new UrlContentReadFailedException(new Uri(WebUrl), UrlFailureReason));
+
+        // Act
+        var (exitCode, output, _) = await RunAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO");
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureSource);
+
+        GetPlainText(output)
+            .Should().Contain($"The content of the URL cannot be read: {UrlFailureReason} {UrlHint}");
+    }
+
+    [Fact]
+    public async Task FeatureNew_JsonWebUrlWithTitle_CreatesFeatureWithUrlContentAsRequest()
+    {
+        // Arrange
+        await InitAsync();
+
+        // Act
+        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO",
+            "--json");
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        var data = root.GetProperty("data");
+        var featureId = data.GetProperty("id").GetString()!;
+
+        featureId
+            .Should().MatchRegex(@"^\d{8}-\d{4}-login-sso$");
+
+        data.GetProperty("source").GetProperty("kind").GetString()
+            .Should().Be("url");
+
+        data.GetProperty("source").GetProperty("value").GetString()
+            .Should().Be(WebUrl);
+
+        // The line ending depends on the operating system, because the fake git answers no attribute query.
+        (await File.ReadAllTextAsync(GetFeaturePath(featureId, "request.md"), TestContext.Current.CancellationToken))
+            .ReplaceLineEndings("\n")
+            .Should().Be("Login SSO\n");
+
+        A.CallTo(() => _urlContentReader.ReadAsync(new Uri(WebUrl), A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task FeatureNew_PlainWebUrlWithTitle_CreatesFeature()
+    {
+        // Arrange
+        await InitAsync();
+
+        // Act
+        var (exitCode, output, _) = await RunAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO");
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        GetLines(output)
+            .Should().Contain(x => x.StartsWith("Created feature ", StringComparison.Ordinal) &&
+                                   x.EndsWith("-login-sso (feature).", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FeatureNew_JsonWebUrlWithoutTitle_Returns34AndReadsNoUrl()
+    {
+        // Arrange
+        await InitAsync();
+        var snapshot = _tempDirectory.TakeSnapshot();
+
+        // Act
+        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", WebUrl, "--json");
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureTitle);
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeFalse();
+
+        root.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.InvalidFeatureTitle);
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().Contain("Pass the title with --title.");
+
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+
+        _tempDirectory.TakeSnapshot()
+            .Should().Equal(snapshot);
+    }
+
+    [Fact]
+    public async Task FeatureNew_PlainWebUrlWithoutTitle_Returns34AndReadsNoUrl()
+    {
+        // Arrange
+        await InitAsync();
+
+        // Act
+        var (exitCode, output, _) = await RunAsync("feature", "new", "--source", WebUrl);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureTitle);
+
+        GetPlainText(output)
+            .Should().Contain("Pass the title with --title.");
+
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
+    }
     [Fact]
     [Trait("Requirement", "FP03-AC4")]
     public async Task FeatureCurrent_AfterNewOnUnrelatedBranch_ReturnsNewFeatureFromOverride()
@@ -1092,7 +1408,9 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         var exitCode = await Program.RunAsync(args, output, error, x =>
         {
             x.AddSingleton(_gitCommandRunner)
-                .AddSingleton(_confirmation);
+                .AddSingleton(_confirmation)
+                .AddSingleton(_trackerIssueReader)
+                .AddSingleton(_urlContentReader);
 
             if (_cancellation is not null)
             {
@@ -1148,8 +1466,18 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         return WhitespaceRegex().Replace(text, " ");
     }
 
+    private static string GetPlainText(string output)
+    {
+        // Error messages are colored per console line, so the escape sequences are removed before the line breaks
+        // are folded.
+        return FoldWhitespace(AnsiEscapeSequenceRegex().Replace(output, string.Empty));
+    }
+
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();
+
+    [GeneratedRegex(@"\x1B\[[0-9;]*m")]
+    private static partial Regex AnsiEscapeSequenceRegex();
 
     [GeneratedRegex("\"status\"\\s*:\\s*\"active\"")]
     private static partial Regex StatusRegex();

@@ -38,8 +38,8 @@ public static class ShadeKitCliExitCodes
 
     /// <summary>
     /// Represents the exit code returned when a path at which a command needs a file, such as <c>.gitignore</c>,
-    /// <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root, or the repository template of <c>request.md</c>, is
-    /// a directory. The error code is <see cref="ShadeKitCliErrorCodes.PathNotAFile" />.
+    /// <c>CLAUDE.md</c>, or <c>AGENTS.md</c> at the repository root, is a directory. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.PathNotAFile" />.
     /// </summary>
     public const int PathNotAFile = 14;
 
@@ -110,8 +110,10 @@ public static class ShadeKitCliExitCodes
     public const int InvalidFeatureId = 32;
 
     /// <summary>
-    /// Represents the exit code returned when the source of a new feature cannot be used, because it is empty or is a
-    /// URL of a tracker in <c>config.json</c> without an issue number. The error code is
+    /// Represents the exit code returned when the source of a new feature cannot be used, because it is empty; it is a
+    /// URL of a tracker in <c>config.json</c> without an issue number; it names a file that cannot be read, is larger
+    /// than 1 MiB, or is not UTF-8 text; the issue of a tracker URL cannot be read with <c>gh</c>, because <c>gh</c>
+    /// cannot be found or started, or fails; or the content of another URL cannot be loaded. The error code is
     /// <see cref="ShadeKitCliErrorCodes.InvalidFeatureSource" />.
     /// </summary>
     public const int InvalidFeatureSource = 33;

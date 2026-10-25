@@ -26,7 +26,8 @@ public interface IFeatureStore
     /// <para>
     /// Everything is checked before anything is written. The feature is built in a hidden staging folder and moved
     /// into place, so the feature folder appears only when complete; the local override is written last and replaces
-    /// an unusable one. <c>request.md</c> comes from <c>templates/request.md</c>, else from the shipped template.
+    /// an unusable one. <c>request.md</c> holds the request content loaded from the source (the text, the file
+    /// content, the issue formatted as Markdown, or the content of the URL), unchanged except for its line endings.
     /// </para>
     /// <para>
     /// A failure or cancellation before the move deletes only the staging folder; an existing feature folder is never
@@ -54,13 +55,13 @@ public interface IFeatureStore
     /// <see cref="WorkflowProfiles.All" />.
     /// </exception>
     /// <exception cref="InvalidFeatureSourceException">
-    /// The source is empty; it is a URL of a tracker in <c>config.json</c> without an issue number; or it names a file
-    /// that cannot be read, is larger than <see cref="FeatureIdFactory.MaxSourceFileSize" /> bytes (1 MiB), or is not
-    /// UTF-8 text.
+    /// The source is empty; it is a URL of a tracker in <c>config.json</c> without an issue number or whose issue
+    /// cannot be read with <c>gh</c>; it is any other URL whose content cannot be read; or it names a file that cannot
+    /// be read, is larger than <see cref="FeatureIdFactory.MaxSourceFileSize" /> bytes (1 MiB), or is not UTF-8 text.
     /// </exception>
     /// <exception cref="InvalidFeatureTitleException">
-    /// A URL source has no title, the title contains a control character, or the title contains no letter or digit
-    /// for the slug of the id.
+    /// A URL source whose host is not a tracker in <c>config.json</c> has no title, the title contains a control
+    /// character, or the title contains no letter or digit for the slug of the id.
     /// </exception>
     /// <exception cref="FeatureAlreadyExistsException">
     /// The folder of the new feature id already exists, or another run created it before the new feature was moved
@@ -73,7 +74,7 @@ public interface IFeatureStore
     /// <c>git</c> cannot be started, or it fails in a way that SHADE kit does not expect.
     /// </exception>
     /// <exception cref="InvalidKitFileException">
-    /// <c>config.json</c> is invalid, or the repository template <c>templates/request.md</c> is not UTF-8 text.
+    /// <c>config.json</c> is invalid.
     /// </exception>
     /// <exception cref="FormatTooNewException">
     /// <c>config.json</c> uses a format version newer than the engine supports.

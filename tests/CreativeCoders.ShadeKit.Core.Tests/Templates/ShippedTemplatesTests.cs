@@ -31,7 +31,6 @@ public class ShippedTemplatesTests
         // Arrange
         (string ResourcePath, string RepositoryPath)[] templateTable =
         [
-            ("request.template.md", ".shadekit/templates/request.md"),
             ("discussion.template.md", ".shadekit/templates/discussion.md"),
             ("spec.template.md", ".shadekit/templates/spec.md"),
             ("researches.template.md", ".shadekit/templates/researches.md"),
@@ -106,17 +105,14 @@ public class ShippedTemplatesTests
     }
 
     [Fact]
-    public void Request_IsTheRequestTemplateOfTheCatalog()
+    public void All_Catalog_ContainsNoRequestTemplate()
     {
         // Act
-        var request = ShippedTemplates.Request;
+        var catalog = ShippedTemplates.All;
 
         // Assert
-        request
-            .Should().Be(new ShippedTemplate("request.template.md", "templates/request.md"));
-
-        ShippedTemplates.All
-            .Should().ContainSingle(x => x.ResourcePath == request.ResourcePath)
-            .Which.Should().BeSameAs(request);
+        catalog
+            .Should().NotContain(x => x.ResourcePath == "request.template.md"
+                                      || x.RepositoryPath == ".shadekit/templates/request.md");
     }
 }

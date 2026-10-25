@@ -1,8 +1,7 @@
 using System.ComponentModel;
-using System.Diagnostics;
 using CreativeCoders.Core;
-using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
+using CreativeCoders.ShadeKit.Core.Processes;
 
 namespace CreativeCoders.ShadeKit.Core.Git;
 
@@ -41,73 +40,19 @@ public sealed class GitCommandRunner(IGitExecutableLocator gitExecutableLocator)
                 $"the git executable path '{gitExecutablePath}' is not absolute, so it is not started.");
         }
 
-        using var process = new Process();
-        process.StartInfo = CreateStartInfo(gitExecutablePath, workingDirectory, arguments);
+        ExternalProcessResult result;
 
         try
         {
-            process.Start();
+            result = await ExternalProcessRunner
+                .RunAsync(gitExecutablePath, workingDirectory, arguments, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Win32Exception exception)
         {
             throw new GitUnavailableException(arguments, $"git could not be started: {exception.Message}", exception);
         }
 
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-        try
-        {
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            KillProcessTree(process);
-
-            throw;
-        }
-
-        var standardOutput = await standardOutputTask.ConfigureAwait(false);
-        var standardError = await standardErrorTask.ConfigureAwait(false);
-
-        return new GitCommandResult(process.ExitCode, standardOutput, standardError);
-    }
-
-    private static ProcessStartInfo CreateStartInfo(string gitExecutablePath, string workingDirectory,
-        IReadOnlyList<string> arguments)
-    {
-        var startInfo = new ProcessStartInfo(gitExecutablePath)
-        {
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = TextFileEncoding.Utf8WithoutBom,
-            StandardErrorEncoding = TextFileEncoding.Utf8WithoutBom
-        };
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        return startInfo;
-    }
-
-    private static void KillProcessTree(Process process)
-    {
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch (InvalidOperationException)
-        {
-            // The process has already exited; there is nothing left to kill.
-        }
-        catch (Win32Exception)
-        {
-            // The process or one of its children could not be killed; cancellation is reported regardless.
-        }
+        return new GitCommandResult(result.ExitCode, result.StandardOutput, result.StandardError);
     }
 }

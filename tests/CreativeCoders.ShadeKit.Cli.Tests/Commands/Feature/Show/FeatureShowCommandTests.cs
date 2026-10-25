@@ -71,6 +71,52 @@ public class FeatureShowCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_PlainModeTextSourceWithText_WritesKindOnly()
+    {
+        // Arrange
+        var console = new TestConsole();
+        var command = CreateCommand(console,
+            CreateFeatureStore(CreateResult(new FeatureSource
+            {
+                Kind = FeatureSourceKind.Text,
+                Value = "Login SSO\nUsers sign in with the company account."
+            })));
+
+        // Act
+        await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id });
+
+        // Assert
+        console.Lines
+            .Should().Contain("Source: text")
+            .And.NotContain(x => x.Contains("Users sign in", StringComparison.Ordinal))
+            .And.NotContain(x => x.StartsWith("Source: text ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeTextSourceWithText_WritesTextAsSourceValue()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        const string text = "Login SSO\nUsers sign in with the company account.";
+        var command = CreateCommand(new TestConsole(),
+            CreateFeatureStore(CreateResult(new FeatureSource { Kind = FeatureSourceKind.Text, Value = text })),
+            jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id, Json = true });
+
+        // Assert
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+        var source = document.RootElement.GetProperty("data").GetProperty("source");
+
+        source.GetProperty("kind").GetString()
+            .Should().Be("text");
+
+        source.GetProperty("value").GetString()
+            .Should().Be(text);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_PlainModeValueWithMarkupCharacters_WritesValueVerbatim()
     {
         // Arrange

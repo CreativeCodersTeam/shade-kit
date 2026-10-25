@@ -1,5 +1,4 @@
-using System.Text;
-using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Processes;
 
 namespace CreativeCoders.ShadeKit.Core.Git;
 
@@ -18,34 +17,11 @@ namespace CreativeCoders.ShadeKit.Core.Git;
 /// </remarks>
 public sealed class GitExecutableLocator : IGitExecutableLocator
 {
-    private const string PathVariableName = "PATH";
-
     private const string WindowsExecutableName = "git.exe";
 
     private const string UnixExecutableName = "git";
 
-    private const char WindowsPathListSeparator = ';';
-
-    private const char UnixPathListSeparator = ':';
-
-    private const char WindowsDirectorySeparator = '\\';
-
-    private const char WindowsAltDirectorySeparator = '/';
-
-    private const char UnixDirectorySeparator = '/';
-
-    private const char Quote = '"';
-
-    private const UnixFileMode AnyExecute =
-        UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
-
-    private readonly Func<string?> _getPathVariable;
-
-    private readonly bool _isWindows;
-
-    private readonly Func<string, bool> _fileExists;
-
-    private readonly Func<string, bool> _isExecutable;
+    private readonly PathExecutableSearch _pathExecutableSearch;
 
     private string? _gitExecutablePath;
 
@@ -54,9 +30,8 @@ public sealed class GitExecutableLocator : IGitExecutableLocator
     /// environment variable of the current process and uses the rules of the current operating system.
     /// </summary>
     public GitExecutableLocator()
-        : this(static () => Environment.GetEnvironmentVariable(PathVariableName), OperatingSystem.IsWindows(),
-            File.Exists, HasUnixExecuteBit)
     {
+        _pathExecutableSearch = new PathExecutableSearch(WindowsExecutableName, UnixExecutableName);
     }
 
     /// <summary>
@@ -88,35 +63,14 @@ public sealed class GitExecutableLocator : IGitExecutableLocator
     internal GitExecutableLocator(Func<string?> getPathVariable, bool isWindows, Func<string, bool> fileExists,
         Func<string, bool> isExecutable)
     {
-        _getPathVariable = Ensure.NotNull(getPathVariable);
-        _isWindows = isWindows;
-        _fileExists = Ensure.NotNull(fileExists);
-        _isExecutable = Ensure.NotNull(isExecutable);
+        _pathExecutableSearch = new PathExecutableSearch(WindowsExecutableName, UnixExecutableName, getPathVariable,
+            isWindows, fileExists, isExecutable);
     }
 
     /// <inheritdoc />
     public string? FindGitExecutable()
     {
-        return _gitExecutablePath ??= SearchPathVariable();
-    }
-
-    private string? SearchPathVariable()
-    {
-        var pathVariable = _getPathVariable();
-
-        if (string.IsNullOrEmpty(pathVariable))
-        {
-            return null;
-        }
-
-        var entries = _isWindows
-            ? SplitWindowsPathVariable(pathVariable)
-            : pathVariable.Split(UnixPathListSeparator, StringSplitOptions.RemoveEmptyEntries);
-
-        return entries
-            .Where(IsFullyQualified)
-            .Select(CreateCandidatePath)
-            .FirstOrDefault(IsCandidate);
+        return _gitExecutablePath ??= _pathExecutableSearch.Find();
     }
 
     /// <summary>
@@ -132,110 +86,6 @@ public sealed class GitExecutableLocator : IGitExecutableLocator
     /// </returns>
     internal static bool HasUnixExecuteBit(string path)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return true;
-        }
-
-        try
-        {
-            return (File.GetUnixFileMode(path) & AnyExecute) != 0;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
-    // Like the PATH search of a shell: on Unix, a file without any execute bit is skipped.
-    private bool IsCandidate(string path)
-    {
-        return _fileExists(path) && (_isWindows || _isExecutable(path));
-    }
-
-    // Splits at ';' outside double quotation marks and removes the quotation marks, like cmd.exe does. Quotation
-    // marks cannot be part of a Windows file name, so removing them never changes a valid directory.
-    private static IEnumerable<string> SplitWindowsPathVariable(string pathVariable)
-    {
-        var entry = new StringBuilder();
-        var isQuoted = false;
-
-        foreach (var character in pathVariable)
-        {
-            if (character == Quote)
-            {
-                isQuoted = !isQuoted;
-            }
-            else if (character == WindowsPathListSeparator && !isQuoted)
-            {
-                if (entry.Length > 0)
-                {
-                    yield return entry.ToString();
-                }
-
-                entry.Clear();
-            }
-            else
-            {
-                entry.Append(character);
-            }
-        }
-
-        if (entry.Length > 0)
-        {
-            yield return entry.ToString();
-        }
-    }
-
-    private bool IsFullyQualified(string directory)
-    {
-        return _isWindows
-            ? IsWindowsFullyQualified(directory)
-            : directory.StartsWith(UnixDirectorySeparator);
-    }
-
-    // Mirrors Path.IsPathFullyQualified on Windows, independent of the host operating system: a drive path such as
-    // "C:\Git\cmd" or a path that starts with two separators (UNC "\\server\share", device "\\?\C:\"). "C:Git" and
-    // "\Git" are relative to the current drive or directory.
-    private static bool IsWindowsFullyQualified(string directory)
-    {
-        if (directory.Length < 2)
-        {
-            return false;
-        }
-
-        if (IsWindowsDirectorySeparator(directory[0]))
-        {
-            return directory[1] == '?' || IsWindowsDirectorySeparator(directory[1]);
-        }
-
-        return directory.Length >= 3
-               && char.IsAsciiLetter(directory[0])
-               && directory[1] == ':'
-               && IsWindowsDirectorySeparator(directory[2]);
-    }
-
-    private static bool IsWindowsDirectorySeparator(char character)
-    {
-        return character is WindowsDirectorySeparator or WindowsAltDirectorySeparator;
-    }
-
-    private string CreateCandidatePath(string directory)
-    {
-        var executableName = _isWindows ? WindowsExecutableName : UnixExecutableName;
-        var lastCharacter = directory[^1];
-
-        var endsWithSeparator = _isWindows
-            ? IsWindowsDirectorySeparator(lastCharacter)
-            : lastCharacter == UnixDirectorySeparator;
-
-        if (endsWithSeparator)
-        {
-            return directory + executableName;
-        }
-
-        var directorySeparator = _isWindows ? WindowsDirectorySeparator : UnixDirectorySeparator;
-
-        return $"{directory}{directorySeparator}{executableName}";
+        return PathExecutableSearch.HasUnixExecuteBit(path);
     }
 }

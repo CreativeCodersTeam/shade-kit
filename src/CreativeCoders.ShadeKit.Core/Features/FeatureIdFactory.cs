@@ -3,6 +3,8 @@ using System.Globalization;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Trackers;
+using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -10,12 +12,27 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// Derives the id, title, and source of a new feature from the input of <c>shade-kit feature new</c>.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The creation time is read once per call and truncated to whole seconds. A file source is read through a
 /// <see cref="FileStream" /> up to <see cref="MaxSourceFileSize" /> + 1 bytes, so an endless device such as
 /// <c>/dev/zero</c> is refused. Known residual risk: opening a FIFO without a writer blocks.
+/// </para>
+/// <para>
+/// The content of every source is loaded here, before the feature store writes anything, so a source that cannot be
+/// loaded leaves no feature behind. The issue of a URL whose host is a tracker is read with the
+/// <see cref="ITrackerIssueReader" /> in the repository root, after the issue number of the URL was checked; the
+/// content of any other URL is read with the <see cref="IUrlContentReader" />, after the title was checked. A failure
+/// of either reader is reported as an <see cref="InvalidFeatureSourceException" />; a cancellation is not.
+/// </para>
 /// </remarks>
 /// <param name="timeProvider">The provider of the local time.</param>
-public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFactory
+/// <param name="trackerIssueReader">The reader of the issue of a URL source whose host is a tracker.</param>
+/// <param name="urlContentReader">The reader of the content of a URL source whose host is not a tracker.</param>
+public sealed class FeatureIdFactory(
+    TimeProvider timeProvider,
+    ITrackerIssueReader trackerIssueReader,
+    IUrlContentReader urlContentReader)
+    : IFeatureIdFactory
 {
     /// <summary>
     /// Represents the maximum size, in bytes, of the file of a file source.
@@ -32,7 +49,13 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
 
     private const string ExplicitTitleOrigin = "passed with --title";
 
+    private const string IssueTitleOrigin = "taken from the issue title";
+
     private readonly TimeProvider _timeProvider = Ensure.NotNull(timeProvider);
+
+    private readonly ITrackerIssueReader _trackerIssueReader = Ensure.NotNull(trackerIssueReader);
+
+    private readonly IUrlContentReader _urlContentReader = Ensure.NotNull(urlContentReader);
 
     /// <inheritdoc />
     public async Task<FeatureIdentity> CreateAsync(string source, string? title, string workingDirectory,
@@ -58,7 +81,8 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
 
         if (TryGetHttpUrl(source, out var url))
         {
-            return CreateFromUrl(source, url, explicitTitle, trackers, createdAt);
+            return await CreateFromUrlAsync(source, url, explicitTitle, trackers, repositoryRootPath, createdAt,
+                cancellationToken).ConfigureAwait(false);
         }
 
         var filePath = FindSourceFilePath(source, workingDirectory);
@@ -72,35 +96,93 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
         return CreateFromText(source, explicitTitle, createdAt);
     }
 
-    private static FeatureIdentity CreateFromUrl(string source, Uri url, string? explicitTitle,
-        IReadOnlyDictionary<string, string> trackers, DateTimeOffset createdAt)
+    private async Task<FeatureIdentity> CreateFromUrlAsync(string source, Uri url, string? explicitTitle,
+        IReadOnlyDictionary<string, string> trackers, string repositoryRootPath, DateTimeOffset createdAt,
+        CancellationToken cancellationToken)
     {
         var trackerPrefix = FindTrackerPrefix(trackers, url.Host);
-        string? issueNumber = null;
 
-        if (trackerPrefix is not null)
-        {
-            issueNumber = GetIssueNumber(url)
+        return trackerPrefix is null
+            ? await CreateFromWebUrlAsync(source, url, explicitTitle, createdAt, cancellationToken)
+                .ConfigureAwait(false)
+            : await CreateFromIssueUrlAsync(source, url, trackerPrefix, explicitTitle, repositoryRootPath, createdAt,
+                cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<FeatureIdentity> CreateFromIssueUrlAsync(string source, Uri url, string trackerPrefix,
+        string? explicitTitle, string repositoryRootPath, DateTimeOffset createdAt,
+        CancellationToken cancellationToken)
+    {
+        var issueNumber = GetIssueNumber(url)
                           ?? throw new InvalidFeatureSourceException(source,
                               $"The host '{url.Host}' is a tracker in config.json, but the last segment of the URL " +
                               "path is not an issue number, as in '/issues/142'.");
-        }
 
+        // A title passed with --title is checked before gh runs, so a title that cannot be used costs no gh call.
+        var explicitSlug = explicitTitle is null ? null : CreateCheckedSlug(explicitTitle, ExplicitTitleOrigin);
+
+        var issue = await ReadIssueAsync(source, url, repositoryRootPath, cancellationToken).ConfigureAwait(false);
+
+        var title = explicitTitle ?? issue.Title.Trim();
+        var slug = explicitSlug ?? CreateCheckedSlug(title, IssueTitleOrigin);
+
+        return CreateIdentity($"{trackerPrefix}-{issueNumber}-{slug}", title,
+            new FeatureSource { Kind = FeatureSourceKind.Url, Value = source }, TrackerIssueMarkdown.Format(issue),
+            createdAt);
+    }
+
+    private async Task<FeatureIdentity> CreateFromWebUrlAsync(string source, Uri url, string? explicitTitle,
+        DateTimeOffset createdAt, CancellationToken cancellationToken)
+    {
+        // The title is checked before the request is sent, so a missing or unusable title costs no network call.
         if (explicitTitle is null)
         {
             throw new InvalidFeatureTitleException(
-                "A URL source has no title from which the feature id can be built. Pass the title with --title.");
+                "A URL source whose host is not a tracker in config.json has no title from which the feature id can " +
+                "be built. Pass the title with --title.");
         }
 
-        EnsureNoControlCharacter(explicitTitle, ExplicitTitleOrigin);
+        var slug = CreateCheckedSlug(explicitTitle, ExplicitTitleOrigin);
 
-        var slug = CreateSlug(explicitTitle);
-        var id = trackerPrefix is null
-            ? CreateTimeBasedId(createdAt, slug)
-            : $"{trackerPrefix}-{issueNumber}-{slug}";
+        var content = await ReadUrlContentAsync(source, url, cancellationToken).ConfigureAwait(false);
 
-        return CreateIdentity(id, explicitTitle, new FeatureSource { Kind = FeatureSourceKind.Url, Value = source },
-            source, createdAt);
+        return CreateIdentity(CreateTimeBasedId(createdAt, slug), explicitTitle,
+            new FeatureSource { Kind = FeatureSourceKind.Url, Value = source }, content, createdAt);
+    }
+
+    // Only the failures of the reader are wrapped; an OperationCanceledException passes through unchanged.
+    private async Task<TrackerIssue> ReadIssueAsync(string source, Uri url, string repositoryRootPath,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _trackerIssueReader.ReadIssueAsync(url, repositoryRootPath, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (GhNotFoundException exception)
+        {
+            // The reason names gh already, for example "The GitHub CLI gh was not found in ...".
+            throw new InvalidFeatureSourceException(source, $"The issue cannot be read: {exception.Reason}", exception);
+        }
+        catch (TrackerIssueReadFailedException exception)
+        {
+            throw new InvalidFeatureSourceException(source, $"The issue cannot be read: {exception.Reason}",
+                exception);
+        }
+    }
+
+    // Only the failures of the reader are wrapped; an OperationCanceledException passes through unchanged.
+    private async Task<string> ReadUrlContentAsync(string source, Uri url, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _urlContentReader.ReadAsync(url, cancellationToken).ConfigureAwait(false);
+        }
+        catch (UrlContentReadFailedException exception)
+        {
+            throw new InvalidFeatureSourceException(source,
+                $"The content of the URL cannot be read: {exception.Reason}", exception);
+        }
     }
 
     private static async Task<FeatureIdentity> CreateFromFileAsync(string source, string filePath,
@@ -123,9 +205,7 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
             titleOrigin = "taken from the file name";
         }
 
-        EnsureNoControlCharacter(title, titleOrigin);
-
-        var id = CreateTimeBasedId(createdAt, CreateSlug(title));
+        var id = CreateTimeBasedId(createdAt, CreateCheckedSlug(title, titleOrigin));
         var featureSource = new FeatureSource
         {
             Kind = FeatureSourceKind.File,
@@ -140,20 +220,19 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
         // The source is not whitespace only, so it has at least one non-empty line.
         var title = explicitTitle ?? source.Split('\n').Select(x => x.Trim()).First(x => x.Length > 0);
 
-        EnsureNoControlCharacter(title,
-            explicitTitle is null ? "taken from the first line of the text" : ExplicitTitleOrigin);
+        var id = CreateTimeBasedId(createdAt, CreateCheckedSlug(title,
+            explicitTitle is null ? "taken from the first line of the text" : ExplicitTitleOrigin));
 
-        var id = CreateTimeBasedId(createdAt, CreateSlug(title));
-
-        return CreateIdentity(id, title, new FeatureSource { Kind = FeatureSourceKind.Text }, source, createdAt);
+        return CreateIdentity(id, title, new FeatureSource { Kind = FeatureSourceKind.Text, Value = source }, source,
+            createdAt);
     }
 
     private static FeatureIdentity CreateIdentity(string id, string title, FeatureSource source,
-        string originalInput, DateTimeOffset createdAt)
+        string requestContent, DateTimeOffset createdAt)
     {
         FeatureIds.EnsureValid(id);
 
-        return new FeatureIdentity(id, title, source, originalInput, createdAt);
+        return new FeatureIdentity(id, title, source, requestContent, createdAt);
     }
 
     private static bool TryGetHttpUrl(string source, [NotNullWhen(true)] out Uri? url)
@@ -349,6 +428,14 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider) : IFeatureIdFact
         return RepositoryFilePath.IsOutsideRoot(relativePath)
             ? filePath
             : RepositoryFilePath.ToForwardSlashes(relativePath);
+    }
+
+    // Checks the title for control characters first, then builds the slug of the feature id from it.
+    private static string CreateCheckedSlug(string title, string titleOrigin)
+    {
+        EnsureNoControlCharacter(title, titleOrigin);
+
+        return CreateSlug(title);
     }
 
     private static string CreateSlug(string title)

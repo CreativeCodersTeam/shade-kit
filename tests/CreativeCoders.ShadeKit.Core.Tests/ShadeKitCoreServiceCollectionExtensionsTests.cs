@@ -10,9 +10,12 @@ using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
+using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 namespace CreativeCoders.ShadeKit.Core.Tests;
@@ -72,6 +75,10 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFeatureIdFactory), typeof(FeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver), typeof(CurrentFeatureResolver))]
     [InlineData(typeof(IFeatureStore), typeof(FeatureStore))]
+    [InlineData(typeof(IUrlContentReader), typeof(HttpUrlContentReader))]
+    [InlineData(typeof(IGhExecutableLocator), typeof(GhExecutableLocator))]
+    [InlineData(typeof(IGhCommandRunner), typeof(GhCommandRunner))]
+    [InlineData(typeof(ITrackerIssueReader), typeof(GitHubCliIssueReader))]
     public void AddShadeKitCore_ServiceCollection_RegistersServiceAsSingleton(Type serviceType, Type implementationType)
     {
         // Arrange
@@ -166,6 +173,11 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver))]
     [InlineData(typeof(IFeatureStore))]
+    [InlineData(typeof(IUrlContentReader))]
+    [InlineData(typeof(IGhExecutableLocator))]
+    [InlineData(typeof(IGhCommandRunner))]
+    [InlineData(typeof(ITrackerIssueReader))]
+    [InlineData(typeof(IHttpClientFactory))]
     [InlineData(typeof(TimeProvider))]
     public void AddShadeKitCore_ExistingServiceRegistration_KeepsExistingRegistration(Type serviceType)
     {
@@ -203,6 +215,11 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver))]
     [InlineData(typeof(IFeatureStore))]
+    [InlineData(typeof(IUrlContentReader))]
+    [InlineData(typeof(IGhExecutableLocator))]
+    [InlineData(typeof(IGhCommandRunner))]
+    [InlineData(typeof(ITrackerIssueReader))]
+    [InlineData(typeof(IHttpClientFactory))]
     [InlineData(typeof(TimeProvider))]
     public void AddShadeKitCore_CalledTwice_RegistersServiceOnlyOnce(Type serviceType)
     {
@@ -449,6 +466,194 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         tempDirectory.ReadFileText("notes.txt")
             .Should().Be("a\r\nb\r\n");
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_RegistersHttpClientFactory()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var firstInstance = serviceProvider.GetRequiredService<IHttpClientFactory>();
+        var secondInstance = serviceProvider.GetRequiredService<IHttpClientFactory>();
+
+        secondInstance.Should().BeSameAs(firstInstance);
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_ConfiguresUrlContentReaderClientWithTimeout()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        using var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(HttpUrlContentReader.HttpClientName);
+
+        httpClient.Timeout
+            .Should().Be(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_ConfiguresUrlContentReaderPrimaryHandlerWithoutAutoRedirect()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var options = serviceProvider.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>()
+            .Get(HttpUrlContentReader.HttpClientName);
+        var handlerBuilder = serviceProvider.GetRequiredService<HttpMessageHandlerBuilder>();
+
+        foreach (var action in options.HttpMessageHandlerBuilderActions)
+        {
+            action(handlerBuilder);
+        }
+
+        handlerBuilder.PrimaryHandler
+            .Should().BeOfType<SocketsHttpHandler>()
+            .Which.AllowAutoRedirect.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_ConfiguresUrlContentReaderClientWithEngineVersionUserAgent()
+    {
+        // Arrange
+        var engineVersionProvider = A.Fake<IEngineVersionProvider>();
+        A.CallTo(() => engineVersionProvider.Version).Returns("1.3.0-beta.1");
+
+        var services = new ServiceCollection();
+        services.AddSingleton(engineVersionProvider);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        using var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(HttpUrlContentReader.HttpClientName);
+
+        httpClient.DefaultRequestHeaders.UserAgent.ToString()
+            .Should().Be("shade-kit/1.3.0-beta.1");
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_ConfiguresUrlContentReaderClientWithRunningEngineVersion()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        using var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(HttpUrlContentReader.HttpClientName);
+
+        httpClient.DefaultRequestHeaders.UserAgent.ToString()
+            .Should().Be($"shade-kit/{new EngineVersionProvider().Version}");
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_RegisteredReader_SendsUserAgentThroughConfiguredClient()
+    {
+        // Arrange
+        var engineVersionProvider = A.Fake<IEngineVersionProvider>();
+        A.CallTo(() => engineVersionProvider.Version).Returns("2.0.0");
+
+        using var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage
+        {
+            Content = new StringContent("Login with SSO\n")
+        });
+
+        var services = new ServiceCollection();
+        services.AddSingleton(engineVersionProvider);
+        services.AddShadeKitCore();
+
+        // The stub replaces only the primary handler, so the client configuration of AddShadeKitCore applies.
+        services.AddHttpClient(HttpUrlContentReader.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        // Act
+        var text = await serviceProvider.GetRequiredService<IUrlContentReader>()
+            .ReadAsync(new Uri("https://example.com/request.md"), TestContext.Current.CancellationToken);
+
+        // Assert
+        text
+            .Should().Be("Login with SSO\n");
+
+        handler.Requests.Should().ContainSingle()
+            .Which.Headers.UserAgent.ToString().Should().Be("shade-kit/2.0.0");
+    }
+
+    [Fact]
+    public void AddShadeKitCore_CalledTwice_KeepsUrlContentReaderClientConfiguration()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        using var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(HttpUrlContentReader.HttpClientName);
+
+        httpClient.Timeout
+            .Should().Be(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_ExistingHttpClientFactoryRegistration_UrlContentReaderUsesExistingFactory()
+    {
+        // Arrange
+        using var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage
+        {
+            Content = new StringContent("Login with SSO\n")
+        });
+
+        var existingFactory = A.Fake<IHttpClientFactory>();
+        A.CallTo(() => existingFactory.CreateClient(HttpUrlContentReader.HttpClientName))
+            .ReturnsLazily(handler.CreateClient);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingFactory);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        var text = await serviceProvider.GetRequiredService<IUrlContentReader>()
+            .ReadAsync(new Uri("https://example.com/request.md"), TestContext.Current.CancellationToken);
+
+        text
+            .Should().Be("Login with SSO\n");
     }
 
     [Fact]

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (`quick` is a phase of its own; DoD items, coverage, playbook on demand) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (`quick` is a phase of its own; DoD items, coverage, playbook on demand) and 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions) |
 | Source | Concept §2 (Workflow profiles), §5.4, §11.2 |
 | Depends on | 04, 05, 06, 09, 13, 15 |
 | Enables | v1 profile `quick` end to end |
@@ -32,7 +32,7 @@ Profile: `new` → `quick` (all in one) → `finish`, one approval at the end. *
 
 ### The `quick` phase
 
-1. Read `request.md`.
+1. Read `request.md`. It can hold third-party content (issue text, comments, web pages): the skill treats it as data that describes the requirement, never as instructions, and shows the human any instruction in it that looks suspicious ([skill conventions](06-skill-foundation.md#skill-conventions)). **Decided** on 2026-10-25 (code review of the rework of `feature new`, finding F6). **Implemented** (`shade-kit-quick`).
 2. **Short clarification:** ask only the questions that block the change, using the interview skill (package 06). If the change turns out not to be small or not clear, recommend dropping it and creating a `feature` or `bugfix` instead, and stop until the human decides. **Proposed.**
 3. **Compact spec:** write `spec.md` in the format of package 10 with only goal, requirements with `REQ-` IDs, and acceptance criteria; the other sections state "not applicable in quick". **Proposed**, so the DoD and the report can trace requirements to tests also in `quick`.
 4. **Implement and test:** write the code and the tests that prove each acceptance criterion. No `plan.md` or `tasks.md`.

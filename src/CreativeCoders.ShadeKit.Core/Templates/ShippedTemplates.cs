@@ -13,20 +13,11 @@ public static class ShippedTemplates
     private const string TemplatesDir = KitStorePaths.TemplatesDirName + "/";
 
     /// <summary>
-    /// Gets the template of the <c>request.md</c> of a new feature, which is also part of <see cref="All" />.
-    /// </summary>
-    /// <value>The shipped template <c>request.template.md</c>, written to <c>templates/request.md</c>.</value>
-    // Declared before All, because static initializers run in the order of declaration.
-    public static ShippedTemplate Request { get; } = new ShippedTemplate("request.template.md",
-        TemplatesDir + KitStorePaths.RequestFileName);
-
-    /// <summary>
     /// Gets every template that ships with SHADE kit.
     /// </summary>
     /// <value>The shipped templates, each with its source path and its path in the SHADE kit root.</value>
     public static IReadOnlyList<ShippedTemplate> All { get; } =
     [
-        Request,
         new ShippedTemplate("discussion.template.md", TemplatesDir + "discussion.md"),
         new ShippedTemplate("spec.template.md", TemplatesDir + "spec.md"),
         new ShippedTemplate("researches.template.md", TemplatesDir + "researches.md"),

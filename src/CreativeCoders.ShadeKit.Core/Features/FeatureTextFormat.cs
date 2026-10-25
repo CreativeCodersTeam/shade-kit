@@ -5,7 +5,7 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 
 /// <summary>
 /// Formats the values of a feature as text in the same way wherever SHADE kit writes them for people, for example in
-/// <c>request.md</c> and in the plain output of <c>shade-kit feature show</c>.
+/// the <c>request.md</c> of a tracker issue and in the plain output of <c>shade-kit feature show</c>.
 /// </summary>
 public static class FeatureTextFormat
 {

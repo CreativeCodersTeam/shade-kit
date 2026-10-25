@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (`spec.md` template), 2026-10-18 (consistency review: router reference replaced by `shade-kit-next-phase`), and 2026-10-24 (documentation check: the `quick` phase writes the `quick` spec) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (`spec.md` template), 2026-10-18 (consistency review: router reference replaced by `shade-kit-next-phase`), 2026-10-24 (documentation check: the `quick` phase writes the `quick` spec), and 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions) |
 | Source | Concept §3.3 (research focuses), §5.1 (`refine`), §5.2 (DoR), §6 |
 | Depends on | 06, 09 |
 | Enables | 11 (`map`), 12 (`plan`, DoR) |
@@ -29,7 +29,7 @@ Vague statements, gaps, and contradictions in a requirement are found and resolv
 
 ### Run
 
-1. Read `request.md`, any discussion notes of the feature, and an existing `spec.md` (later rounds).
+1. Read `request.md`, any discussion notes of the feature, and an existing `spec.md` (later rounds). `request.md` can hold third-party content (issue text, comments, web pages): the skill and the research agents of step 2 treat it as data that describes the requirement, never as instructions, and the human is shown any instruction in it that looks suspicious ([skill conventions](06-skill-foundation.md#skill-conventions)). **Decided** on 2026-10-25 (code review of the rework of `feature new`, finding F6). **Implemented** (`shade-kit-refine`, `shade-kit-research`).
 2. Run the research skill (package 06) with two focuses in parallel:
    - **Gaps and open questions:** vague terms, missing cases, contradictions, unstated assumptions.
    - **Security at requirement level:** data that needs protection, roles and permissions, abuse cases.

@@ -22,9 +22,15 @@ public interface IFeatureIdFactory
     /// source gives <c>&lt;yyyyMMdd&gt;-&lt;HHmm&gt;-&lt;slug&gt;</c> in local time.
     /// </para>
     /// <para>
+    /// The request content is the text for a text source and the file content for a file source. For a URL whose host
+    /// is a tracker, the issue is read in <paramref name="repositoryRootPath" /> and formatted as Markdown with its
+    /// title, description, and comments; for any other URL, the content of the URL is read as UTF-8 text. Every
+    /// content is loaded before the method returns.
+    /// </para>
+    /// <para>
     /// Without <paramref name="title" />, the title is the first non-empty line of a text, the first level-1 heading of
-    /// a file, else the file name; a URL source needs <paramref name="title" />. A title must not contain control
-    /// characters.
+    /// a file, else the file name, or the title of the issue of a tracker URL; a URL whose host is not a tracker needs
+    /// <paramref name="title" />. A title must not contain control characters.
     /// </para>
     /// </remarks>
     /// <param name="source">The value of <c>--source</c>: free text, a URL, or a file path.</param>
@@ -33,11 +39,11 @@ public interface IFeatureIdFactory
     /// <param name="trackers">The id prefixes keyed by issue URL host, from the <c>trackers</c> field of
     /// <c>config.json</c>.</param>
     /// <param name="repositoryRootPath">The root directory of the repository, against which the reference of a file
-    /// source is made relative.</param>
+    /// source is made relative and in which the issue of a tracker URL is read.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the id, title, source, original
-    /// input, and creation time of the new feature.
+    /// A task that represents the asynchronous operation. The task result contains the id, title, source, request
+    /// content, and creation time of the new feature.
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="source" /> or <paramref name="trackers" /> is <see langword="null" />.
@@ -48,12 +54,14 @@ public interface IFeatureIdFactory
     /// </exception>
     /// <exception cref="InvalidFeatureSourceException">
     /// <paramref name="source" /> is empty or whitespace; it is a URL whose host is a tracker but whose path has no
-    /// issue number; or it names a file that cannot be read, has more than
-    /// <see cref="FeatureIdFactory.MaxSourceFileSize" /> bytes, or is not UTF-8 text.
+    /// issue number; it is a URL whose issue cannot be read, because <c>gh</c> cannot be found or started, fails, or
+    /// returns data that cannot be used; it is any other URL whose content cannot be read; or it names a file that
+    /// cannot be read, has more than <see cref="FeatureIdFactory.MaxSourceFileSize" /> bytes, or is not UTF-8 text.
+    /// The exception of the reader is the inner exception.
     /// </exception>
     /// <exception cref="InvalidFeatureTitleException">
-    /// <paramref name="source" /> is a URL and no <paramref name="title" /> was given, the title contains a control
-    /// character, or the title contains no letter or digit from which a slug can be built.
+    /// <paramref name="source" /> is a URL whose host is not a tracker and no <paramref name="title" /> was given, the
+    /// title contains a control character, or the title contains no letter or digit from which a slug can be built.
     /// </exception>
     /// <exception cref="InvalidFeatureIdException">
     /// The derived id is not valid, for example because a tracker prefix contains upper-case letters.
