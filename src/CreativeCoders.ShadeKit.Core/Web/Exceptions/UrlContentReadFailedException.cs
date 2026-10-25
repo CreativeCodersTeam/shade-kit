@@ -1,6 +1,6 @@
 using CreativeCoders.Core;
 
-namespace CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+namespace CreativeCoders.ShadeKit.Core.Web.Exceptions;
 
 /// <summary>
 /// Represents the exception that is thrown when the content of a URL cannot be read, for example because the server

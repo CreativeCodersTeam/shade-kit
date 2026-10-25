@@ -17,6 +17,7 @@ using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
 using FakeItEasy;
@@ -345,16 +346,15 @@ public class CliErrorMapperTests
     }
 
     [Fact]
-    public void Map_InvalidFeatureSourceCausedByGhNotFound_ReturnsExitCode33WithGhInstallHint()
+    public void Map_InvalidFeatureSourceWithGhUnavailableProblem_ReturnsExitCode33WithGhInstallHint()
     {
         // Arrange
         var mapper = CreateMapper();
-        var cause = new GhNotFoundException(["issue", "view", "https://github.com/octo/repo/issues/1"],
-            "The GitHub CLI gh was not found in any absolute directory of the PATH environment variable.");
 
         // Act
         var error = mapper.Map(new InvalidFeatureSourceException("https://github.com/octo/repo/issues/1",
-            $"The issue cannot be read: {cause.Reason}", cause));
+            "The issue cannot be read: The GitHub CLI gh was not found in any absolute directory of the PATH " +
+            "environment variable.", problem: FeatureSourceProblem.GhUnavailable));
 
         // Assert
         error
@@ -366,59 +366,35 @@ public class CliErrorMapperTests
     }
 
     [Fact]
-    public void Map_InvalidFeatureSourceCausedByGhNotStartable_ReturnsExitCode33WithGhInstallHint()
+    public void Map_InvalidFeatureSourceWithIssueReadFailedProblem_ReturnsExitCode33WithGhSignInHint()
     {
         // Arrange
         var mapper = CreateMapper();
-        var cause = new GhNotFoundException(["issue", "view"],
-            "The gh executable '/usr/bin/gh' could not be started: Permission denied.",
-            new System.ComponentModel.Win32Exception("Permission denied"));
 
         // Act
         var error = mapper.Map(new InvalidFeatureSourceException("https://github.com/octo/repo/issues/1",
-            $"The issue cannot be read: {cause.Reason}", cause));
-
-        // Assert
-        error
-            .Should().NotBeNull();
-
-        error.Message
-            .Should().EndWith(" Install the GitHub CLI gh and make it available on the PATH, then run the command " +
-                              "again.");
-    }
-
-    [Fact]
-    public void Map_InvalidFeatureSourceCausedByTrackerIssueReadFailed_ReturnsExitCode33WithGhSignInHint()
-    {
-        // Arrange
-        var mapper = CreateMapper();
-        var cause = new TrackerIssueReadFailedException(new Uri("https://github.com/octo/repo/issues/1"),
-            "The gh command exited with the exit code 1: Could not resolve to an issue.");
-
-        // Act
-        var error = mapper.Map(new InvalidFeatureSourceException("https://github.com/octo/repo/issues/1",
-            $"The issue cannot be read: {cause.Reason}", cause));
+            "The issue cannot be read: gh exited with the unexpected exit code 1: Could not resolve to an issue.",
+            problem: FeatureSourceProblem.IssueReadFailed));
 
         // Assert
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidFeatureSource,
                 ShadeKitCliErrorCodes.InvalidFeatureSource,
-                "The source 'https://github.com/octo/repo/issues/1' cannot be used: The issue cannot be read: The gh " +
-                "command exited with the exit code 1: Could not resolve to an issue. Check the issue URL and that gh " +
-                "is signed in for its host ('gh auth status'), then run the command again."));
+                "The source 'https://github.com/octo/repo/issues/1' cannot be used: The issue cannot be read: gh " +
+                "exited with the unexpected exit code 1: Could not resolve to an issue. Check the issue URL and " +
+                "that gh is signed in for its host ('gh auth status'), then run the command again."));
     }
 
     [Fact]
-    public void Map_InvalidFeatureSourceCausedByUrlContentReadFailed_ReturnsExitCode33WithUrlHint()
+    public void Map_InvalidFeatureSourceWithUrlReadFailedProblem_ReturnsExitCode33WithUrlHint()
     {
         // Arrange
         var mapper = CreateMapper();
-        var cause = new UrlContentReadFailedException(new Uri("https://example.com/docs/request.md"),
-            "The server answered with the status code 404 (Not Found), not with a success status code (2xx).");
 
         // Act
         var error = mapper.Map(new InvalidFeatureSourceException("https://example.com/docs/request.md",
-            $"The content of the URL cannot be read: {cause.Reason}", cause));
+            "The content of the URL cannot be read: The server answered with the status code 404 (Not Found), not " +
+            "with a success status code (2xx).", problem: FeatureSourceProblem.UrlReadFailed));
 
         // Assert
         error
@@ -431,7 +407,7 @@ public class CliErrorMapperTests
     }
 
     [Fact]
-    public void Map_InvalidFeatureSourceCausedByOtherException_ReturnsExitCode33WithSourceHint()
+    public void Map_InvalidFeatureSourceWithInnerExceptionAndDefaultProblem_ReturnsExitCode33WithSourceHint()
     {
         // Arrange
         var mapper = CreateMapper();
@@ -449,7 +425,7 @@ public class CliErrorMapperTests
     }
 
     [Fact]
-    public void Map_UrlContentReadFailed_ReturnsExitCode33WithExceptionMessage()
+    public void Map_UrlContentReadFailed_ReturnsExitCode33WithExceptionMessageAndUrlHint()
     {
         // Arrange
         var mapper = CreateMapper();
@@ -467,108 +443,48 @@ public class CliErrorMapperTests
                 "the command again, or save the content to a file and pass the path of the file with --source."));
     }
 
-    [Fact]
-    public void Map_UrlContentReadFailedWithInnerException_ReturnsExitCode33()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Map_GhUnavailable_ReturnsExitCode33WithExceptionMessageAndGhInstallHint(bool isNotFound)
     {
         // Arrange
         var mapper = CreateMapper();
+        string[] arguments = ["issue", "view", "https://github.com/octo/repo/issues/1"];
+        const string reason = "The GitHub CLI gh was not found in any absolute directory of the PATH environment " +
+                              "variable.";
 
         // Act
-        var error = mapper.Map(new UrlContentReadFailedException(new Uri("https://example.com/"),
-            "The request failed: No such host is known.", new HttpRequestException("No such host is known.")));
-
-        // Assert
-        error
-            .Should().NotBeNull();
-
-        error.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureSource);
-
-        error.Code
-            .Should().Be(ShadeKitCliErrorCodes.InvalidFeatureSource);
-    }
-
-    [Fact]
-    public void Map_GhNotFound_ReturnsExitCode33WithExceptionMessage()
-    {
-        // Arrange
-        var mapper = CreateMapper();
-
-        // Act
-        var error = mapper.Map(new GhNotFoundException(
-            ["issue", "view", "https://github.com/octo/repo/issues/1", "--json", "title,body,comments"],
-            "The GitHub CLI gh was not found in any absolute directory of the PATH environment variable."));
+        var error = mapper.Map(isNotFound
+            ? new GhNotFoundException(arguments, reason)
+            : new GhUnavailableException(arguments, reason));
 
         // Assert
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidFeatureSource,
                 ShadeKitCliErrorCodes.InvalidFeatureSource,
-                "The gh command 'gh issue view https://github.com/octo/repo/issues/1 --json title,body,comments' " +
-                "cannot be run: The GitHub CLI gh was not found in any absolute directory of the PATH environment " +
-                "variable. Install the GitHub CLI gh and make it available on the PATH, then run the command " +
-                "again."));
+                "The gh command 'gh issue view https://github.com/octo/repo/issues/1' cannot be run: The GitHub CLI " +
+                "gh was not found in any absolute directory of the PATH environment variable. Install the GitHub CLI " +
+                "gh and make it available on the PATH, then run the command again."));
     }
 
     [Fact]
-    public void Map_GhNotFoundWithInnerException_ReturnsExitCode33()
-    {
-        // Arrange
-        var mapper = CreateMapper();
-
-        // Act
-        var error = mapper.Map(new GhNotFoundException(["issue", "view"],
-            "The gh executable '/usr/bin/gh' could not be started: Permission denied.",
-            new System.ComponentModel.Win32Exception("Permission denied")));
-
-        // Assert
-        error
-            .Should().NotBeNull();
-
-        error.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureSource);
-
-        error.Code
-            .Should().Be(ShadeKitCliErrorCodes.InvalidFeatureSource);
-    }
-
-    [Fact]
-    public void Map_TrackerIssueReadFailed_ReturnsExitCode33WithExceptionMessage()
+    public void Map_TrackerIssueReadFailed_ReturnsExitCode33WithExceptionMessageAndGhSignInHint()
     {
         // Arrange
         var mapper = CreateMapper();
 
         // Act
         var error = mapper.Map(new TrackerIssueReadFailedException(new Uri("https://github.com/octo/repo/issues/1"),
-            "The gh command exited with the exit code 1: Could not resolve to an issue."));
+            "gh exited with the unexpected exit code 1: Could not resolve to an issue."));
 
         // Assert
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidFeatureSource,
                 ShadeKitCliErrorCodes.InvalidFeatureSource,
-                "The issue 'https://github.com/octo/repo/issues/1' cannot be read: The gh command exited with the " +
-                "exit code 1: Could not resolve to an issue. Check the issue URL and that gh is signed in for its " +
-                "host ('gh auth status'), then run the command again."));
-    }
-
-    [Fact]
-    public void Map_TrackerIssueReadFailedWithInnerException_ReturnsExitCode33()
-    {
-        // Arrange
-        var mapper = CreateMapper();
-
-        // Act
-        var error = mapper.Map(new TrackerIssueReadFailedException(new Uri("https://github.com/octo/repo/issues/1"),
-            "The gh output is not valid JSON: Unexpected end.", new System.Text.Json.JsonException("Unexpected end")));
-
-        // Assert
-        error
-            .Should().NotBeNull();
-
-        error.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.InvalidFeatureSource);
-
-        error.Code
-            .Should().Be(ShadeKitCliErrorCodes.InvalidFeatureSource);
+                "The issue 'https://github.com/octo/repo/issues/1' cannot be read: gh exited with the unexpected exit " +
+                "code 1: Could not resolve to an issue. Check the issue URL and that gh is signed in for its host " +
+                "('gh auth status'), then run the command again."));
     }
 
     [Fact]

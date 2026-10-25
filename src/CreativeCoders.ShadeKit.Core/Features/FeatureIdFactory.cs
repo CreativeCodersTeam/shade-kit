@@ -1,10 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Files;
-using CreativeCoders.ShadeKit.Core.Trackers;
-using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -13,32 +11,20 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The creation time is read once per call and truncated to whole seconds. A file source is read through a
-/// <see cref="FileStream" /> up to <see cref="MaxSourceFileSize" /> + 1 bytes, so an endless device such as
-/// <c>/dev/zero</c> is refused. Known residual risk: opening a FIFO without a writer blocks.
+/// The creation time is read once per call and truncated to whole seconds.
 /// </para>
 /// <para>
-/// The content of every source is loaded here, before the feature store writes anything, so a source that cannot be
-/// loaded leaves no feature behind. The issue of a URL whose host is a tracker is read with the
-/// <see cref="ITrackerIssueReader" /> in the repository root, after the issue number of the URL was checked; the
-/// content of any other URL is read with the <see cref="IUrlContentReader" />, after the title was checked. A failure
-/// of either reader is reported as an <see cref="InvalidFeatureSourceException" />; a cancellation is not.
+/// The content of every source is loaded with the <see cref="IFeatureSourceReader" />, before the feature store writes
+/// anything, so a source that cannot be loaded leaves no feature behind. The issue of a URL whose host is a tracker is
+/// read in the repository root after the issue number of the URL was checked; the content of any other URL is read
+/// after the title was checked.
 /// </para>
 /// </remarks>
 /// <param name="timeProvider">The provider of the local time.</param>
-/// <param name="trackerIssueReader">The reader of the issue of a URL source whose host is a tracker.</param>
-/// <param name="urlContentReader">The reader of the content of a URL source whose host is not a tracker.</param>
-public sealed class FeatureIdFactory(
-    TimeProvider timeProvider,
-    ITrackerIssueReader trackerIssueReader,
-    IUrlContentReader urlContentReader)
+/// <param name="featureSourceReader">The reader that loads the content of the source.</param>
+public sealed class FeatureIdFactory(TimeProvider timeProvider, IFeatureSourceReader featureSourceReader)
     : IFeatureIdFactory
 {
-    /// <summary>
-    /// Represents the maximum size, in bytes, of the file of a file source.
-    /// </summary>
-    public const int MaxSourceFileSize = 1_048_576;
-
     private const string TimeBasedIdFormat = "yyyyMMdd-HHmm";
 
     private const int MaxHeadingIndentation = 3;
@@ -53,9 +39,7 @@ public sealed class FeatureIdFactory(
 
     private readonly TimeProvider _timeProvider = Ensure.NotNull(timeProvider);
 
-    private readonly ITrackerIssueReader _trackerIssueReader = Ensure.NotNull(trackerIssueReader);
-
-    private readonly IUrlContentReader _urlContentReader = Ensure.NotNull(urlContentReader);
+    private readonly IFeatureSourceReader _featureSourceReader = Ensure.NotNull(featureSourceReader);
 
     /// <inheritdoc />
     public async Task<FeatureIdentity> CreateAsync(string source, string? title, string workingDirectory,
@@ -79,7 +63,7 @@ public sealed class FeatureIdFactory(
         var explicitTitle = string.IsNullOrWhiteSpace(title) ? null : title.Trim();
         var createdAt = TruncateToSeconds(_timeProvider.GetLocalNow());
 
-        if (TryGetHttpUrl(source, out var url))
+        if (HttpUrls.TryParse(source, out var url))
         {
             return await CreateFromUrlAsync(source, url, explicitTitle, trackers, repositoryRootPath, createdAt,
                 cancellationToken).ConfigureAwait(false);
@@ -121,14 +105,14 @@ public sealed class FeatureIdFactory(
         // A title passed with --title is checked before gh runs, so a title that cannot be used costs no gh call.
         var explicitSlug = explicitTitle is null ? null : CreateCheckedSlug(explicitTitle, ExplicitTitleOrigin);
 
-        var issue = await ReadIssueAsync(source, url, repositoryRootPath, cancellationToken).ConfigureAwait(false);
+        var issue = await _featureSourceReader.ReadIssueAsync(source, url, repositoryRootPath, cancellationToken)
+            .ConfigureAwait(false);
 
         var title = explicitTitle ?? issue.Title.Trim();
         var slug = explicitSlug ?? CreateCheckedSlug(title, IssueTitleOrigin);
 
-        return CreateIdentity($"{trackerPrefix}-{issueNumber}-{slug}", title,
-            new FeatureSource { Kind = FeatureSourceKind.Url, Value = source }, TrackerIssueMarkdown.Format(issue),
-            createdAt);
+        return CreateIdentity($"{trackerPrefix}-{issueNumber}-{slug}", title, CreateUrlSource(source),
+            TrackerIssueMarkdown.Format(issue), createdAt);
     }
 
     private async Task<FeatureIdentity> CreateFromWebUrlAsync(string source, Uri url, string? explicitTitle,
@@ -144,66 +128,25 @@ public sealed class FeatureIdFactory(
 
         var slug = CreateCheckedSlug(explicitTitle, ExplicitTitleOrigin);
 
-        var content = await ReadUrlContentAsync(source, url, cancellationToken).ConfigureAwait(false);
+        var content = await _featureSourceReader.ReadUrlAsync(source, url, cancellationToken).ConfigureAwait(false);
 
-        return CreateIdentity(CreateTimeBasedId(createdAt, slug), explicitTitle,
-            new FeatureSource { Kind = FeatureSourceKind.Url, Value = source }, content, createdAt);
+        return CreateIdentity(CreateTimeBasedId(createdAt, slug), explicitTitle, CreateUrlSource(source), content,
+            createdAt);
     }
 
-    // Only the failures of the reader are wrapped; an OperationCanceledException passes through unchanged.
-    private async Task<TrackerIssue> ReadIssueAsync(string source, Uri url, string repositoryRootPath,
-        CancellationToken cancellationToken)
+    private async Task<FeatureIdentity> CreateFromFileAsync(string source, string filePath, string? explicitTitle,
+        string repositoryRootPath, DateTimeOffset createdAt, CancellationToken cancellationToken)
     {
-        try
-        {
-            return await _trackerIssueReader.ReadIssueAsync(url, repositoryRootPath, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (GhNotFoundException exception)
-        {
-            // The reason names gh already, for example "The GitHub CLI gh was not found in ...".
-            throw new InvalidFeatureSourceException(source, $"The issue cannot be read: {exception.Reason}", exception);
-        }
-        catch (TrackerIssueReadFailedException exception)
-        {
-            throw new InvalidFeatureSourceException(source, $"The issue cannot be read: {exception.Reason}",
-                exception);
-        }
-    }
+        var text = await _featureSourceReader.ReadFileAsync(source, filePath, cancellationToken).ConfigureAwait(false);
 
-    // Only the failures of the reader are wrapped; an OperationCanceledException passes through unchanged.
-    private async Task<string> ReadUrlContentAsync(string source, Uri url, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await _urlContentReader.ReadAsync(url, cancellationToken).ConfigureAwait(false);
-        }
-        catch (UrlContentReadFailedException exception)
-        {
-            throw new InvalidFeatureSourceException(source,
-                $"The content of the URL cannot be read: {exception.Reason}", exception);
-        }
-    }
+        var heading = explicitTitle is null ? FindLevelOneHeading(text) : null;
 
-    private static async Task<FeatureIdentity> CreateFromFileAsync(string source, string filePath,
-        string? explicitTitle, string repositoryRootPath, DateTimeOffset createdAt,
-        CancellationToken cancellationToken)
-    {
-        var text = await ReadSourceFileAsync(source, filePath, cancellationToken).ConfigureAwait(false);
-        var title = explicitTitle;
-        var titleOrigin = ExplicitTitleOrigin;
-
-        if (title is null)
+        var (title, titleOrigin) = (explicitTitle, heading) switch
         {
-            title = FindLevelOneHeading(text);
-            titleOrigin = "taken from the first level-1 heading of the file";
-        }
-
-        if (title is null)
-        {
-            title = Path.GetFileNameWithoutExtension(filePath);
-            titleOrigin = "taken from the file name";
-        }
+            ({ } explicitValue, _) => (explicitValue, ExplicitTitleOrigin),
+            (_, { } headingValue) => (headingValue, "taken from the first level-1 heading of the file"),
+            _ => (Path.GetFileNameWithoutExtension(filePath), "taken from the file name")
+        };
 
         var id = CreateTimeBasedId(createdAt, CreateCheckedSlug(title, titleOrigin));
         var featureSource = new FeatureSource
@@ -227,28 +170,17 @@ public sealed class FeatureIdFactory(
             createdAt);
     }
 
+    private static FeatureSource CreateUrlSource(string source)
+    {
+        return new FeatureSource { Kind = FeatureSourceKind.Url, Value = source };
+    }
+
     private static FeatureIdentity CreateIdentity(string id, string title, FeatureSource source,
         string requestContent, DateTimeOffset createdAt)
     {
         FeatureIds.EnsureValid(id);
 
         return new FeatureIdentity(id, title, source, requestContent, createdAt);
-    }
-
-    private static bool TryGetHttpUrl(string source, [NotNullWhen(true)] out Uri? url)
-    {
-        if (Uri.TryCreate(source, UriKind.Absolute, out var parsedUrl)
-            && (parsedUrl.Scheme == Uri.UriSchemeHttp || parsedUrl.Scheme == Uri.UriSchemeHttps)
-            && parsedUrl.Host.Length > 0)
-        {
-            url = parsedUrl;
-
-            return true;
-        }
-
-        url = null;
-
-        return false;
     }
 
     private static string? FindSourceFilePath(string source, string workingDirectory)
@@ -274,42 +206,6 @@ public sealed class FeatureIdFactory(
         }
     }
 
-    private static async Task<string> ReadSourceFileAsync(string source, string filePath,
-        CancellationToken cancellationToken)
-    {
-        // One byte more than the limit is read, so a larger file is detected without reading it completely.
-        var content = new byte[MaxSourceFileSize + 1];
-        int length;
-
-        try
-        {
-            var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 0);
-
-            await using (stream.ConfigureAwait(false))
-            {
-                // Reads until the buffer is full or the stream ends. The length of the stream is not used, because
-                // devices such as /dev/zero report a length of 0.
-                length = await stream
-                    .ReadAtLeastAsync(content, content.Length, throwOnEndOfStream: false, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            throw new InvalidFeatureSourceException(source, $"The file cannot be read: {exception.Message}",
-                exception);
-        }
-
-        if (length > MaxSourceFileSize)
-        {
-            throw new InvalidFeatureSourceException(source,
-                $"The file is larger than {MaxSourceFileSize.ToString("N0", CultureInfo.InvariantCulture)} bytes " +
-                "(1 MiB), the size limit of a file source. Shorten the file, or pass a shorter request as text.");
-        }
-
-        return DecodeUtf8(source, content.AsSpan(0, length));
-    }
-
     private static string? FindTrackerPrefix(IReadOnlyDictionary<string, string> trackers, string host)
     {
         return trackers
@@ -327,23 +223,17 @@ public sealed class FeatureIdFactory(
             : null;
     }
 
-    private static string DecodeUtf8(string source, ReadOnlySpan<byte> content)
-    {
-        return TextFileEncoding.DecodeUtf8(content,
-            (_, reason, innerException) => new InvalidFeatureSourceException(source, reason, innerException));
-    }
-
     private static void EnsureNoControlCharacter(string title, string titleOrigin)
     {
-        if (!title.Any(char.IsControl))
+        var controlCharacter = title.Where(char.IsControl).Select(x => (char?)x).FirstOrDefault();
+
+        if (controlCharacter is null)
         {
             return;
         }
 
-        var controlCharacter = title.First(char.IsControl);
-
         throw new InvalidFeatureTitleException(
-            $"The title {titleOrigin} contains the control character U+{(int)controlCharacter:X4}; a title must be " +
+            $"The title {titleOrigin} contains the control character U+{(int)controlCharacter.Value:X4}; a title must be " +
             "a single line without tabs or other control characters. Pass such a title with --title.");
     }
 

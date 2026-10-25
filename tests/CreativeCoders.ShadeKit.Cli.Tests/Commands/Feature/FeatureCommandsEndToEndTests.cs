@@ -5,9 +5,12 @@ using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
@@ -84,7 +87,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
             .Returns(new TrackerIssue("Login with SSO", "Users sign in with the company account.", []));
 
-        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._))
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
             .Returns("Login SSO\n");
     }
 
@@ -318,7 +321,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     {
         // Arrange
         await InitAsync();
-        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._))
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
             .Throws(new UrlContentReadFailedException(new Uri(WebUrl), UrlFailureReason));
         var snapshot = _tempDirectory.TakeSnapshot();
 
@@ -349,7 +352,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     {
         // Arrange
         await InitAsync();
-        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._))
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
             .Throws(new UrlContentReadFailedException(new Uri(WebUrl), UrlFailureReason));
 
         // Act
@@ -394,7 +397,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .ReplaceLineEndings("\n")
             .Should().Be("Login SSO\n");
 
-        A.CallTo(() => _urlContentReader.ReadAsync(new Uri(WebUrl), A<CancellationToken>._))
+        A.CallTo(() => _urlContentReader.ReadAsync(new Uri(WebUrl), A<int>._, A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
 
         A.CallTo(_trackerIssueReader).MustNotHaveHappened();
@@ -1366,22 +1369,22 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         _tempDirectory.Dispose();
     }
 
-    private GitCommandResult AnswerGit(IReadOnlyList<string> arguments)
+    private ExternalProcessResult AnswerGit(IReadOnlyList<string> arguments)
     {
         _onGitCall?.Invoke(arguments);
 
         if (arguments.SequenceEqual(CurrentBranchArguments))
         {
             return _branch is null
-                ? new GitCommandResult(1, string.Empty, string.Empty)
-                : new GitCommandResult(0, _branch + "\n", string.Empty);
+                ? new ExternalProcessResult(1, string.Empty, string.Empty)
+                : new ExternalProcessResult(0, _branch + "\n", string.Empty);
         }
 
         return arguments switch
         {
-            ["config", "user.name"] => new GitCommandResult(0, UserName + "\n", string.Empty),
-            ["config", "user.email"] => new GitCommandResult(0, UserEmail + "\n", string.Empty),
-            _ => new GitCommandResult(128, string.Empty, $"unexpected git call: {string.Join(' ', arguments)}")
+            ["config", "user.name"] => new ExternalProcessResult(0, UserName + "\n", string.Empty),
+            ["config", "user.email"] => new ExternalProcessResult(0, UserEmail + "\n", string.Empty),
+            _ => new ExternalProcessResult(128, string.Empty, $"unexpected git call: {string.Join(' ', arguments)}")
         };
     }
 

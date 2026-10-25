@@ -7,10 +7,12 @@ using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Init;
+using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Trackers;
+using CreativeCoders.ShadeKit.Core.Web;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
@@ -72,6 +74,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IEditorConfigLineEndingResolver), typeof(EditorConfigLineEndingResolver))]
     [InlineData(typeof(ILineEndingResolver), typeof(LineEndingResolver))]
     [InlineData(typeof(ITextFileWriter), typeof(TextFileWriter))]
+    [InlineData(typeof(IFeatureSourceReader), typeof(FeatureSourceReader))]
     [InlineData(typeof(IFeatureIdFactory), typeof(FeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver), typeof(CurrentFeatureResolver))]
     [InlineData(typeof(IFeatureStore), typeof(FeatureStore))]
@@ -170,6 +173,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IEditorConfigLineEndingResolver))]
     [InlineData(typeof(ILineEndingResolver))]
     [InlineData(typeof(ITextFileWriter))]
+    [InlineData(typeof(IFeatureSourceReader))]
     [InlineData(typeof(IFeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver))]
     [InlineData(typeof(IFeatureStore))]
@@ -212,6 +216,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IEditorConfigLineEndingResolver))]
     [InlineData(typeof(ILineEndingResolver))]
     [InlineData(typeof(ITextFileWriter))]
+    [InlineData(typeof(IFeatureSourceReader))]
     [InlineData(typeof(IFeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver))]
     [InlineData(typeof(IFeatureStore))]
@@ -312,7 +317,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
         // Arrange
         var existingRunner = A.Fake<IGitCommandRunner>();
         A.CallTo(() => existingRunner.RunAsync("/repo", A<IReadOnlyList<string>>._, A<CancellationToken>._))
-            .Returns(new GitCommandResult(0, "main\n", ""));
+            .Returns(new ExternalProcessResult(0, "main\n", ""));
 
         var services = new ServiceCollection();
         services.AddSingleton(existingRunner);
@@ -391,7 +396,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
         var existingRunner = A.Fake<IGitCommandRunner>();
         A.CallTo(() => existingRunner.RunAsync(Path.GetFullPath("/repo"), A<IReadOnlyList<string>>._,
                 A<CancellationToken>._))
-            .Returns(new GitCommandResult(0, "readme.md: eol: crlf\n", ""));
+            .Returns(new ExternalProcessResult(0, "readme.md: eol: crlf\n", ""));
 
         var services = new ServiceCollection();
         services.AddSingleton(existingRunner);
@@ -597,7 +602,8 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         // Act
         var text = await serviceProvider.GetRequiredService<IUrlContentReader>()
-            .ReadAsync(new Uri("https://example.com/request.md"), TestContext.Current.CancellationToken);
+            .ReadAsync(new Uri("https://example.com/request.md"), FeatureSourceReader.MaxSourceLength,
+                TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -650,7 +656,8 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
         await using var serviceProvider = services.BuildServiceProvider();
 
         var text = await serviceProvider.GetRequiredService<IUrlContentReader>()
-            .ReadAsync(new Uri("https://example.com/request.md"), TestContext.Current.CancellationToken);
+            .ReadAsync(new Uri("https://example.com/request.md"), FeatureSourceReader.MaxSourceLength,
+                TestContext.Current.CancellationToken);
 
         text
             .Should().Be("Login with SSO\n");

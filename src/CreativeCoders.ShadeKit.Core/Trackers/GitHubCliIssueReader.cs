@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.Json;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Text;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web;
 
 namespace CreativeCoders.ShadeKit.Core.Trackers;
 
@@ -49,7 +51,7 @@ public sealed class GitHubCliIssueReader(IGhCommandRunner ghCommandRunner) : ITr
         cancellationToken.ThrowIfCancellationRequested();
 
         // Only an absolute http or https URL is passed, so the argument can never be read as an option of gh.
-        if (!IsHttpUrl(issueUrl))
+        if (!HttpUrls.IsHttpUrl(issueUrl))
         {
             throw new TrackerIssueReadFailedException(issueUrl,
                 "Only absolute http and https URLs can be read as issues.");
@@ -62,7 +64,7 @@ public sealed class GitHubCliIssueReader(IGhCommandRunner ghCommandRunner) : ITr
 
         if (result.ExitCode != 0)
         {
-            throw new TrackerIssueReadFailedException(issueUrl, CreateExitCodeReason(result));
+            throw new TrackerIssueReadFailedException(issueUrl, result.CreateUnexpectedExitCodeReason("gh"));
         }
 
         return ParseIssue(issueUrl, result.StandardOutput);
@@ -79,7 +81,7 @@ public sealed class GitHubCliIssueReader(IGhCommandRunner ghCommandRunner) : ITr
         catch (JsonException exception)
         {
             throw new TrackerIssueReadFailedException(issueUrl,
-                $"The gh output is not valid JSON: {CreateSentence(exception.Message)}", exception);
+                $"The gh output is not valid JSON: {Sentences.Terminate(exception.Message)}", exception);
         }
 
         using (document)
@@ -185,25 +187,5 @@ public sealed class GitHubCliIssueReader(IGhCommandRunner ghCommandRunner) : ITr
         }
 
         return value.GetString()!;
-    }
-
-    private static string CreateExitCodeReason(GhCommandResult result)
-    {
-        var exitCode = result.ExitCode.ToString(CultureInfo.InvariantCulture);
-        var standardError = result.StandardError.Trim();
-
-        return standardError.Length == 0
-            ? $"The gh command exited with the exit code {exitCode} without an error message."
-            : $"The gh command exited with the exit code {exitCode}: {CreateSentence(standardError)}";
-    }
-
-    private static bool IsHttpUrl(Uri url)
-    {
-        return url.IsAbsoluteUri && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
-    }
-
-    private static string CreateSentence(string text)
-    {
-        return text.EndsWith('.') ? text : text + ".";
     }
 }

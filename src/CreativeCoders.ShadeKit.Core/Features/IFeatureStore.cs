@@ -57,7 +57,7 @@ public interface IFeatureStore
     /// <exception cref="InvalidFeatureSourceException">
     /// The source is empty; it is a URL of a tracker in <c>config.json</c> without an issue number or whose issue
     /// cannot be read with <c>gh</c>; it is any other URL whose content cannot be read; or it names a file that cannot
-    /// be read, is larger than <see cref="FeatureIdFactory.MaxSourceFileSize" /> bytes (1 MiB), or is not UTF-8 text.
+    /// be read, is larger than <see cref="FeatureSourceReader.MaxSourceLength" /> bytes (1 MiB), or is not UTF-8 text.
     /// </exception>
     /// <exception cref="InvalidFeatureTitleException">
     /// A URL source whose host is not a tracker in <c>config.json</c> has no title, the title contains a control

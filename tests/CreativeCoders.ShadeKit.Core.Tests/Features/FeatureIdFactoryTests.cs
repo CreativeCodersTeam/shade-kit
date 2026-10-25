@@ -5,6 +5,8 @@ using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.Time.Testing;
@@ -47,7 +49,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
             .Returns(DefaultIssue);
 
-        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._))
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
             .Returns(WebContent);
     }
 
@@ -294,7 +296,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
                 new DateTimeOffset(2026, 10, 20, 15, 30, 45, TimeSpan.FromHours(2))),
                 options => options.ComparingByMembers<FeatureIdentity>());
 
-        A.CallTo(() => _urlContentReader.ReadAsync(new Uri(WebUrl), TestContext.Current.CancellationToken))
+        A.CallTo(() => _urlContentReader.ReadAsync(new Uri(WebUrl), FeatureSourceReader.MaxSourceLength, TestContext.Current.CancellationToken))
             .MustHaveHappenedOnceExactly();
         A.CallTo(_trackerIssueReader).MustNotHaveHappened();
     }
@@ -305,7 +307,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         // Arrange
         var readerException = new UrlContentReadFailedException(new Uri(WebUrl),
             "The server answered with status code 404 (Not Found).");
-        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._)).Throws(readerException);
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._)).Throws(readerException);
         var factory = CreateFactory();
 
         // Act
@@ -330,7 +332,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     {
         // Arrange
         var canceledException = new OperationCanceledException("Canceled by the test.");
-        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._)).Throws(canceledException);
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._)).Throws(canceledException);
         var factory = CreateFactory();
 
         // Act
@@ -424,7 +426,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     {
         // Arrange
         var readerException = new InvalidOperationException("Unexpected.");
-        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._)).Throws(readerException);
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._)).Throws(readerException);
         var factory = CreateFactory();
 
         // Act
@@ -1205,7 +1207,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public async Task CreateAsync_FileOfExactlyMaximumSize_ReturnsFileSourceWithCompleteContent()
     {
         // Arrange
-        var content = CreateFileContent(FeatureIdFactory.MaxSourceFileSize);
+        var content = CreateFileContent(FeatureSourceReader.MaxSourceLength);
         _repository.WriteFile(content, "request.md");
         var factory = CreateFactory();
 
@@ -1229,7 +1231,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         // Arrange
         // 'ü' takes two bytes in UTF-8, so the file has fewer characters than the limit but more bytes.
         const string heading = "# Login SSO\n";
-        var characterCount = (FeatureIdFactory.MaxSourceFileSize - heading.Length) / 2 + 1;
+        var characterCount = (FeatureSourceReader.MaxSourceLength - heading.Length) / 2 + 1;
         _repository.WriteFile(heading + new string('ü', characterCount), "request.md");
         var factory = CreateFactory();
 
@@ -1247,7 +1249,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     {
         // Arrange
         const string lastCharacter = "\U0001F600";
-        var content = CreateFileContent(FeatureIdFactory.MaxSourceFileSize - 4) + lastCharacter;
+        var content = CreateFileContent(FeatureSourceReader.MaxSourceLength - 4) + lastCharacter;
         _repository.WriteFile(content, "request.md");
         var factory = CreateFactory();
 
@@ -1263,7 +1265,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public async Task CreateAsync_Utf8BomPlusContentOfExactlyMaximumSize_ReturnsContentWithoutBom()
     {
         // Arrange
-        var text = CreateFileContent(FeatureIdFactory.MaxSourceFileSize - 3);
+        var text = CreateFileContent(FeatureSourceReader.MaxSourceLength - 3);
         _repository.WriteFileBytes([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(text)], "request.md");
         var factory = CreateFactory();
 
@@ -1280,7 +1282,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     {
         // Arrange
         // The byte order mark counts toward the limit.
-        var text = CreateFileContent(FeatureIdFactory.MaxSourceFileSize - 2);
+        var text = CreateFileContent(FeatureSourceReader.MaxSourceLength - 2);
         _repository.WriteFileBytes([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(text)], "request.md");
         var factory = CreateFactory();
 
@@ -1297,7 +1299,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public async Task CreateAsync_FileOverLimitWithNulByte_ThrowsSizeLimitExceptionBeforeEncodingCheck()
     {
         // Arrange
-        var content = Encoding.UTF8.GetBytes(CreateFileContent(FeatureIdFactory.MaxSourceFileSize + 1));
+        var content = Encoding.UTF8.GetBytes(CreateFileContent(FeatureSourceReader.MaxSourceLength + 1));
         content[^1] = 0x00;
         _repository.WriteFileBytes(content, "request.md");
         var factory = CreateFactory();
@@ -1318,7 +1320,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         string expectedReasonStart)
     {
         // Arrange
-        var content = Encoding.UTF8.GetBytes(CreateFileContent(FeatureIdFactory.MaxSourceFileSize));
+        var content = Encoding.UTF8.GetBytes(CreateFileContent(FeatureSourceReader.MaxSourceLength));
         content[^1] = lastByte;
         _repository.WriteFileBytes(content, "request.md");
         var factory = CreateFactory();
@@ -1360,7 +1362,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public async Task CreateAsync_FileOneByteLargerThanMaximumSize_ThrowsInvalidFeatureSourceExceptionNamingSizeLimit()
     {
         // Arrange
-        _repository.WriteFile(CreateFileContent(FeatureIdFactory.MaxSourceFileSize + 1), "request.md");
+        _repository.WriteFile(CreateFileContent(FeatureSourceReader.MaxSourceLength + 1), "request.md");
         var factory = CreateFactory();
 
         // Act
@@ -1992,7 +1994,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 10, 21, 2, 5, 0, TimeSpan.Zero));
         timeProvider.SetLocalTimeZone(
             TimeZoneInfo.CreateCustomTimeZone("Test UTC-05", TimeSpan.FromHours(-5), "Test UTC-05", "Test UTC-05"));
-        var factory = new FeatureIdFactory(timeProvider, _trackerIssueReader, _urlContentReader);
+        var factory = new FeatureIdFactory(timeProvider, new FeatureSourceReader(_trackerIssueReader, _urlContentReader));
 
         // Act
         var identity = await CreateAsync(factory, "Login SSO", null);
@@ -2122,7 +2124,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public void Ctor_NullTimeProvider_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeatureIdFactory(null!, _trackerIssueReader, _urlContentReader);
+        var act = () => new FeatureIdFactory(null!, new FeatureSourceReader(_trackerIssueReader, _urlContentReader));
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -2130,25 +2132,14 @@ public sealed class FeatureIdFactoryTests : IDisposable
     }
 
     [Fact]
-    public void Ctor_NullTrackerIssueReader_ThrowsArgumentNullException()
+    public void Ctor_NullFeatureSourceReader_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeatureIdFactory(TimeProvider.System, null!, _urlContentReader);
+        var act = () => new FeatureIdFactory(TimeProvider.System, null!);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("trackerIssueReader");
-    }
-
-    [Fact]
-    public void Ctor_NullUrlContentReader_ThrowsArgumentNullException()
-    {
-        // Act
-        var act = () => new FeatureIdFactory(TimeProvider.System, _trackerIssueReader, null!);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("urlContentReader");
+            .WithParameterName("featureSourceReader");
     }
 
     // Creates UTF-8 text of exactly the specified number of bytes that starts with the level-1 heading "Login SSO".
@@ -2178,7 +2169,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         var timeProvider = new FakeTimeProvider(utcNow ?? UtcNow);
         timeProvider.SetLocalTimeZone(UtcPlusTwo);
 
-        return new FeatureIdFactory(timeProvider, _trackerIssueReader, _urlContentReader);
+        return new FeatureIdFactory(timeProvider, new FeatureSourceReader(_trackerIssueReader, _urlContentReader));
     }
 
     private Task<FeatureIdentity> CreateAsync(FeatureIdFactory factory, string source, string? title,

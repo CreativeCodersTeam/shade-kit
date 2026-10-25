@@ -39,9 +39,9 @@ internal sealed class PathExecutableSearch
     private const UnixFileMode AnyExecute =
         UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
 
-    private readonly string _windowsExecutableName;
+    private readonly string _executableName;
 
-    private readonly string _unixExecutableName;
+    private readonly char _directorySeparator;
 
     private readonly Func<string?> _getPathVariable;
 
@@ -113,10 +113,13 @@ internal sealed class PathExecutableSearch
     public PathExecutableSearch(string windowsExecutableName, string unixExecutableName,
         Func<string?> getPathVariable, bool isWindows, Func<string, bool> fileExists, Func<string, bool> isExecutable)
     {
-        _windowsExecutableName = Ensure.IsNotNullOrWhitespace(windowsExecutableName);
-        _unixExecutableName = Ensure.IsNotNullOrWhitespace(unixExecutableName);
+        Ensure.IsNotNullOrWhitespace(windowsExecutableName);
+        Ensure.IsNotNullOrWhitespace(unixExecutableName);
+
         _getPathVariable = Ensure.NotNull(getPathVariable);
         _isWindows = isWindows;
+        _executableName = isWindows ? windowsExecutableName : unixExecutableName;
+        _directorySeparator = isWindows ? WindowsDirectorySeparator : UnixDirectorySeparator;
         _fileExists = Ensure.NotNull(fileExists);
         _isExecutable = Ensure.NotNull(isExecutable);
     }
@@ -250,20 +253,14 @@ internal sealed class PathExecutableSearch
 
     private string CreateCandidatePath(string directory)
     {
-        var executableName = _isWindows ? _windowsExecutableName : _unixExecutableName;
         var lastCharacter = directory[^1];
 
         var endsWithSeparator = _isWindows
             ? IsWindowsDirectorySeparator(lastCharacter)
             : lastCharacter == UnixDirectorySeparator;
 
-        if (endsWithSeparator)
-        {
-            return directory + executableName;
-        }
-
-        var directorySeparator = _isWindows ? WindowsDirectorySeparator : UnixDirectorySeparator;
-
-        return $"{directory}{directorySeparator}{executableName}";
+        return endsWithSeparator
+            ? directory + _executableName
+            : $"{directory}{_directorySeparator}{_executableName}";
     }
 }

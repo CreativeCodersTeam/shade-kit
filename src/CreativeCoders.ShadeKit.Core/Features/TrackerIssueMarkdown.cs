@@ -1,8 +1,8 @@
-using System.Text;
+using System.Text.RegularExpressions;
 using CreativeCoders.Core;
-using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Trackers;
 
-namespace CreativeCoders.ShadeKit.Core.Trackers;
+namespace CreativeCoders.ShadeKit.Core.Features;
 
 /// <summary>
 /// Formats a <see cref="TrackerIssue" /> as the Markdown text of a <c>request.md</c> file.
@@ -26,7 +26,7 @@ namespace CreativeCoders.ShadeKit.Core.Trackers;
 /// or is empty if there is no block; the line ending of the file is decided when it is written.
 /// </para>
 /// </remarks>
-internal static class TrackerIssueMarkdown
+internal static partial class TrackerIssueMarkdown
 {
     private const string LineEnding = "\n";
 
@@ -72,28 +72,7 @@ internal static class TrackerIssueMarkdown
     // A line break in the title would end the heading, so every run of control characters becomes one space.
     private static string CreateHeadingText(string title)
     {
-        var text = new StringBuilder(title.Length);
-        var isInControlRun = false;
-
-        foreach (var character in title)
-        {
-            if (char.IsControl(character))
-            {
-                if (!isInControlRun)
-                {
-                    text.Append(' ');
-                }
-
-                isInControlRun = true;
-
-                continue;
-            }
-
-            text.Append(character);
-            isInControlRun = false;
-        }
-
-        return text.ToString().Trim();
+        return ControlCharacterRuns().Replace(title, " ").Trim();
     }
 
     private static void AddBodyBlock(List<string> blocks, string body)
@@ -104,4 +83,8 @@ internal static class TrackerIssueMarkdown
             blocks.Add(body.TrimEnd('\r', '\n'));
         }
     }
+
+    // \p{Cc} is the Unicode category of char.IsControl.
+    [GeneratedRegex(@"\p{Cc}+")]
+    private static partial Regex ControlCharacterRuns();
 }

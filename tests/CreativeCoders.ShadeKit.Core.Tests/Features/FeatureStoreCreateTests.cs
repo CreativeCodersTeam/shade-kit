@@ -16,8 +16,8 @@ using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
-using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
@@ -339,7 +339,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
     {
         // Arrange
         var filePath = _context.Repository.WriteFile(
-            "# Login SSO\n" + new string('a', FeatureIdFactory.MaxSourceFileSize), "request.md");
+            "# Login SSO\n" + new string('a', FeatureSourceReader.MaxSourceLength), "request.md");
         var snapshot = _context.Repository.TakeSnapshot();
         var featureStore = _context.CreateFeatureStore();
 
@@ -933,7 +933,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
                 cancellationTokenSource.Token))
             .MustHaveHappenedOnceExactly();
 
-        A.CallTo(() => _context.UrlContentReader.ReadAsync(A<Uri>._, cancellationTokenSource.Token))
+        A.CallTo(() => _context.UrlContentReader.ReadAsync(A<Uri>._, FeatureSourceReader.MaxSourceLength, cancellationTokenSource.Token))
             .MustHaveHappenedOnceExactly();
     }
 
@@ -941,7 +941,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
     public async Task CreateAsync_UrlContentCannotBeRead_ThrowsInvalidFeatureSourceExceptionAndChangesNothing()
     {
         // Arrange
-        A.CallTo(() => _context.UrlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._))
+        A.CallTo(() => _context.UrlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
             .Throws(new UrlContentReadFailedException(new Uri(WebUrl), "The request timed out."));
         _context.Repository.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName);
         var snapshot = _context.Repository.TakeSnapshot();

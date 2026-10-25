@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using FakeItEasy;
@@ -357,19 +358,19 @@ public class GitHubCliIssueReaderTests
 
     [Theory]
     [InlineData("  GraphQL: Could not resolve to an issue or pull request with the number of 42. (repository.issue)\n",
-        "The gh command exited with the exit code 1: GraphQL: Could not resolve to an issue or pull request with " +
+        "gh exited with the unexpected exit code 1: GraphQL: Could not resolve to an issue or pull request with " +
         "the number of 42. (repository.issue).")]
     [InlineData("To get started with GitHub CLI, please run:  gh auth login\n",
-        "The gh command exited with the exit code 1: To get started with GitHub CLI, please run:  gh auth login.")]
-    [InlineData("HTTP 404: Not Found.\r\n", "The gh command exited with the exit code 1: HTTP 404: Not Found.")]
-    [InlineData("", "The gh command exited with the exit code 1 without an error message.")]
-    [InlineData(" \n ", "The gh command exited with the exit code 1 without an error message.")]
+        "gh exited with the unexpected exit code 1: To get started with GitHub CLI, please run:  gh auth login.")]
+    [InlineData("HTTP 404: Not Found.\r\n", "gh exited with the unexpected exit code 1: HTTP 404: Not Found.")]
+    [InlineData("", "gh exited with the unexpected exit code 1.")]
+    [InlineData(" \n ", "gh exited with the unexpected exit code 1.")]
     public async Task ReadIssueAsync_GhExitsWithNonZeroExitCode_ThrowsTrackerIssueReadFailedExceptionWithStandardError(
         string standardError, string expectedReason)
     {
         // Arrange
         A.CallTo(() => _ghCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
-            .Returns(new GhCommandResult(1, FullIssueJson, standardError));
+            .Returns(new ExternalProcessResult(1, FullIssueJson, standardError));
         var sut = new GitHubCliIssueReader(_ghCommandRunner);
 
         // Act
@@ -401,7 +402,7 @@ public class GitHubCliIssueReaderTests
         {
             A.CallTo(() => _ghCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._,
                     A<CancellationToken>._))
-                .Returns(new GhCommandResult(exitCode, string.Empty, "authentication required"));
+                .Returns(new ExternalProcessResult(exitCode, string.Empty, "authentication required"));
             var sut = new GitHubCliIssueReader(_ghCommandRunner);
 
             // Act
@@ -410,7 +411,7 @@ public class GitHubCliIssueReaderTests
 
             // Assert
             (await act.Should().ThrowAsync<TrackerIssueReadFailedException>()).Which.Reason
-                .Should().Be($"The gh command exited with the exit code {expectedExitCode}: authentication required.");
+                .Should().Be($"gh exited with the unexpected exit code {expectedExitCode}: authentication required.");
         }
         finally
         {
@@ -423,7 +424,7 @@ public class GitHubCliIssueReaderTests
     {
         // Arrange
         A.CallTo(() => _ghCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
-            .Returns(new GhCommandResult(1, "not json", "HTTP 404: Not Found"));
+            .Returns(new ExternalProcessResult(1, "not json", "HTTP 404: Not Found"));
         var sut = new GitHubCliIssueReader(_ghCommandRunner);
 
         // Act
@@ -432,7 +433,7 @@ public class GitHubCliIssueReaderTests
 
         // Assert
         (await act.Should().ThrowAsync<TrackerIssueReadFailedException>()).Which.Reason
-            .Should().Be("The gh command exited with the exit code 1: HTTP 404: Not Found.");
+            .Should().Be("gh exited with the unexpected exit code 1: HTTP 404: Not Found.");
     }
 
     [Fact]
@@ -440,7 +441,7 @@ public class GitHubCliIssueReaderTests
     {
         // Arrange
         A.CallTo(() => _ghCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
-            .Returns(new GhCommandResult(1, string.Empty, "line one\nline two\n"));
+            .Returns(new ExternalProcessResult(1, string.Empty, "line one\nline two\n"));
         var sut = new GitHubCliIssueReader(_ghCommandRunner);
 
         // Act
@@ -449,7 +450,7 @@ public class GitHubCliIssueReaderTests
 
         // Assert
         (await act.Should().ThrowAsync<TrackerIssueReadFailedException>()).Which.Reason
-            .Should().Be("The gh command exited with the exit code 1: line one\nline two.");
+            .Should().Be("gh exited with the unexpected exit code 1: line one\nline two.");
     }
 
     [Fact]
@@ -457,7 +458,7 @@ public class GitHubCliIssueReaderTests
     {
         // Arrange
         A.CallTo(() => _ghCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
-            .Returns(new GhCommandResult(0, FullIssueJson, "A new release of gh is available."));
+            .Returns(new ExternalProcessResult(0, FullIssueJson, "A new release of gh is available."));
         var sut = new GitHubCliIssueReader(_ghCommandRunner);
 
         // Act
@@ -654,7 +655,7 @@ public class GitHubCliIssueReaderTests
     private void SetupGhOutput(string standardOutput)
     {
         A.CallTo(() => _ghCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
-            .Returns(new GhCommandResult(0, standardOutput, string.Empty));
+            .Returns(new ExternalProcessResult(0, standardOutput, string.Empty));
     }
 
     private void AssertRunnerNotCalled()

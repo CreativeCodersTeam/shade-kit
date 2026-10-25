@@ -78,7 +78,7 @@ public class GhCommandRunnerTests
     [InlineData("   ")]
     [InlineData(@"C:gh")]
     [InlineData(@"\gh")]
-    public async Task RunAsync_GhLocatorReturnsRelativePath_ThrowsGhNotFoundExceptionWithoutStarting(
+    public async Task RunAsync_GhLocatorReturnsRelativePath_ThrowsGhUnavailableExceptionWithoutStarting(
         string relativePath)
     {
         // Arrange
@@ -89,7 +89,7 @@ public class GhCommandRunnerTests
         var act = () => sut.RunAsync(Path.GetTempPath(), IssueArguments, TestContext.Current.CancellationToken);
 
         // Assert
-        var exception = (await act.Should().ThrowAsync<GhNotFoundException>()).Which;
+        var exception = (await act.Should().ThrowExactlyAsync<GhUnavailableException>()).Which;
 
         exception.Reason
             .Should().Be($"The gh executable path '{relativePath}' is not absolute, so it is not started.");
@@ -99,7 +99,7 @@ public class GhCommandRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_ExecutableCannotBeStarted_ThrowsGhNotFoundExceptionWithStartFailure()
+    public async Task RunAsync_ExecutableCannotBeStarted_ThrowsGhUnavailableExceptionWithStartFailure()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -112,7 +112,7 @@ public class GhCommandRunnerTests
         var act = () => sut.RunAsync(tempDirectory.RootPath, IssueArguments, TestContext.Current.CancellationToken);
 
         // Assert
-        var exception = (await act.Should().ThrowAsync<GhNotFoundException>()).Which;
+        var exception = (await act.Should().ThrowExactlyAsync<GhUnavailableException>()).Which;
 
         exception.Arguments
             .Should().Equal(IssueArguments);

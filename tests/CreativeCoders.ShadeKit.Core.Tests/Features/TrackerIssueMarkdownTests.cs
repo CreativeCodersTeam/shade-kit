@@ -1,7 +1,8 @@
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Trackers;
 
-namespace CreativeCoders.ShadeKit.Core.Tests.Trackers;
+namespace CreativeCoders.ShadeKit.Core.Tests.Features;
 
 public class TrackerIssueMarkdownTests
 {

@@ -21,7 +21,7 @@ public interface ITrackerIssueReader
     /// <exception cref="ArgumentException">
     /// <paramref name="workingDirectory" /> is <see langword="null" />, empty, or whitespace.
     /// </exception>
-    /// <exception cref="GhNotFoundException">The tracker tool <c>gh</c> cannot be found or started.</exception>
+    /// <exception cref="GhUnavailableException">The tracker tool <c>gh</c> cannot be found or started.</exception>
     /// <exception cref="TrackerIssueReadFailedException">
     /// The URL is not an absolute <c>http</c> or <c>https</c> URL, the tracker tool fails, or it returns data that
     /// cannot be used.

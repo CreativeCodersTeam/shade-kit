@@ -60,10 +60,7 @@ public class FeatureShowCommand(
 
     private void WriteFeature(FeatureShowCommandData data, FeatureDocument feature)
     {
-        // The text of a text source can span many lines; it is in request.md and in the JSON output.
-        var source = data.Source.Kind == FeatureSourceKind.Text || data.Source.Value is null
-            ? data.Source.Kind.ToJsonName()
-            : $"{data.Source.Kind.ToJsonName()} {data.Source.Value}";
+        var source = FeatureTextFormat.FormatSource(feature.Source);
         var created = FeatureTextFormat.FormatCreated(feature);
 
         _context.Console.WriteLine($"Id: {data.Id}");

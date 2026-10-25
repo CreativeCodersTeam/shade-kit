@@ -8,6 +8,7 @@ using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Trackers;
+using CreativeCoders.ShadeKit.Core.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -55,6 +56,7 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<ILineEndingResolver, LineEndingResolver>();
         services.TryAddSingleton<ITextFileWriter, TextFileWriter>();
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IFeatureSourceReader, FeatureSourceReader>();
         services.TryAddSingleton<IFeatureIdFactory, FeatureIdFactory>();
         services.TryAddSingleton<ICurrentFeatureResolver, CurrentFeatureResolver>();
         services.TryAddSingleton<IFeatureStore, FeatureStore>();

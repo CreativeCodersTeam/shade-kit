@@ -9,7 +9,12 @@ namespace CreativeCoders.ShadeKit.Core.Features.Exceptions;
 /// <param name="source">The source as it was passed, for example the value of <c>--source</c>.</param>
 /// <param name="reason">A sentence that describes why the source cannot be used.</param>
 /// <param name="innerException">The exception that caused this exception, or <see langword="null" /> if there is none.</param>
-public class InvalidFeatureSourceException(string source, string reason, Exception? innerException = null)
+/// <param name="problem">The kind of problem, from which callers choose how to suggest a fix.</param>
+public class InvalidFeatureSourceException(
+    string source,
+    string reason,
+    Exception? innerException = null,
+    FeatureSourceProblem problem = FeatureSourceProblem.InvalidSource)
     : Exception($"The feature source '{source}' cannot be used: {reason}", innerException)
 {
     /// <summary>
@@ -27,4 +32,13 @@ public class InvalidFeatureSourceException(string source, string reason, Excepti
     /// </summary>
     /// <value>A sentence that describes the problem, for example that the URL contains no issue number.</value>
     public string Reason { get; } = reason;
+
+    /// <summary>
+    /// Gets the kind of problem with the source.
+    /// </summary>
+    /// <value>
+    /// One of the enumeration values; <see cref="FeatureSourceProblem.InvalidSource" /> unless an issue or URL could
+    /// not be read.
+    /// </value>
+    public FeatureSourceProblem Problem { get; } = problem;
 }

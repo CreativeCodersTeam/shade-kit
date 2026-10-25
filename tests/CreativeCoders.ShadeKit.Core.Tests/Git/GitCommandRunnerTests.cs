@@ -82,7 +82,7 @@ public class GitCommandRunnerTests
         var exception = (await act.Should().ThrowAsync<GitUnavailableException>()).Which;
 
         exception.Reason
-            .Should().Be($"the git executable path '{relativePath}' is not absolute, so it is not started.");
+            .Should().Be($"The git executable path '{relativePath}' is not absolute, so it is not started.");
 
         exception.InnerException
             .Should().BeNull();
@@ -129,7 +129,7 @@ public class GitCommandRunnerTests
             .Should().Equal(BranchArguments);
 
         exception.Reason
-            .Should().StartWith("git could not be started: ");
+            .Should().StartWith("The git executable '").And.Contain("' could not be started: ").And.EndWith(".");
 
         exception.InnerException
             .Should().BeOfType<Win32Exception>();

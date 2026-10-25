@@ -17,6 +17,7 @@ using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
 
@@ -109,18 +110,12 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 "list' to see the ids of the existing features."),
 
             InvalidFeatureSourceException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureSource,
-                $"The source '{e.SourceText}' cannot be used: {e.Reason} {CreateSourceHint(e.InnerException)}"),
+                $"The source '{e.SourceText}' cannot be used: {e.Reason} {CreateSourceHint(e.Problem)}"),
 
-            // FeatureIdFactory wraps these exceptions into an InvalidFeatureSourceException; the mappings are a
-            // fallback for a caller that does not.
-            UrlContentReadFailedException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureSource,
-                $"{e.Message} {CreateSourceHint(e)}"),
-
-            GhNotFoundException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureSource,
-                $"{e.Message} {CreateSourceHint(e)}"),
-
-            TrackerIssueReadFailedException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureSource,
-                $"{e.Message} {CreateSourceHint(e)}"),
+            // FeatureSourceReader wraps these exceptions into an InvalidFeatureSourceException; the arm is a fallback
+            // for a caller that does not.
+            _ when FindSourceReadProblem(exception) is { } problem => CliError.Create(
+                ShadeKitCliExitCodes.InvalidFeatureSource, $"{exception.Message} {CreateSourceHint(problem)}"),
 
             InvalidFeatureTitleException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureTitle,
                 $"The feature title cannot be used: {e.Reason}"),
@@ -366,20 +361,31 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             : $"shade-kit {string.Join(' ', commandPath)} --help";
     }
 
-    // Chooses the hint of an exit-33 message by the failure that caused it, so a valid URL whose content cannot be
-    // loaded points to gh or the URL instead of to another kind of source.
-    private static string CreateSourceHint(Exception? cause)
+    private static FeatureSourceProblem? FindSourceReadProblem(Exception exception)
     {
-        return cause switch
+        return exception switch
         {
-            GhNotFoundException =>
+            GhUnavailableException => FeatureSourceProblem.GhUnavailable,
+            TrackerIssueReadFailedException => FeatureSourceProblem.IssueReadFailed,
+            UrlContentReadFailedException => FeatureSourceProblem.UrlReadFailed,
+            _ => null
+        };
+    }
+
+    // Chooses the hint of an exit-33 message by the problem, so a valid URL whose content cannot be loaded points to
+    // gh or the URL instead of to another kind of source.
+    private static string CreateSourceHint(FeatureSourceProblem problem)
+    {
+        return problem switch
+        {
+            FeatureSourceProblem.GhUnavailable =>
                 "Install the GitHub CLI gh and make it available on the PATH, then run the command again.",
 
-            TrackerIssueReadFailedException =>
+            FeatureSourceProblem.IssueReadFailed =>
                 "Check the issue URL and that gh is signed in for its host ('gh auth status'), then run the command " +
                 "again.",
 
-            UrlContentReadFailedException =>
+            FeatureSourceProblem.UrlReadFailed =>
                 "Check the URL and run the command again, or save the content to a file and pass the path of the " +
                 "file with --source.",
 

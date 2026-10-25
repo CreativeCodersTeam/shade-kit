@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
@@ -33,51 +32,16 @@ public sealed class GhCommandRunner(IGhExecutableLocator ghExecutableLocator) : 
             ["NO_COLOR"] = "1"
         };
 
+    // Declared after EnvironmentVariables, because static initializers run in the order of declaration.
+    private static readonly ExternalTool Gh = new("gh", "The GitHub CLI gh", EnvironmentVariables,
+        static (arguments, reason) => new GhNotFoundException(arguments, reason),
+        static (arguments, reason, innerException) => new GhUnavailableException(arguments, reason, innerException));
+
     /// <inheritdoc />
-    public async Task<GhCommandResult> RunAsync(string workingDirectory, IReadOnlyList<string> arguments,
+    public Task<ExternalProcessResult> RunAsync(string workingDirectory, IReadOnlyList<string> arguments,
         CancellationToken cancellationToken = default)
     {
-        Ensure.IsNotNullOrWhitespace(workingDirectory);
-        Ensure.NotNull(arguments);
-
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var ghExecutablePath = _ghExecutableLocator.FindGhExecutable();
-
-        if (string.IsNullOrEmpty(ghExecutablePath))
-        {
-            throw new GhNotFoundException(arguments,
-                "The GitHub CLI gh was not found in any absolute directory of the PATH environment variable.");
-        }
-
-        if (!Path.IsPathFullyQualified(ghExecutablePath))
-        {
-            throw new GhNotFoundException(arguments,
-                $"The gh executable path '{ghExecutablePath}' is not absolute, so it is not started.");
-        }
-
-        ExternalProcessResult result;
-
-        try
-        {
-            result = await ExternalProcessRunner
-                .RunAsync(ghExecutablePath, workingDirectory, arguments, EnvironmentVariables, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (Win32Exception exception)
-        {
-            throw new GhNotFoundException(arguments,
-                $"The gh executable '{ghExecutablePath}' could not be started: {CreateSentence(exception.Message)}",
-                exception);
-        }
-
-        return new GhCommandResult(result.ExitCode, result.StandardOutput, result.StandardError);
-    }
-
-    private static string CreateSentence(string text)
-    {
-        var trimmedText = text.Trim();
-
-        return trimmedText.EndsWith('.') ? trimmedText : trimmedText + ".";
+        return ExternalToolRunner.RunAsync(Gh, _ghExecutableLocator.FindGhExecutable, workingDirectory, arguments,
+            cancellationToken);
     }
 }

@@ -8,6 +8,7 @@ using CreativeCoders.ShadeKit.Core.Tests.Formats;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Web;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.Time.Testing;
@@ -57,7 +58,7 @@ internal sealed class FeatureStoreTestContext : IDisposable
             .Returns(new GitIdentity(UserName, UserEmail));
         A.CallTo(() => TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
             .Returns(DefaultIssue);
-        A.CallTo(() => UrlContentReader.ReadAsync(A<Uri>._, A<CancellationToken>._))
+        A.CallTo(() => UrlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
             .Returns(DefaultUrlContent);
     }
 
@@ -142,7 +143,7 @@ internal sealed class FeatureStoreTestContext : IDisposable
         var timeProvider = new FakeTimeProvider(UtcNow);
         timeProvider.SetLocalTimeZone(UtcPlusTwo);
 
-        return new FeatureStore(new FeatureIdFactory(timeProvider, TrackerIssueReader, UrlContentReader),
+        return new FeatureStore(new FeatureIdFactory(timeProvider, new FeatureSourceReader(TrackerIssueReader, UrlContentReader)),
             new CurrentFeatureResolver(GitRepositoryInfo), GitRepositoryInfo);
     }
 

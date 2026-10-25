@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
+using CreativeCoders.ShadeKit.Core.Processes;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Git;
@@ -32,7 +33,7 @@ public class GitRepositoryInfoTests
     public async Task GetCurrentBranchAsync_BranchCheckedOut_ReturnsTrimmedBranchName()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new GitCommandResult(0, "feature/gh-142-login-sso\n", ""));
+        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new ExternalProcessResult(0, "feature/gh-142-login-sso\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -47,7 +48,7 @@ public class GitRepositoryInfoTests
     public async Task GetCurrentBranchAsync_BranchCheckedOut_RunsSymbolicRefInRepositoryRoot()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new GitCommandResult(0, "main\n", ""));
+        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new ExternalProcessResult(0, "main\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -63,7 +64,7 @@ public class GitRepositoryInfoTests
     public async Task GetCurrentBranchAsync_DetachedHead_ReturnsNull()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new GitCommandResult(1, "", ""));
+        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new ExternalProcessResult(1, "", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -80,7 +81,7 @@ public class GitRepositoryInfoTests
     public async Task GetCurrentBranchAsync_SuccessWithoutOutput_ReturnsNull(string standardOutput)
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new GitCommandResult(0, standardOutput, ""));
+        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new ExternalProcessResult(0, standardOutput, ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -96,7 +97,7 @@ public class GitRepositoryInfoTests
     {
         // Arrange
         _gitCommandRunner.SetUpResult(CurrentBranchArguments,
-            new GitCommandResult(128, "", "fatal: not a git repository (or any of the parent directories): .git\n"));
+            new ExternalProcessResult(128, "", "fatal: not a git repository (or any of the parent directories): .git\n"));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -110,14 +111,14 @@ public class GitRepositoryInfoTests
 
         exception.Reason
             .Should().Be("git exited with the unexpected exit code 128: " +
-                         "fatal: not a git repository (or any of the parent directories): .git");
+                         "fatal: not a git repository (or any of the parent directories): .git.");
     }
 
     [Fact]
     public async Task GetCurrentBranchAsync_UnexpectedExitCodeWithoutStandardError_ReasonNamesExitCode()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new GitCommandResult(-1, "", "  "));
+        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new ExternalProcessResult(-1, "", "  "));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -168,7 +169,7 @@ public class GitRepositoryInfoTests
         // Arrange
         using var cancellationTokenSource = new CancellationTokenSource();
         var cancellationToken = cancellationTokenSource.Token;
-        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new GitCommandResult(0, "main\n", ""));
+        _gitCommandRunner.SetUpResult(CurrentBranchArguments, new ExternalProcessResult(0, "main\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -203,8 +204,8 @@ public class GitRepositoryInfoTests
     public async Task GetIdentityAsync_NameAndEmailSet_ReturnsTrimmedIdentity()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(0, " Jane Doe \n", ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(0, "jane@example.com\r\n", ""));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(0, " Jane Doe \n", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(0, "jane@example.com\r\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -219,8 +220,8 @@ public class GitRepositoryInfoTests
     public async Task GetIdentityAsync_NameAndEmailSet_RunsGitConfigInRepositoryRoot()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(0, "Jane Doe\n", ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(0, "jane@example.com\n", ""));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(0, "Jane Doe\n", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(0, "jane@example.com\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -242,8 +243,8 @@ public class GitRepositoryInfoTests
         // Arrange
         using var cancellationTokenSource = new CancellationTokenSource();
         var cancellationToken = cancellationTokenSource.Token;
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(0, "Jane Doe\n", ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(0, "jane@example.com\n", ""));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(0, "Jane Doe\n", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(0, "jane@example.com\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -258,8 +259,8 @@ public class GitRepositoryInfoTests
     public async Task GetIdentityAsync_NameNotSet_ThrowsGitIdentityNotConfiguredExceptionForName()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(1, "", ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(0, "jane@example.com\n", ""));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(1, "", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(0, "jane@example.com\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -279,8 +280,8 @@ public class GitRepositoryInfoTests
     public async Task GetIdentityAsync_EmailNotSet_ThrowsGitIdentityNotConfiguredExceptionForEmail()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(0, "Jane Doe\n", ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(1, "", ""));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(0, "Jane Doe\n", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(1, "", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -295,8 +296,8 @@ public class GitRepositoryInfoTests
     public async Task GetIdentityAsync_NameAndEmailNotSet_ThrowsGitIdentityNotConfiguredExceptionForBoth()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(1, "", ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(1, "", ""));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(1, "", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(1, "", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -314,8 +315,8 @@ public class GitRepositoryInfoTests
         string standardOutput)
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(0, standardOutput, ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(0, standardOutput, ""));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(0, standardOutput, ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(0, standardOutput, ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -330,8 +331,8 @@ public class GitRepositoryInfoTests
     public async Task GetIdentityAsync_UnexpectedExitCodeForName_ThrowsGitUnavailableException()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(3, "", "error: invalid config file .git/config\n"));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(0, "jane@example.com\n", ""));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(3, "", "error: invalid config file .git/config\n"));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(0, "jane@example.com\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -344,15 +345,15 @@ public class GitRepositoryInfoTests
             .Should().Equal(UserNameArguments);
 
         exception.Reason
-            .Should().Be("git exited with the unexpected exit code 3: error: invalid config file .git/config");
+            .Should().Be("git exited with the unexpected exit code 3: error: invalid config file .git/config.");
     }
 
     [Fact]
     public async Task GetIdentityAsync_UnexpectedExitCodeForEmail_ThrowsGitUnavailableException()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(0, "Jane Doe\n", ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(128, "", "fatal: unable to read config\n"));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(0, "Jane Doe\n", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(128, "", "fatal: unable to read config\n"));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -367,8 +368,8 @@ public class GitRepositoryInfoTests
     public async Task GetIdentityAsync_UnexpectedExitCodeForNameAndEmail_ThrowsGitUnavailableExceptionForName()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(128, "", "fatal: unable to read config\n"));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(3, "", "error: invalid config file .git/config\n"));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(128, "", "fatal: unable to read config\n"));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(3, "", "error: invalid config file .git/config\n"));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -381,7 +382,7 @@ public class GitRepositoryInfoTests
             .Should().Equal(UserNameArguments);
 
         exception.Reason
-            .Should().Be("git exited with the unexpected exit code 128: fatal: unable to read config");
+            .Should().Be("git exited with the unexpected exit code 128: fatal: unable to read config.");
     }
 
     [Fact]
@@ -389,11 +390,11 @@ public class GitRepositoryInfoTests
     {
         // Arrange
         var nameResult =
-            new TaskCompletionSource<GitCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            new TaskCompletionSource<ExternalProcessResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(UserNameArguments), A<CancellationToken>._))
             .Returns(nameResult.Task);
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(0, "jane@example.com\n", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(0, "jane@example.com\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -407,7 +408,7 @@ public class GitRepositoryInfoTests
         identityTask.IsCompleted
             .Should().BeFalse();
 
-        nameResult.SetResult(new GitCommandResult(0, "Jane Doe\n", ""));
+        nameResult.SetResult(new ExternalProcessResult(0, "Jane Doe\n", ""));
 
         (await identityTask)
             .Should().Be(new GitIdentity("Jane Doe", "jane@example.com"));
@@ -417,8 +418,8 @@ public class GitRepositoryInfoTests
     public async Task GetIdentityAsync_NameWhitespaceAndEmailSet_ThrowsGitIdentityNotConfiguredExceptionForName()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(0, " \n", ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(0, "jane@example.com\n", ""));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(0, " \n", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(0, "jane@example.com\n", ""));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act
@@ -433,8 +434,8 @@ public class GitRepositoryInfoTests
     public async Task GetIdentityAsync_ExitCode1WithOutput_TreatsKeyAsNotSet()
     {
         // Arrange
-        _gitCommandRunner.SetUpResult(UserNameArguments, new GitCommandResult(0, "Jane Doe\n", ""));
-        _gitCommandRunner.SetUpResult(UserEmailArguments, new GitCommandResult(1, "unexpected\n", "some warning\n"));
+        _gitCommandRunner.SetUpResult(UserNameArguments, new ExternalProcessResult(0, "Jane Doe\n", ""));
+        _gitCommandRunner.SetUpResult(UserEmailArguments, new ExternalProcessResult(1, "unexpected\n", "some warning\n"));
         var sut = new GitRepositoryInfo(_gitCommandRunner);
 
         // Act

@@ -3,18 +3,19 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using AwesomeAssertions;
-using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Trackers;
-using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
-namespace CreativeCoders.ShadeKit.Core.Tests.Trackers;
+namespace CreativeCoders.ShadeKit.Core.Tests.Web;
 
 // These tests never use the network: the client factory is faked and returns clients over a stub handler.
 public class HttpUrlContentReaderTests
 {
     private const string RequestUrl = "https://example.com/docs/request.md";
+
+    private const int MaxContentLength = 1_048_576;
 
     private readonly IHttpClientFactory _httpClientFactory = A.Fake<IHttpClientFactory>();
 
@@ -36,7 +37,7 @@ public class HttpUrlContentReaderTests
         var sut = new HttpUrlContentReader(_httpClientFactory);
 
         // Act
-        var act = () => sut.ReadAsync(null!, TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(null!, MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentNullException>()
@@ -55,7 +56,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -79,7 +80,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -102,7 +103,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
@@ -132,7 +133,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -152,7 +153,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler, TimeSpan.FromMilliseconds(100));
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
@@ -174,7 +175,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler, TimeSpan.FromSeconds(30));
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
@@ -200,7 +201,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler, TimeSpan.FromMilliseconds(100));
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -224,7 +225,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), cancellationSource.Token);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, cancellationSource.Token);
 
         // Assert
         (await act.Should().ThrowAsync<OperationCanceledException>())
@@ -249,7 +250,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), cancellationSource.Token);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, cancellationSource.Token);
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -263,7 +264,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), new CancellationToken(canceled: true));
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, new CancellationToken(canceled: true));
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -282,7 +283,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
@@ -304,7 +305,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
@@ -324,16 +325,16 @@ public class HttpUrlContentReaderTests
     public async Task ReadAsync_BodyExactlyAtSizeLimit_ReturnsBodyText(ContentLengthHeader contentLengthHeader)
     {
         // Arrange
-        var body = CreateAsciiBody(FeatureIdFactory.MaxSourceFileSize);
+        var body = CreateAsciiBody(MaxContentLength);
         using var handler = new StubHttpMessageHandler(_ => CreateResponse(body, contentLengthHeader));
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text.Length
-            .Should().Be(FeatureIdFactory.MaxSourceFileSize);
+            .Should().Be(MaxContentLength);
     }
 
     [Theory]
@@ -344,28 +345,28 @@ public class HttpUrlContentReaderTests
         ContentLengthHeader contentLengthHeader)
     {
         // Arrange
-        var body = CreateAsciiBody(FeatureIdFactory.MaxSourceFileSize + 1);
+        var body = CreateAsciiBody(MaxContentLength + 1);
         using var handler = new StubHttpMessageHandler(_ => CreateResponse(body, contentLengthHeader));
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
-            .Should().Be("The response body is larger than 1,048,576 bytes (1 MiB), the size limit of a URL source.");
+            .Should().Be("The response body is larger than 1,048,576 bytes.");
     }
 
     [Fact]
     public async Task ReadAsync_BodyExactlyAtSizeLimitInSmallChunks_ReturnsCompleteBodyText()
     {
         // Arrange
-        var body = CreateNumberedBody(FeatureIdFactory.MaxSourceFileSize);
+        var body = CreateNumberedBody(MaxContentLength);
         using var handler = new StubHttpMessageHandler(_ => CreateResponse(new StreamContent(CreateChunkedStream(body))));
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -376,16 +377,16 @@ public class HttpUrlContentReaderTests
     public async Task ReadAsync_BodyLargerThanSizeLimitInSmallChunks_ThrowsUrlContentReadFailedException()
     {
         // Arrange
-        var body = CreateNumberedBody(FeatureIdFactory.MaxSourceFileSize + 1);
+        var body = CreateNumberedBody(MaxContentLength + 1);
         using var handler = new StubHttpMessageHandler(_ => CreateResponse(new StreamContent(CreateChunkedStream(body))));
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
-            .Should().Be("The response body is larger than 1,048,576 bytes (1 MiB), the size limit of a URL source.");
+            .Should().Be("The response body is larger than 1,048,576 bytes.");
     }
 
     [Fact]
@@ -396,7 +397,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -407,12 +408,12 @@ public class HttpUrlContentReaderTests
     public async Task ReadAsync_MultiByteBodyExactlyAtSizeLimit_ReturnsBodyText()
     {
         // Arrange
-        var expectedText = new string('ä', FeatureIdFactory.MaxSourceFileSize / 2);
+        var expectedText = new string('ä', MaxContentLength / 2);
         using var handler = new StubHttpMessageHandler(_ => CreateResponse(Encoding.UTF8.GetBytes(expectedText)));
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -427,7 +428,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -442,8 +443,8 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
-        await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
+        await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         A.CallTo(() => _httpClientFactory.CreateClient(HttpUrlContentReader.HttpClientName))
@@ -469,7 +470,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -489,7 +490,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -505,7 +506,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -526,7 +527,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -546,7 +547,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
@@ -582,7 +583,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -611,7 +612,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -634,7 +635,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -656,7 +657,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri("http://example.com/docs/request.md"),
+        var text = await sut.ReadAsync(new Uri("http://example.com/docs/request.md"), MaxContentLength,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -672,7 +673,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var text = await sut.ReadAsync(new Uri("https://example.com/0"), TestContext.Current.CancellationToken);
+        var text = await sut.ReadAsync(new Uri("https://example.com/0"), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         text
@@ -690,7 +691,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri("https://example.com/0"), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri("https://example.com/0"), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
@@ -723,7 +724,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler, TimeSpan.FromMilliseconds(200));
 
         // Act
-        var act = () => sut.ReadAsync(new Uri("https://example.com/0"), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri("https://example.com/0"), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -741,7 +742,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
@@ -762,7 +763,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -783,7 +784,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -803,7 +804,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
@@ -822,7 +823,7 @@ public class HttpUrlContentReaderTests
         var sut = CreateSut(handler);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
@@ -844,7 +845,7 @@ public class HttpUrlContentReaderTests
         var sut = new HttpUrlContentReader(_httpClientFactory);
 
         // Act
-        var act = () => sut.ReadAsync(new Uri(url, UriKind.RelativeOrAbsolute),
+        var act = () => sut.ReadAsync(new Uri(url, UriKind.RelativeOrAbsolute), MaxContentLength,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -897,7 +898,7 @@ public class HttpUrlContentReaderTests
         var sut = new HttpUrlContentReader(_httpClientFactory);
 
         // Act
-        await sut.ReadAsync(new Uri(RequestUrl), TestContext.Current.CancellationToken);
+        await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
         handler.Requests.Select(x => x.Headers.UserAgent.ToString())

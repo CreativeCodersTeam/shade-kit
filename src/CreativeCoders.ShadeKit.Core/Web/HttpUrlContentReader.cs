@@ -1,13 +1,11 @@
-using System.Buffers;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using CreativeCoders.Core;
-using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Files;
-using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 
-namespace CreativeCoders.ShadeKit.Core.Trackers;
+namespace CreativeCoders.ShadeKit.Core.Web;
 
 /// <summary>
 /// Reads the text content of a URL with an HTTP <c>GET</c> request.
@@ -20,9 +18,8 @@ namespace CreativeCoders.ShadeKit.Core.Trackers;
 /// </para>
 /// <para>
 /// The content type must be <c>text/*</c>, <c>application/json</c>, or <c>application/xml</c>, with no <c>charset</c>
-/// or the <c>charset</c> <c>utf-8</c>. The body is read as a stream up to
-/// <see cref="FeatureIdFactory.MaxSourceFileSize" /> + 1 bytes, without trusting the <c>Content-Length</c> header,
-/// and decoded strictly as UTF-8. The whole read, redirects and body included, is limited by the
+/// or the <c>charset</c> <c>utf-8</c>. The body is read as a stream up to the maximum content length + 1 bytes,
+/// without trusting the <c>Content-Length</c> header, and decoded strictly as UTF-8. The whole read, redirects and body included, is limited by the
 /// <see cref="HttpClient.Timeout" /> of the client.
 /// </para>
 /// </remarks>
@@ -73,13 +70,14 @@ public sealed class HttpUrlContentReader(IHttpClientFactory httpClientFactory) :
     }
 
     /// <inheritdoc />
-    public async Task<string> ReadAsync(Uri url, CancellationToken cancellationToken = default)
+    public async Task<string> ReadAsync(Uri url, int maxContentLength, CancellationToken cancellationToken = default)
     {
         Ensure.NotNull(url);
+        ArgumentOutOfRangeException.ThrowIfNegative(maxContentLength);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!IsHttpUrl(url))
+        if (!HttpUrls.IsHttpUrl(url))
         {
             throw new UrlContentReadFailedException(url,
                 "Only absolute http and https URLs can be read.");
@@ -99,7 +97,7 @@ public sealed class HttpUrlContentReader(IHttpClientFactory httpClientFactory) :
 
             EnsureUsableContentType(url, response);
 
-            return await ReadBodyTextAsync(url, response, timeoutSource.Token).ConfigureAwait(false);
+            return await ReadBodyTextAsync(url, response, maxContentLength, timeoutSource.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -176,7 +174,7 @@ public sealed class HttpUrlContentReader(IHttpClientFactory httpClientFactory) :
 
         var target = location.IsAbsoluteUri ? location : new Uri(currentUrl, location);
 
-        if (!IsHttpUrl(target))
+        if (!HttpUrls.IsHttpUrl(target))
         {
             throw new UrlContentReadFailedException(url,
                 $"The server redirected to {target.OriginalString}, which is not an http or https URL.");
@@ -225,51 +223,22 @@ public sealed class HttpUrlContentReader(IHttpClientFactory httpClientFactory) :
     }
 
     private static async Task<string> ReadBodyTextAsync(Uri url, HttpResponseMessage response,
-        CancellationToken cancellationToken)
+        int maxContentLength, CancellationToken cancellationToken)
     {
-        // One byte more than the limit is read, so a larger body is detected without reading it completely. The
-        // Content-Length header is not used, because a server can send more or less than it announces.
-        const int readLength = FeatureIdFactory.MaxSourceFileSize + 1;
+        var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
 
-        // The buffer is rented, because a new one would be a large object on every read; the pool may return a
-        // larger array, so only its first readLength bytes are used.
-        var content = ArrayPool<byte>.Shared.Rent(readLength);
-
-        try
+        await using (stream.ConfigureAwait(false))
         {
-            int length;
-
-            var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-
-            await using (stream.ConfigureAwait(false))
-            {
-                length = await stream
-                    .ReadAtLeastAsync(content.AsMemory(0, readLength), readLength, throwOnEndOfStream: false,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            if (length > FeatureIdFactory.MaxSourceFileSize)
-            {
-                throw new UrlContentReadFailedException(url,
-                    "The response body is larger than " +
-                    $"{FeatureIdFactory.MaxSourceFileSize.ToString("N0", CultureInfo.InvariantCulture)} bytes " +
-                    "(1 MiB), the size limit of a URL source.");
-            }
-
-            return TextFileEncoding.DecodeUtf8(content.AsSpan(0, length),
-                (encodingName, _, innerException) => new UrlContentReadFailedException(url,
-                    $"The response body is not UTF-8 text (found: {encodingName}).", innerException));
+            return await LimitedUtf8Reader
+                .ReadAsync(stream, maxContentLength,
+                    () => new UrlContentReadFailedException(url,
+                        "The response body is larger than " +
+                        $"{maxContentLength.ToString("N0", CultureInfo.InvariantCulture)} bytes."),
+                    (encodingName, _, innerException) => new UrlContentReadFailedException(url,
+                        $"The response body is not UTF-8 text (found: {encodingName}).", innerException),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(content);
-        }
-    }
-
-    private static bool IsHttpUrl(Uri url)
-    {
-        return url.IsAbsoluteUri && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
     }
 
     private static string FormatStatusCode(HttpResponseMessage response)

@@ -43,22 +43,7 @@ internal static class GitCommandRunnerExtensions
                 return null;
 
             default:
-                throw new GitUnavailableException(arguments, CreateUnexpectedExitCodeReason(result));
+                throw new GitUnavailableException(arguments, result.CreateUnexpectedExitCodeReason("git"));
         }
-    }
-
-    /// <summary>
-    /// Creates the reason of a <see cref="GitUnavailableException" /> for a <c>git</c> process that exited with an
-    /// exit code its caller does not expect.
-    /// </summary>
-    /// <param name="result">The result of the <c>git</c> process.</param>
-    /// <returns>A sentence with the exit code, followed by the standard error of the process if it wrote any.</returns>
-    public static string CreateUnexpectedExitCodeReason(GitCommandResult result)
-    {
-        var standardError = result.StandardError.Trim();
-
-        return standardError.Length == 0
-            ? $"git exited with the unexpected exit code {result.ExitCode}."
-            : $"git exited with the unexpected exit code {result.ExitCode}: {standardError}";
     }
 }

@@ -1,3 +1,4 @@
+using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Trackers;
@@ -28,10 +29,12 @@ public interface IGhCommandRunner
     /// <paramref name="workingDirectory" /> is <see langword="null" />, empty, or whitespace.
     /// </exception>
     /// <exception cref="ArgumentNullException"><paramref name="arguments" /> is <see langword="null" />.</exception>
-    /// <exception cref="GhNotFoundException">The <c>gh</c> executable cannot be found or started.</exception>
+    /// <exception cref="GhUnavailableException">
+    /// The <c>gh</c> executable cannot be found or started; a missing executable is a <see cref="GhNotFoundException" />.
+    /// </exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken" /> was canceled; the started process is killed.
     /// </exception>
-    Task<GhCommandResult> RunAsync(string workingDirectory, IReadOnlyList<string> arguments,
+    Task<ExternalProcessResult> RunAsync(string workingDirectory, IReadOnlyList<string> arguments,
         CancellationToken cancellationToken = default);
 }

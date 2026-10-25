@@ -1,7 +1,7 @@
 using AwesomeAssertions;
-using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 
-namespace CreativeCoders.ShadeKit.Core.Tests.Trackers.Exceptions;
+namespace CreativeCoders.ShadeKit.Core.Tests.Web.Exceptions;
 
 public class UrlContentReadFailedExceptionTests
 {

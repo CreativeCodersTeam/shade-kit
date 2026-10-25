@@ -14,7 +14,7 @@ public interface IFeatureIdFactory
     /// <para>
     /// <paramref name="source" /> is a URL source if it is an absolute <c>http</c> or <c>https</c> URL, a file
     /// source if <see cref="File.Exists" /> is <see langword="true" /> for it, and a text source otherwise. A file must
-    /// be UTF-8 text of at most <see cref="FeatureIdFactory.MaxSourceFileSize" /> bytes; a byte order mark is removed.
+    /// be UTF-8 text of at most <see cref="FeatureSourceReader.MaxSourceLength" /> bytes; a byte order mark is removed.
     /// </para>
     /// <para>
     /// A URL whose host is a key of <paramref name="trackers" /> (ignoring case) gives the id
@@ -56,7 +56,7 @@ public interface IFeatureIdFactory
     /// <paramref name="source" /> is empty or whitespace; it is a URL whose host is a tracker but whose path has no
     /// issue number; it is a URL whose issue cannot be read, because <c>gh</c> cannot be found or started, fails, or
     /// returns data that cannot be used; it is any other URL whose content cannot be read; or it names a file that
-    /// cannot be read, has more than <see cref="FeatureIdFactory.MaxSourceFileSize" /> bytes, or is not UTF-8 text.
+    /// cannot be read, has more than <see cref="FeatureSourceReader.MaxSourceLength" /> bytes, or is not UTF-8 text.
     /// The exception of the reader is the inner exception.
     /// </exception>
     /// <exception cref="InvalidFeatureTitleException">

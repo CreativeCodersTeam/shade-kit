@@ -1,4 +1,5 @@
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
+using CreativeCoders.ShadeKit.Core.Processes;
 
 namespace CreativeCoders.ShadeKit.Core.Git;
 
@@ -29,6 +30,6 @@ public interface IGitCommandRunner
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken" /> was canceled; the started process is killed.
     /// </exception>
-    Task<GitCommandResult> RunAsync(string workingDirectory, IReadOnlyList<string> arguments,
+    Task<ExternalProcessResult> RunAsync(string workingDirectory, IReadOnlyList<string> arguments,
         CancellationToken cancellationToken = default);
 }
