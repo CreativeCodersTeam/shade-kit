@@ -472,6 +472,46 @@ public sealed class FeatureIdFactoryTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateAsync_IssueMarkdownOfExactlyMaximumSize_ReturnsCompleteMarkdown()
+    {
+        // Arrange
+        var issue = CreateIssueWithMarkdownLength(FeatureSourceReader.MaxSourceLength);
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(issue);
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        Encoding.UTF8.GetByteCount(identity.RequestContent)
+            .Should().Be(FeatureSourceReader.MaxSourceLength);
+    }
+
+    [Fact]
+    public async Task CreateAsync_IssueMarkdownOneByteOverMaximumSize_ThrowsInvalidFeatureSourceExceptionNamingSizeLimit()
+    {
+        // Arrange
+        var issue = CreateIssueWithMarkdownLength(FeatureSourceReader.MaxSourceLength + 1);
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(issue);
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<InvalidFeatureSourceException>()).Which;
+
+        exception.Reason
+            .Should().Be("The issue is larger than 1,048,576 bytes (1 MiB) as Markdown, the size limit of a request. " +
+                         "Save a shortened copy of the issue to a file, and pass the path of the file with --source.");
+
+        exception.Problem
+            .Should().Be(FeatureSourceProblem.InvalidSource);
+    }
+
+    [Fact]
     public async Task CreateAsync_TrackerUrl_ReadsIssueOfUrlInRepositoryRoot()
     {
         // Arrange
@@ -797,6 +837,50 @@ public sealed class FeatureIdFactoryTests : IDisposable
 
         identity.RequestContent
             .Should().Be(source);
+    }
+
+    [Theory]
+    [InlineData("https://example.com/login is broken please fix")]
+    [InlineData("https://github.com/acme/shop/issues/142 login fails")]
+    [InlineData("https://example.com/login\tis broken")]
+    [InlineData("https://example.com/login\nis broken")]
+    public async Task CreateAsync_UrlFollowedByWords_TreatsSourceAsTextWithoutReading(string source)
+    {
+        // Arrange
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, source, "Login SSO");
+
+        // Assert
+        identity.Id
+            .Should().Be($"{TimePrefix}-login-sso");
+
+        identity.Source
+            .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.Text, Value = source });
+
+        identity.RequestContent
+            .Should().Be(source);
+
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task CreateAsync_UrlWithLeadingAndTrailingWhitespace_TreatsSourceAsUrl()
+    {
+        // Arrange
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, $"  {WebUrl}\n", "Login SSO");
+
+        // Assert
+        identity.Source.Kind
+            .Should().Be(FeatureSourceKind.Url);
+
+        A.CallTo(() => _urlContentReader.ReadAsync(new Uri(WebUrl), A<int>._, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
     }
 
     [Fact]
@@ -2148,6 +2232,14 @@ public sealed class FeatureIdFactoryTests : IDisposable
         const string heading = "# Login SSO\n";
 
         return heading + new string('a', byteCount - heading.Length);
+    }
+
+    // Creates an issue without comments whose Markdown in request.md has exactly the specified number of bytes.
+    private static TrackerIssue CreateIssueWithMarkdownLength(int byteCount)
+    {
+        var overhead = Encoding.UTF8.GetByteCount(TrackerIssueMarkdown.Format(new TrackerIssue("Login SSO", "a", []))) - 1;
+
+        return new TrackerIssue("Login SSO", new string('a', byteCount - overhead), []);
     }
 
     private static void SkipWhenReadable(string filePath)

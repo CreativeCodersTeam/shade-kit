@@ -111,8 +111,20 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider, IFeatureSourceRe
         var title = explicitTitle ?? issue.Title.Trim();
         var slug = explicitSlug ?? CreateCheckedSlug(title, IssueTitleOrigin);
 
+        var requestContent = TrackerIssueMarkdown.Format(issue);
+
+        // The issue gets the size limit of a file or URL source, counted on the Markdown that request.md receives.
+        if (TextFileEncoding.Utf8WithoutBom.GetByteCount(requestContent) > FeatureSourceReader.MaxSourceLength)
+        {
+            throw new InvalidFeatureSourceException(source,
+                "The issue is larger than " +
+                $"{FeatureSourceReader.MaxSourceLength.ToString("N0", CultureInfo.InvariantCulture)} bytes (1 MiB) " +
+                "as Markdown, the size limit of a request. Save a shortened copy of the issue to a file, and pass " +
+                "the path of the file with --source.");
+        }
+
         return CreateIdentity($"{trackerPrefix}-{issueNumber}-{slug}", title, CreateUrlSource(source),
-            TrackerIssueMarkdown.Format(issue), createdAt);
+            requestContent, createdAt);
     }
 
     private async Task<FeatureIdentity> CreateFromWebUrlAsync(string source, Uri url, string? explicitTitle,
@@ -225,16 +237,15 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider, IFeatureSourceRe
 
     private static void EnsureNoControlCharacter(string title, string titleOrigin)
     {
-        var controlCharacter = title.Where(char.IsControl).Select(x => (char?)x).FirstOrDefault();
-
-        if (controlCharacter is null)
+        foreach (var character in title.AsSpan())
         {
-            return;
+            if (char.IsControl(character))
+            {
+                throw new InvalidFeatureTitleException(
+                    $"The title {titleOrigin} contains the control character U+{(int)character:X4}; a title must be " +
+                    "a single line without tabs or other control characters. Pass such a title with --title.");
+            }
         }
-
-        throw new InvalidFeatureTitleException(
-            $"The title {titleOrigin} contains the control character U+{(int)controlCharacter.Value:X4}; a title must be " +
-            "a single line without tabs or other control characters. Pass such a title with --title.");
     }
 
     /// <summary>

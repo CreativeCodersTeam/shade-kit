@@ -25,6 +25,10 @@ internal static class HttpUrls
     /// <summary>
     /// Parses the specified text as an absolute <c>http</c> or <c>https</c> URL with a host.
     /// </summary>
+    /// <remarks>
+    /// Text with whitespace between leading and trailing whitespace is not a URL, although <see cref="Uri" /> would
+    /// escape the whitespace: such text is a URL followed by words, as in <c>https://example.com/login is broken</c>.
+    /// </remarks>
     /// <param name="text">The text to parse.</param>
     /// <param name="url">
     /// When this method returns <see langword="true" />, the parsed URL; otherwise, <see langword="null" />.
@@ -34,8 +38,25 @@ internal static class HttpUrls
     /// </returns>
     public static bool TryParse(string text, [NotNullWhen(true)] out Uri? url)
     {
-        url = Uri.TryCreate(text, UriKind.Absolute, out var parsedUrl) && IsHttpUrl(parsedUrl) ? parsedUrl : null;
+        url = !ContainsInnerWhitespace(text)
+              && Uri.TryCreate(text, UriKind.Absolute, out var parsedUrl)
+              && IsHttpUrl(parsedUrl)
+            ? parsedUrl
+            : null;
 
         return url is not null;
+    }
+
+    private static bool ContainsInnerWhitespace(string text)
+    {
+        foreach (var character in text.AsSpan().Trim())
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

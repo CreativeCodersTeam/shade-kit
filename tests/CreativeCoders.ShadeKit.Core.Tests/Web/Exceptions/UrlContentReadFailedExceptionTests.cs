@@ -12,18 +12,18 @@ public class UrlContentReadFailedExceptionTests
         var url = new Uri("https://example.com/docs/request.md");
 
         // Act
-        var exception = new UrlContentReadFailedException(url, "The server redirected more than 10 times.");
+        var exception = new UrlContentReadFailedException(url, "The server sent no content type.");
 
         // Assert
         exception.Message
             .Should().Be("The content of the URL 'https://example.com/docs/request.md' cannot be read: The server " +
-                         "redirected more than 10 times.");
+                         "sent no content type.");
 
         exception.Url
             .Should().BeSameAs(url);
 
         exception.Reason
-            .Should().Be("The server redirected more than 10 times.");
+            .Should().Be("The server sent no content type.");
 
         exception.InnerException
             .Should().BeNull();

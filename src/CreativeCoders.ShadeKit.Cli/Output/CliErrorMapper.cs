@@ -112,11 +112,6 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             InvalidFeatureSourceException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureSource,
                 $"The source '{e.SourceText}' cannot be used: {e.Reason} {CreateSourceHint(e.Problem)}"),
 
-            // FeatureSourceReader wraps these exceptions into an InvalidFeatureSourceException; the arm is a fallback
-            // for a caller that does not.
-            _ when FindSourceReadProblem(exception) is { } problem => CliError.Create(
-                ShadeKitCliExitCodes.InvalidFeatureSource, $"{exception.Message} {CreateSourceHint(problem)}"),
-
             InvalidFeatureTitleException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureTitle,
                 $"The feature title cannot be used: {e.Reason}"),
 
@@ -361,17 +356,6 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             : $"shade-kit {string.Join(' ', commandPath)} --help";
     }
 
-    private static FeatureSourceProblem? FindSourceReadProblem(Exception exception)
-    {
-        return exception switch
-        {
-            GhUnavailableException => FeatureSourceProblem.GhUnavailable,
-            TrackerIssueReadFailedException => FeatureSourceProblem.IssueReadFailed,
-            UrlContentReadFailedException => FeatureSourceProblem.UrlReadFailed,
-            _ => null
-        };
-    }
-
     // Chooses the hint of an exit-33 message by the problem, so a valid URL whose content cannot be loaded points to
     // gh or the URL instead of to another kind of source.
     private static string CreateSourceHint(FeatureSourceProblem problem)
@@ -379,7 +363,8 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         return problem switch
         {
             FeatureSourceProblem.GhUnavailable =>
-                "Install the GitHub CLI gh and make it available on the PATH, then run the command again.",
+                "Make sure the GitHub CLI gh is installed, on the PATH, and can be executed, then run the command " +
+                "again.",
 
             FeatureSourceProblem.IssueReadFailed =>
                 "Check the issue URL and that gh is signed in for its host ('gh auth status'), then run the command " +

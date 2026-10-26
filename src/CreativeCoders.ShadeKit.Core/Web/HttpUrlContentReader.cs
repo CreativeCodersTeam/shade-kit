@@ -12,13 +12,15 @@ namespace CreativeCoders.ShadeKit.Core.Web;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every read creates the named client <see cref="HttpClientName" />, whose primary handler must not follow redirects:
-/// the reader follows up to <see cref="MaxRedirects" /> redirects itself, refuses a redirect from <c>https</c> to
-/// <c>http</c> and to any other scheme, and accepts only a success status code (2xx).
+/// Every read creates the named client <see cref="HttpClientName" /> and sends one request; redirects are followed by
+/// the handlers of the client, not by the reader. Only a success status code (2xx) is accepted. A redirect status code
+/// that reaches the reader is a redirect the client did not follow, for example one from <c>https</c> to
+/// <c>http</c>, one to another scheme, or one beyond the redirect limit of the client; the failure names the reason.
 /// </para>
 /// <para>
 /// The content type must be <c>text/*</c>, <c>application/json</c>, or <c>application/xml</c>, with no <c>charset</c>
-/// or the <c>charset</c> <c>utf-8</c>. The body is read as a stream up to the maximum content length + 1 bytes,
+/// or one of the <c>charset</c> labels <c>utf-8</c>, <c>utf8</c>, and <c>us-ascii</c>, which all mean text that
+/// decodes as UTF-8. The body is read as a stream up to the maximum content length + 1 bytes,
 /// without trusting the <c>Content-Length</c> header, and decoded strictly as UTF-8. The whole read, redirects and body included, is limited by the
 /// <see cref="HttpClient.Timeout" /> of the client.
 /// </para>
@@ -32,16 +34,14 @@ public sealed class HttpUrlContentReader(IHttpClientFactory httpClientFactory) :
     public const string HttpClientName = "CreativeCoders.ShadeKit.UrlContentReader";
 
     /// <summary>
-    /// Represents the maximum number of redirects that are followed for one read.
-    /// </summary>
-    public const int MaxRedirects = 10;
-
-    /// <summary>
     /// Represents the product name in the <c>User-Agent</c> header that the registered client sends.
     /// </summary>
     public const string UserAgentProductName = "shade-kit";
 
     private static readonly string[] AllowedApplicationMediaTypes = ["application/json", "application/xml"];
+
+    // US-ASCII is a subset of UTF-8, so text with one of these labels decodes as UTF-8.
+    private static readonly string[] AllowedCharSets = ["utf-8", "utf8", "us-ascii"];
 
     private readonly IHttpClientFactory _httpClientFactory = Ensure.NotNull(httpClientFactory);
 
@@ -92,9 +92,9 @@ public sealed class HttpUrlContentReader(IHttpClientFactory httpClientFactory) :
 
         try
         {
-            using var response = await GetFollowingRedirectsAsync(httpClient, url, timeoutSource.Token)
-                .ConfigureAwait(false);
+            using var response = await GetAsync(httpClient, url, timeoutSource.Token).ConfigureAwait(false);
 
+            EnsureSuccessStatusCode(url, response);
             EnsureUsableContentType(url, response);
 
             return await ReadBodyTextAsync(url, response, maxContentLength, timeoutSource.Token).ConfigureAwait(false);
@@ -109,40 +109,6 @@ public sealed class HttpUrlContentReader(IHttpClientFactory httpClientFactory) :
         {
             throw new UrlContentReadFailedException(url, $"The request failed: {exception.Message}", exception);
         }
-    }
-
-    private static async Task<HttpResponseMessage> GetFollowingRedirectsAsync(HttpClient httpClient, Uri url,
-        CancellationToken cancellationToken)
-    {
-        var currentUrl = url;
-
-        // The first request and up to MaxRedirects redirected requests.
-        for (var requestCount = 0; requestCount <= MaxRedirects; requestCount++)
-        {
-            var response = await GetAsync(httpClient, currentUrl, cancellationToken).ConfigureAwait(false);
-
-            if (!IsRedirect(response.StatusCode))
-            {
-                if (response.IsSuccessStatusCode)
-                {
-                    return response;
-                }
-
-                using (response)
-                {
-                    throw new UrlContentReadFailedException(url,
-                        $"The server answered with the status code {FormatStatusCode(response)}, not with a " +
-                        "success status code (2xx).");
-                }
-            }
-
-            using (response)
-            {
-                currentUrl = GetRedirectTarget(url, currentUrl, response);
-            }
-        }
-
-        throw new UrlContentReadFailedException(url, $"The server redirected more than {MaxRedirects} times.");
     }
 
     private static async Task<HttpResponseMessage> GetAsync(HttpClient httpClient, Uri url,
@@ -161,32 +127,49 @@ public sealed class HttpUrlContentReader(IHttpClientFactory httpClientFactory) :
             or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect;
     }
 
-    private static Uri GetRedirectTarget(Uri url, Uri currentUrl, HttpResponseMessage response)
+    private static void EnsureSuccessStatusCode(Uri url, HttpResponseMessage response)
     {
+        if (IsRedirect(response.StatusCode))
+        {
+            throw new UrlContentReadFailedException(url, CreateRedirectNotFollowedReason(url, response));
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new UrlContentReadFailedException(url,
+                $"The server answered with the status code {FormatStatusCode(response)}, not with a success status " +
+                "code (2xx).");
+        }
+    }
+
+    // The handlers of the client follow the redirects they accept, so a redirect that reaches the reader was refused;
+    // the reason is derived from its target. The request of the response carries the URL of the last request.
+    private static string CreateRedirectNotFollowedReason(Uri url, HttpResponseMessage response)
+    {
+        var currentUrl = response.RequestMessage?.RequestUri is { IsAbsoluteUri: true } requestUrl ? requestUrl : url;
         var location = response.Headers.Location;
 
         if (location is null)
         {
-            throw new UrlContentReadFailedException(url,
-                $"The server answered {currentUrl.OriginalString} with the redirect status code " +
-                $"{FormatStatusCode(response)}, but without a valid Location header.");
+            return $"The server answered {currentUrl.OriginalString} with the redirect status code " +
+                   $"{FormatStatusCode(response)}, but without a valid Location header.";
         }
 
         var target = location.IsAbsoluteUri ? location : new Uri(currentUrl, location);
 
         if (!HttpUrls.IsHttpUrl(target))
         {
-            throw new UrlContentReadFailedException(url,
-                $"The server redirected to {target.OriginalString}, which is not an http or https URL.");
+            return $"The server redirected to {target.OriginalString}, which is not an http or https URL.";
         }
 
         if (currentUrl.Scheme == Uri.UriSchemeHttps && target.Scheme != Uri.UriSchemeHttps)
         {
-            throw new UrlContentReadFailedException(url,
-                $"The server redirected from https to the insecure URL {target.OriginalString}.");
+            return $"The server redirected from https to the insecure URL {target.OriginalString}.";
         }
 
-        return target;
+        return $"The server answered {currentUrl.OriginalString} with the redirect status code " +
+               $"{FormatStatusCode(response)} to {target.OriginalString}, and the redirect was not followed, for " +
+               "example because the server redirected too many times.";
     }
 
     private static void EnsureUsableContentType(Uri url, HttpResponseMessage response)
@@ -209,10 +192,10 @@ public sealed class HttpUrlContentReader(IHttpClientFactory httpClientFactory) :
         // The charset may be a quoted string, which means the same as the token.
         var charSet = contentType.CharSet?.Trim('"');
 
-        if (charSet is not null && !string.Equals(charSet, "utf-8", StringComparison.OrdinalIgnoreCase))
+        if (charSet is not null && !AllowedCharSets.Contains(charSet, StringComparer.OrdinalIgnoreCase))
         {
             throw new UrlContentReadFailedException(url,
-                $"The response has the charset {charSet}; only utf-8 can be read.");
+                $"The response has the charset {charSet}; only utf-8, utf8, and us-ascii can be read.");
         }
     }
 

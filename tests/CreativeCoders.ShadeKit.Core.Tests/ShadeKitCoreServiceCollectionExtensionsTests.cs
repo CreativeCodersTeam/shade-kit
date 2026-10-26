@@ -511,29 +511,33 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void AddShadeKitCore_ServiceCollection_ConfiguresUrlContentReaderPrimaryHandlerWithoutAutoRedirect()
+    public async Task AddShadeKitCore_PrimaryHandlerConfiguredBefore_KeepsPrimaryHandler()
     {
         // Arrange
+        using var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage
+        {
+            Content = new StringContent("Login with SSO\n")
+        });
+
         var services = new ServiceCollection();
+        services.AddHttpClient(HttpUrlContentReader.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
 
         // Act
         services.AddShadeKitCore();
 
         // Assert
-        using var serviceProvider = services.BuildServiceProvider();
+        await using var serviceProvider = services.BuildServiceProvider();
 
-        var options = serviceProvider.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>()
-            .Get(HttpUrlContentReader.HttpClientName);
-        var handlerBuilder = serviceProvider.GetRequiredService<HttpMessageHandlerBuilder>();
+        var text = await serviceProvider.GetRequiredService<IUrlContentReader>()
+            .ReadAsync(new Uri("https://example.com/request.md"), FeatureSourceReader.MaxSourceLength,
+                TestContext.Current.CancellationToken);
 
-        foreach (var action in options.HttpMessageHandlerBuilderActions)
-        {
-            action(handlerBuilder);
-        }
+        text
+            .Should().Be("Login with SSO\n");
 
-        handlerBuilder.PrimaryHandler
-            .Should().BeOfType<SocketsHttpHandler>()
-            .Which.AllowAutoRedirect.Should().BeFalse();
+        handler.Requests
+            .Should().ContainSingle();
     }
 
     [Fact]
@@ -631,6 +635,30 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         httpClient.Timeout
             .Should().Be(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public void AddShadeKitCore_CalledTwice_AddsUserAgentOnce()
+    {
+        // Arrange
+        var engineVersionProvider = A.Fake<IEngineVersionProvider>();
+        A.CallTo(() => engineVersionProvider.Version).Returns("1.3.0");
+
+        var services = new ServiceCollection();
+        services.AddSingleton(engineVersionProvider);
+
+        // Act
+        services.AddShadeKitCore();
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        using var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(HttpUrlContentReader.HttpClientName);
+
+        httpClient.DefaultRequestHeaders.UserAgent.ToString()
+            .Should().Be("shade-kit/1.3.0");
     }
 
     [Fact]

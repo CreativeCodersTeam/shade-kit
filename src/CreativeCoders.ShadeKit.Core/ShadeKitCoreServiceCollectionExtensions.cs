@@ -27,10 +27,12 @@ public static class ShadeKitCoreServiceCollectionExtensions
     /// All services are singletons. Existing registrations are kept, so a registration made before the call replaces
     /// the default. The call also registers the <see cref="IHttpClientFactory" /> and the named client
     /// <see cref="HttpUrlContentReader.HttpClientName" /> with a timeout of
-    /// <see cref="HttpUrlContentReader.RequestTimeout" />, the <c>User-Agent</c>
-    /// <c>shade-kit/&lt;engine version&gt;</c> from the <see cref="IEngineVersionProvider" />, and a primary handler
-    /// that does not follow redirects. A repeated call keeps the existing registrations but adds the configuration of
-    /// the named client again: the timeout stays the same, and the <c>User-Agent</c> product can be sent twice.
+    /// <see cref="HttpUrlContentReader.RequestTimeout" /> and the <c>User-Agent</c>
+    /// <c>shade-kit/&lt;engine version&gt;</c> from the <see cref="IEngineVersionProvider" />. The client keeps the
+    /// default primary handler, which follows redirects. The configuration of the named client does not follow the
+    /// rule above: the timeout replaces one set by a configuration added before the call, and the <c>User-Agent</c>
+    /// is added only when the client has none yet, so a repeated call sends it once. A primary handler configured for
+    /// the named client, before or after the call, is kept.
     /// </remarks>
     /// <param name="services">The service collection to add the services to.</param>
     /// <returns>The same <see cref="IServiceCollection" /> instance so that additional calls can be chained.</returns>
@@ -65,10 +67,13 @@ public static class ShadeKitCoreServiceCollectionExtensions
             .ConfigureHttpClient((serviceProvider, httpClient) =>
             {
                 httpClient.Timeout = HttpUrlContentReader.RequestTimeout;
-                httpClient.DefaultRequestHeaders.UserAgent.Add(HttpUrlContentReader.CreateUserAgent(
-                    serviceProvider.GetRequiredService<IEngineVersionProvider>().Version));
-            })
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+
+                if (httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
+                {
+                    httpClient.DefaultRequestHeaders.UserAgent.Add(HttpUrlContentReader.CreateUserAgent(
+                        serviceProvider.GetRequiredService<IEngineVersionProvider>().Version));
+                }
+            });
         services.TryAddSingleton<IUrlContentReader, HttpUrlContentReader>();
         services.TryAddSingleton<IGhExecutableLocator, GhExecutableLocator>();
         services.TryAddSingleton<IGhCommandRunner, GhCommandRunner>();

@@ -43,8 +43,8 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     private const string GhSignInHint =
         "Check the issue URL and that gh is signed in for its host ('gh auth status'), then run the command again.";
 
-    private const string GhInstallHint =
-        "Install the GitHub CLI gh and make it available on the PATH, then run the command again.";
+    private const string GhAvailabilityHint =
+        "Make sure the GitHub CLI gh is installed, on the PATH, and can be executed, then run the command again.";
 
     private const string UrlHint =
         "Check the URL and run the command again, or save the content to a file and pass the path of the file with " +
@@ -290,7 +290,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     }
 
     [Fact]
-    public async Task FeatureNew_JsonGhNotFound_Returns33WithGhInstallHint()
+    public async Task FeatureNew_JsonGhNotFound_Returns33WithGhAvailabilityHint()
     {
         // Arrange
         await InitAsync();
@@ -310,7 +310,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
 
         root.GetProperty("error").GetProperty("message").GetString()
             .Should().Be($"The source '{IssueUrl}' cannot be used: The issue cannot be read: {GhNotFoundReason} " +
-                         GhInstallHint);
+                         GhAvailabilityHint);
 
         Directory.Exists(GetFeaturePath(IssueFeatureId))
             .Should().BeFalse();

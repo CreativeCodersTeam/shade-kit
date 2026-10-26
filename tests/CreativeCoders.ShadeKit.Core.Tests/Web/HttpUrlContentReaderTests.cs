@@ -462,6 +462,10 @@ public class HttpUrlContentReaderTests
     [InlineData("text/plain; charset=utf-8")]
     [InlineData("text/markdown; charset=UTF-8")]
     [InlineData("application/json; charset=\"utf-8\"")]
+    [InlineData("text/plain; charset=utf8")]
+    [InlineData("text/plain; charset=UTF8")]
+    [InlineData("application/json; charset=us-ascii")]
+    [InlineData("text/plain; charset=US-ASCII")]
     public async Task ReadAsync_AllowedContentType_ReturnsBodyText(string contentType)
     {
         // Arrange
@@ -516,8 +520,7 @@ public class HttpUrlContentReaderTests
     [Theory]
     [InlineData("text/plain; charset=iso-8859-1", "iso-8859-1")]
     [InlineData("text/plain; charset=utf-16", "utf-16")]
-    [InlineData("application/json; charset=us-ascii", "us-ascii")]
-    [InlineData("text/plain; charset=utf8", "utf8")]
+    [InlineData("text/plain; charset=windows-1252", "windows-1252")]
     public async Task ReadAsync_CharsetOtherThanUtf8_ThrowsUrlContentReadFailedException(string contentType,
         string expectedCharset)
     {
@@ -531,7 +534,7 @@ public class HttpUrlContentReaderTests
 
         // Assert
         (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
-            .Should().Be($"The response has the charset {expectedCharset}; only utf-8 can be read.");
+            .Should().Be($"The response has the charset {expectedCharset}; only utf-8, utf8, and us-ascii can be read.");
     }
 
     [Theory]
@@ -565,193 +568,6 @@ public class HttpUrlContentReaderTests
             exception.InnerException
                 .Should().BeNull();
         }
-    }
-
-    [Theory]
-    [InlineData(HttpStatusCode.MovedPermanently)]
-    [InlineData(HttpStatusCode.Found)]
-    [InlineData(HttpStatusCode.SeeOther)]
-    [InlineData(HttpStatusCode.TemporaryRedirect)]
-    [InlineData(HttpStatusCode.PermanentRedirect)]
-    public async Task ReadAsync_RedirectWithAbsoluteLocation_FollowsRedirect(HttpStatusCode statusCode)
-    {
-        // Arrange
-        using var handler = new StubHttpMessageHandler(request =>
-            request.RequestUri == new Uri(RequestUrl)
-                ? CreateRedirect(statusCode, "https://docs.example.org/moved/request.md")
-                : CreateResponse("Moved\n"u8.ToArray()));
-        var sut = CreateSut(handler);
-
-        // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
-
-        // Assert
-        text
-            .Should().Be("Moved\n");
-
-        handler.Requests.Select(x => x.RequestUri)
-            .Should().Equal(new Uri(RequestUrl), new Uri("https://docs.example.org/moved/request.md"));
-
-        handler.Requests
-            .Should().OnlyContain(x => x.Method == HttpMethod.Get);
-    }
-
-    [Theory]
-    [InlineData("/moved/request.md", "https://example.com/moved/request.md")]
-    [InlineData("next.md", "https://example.com/docs/next.md")]
-    [InlineData("../other/request.md", "https://example.com/other/request.md")]
-    [InlineData("//cdn.example.org/request.md", "https://cdn.example.org/request.md")]
-    public async Task ReadAsync_RedirectWithRelativeLocation_FollowsRedirectResolvedAgainstCurrentUrl(
-        string location, string expectedTarget)
-    {
-        // Arrange
-        using var handler = new StubHttpMessageHandler(request =>
-            request.RequestUri == new Uri(RequestUrl)
-                ? CreateRedirect(HttpStatusCode.Found, location)
-                : CreateResponse("Moved\n"u8.ToArray()));
-        var sut = CreateSut(handler);
-
-        // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
-
-        // Assert
-        text
-            .Should().Be("Moved\n");
-
-        handler.Requests.Select(x => x.RequestUri)
-            .Should().Equal(new Uri(RequestUrl), new Uri(expectedTarget));
-    }
-
-    [Fact]
-    public async Task ReadAsync_RelativeRedirectAfterRedirect_ResolvesAgainstLastUrl()
-    {
-        // Arrange
-        using var handler = new StubHttpMessageHandler(request => request.RequestUri!.AbsolutePath switch
-        {
-            "/docs/request.md" => CreateRedirect(HttpStatusCode.Found, "https://other.example.org/a/b.md"),
-            "/a/b.md" => CreateRedirect(HttpStatusCode.Found, "c.md"),
-            _ => CreateResponse("Moved twice\n"u8.ToArray())
-        });
-        var sut = CreateSut(handler);
-
-        // Act
-        var text = await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
-
-        // Assert
-        text
-            .Should().Be("Moved twice\n");
-
-        handler.Requests.Select(x => x.RequestUri)
-            .Should().Equal(new Uri(RequestUrl), new Uri("https://other.example.org/a/b.md"),
-                new Uri("https://other.example.org/a/c.md"));
-    }
-
-    [Fact]
-    public async Task ReadAsync_RedirectFromHttpToHttps_FollowsRedirect()
-    {
-        // Arrange
-        using var handler = new StubHttpMessageHandler(request =>
-            request.RequestUri!.Scheme == Uri.UriSchemeHttp
-                ? CreateRedirect(HttpStatusCode.MovedPermanently, RequestUrl)
-                : CreateResponse("Secure\n"u8.ToArray()));
-        var sut = CreateSut(handler);
-
-        // Act
-        var text = await sut.ReadAsync(new Uri("http://example.com/docs/request.md"), MaxContentLength,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        text
-            .Should().Be("Secure\n");
-    }
-
-    [Fact]
-    public async Task ReadAsync_TenRedirects_ReturnsBodyText()
-    {
-        // Arrange
-        using var handler = CreateRedirectChainHandler(HttpUrlContentReader.MaxRedirects);
-        var sut = CreateSut(handler);
-
-        // Act
-        var text = await sut.ReadAsync(new Uri("https://example.com/0"), MaxContentLength, TestContext.Current.CancellationToken);
-
-        // Assert
-        text
-            .Should().Be("End of chain\n");
-
-        handler.Requests
-            .Should().HaveCount(11);
-    }
-
-    [Fact]
-    public async Task ReadAsync_ElevenRedirects_ThrowsUrlContentReadFailedException()
-    {
-        // Arrange
-        using var handler = CreateRedirectChainHandler(HttpUrlContentReader.MaxRedirects + 1);
-        var sut = CreateSut(handler);
-
-        // Act
-        var act = () => sut.ReadAsync(new Uri("https://example.com/0"), MaxContentLength, TestContext.Current.CancellationToken);
-
-        // Assert
-        var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
-
-        exception.Reason
-            .Should().Be("The server redirected more than 10 times.");
-
-        exception.Url
-            .Should().Be(new Uri("https://example.com/0"));
-
-        handler.Requests
-            .Should().HaveCount(11);
-    }
-
-    [Fact]
-    public async Task ReadAsync_RedirectChainLongerThanTimeout_ThrowsUrlContentReadFailedException()
-    {
-        // Arrange: every request takes 50 ms, so no single request reaches the timeout of 200 ms, but the chain of
-        // 10 redirects does.
-        using var handler = new StubHttpMessageHandler(async (request, cancellationToken) =>
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken).ConfigureAwait(false);
-
-            var index = int.Parse(request.RequestUri!.AbsolutePath.TrimStart('/'), CultureInfo.InvariantCulture);
-
-            return index < HttpUrlContentReader.MaxRedirects
-                ? CreateRedirect(HttpStatusCode.Found, $"/{index + 1}")
-                : CreateResponse("End of chain\n"u8.ToArray());
-        });
-        var sut = CreateSut(handler, TimeSpan.FromMilliseconds(200));
-
-        // Act
-        var act = () => sut.ReadAsync(new Uri("https://example.com/0"), MaxContentLength, TestContext.Current.CancellationToken);
-
-        // Assert
-        (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which.Reason
-            .Should().Be("The server did not answer completely within 0.2 seconds.");
-    }
-
-    [Fact]
-    public async Task ReadAsync_RedirectedRequestFails_ThrowsUrlContentReadFailedExceptionWithOriginalUrl()
-    {
-        // Arrange
-        using var handler = new StubHttpMessageHandler((request, _) =>
-            request.RequestUri == new Uri(RequestUrl)
-                ? Task.FromResult(CreateRedirect(HttpStatusCode.Found, "https://mirror.example.org/request.md"))
-                : Task.FromException<HttpResponseMessage>(new HttpRequestException("Connection refused.")));
-        var sut = CreateSut(handler);
-
-        // Act
-        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
-
-        // Assert
-        var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
-
-        exception.Reason
-            .Should().Be("The request failed: Connection refused.");
-
-        exception.Url
-            .Should().Be(new Uri(RequestUrl));
     }
 
     [Fact]
@@ -812,14 +628,18 @@ public class HttpUrlContentReaderTests
                          "a valid Location header.");
     }
 
-    [Fact]
-    public async Task ReadAsync_RedirectToErrorStatusCode_ThrowsUrlContentReadFailedException()
+    [Theory]
+    [InlineData(HttpStatusCode.MovedPermanently, "301 (Moved Permanently)")]
+    [InlineData(HttpStatusCode.Found, "302 (Found)")]
+    [InlineData(HttpStatusCode.SeeOther, "303 (See Other)")]
+    [InlineData(HttpStatusCode.TemporaryRedirect, "307 (Temporary Redirect)")]
+    [InlineData(HttpStatusCode.PermanentRedirect, "308 (Permanent Redirect)")]
+    public async Task ReadAsync_RedirectNotFollowedByClient_ThrowsUrlContentReadFailedExceptionWithoutFollowing(
+        HttpStatusCode statusCode, string expectedStatusCode)
     {
         // Arrange
-        using var handler = new StubHttpMessageHandler(request =>
-            request.RequestUri == new Uri(RequestUrl)
-                ? CreateRedirect(HttpStatusCode.Found, "/gone")
-                : CreateResponse([], statusCode: HttpStatusCode.Gone));
+        using var handler = new StubHttpMessageHandler(_ =>
+            CreateRedirect(statusCode, "https://docs.example.org/moved/request.md"));
         var sut = CreateSut(handler);
 
         // Act
@@ -829,7 +649,40 @@ public class HttpUrlContentReaderTests
         var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
 
         exception.Reason
-            .Should().Be("The server answered with the status code 410 (Gone), not with a success status code (2xx).");
+            .Should().Be($"The server answered {RequestUrl} with the redirect status code {expectedStatusCode} to " +
+                         "https://docs.example.org/moved/request.md, and the redirect was not followed, for example " +
+                         "because the server redirected too many times.");
+
+        exception.Url
+            .Should().Be(new Uri(RequestUrl));
+
+        handler.Requests
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task ReadAsync_RedirectNotFollowedAfterRedirects_ResolvesLocationAgainstLastRequestUrl()
+    {
+        // Arrange: the client followed redirects to the URL of the request that the response carries.
+        using var handler = new StubHttpMessageHandler(_ =>
+        {
+            var response = CreateRedirect(HttpStatusCode.Found, "c.md");
+            response.RequestMessage = new HttpRequestMessage(HttpMethod.Get, "https://other.example.org/a/b.md");
+
+            return response;
+        });
+        var sut = CreateSut(handler);
+
+        // Act
+        var act = () => sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<UrlContentReadFailedException>()).Which;
+
+        exception.Reason
+            .Should().Be("The server answered https://other.example.org/a/b.md with the redirect status code 302 " +
+                         "(Found) to https://other.example.org/a/c.md, and the redirect was not followed, for " +
+                         "example because the server redirected too many times.");
 
         exception.Url
             .Should().Be(new Uri(RequestUrl));
@@ -879,13 +732,10 @@ public class HttpUrlContentReaderTests
     }
 
     [Fact]
-    public async Task ReadAsync_ClientWithUserAgent_SendsUserAgentWithEveryRequest()
+    public async Task ReadAsync_ClientWithUserAgent_SendsUserAgent()
     {
         // Arrange
-        using var handler = new StubHttpMessageHandler(request =>
-            request.RequestUri == new Uri(RequestUrl)
-                ? CreateRedirect(HttpStatusCode.Found, "/moved.md")
-                : CreateResponse("Moved\n"u8.ToArray()));
+        using var handler = new StubHttpMessageHandler(_ => CreateResponse("Text\n"u8.ToArray()));
 
         A.CallTo(() => _httpClientFactory.CreateClient(HttpUrlContentReader.HttpClientName))
             .ReturnsLazily(() =>
@@ -901,8 +751,8 @@ public class HttpUrlContentReaderTests
         await sut.ReadAsync(new Uri(RequestUrl), MaxContentLength, TestContext.Current.CancellationToken);
 
         // Assert
-        handler.Requests.Select(x => x.Headers.UserAgent.ToString())
-            .Should().Equal("shade-kit/1.3.0", "shade-kit/1.3.0");
+        handler.Requests.Should().ContainSingle()
+            .Which.Headers.UserAgent.ToString().Should().Be("shade-kit/1.3.0");
     }
 
     public enum ContentLengthHeader
@@ -925,20 +775,6 @@ public class HttpUrlContentReaderTests
             });
 
         return new HttpUrlContentReader(_httpClientFactory);
-    }
-
-    // Redirects /0 to /1 and so on, and answers /<redirectCount> with a text.
-    private static StubHttpMessageHandler CreateRedirectChainHandler(int redirectCount)
-    {
-        return new StubHttpMessageHandler(request =>
-        {
-            var index = int.Parse(request.RequestUri!.AbsolutePath.TrimStart('/'),
-                CultureInfo.InvariantCulture);
-
-            return index < redirectCount
-                ? CreateRedirect(HttpStatusCode.Found, $"/{index + 1}")
-                : CreateResponse("End of chain\n"u8.ToArray());
-        });
     }
 
     private static byte[] CreateAsciiBody(int length)
