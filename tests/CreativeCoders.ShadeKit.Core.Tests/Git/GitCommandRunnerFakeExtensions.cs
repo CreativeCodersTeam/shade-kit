@@ -1,4 +1,5 @@
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Processes;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Git;
@@ -13,7 +14,7 @@ internal static class GitCommandRunnerFakeExtensions
     /// working directory.
     /// </summary>
     public static void SetUpResult(this IGitCommandRunner gitCommandRunner, IReadOnlyList<string> arguments,
-        GitCommandResult result)
+        ExternalProcessResult result)
     {
         A.CallTo(() => gitCommandRunner.RunAsync(A<string>._,
                 A<IReadOnlyList<string>>.That.IsSameSequenceAs(arguments), A<CancellationToken>._))

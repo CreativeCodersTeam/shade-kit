@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items), 2026-10-18 (`quick` phase; DOR-10, DOD-01, items that do not apply), and 2026-10-24 (documentation check: the engine replaces `{{feature-id}}` in a checklist copy) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items), 2026-10-18 (`quick` phase; DOR-10, DOD-01, items that do not apply), 2026-10-24 (documentation check: the engine replaces `{{feature-id}}` in a checklist copy), and 2026-10-25 (reference to the removed `request.md` template dropped) |
 | Source | Concept §2 (Gates), §4.1 (`checks/`), §5.2, §6, §11.1, §11.4 |
 | Depends on | 02, 04 |
 | Enables | 12 (DoR), 15 (DoD), every phase transition |
@@ -78,7 +78,7 @@ The concept's example is keyed by phase only. Because the `quick` profile needs 
 ### Checklists
 
 - The team edits the templates in `.shadekit/templates/checks/`. They are tracked by `templates.lock.json` like every template (package 02).
-- When a phase with a checklist starts, the engine copies the template into the feature folder (`features/<id>/checks/definition-of-ready.md`) if the copy does not exist yet, replaces `{{feature-id}}` with the id (as for `request.md`, package 03), and returns its path. The agent checks and fills in this copy. The filled copy is the record of the gate. **Proposed.**
+- When a phase with a checklist starts, the engine copies the template into the feature folder (`features/<id>/checks/definition-of-ready.md`) if the copy does not exist yet, replaces `{{feature-id}}` with the id, and returns its path. The agent checks and fills in this copy. The filled copy is the record of the gate. **Proposed.**
 - A reopened phase (package 04) reuses the existing copy; the agent rechecks every item, and the "Check runs" log keeps the earlier results visible.
 
 ### Checklist format

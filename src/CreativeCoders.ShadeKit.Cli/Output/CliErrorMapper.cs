@@ -15,7 +15,9 @@ using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
+using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
 
@@ -108,8 +110,7 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 "list' to see the ids of the existing features."),
 
             InvalidFeatureSourceException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureSource,
-                $"The source '{e.SourceText}' cannot be used: {e.Reason} Pass an issue URL, the path of an existing " +
-                "UTF-8 text file, or the request text with --source."),
+                $"The source '{e.SourceText}' cannot be used: {e.Reason} {CreateSourceHint(e.Problem)}"),
 
             InvalidFeatureTitleException e => CliError.Create(ShadeKitCliExitCodes.InvalidFeatureTitle,
                 $"The feature title cannot be used: {e.Reason}"),
@@ -353,6 +354,28 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         return commandPath is null
             ? "shade-kit --help"
             : $"shade-kit {string.Join(' ', commandPath)} --help";
+    }
+
+    // Chooses the hint of an exit-33 message by the problem, so a valid URL whose content cannot be loaded points to
+    // gh or the URL instead of to another kind of source.
+    private static string CreateSourceHint(FeatureSourceProblem problem)
+    {
+        return problem switch
+        {
+            FeatureSourceProblem.GhUnavailable =>
+                "Make sure the GitHub CLI gh is installed, on the PATH, and can be executed, then run the command " +
+                "again.",
+
+            FeatureSourceProblem.IssueReadFailed =>
+                "Check the issue URL and that gh is signed in for its host ('gh auth status'), then run the command " +
+                "again.",
+
+            FeatureSourceProblem.UrlReadFailed =>
+                "Check the URL and run the command again, or save the content to a file and pass the path of the " +
+                "file with --source.",
+
+            _ => "Pass an issue URL, the path of an existing UTF-8 text file, or the request text with --source."
+        };
     }
 
     private static string GetFeaturesDirectoryPath()

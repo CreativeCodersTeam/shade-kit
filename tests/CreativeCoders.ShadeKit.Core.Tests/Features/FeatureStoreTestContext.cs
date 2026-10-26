@@ -3,11 +3,12 @@ using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
-using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Web;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.Time.Testing;
@@ -16,9 +17,9 @@ namespace CreativeCoders.ShadeKit.Core.Tests.Features;
 
 /// <summary>
 /// Provides a temporary git repository with a <c>.shadekit</c> directory, a real <see cref="KitStore" />, and a
-/// <see cref="FeatureStore" /> with real collaborators; only <see cref="IGitRepositoryInfo" /> and the line ending
-/// resolver of the store are faked, so no test starts <c>git</c> and the written line ending does not depend on the
-/// operating system.
+/// <see cref="FeatureStore" /> with real collaborators; only <see cref="IGitRepositoryInfo" />, the readers of URL
+/// sources, and the line ending resolver of the store are faked, so no test starts <c>git</c> or <c>gh</c> or sends a
+/// request, and the written line ending does not depend on the operating system.
 /// </summary>
 internal sealed class FeatureStoreTestContext : IDisposable
 {
@@ -33,6 +34,17 @@ internal sealed class FeatureStoreTestContext : IDisposable
 
     public const string TimeBasedIdPrefix = "20261020-1530-";
 
+    /// <summary>
+    /// Represents the content that <see cref="UrlContentReader" /> returns for every URL by default.
+    /// </summary>
+    public const string DefaultUrlContent = "# Login SSO\n\nUsers sign in with the company account.\n";
+
+    /// <summary>
+    /// Gets the issue that <see cref="TrackerIssueReader" /> returns for every issue URL by default.
+    /// </summary>
+    public static readonly TrackerIssue DefaultIssue = new TrackerIssue("Login with SSO",
+        "Users sign in with the company account.", []);
+
     private static readonly TimeZoneInfo UtcPlusTwo =
         TimeZoneInfo.CreateCustomTimeZone("Test UTC+02", TimeSpan.FromHours(2), "Test UTC+02", "Test UTC+02");
 
@@ -44,6 +56,10 @@ internal sealed class FeatureStoreTestContext : IDisposable
         SetBranch("main");
         A.CallTo(() => GitRepositoryInfo.GetIdentityAsync(A<string>._, A<CancellationToken>._))
             .Returns(new GitIdentity(UserName, UserEmail));
+        A.CallTo(() => TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(DefaultIssue);
+        A.CallTo(() => UrlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
+            .Returns(DefaultUrlContent);
     }
 
     public TempKitDirectory Repository { get; } = new TempKitDirectory();
@@ -51,6 +67,17 @@ internal sealed class FeatureStoreTestContext : IDisposable
     public string RepositoryRootPath { get; }
 
     public IGitRepositoryInfo GitRepositoryInfo { get; } = A.Fake<IGitRepositoryInfo>();
+
+    /// <summary>
+    /// Gets the fake reader of the issue of a tracker URL, which returns <see cref="DefaultIssue" /> by default.
+    /// </summary>
+    public ITrackerIssueReader TrackerIssueReader { get; } = A.Fake<ITrackerIssueReader>();
+
+    /// <summary>
+    /// Gets the fake reader of the content of any other URL, which returns <see cref="DefaultUrlContent" /> by
+    /// default.
+    /// </summary>
+    public IUrlContentReader UrlContentReader { get; } = A.Fake<IUrlContentReader>();
 
     /// <summary>
     /// Gets or sets the format registry of the stores that <see cref="CreateStore" /> creates.
@@ -111,13 +138,13 @@ internal sealed class FeatureStoreTestContext : IDisposable
             CreateWriter());
     }
 
-    public FeatureStore CreateFeatureStore(IShippedTemplateReader? shippedTemplateReader = null)
+    public FeatureStore CreateFeatureStore()
     {
         var timeProvider = new FakeTimeProvider(UtcNow);
         timeProvider.SetLocalTimeZone(UtcPlusTwo);
 
-        return new FeatureStore(new FeatureIdFactory(timeProvider), new CurrentFeatureResolver(GitRepositoryInfo),
-            GitRepositoryInfo, shippedTemplateReader ?? new ShippedTemplateReader());
+        return new FeatureStore(new FeatureIdFactory(timeProvider, new FeatureSourceReader(TrackerIssueReader, UrlContentReader)),
+            new CurrentFeatureResolver(GitRepositoryInfo), GitRepositoryInfo);
     }
 
     public NewFeatureRequest CreateRequest(string source, string? title = null, string? profile = null)
@@ -137,6 +164,10 @@ internal sealed class FeatureStoreTestContext : IDisposable
             KitStorePaths.ConfigFileName);
     }
 
+    /// <summary>
+    /// Writes <c>templates/request.md</c>, the repository template of earlier versions, which
+    /// <see cref="FeatureStore" /> ignores.
+    /// </summary>
     public void WriteRequestTemplate(string content)
     {
         WriteKitFile(content, KitStorePaths.TemplatesDirName, KitStorePaths.RequestFileName);

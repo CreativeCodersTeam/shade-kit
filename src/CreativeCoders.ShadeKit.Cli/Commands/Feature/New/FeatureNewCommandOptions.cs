@@ -23,10 +23,12 @@ public class FeatureNewCommandOptions : JsonCommandOptions
     /// </summary>
     /// <value>
     /// An absolute <c>http</c> or <c>https</c> URL, the path of an existing UTF-8 text file of at most 1 MiB, or the
-    /// request text. The default is an empty string.
+    /// request text. The issue of a URL whose host is a tracker in <c>config.json</c> is read with <c>gh</c>; any other
+    /// URL is read with an HTTP GET. The default is an empty string.
     /// </value>
     [OptionParameter('s', "source", IsRequired = true,
-        HelpText = "The request: an issue URL, the path of an existing UTF-8 text file (at most 1 MiB), or the " +
+        HelpText = "The request: an issue URL of a tracker in config.json (read with gh), another http(s) URL " +
+                   "(its content is downloaded), the path of an existing UTF-8 text file (at most 1 MiB), or the " +
                    "request text")]
     public string Source { get; set; } = string.Empty;
 
@@ -34,10 +36,11 @@ public class FeatureNewCommandOptions : JsonCommandOptions
     /// Gets or sets the title of the new feature.
     /// </summary>
     /// <value>
-    /// The title, or <see langword="null" /> to derive it from a text or file source. The default is
-    /// <see langword="null" />.
+    /// The title, or <see langword="null" /> to derive it from a text or file source or from the issue of a tracker
+    /// URL; required for a URL whose host is not a tracker. The default is <see langword="null" />.
     /// </value>
     [OptionParameter('t', "title",
-        HelpText = "The feature title; required for a URL source, otherwise derived from the source")]
+        HelpText = "The feature title; required for a URL that is not an issue URL of a tracker in config.json, " +
+                   "otherwise derived from the source (the issue title for an issue URL)")]
     public string? Title { get; set; }
 }

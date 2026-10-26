@@ -3,7 +3,12 @@ using System.Text;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Trackers;
+using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
+using FakeItEasy;
 using Microsoft.Extensions.Time.Testing;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Features;
@@ -11,6 +16,10 @@ namespace CreativeCoders.ShadeKit.Core.Tests.Features;
 public sealed class FeatureIdFactoryTests : IDisposable
 {
     private const string IssueUrl = "https://github.com/acme/shop/issues/142";
+
+    private const string WebUrl = "https://example.com/requests/login-sso";
+
+    private const string WebContent = "# Login SSO\n\nThe customers want to log in with their company account.\n";
 
     private const string TimePrefix = "20261020-1530";
 
@@ -25,7 +34,24 @@ public sealed class FeatureIdFactoryTests : IDisposable
     // 2026-10-20 13:30:45.678 UTC is 15:30:45.678 in UTC+02.
     private static readonly DateTimeOffset UtcNow = new DateTimeOffset(2026, 10, 20, 13, 30, 45, 678, TimeSpan.Zero);
 
+    private static readonly TrackerIssue DefaultIssue = new TrackerIssue("Issue Title",
+        "The customers want to log in with their company account.",
+        [new TrackerIssueComment("jane", new DateTimeOffset(2026, 10, 19, 9, 0, 0, TimeSpan.Zero), "Agreed.")]);
+
     private readonly TempKitDirectory _repository = new TempKitDirectory();
+
+    private readonly ITrackerIssueReader _trackerIssueReader = A.Fake<ITrackerIssueReader>();
+
+    private readonly IUrlContentReader _urlContentReader = A.Fake<IUrlContentReader>();
+
+    public FeatureIdFactoryTests()
+    {
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(DefaultIssue);
+
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
+            .Returns(WebContent);
+    }
 
     public void Dispose()
     {
@@ -45,7 +71,8 @@ public sealed class FeatureIdFactoryTests : IDisposable
         // Assert
         identity
             .Should().BeEquivalentTo(new FeatureIdentity("gh-142-login-sso", "Login SSO",
-                new FeatureSource { Kind = FeatureSourceKind.Url, Value = IssueUrl }, IssueUrl,
+                new FeatureSource { Kind = FeatureSourceKind.Url, Value = IssueUrl },
+                TrackerIssueMarkdown.Format(DefaultIssue),
                 new DateTimeOffset(2026, 10, 20, 15, 30, 45, TimeSpan.FromHours(2))),
                 options => options.ComparingByMembers<FeatureIdentity>());
     }
@@ -64,7 +91,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         // Assert
         identity
             .Should().BeEquivalentTo(new FeatureIdentity($"{TimePrefix}-login-sso-for-customers",
-                "Login SSO for customers", new FeatureSource { Kind = FeatureSourceKind.Text }, text,
+                "Login SSO for customers", new FeatureSource { Kind = FeatureSourceKind.Text, Value = text }, text,
                 new DateTimeOffset(2026, 10, 20, 15, 30, 45, TimeSpan.FromHours(2))),
                 options => options.ComparingByMembers<FeatureIdentity>());
     }
@@ -121,7 +148,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         identity.Id
             .Should().Be($"{TimePrefix}-login-sso");
 
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(text);
     }
 
@@ -198,23 +225,48 @@ public sealed class FeatureIdFactoryTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateAsync_UrlWithoutTitle_ThrowsInvalidFeatureTitleExceptionWithTitleHint()
+    public async Task CreateAsync_WebUrlWithoutTitle_ThrowsInvalidFeatureTitleExceptionWithoutReadingUrl()
     {
         // Arrange
         var factory = CreateFactory();
 
         // Act
-        var act = () => CreateAsync(factory, IssueUrl, null);
+        var act = () => CreateAsync(factory, WebUrl, null);
 
         // Assert
         (await act.Should().ThrowAsync<InvalidFeatureTitleException>())
-            .Which.Reason.Should().Contain("--title");
+            .Which.Reason.Should().Be("A URL source whose host is not a tracker in config.json has no title from " +
+                                      "which the feature id can be built. Pass the title with --title.");
+
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task CreateAsync_UrlWithWhitespaceTitle_ThrowsInvalidFeatureTitleException(string title)
+    [InlineData("???")]
+    [InlineData("Login\nSSO")]
+    public async Task CreateAsync_WebUrlWithMissingOrUnusableTitle_ThrowsInvalidFeatureTitleExceptionWithoutReadingUrl(
+        string title)
+    {
+        // Arrange
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, WebUrl, title);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidFeatureTitleException>();
+
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
+    }
+
+    [Theory]
+    [InlineData("???")]
+    [InlineData("Login\nSSO")]
+    public async Task CreateAsync_TrackerUrlWithUnusableTitle_ThrowsInvalidFeatureTitleExceptionWithoutReadingIssue(
+        string title)
     {
         // Arrange
         var factory = CreateFactory();
@@ -224,19 +276,376 @@ public sealed class FeatureIdFactoryTests : IDisposable
 
         // Assert
         await act.Should().ThrowAsync<InvalidFeatureTitleException>();
+
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
     }
 
     [Fact]
-    public async Task CreateAsync_UrlWithTitleWithoutSlug_ThrowsInvalidFeatureTitleException()
+    public async Task CreateAsync_WebUrlWithTitle_ReturnsUrlContentAsRequestContent()
     {
         // Arrange
         var factory = CreateFactory();
 
         // Act
-        var act = () => CreateAsync(factory, IssueUrl, "???");
+        var identity = await CreateAsync(factory, WebUrl, "Login SSO");
 
         // Assert
-        await act.Should().ThrowAsync<InvalidFeatureTitleException>();
+        identity
+            .Should().BeEquivalentTo(new FeatureIdentity($"{TimePrefix}-login-sso", "Login SSO",
+                new FeatureSource { Kind = FeatureSourceKind.Url, Value = WebUrl }, WebContent,
+                new DateTimeOffset(2026, 10, 20, 15, 30, 45, TimeSpan.FromHours(2))),
+                options => options.ComparingByMembers<FeatureIdentity>());
+
+        A.CallTo(() => _urlContentReader.ReadAsync(new Uri(WebUrl), FeatureSourceReader.MaxSourceLength, TestContext.Current.CancellationToken))
+            .MustHaveHappenedOnceExactly();
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task CreateAsync_UrlContentReadFails_ThrowsInvalidFeatureSourceExceptionWithReaderException()
+    {
+        // Arrange
+        var readerException = new UrlContentReadFailedException(new Uri(WebUrl),
+            "The server answered with status code 404 (Not Found).");
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._)).Throws(readerException);
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, WebUrl, "Login SSO");
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<InvalidFeatureSourceException>()).Which;
+
+        exception.SourceText
+            .Should().Be(WebUrl);
+
+        exception.Reason
+            .Should().Be("The content of the URL cannot be read: The server answered with status code 404 " +
+                         "(Not Found).");
+
+        exception.InnerException
+            .Should().BeSameAs(readerException);
+    }
+
+    [Fact]
+    public async Task CreateAsync_UrlContentReadCanceled_ThrowsOperationCanceledExceptionUnwrapped()
+    {
+        // Arrange
+        var canceledException = new OperationCanceledException("Canceled by the test.");
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._)).Throws(canceledException);
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, WebUrl, "Login SSO");
+
+        // Assert
+        (await act.Should().ThrowAsync<OperationCanceledException>())
+            .Which.Should().BeSameAs(canceledException);
+    }
+
+    [Fact]
+    public async Task CreateAsync_TrackerUrlWithoutTitle_UsesTrimmedIssueTitle()
+    {
+        // Arrange
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(DefaultIssue with { Title = "  Login with SSO  " });
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        identity.Id
+            .Should().Be("gh-142-login-with-sso");
+
+        identity.Title
+            .Should().Be("Login with SSO");
+
+        identity.Source
+            .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.Url, Value = IssueUrl });
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t")]
+    public async Task CreateAsync_TrackerUrlWithWhitespaceTitle_UsesIssueTitle(string title)
+    {
+        // Arrange
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, IssueUrl, title);
+
+        // Assert
+        identity.Title
+            .Should().Be("Issue Title");
+
+        identity.Id
+            .Should().Be("gh-142-issue-title");
+    }
+
+    [Fact]
+    public async Task CreateAsync_IssueTitleWithControlCharactersOnlyAtEdges_UsesTrimmedIssueTitle()
+    {
+        // Arrange
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(DefaultIssue with { Title = "\tLogin SSO\n" });
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        identity.Title
+            .Should().Be("Login SSO");
+
+        identity.RequestContent
+            .Should().StartWith("# Login SSO\n\nThe customers want to log in with their company account.\n");
+    }
+
+    [Fact]
+    public async Task CreateAsync_TrackerIssueReaderThrowsOtherException_PassesItThroughUnwrapped()
+    {
+        // Arrange
+        var readerException = new InvalidOperationException("Unexpected.");
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(readerException);
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .Which.Should().BeSameAs(readerException);
+    }
+
+    [Fact]
+    public async Task CreateAsync_UrlContentReaderThrowsOtherException_PassesItThroughUnwrapped()
+    {
+        // Arrange
+        var readerException = new InvalidOperationException("Unexpected.");
+        A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._)).Throws(readerException);
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, WebUrl, "Login SSO");
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .Which.Should().BeSameAs(readerException);
+    }
+
+    [Fact]
+    public async Task CreateAsync_TrackerUrlWithTitle_UsesTitleOverIssueTitle()
+    {
+        // Arrange
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, IssueUrl, "Login SSO");
+
+        // Assert
+        identity.Title
+            .Should().Be("Login SSO");
+
+        identity.RequestContent
+            .Should().StartWith("# Issue Title\n");
+    }
+
+    [Fact]
+    public async Task CreateAsync_TrackerUrl_ReturnsIssueAsMarkdownRequestContent()
+    {
+        // Arrange
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        identity.RequestContent
+            .Should().Be("# Issue Title\n\nThe customers want to log in with their company account.\n\n" +
+                         "## Comments\n\n### jane · 2026-10-19T09:00:00+00:00\n\nAgreed.\n");
+
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task CreateAsync_IssueMarkdownOfExactlyMaximumSize_ReturnsCompleteMarkdown()
+    {
+        // Arrange
+        var issue = CreateIssueWithMarkdownLength(FeatureSourceReader.MaxSourceLength);
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(issue);
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        Encoding.UTF8.GetByteCount(identity.RequestContent)
+            .Should().Be(FeatureSourceReader.MaxSourceLength);
+    }
+
+    [Fact]
+    public async Task CreateAsync_IssueMarkdownOneByteOverMaximumSize_ThrowsInvalidFeatureSourceExceptionNamingSizeLimit()
+    {
+        // Arrange
+        var issue = CreateIssueWithMarkdownLength(FeatureSourceReader.MaxSourceLength + 1);
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(issue);
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<InvalidFeatureSourceException>()).Which;
+
+        exception.Reason
+            .Should().Be("The issue is larger than 1,048,576 bytes (1 MiB) as Markdown, the size limit of a request. " +
+                         "Save a shortened copy of the issue to a file, and pass the path of the file with --source.");
+
+        exception.Problem
+            .Should().Be(FeatureSourceProblem.InvalidSource);
+    }
+
+    [Fact]
+    public async Task CreateAsync_TrackerUrl_ReadsIssueOfUrlInRepositoryRoot()
+    {
+        // Arrange
+        var repositoryRootPath = Path.Combine(_repository.RootPath, "root");
+        var factory = CreateFactory();
+
+        // Act
+        await CreateAsync(factory, IssueUrl, null, repositoryRootPath: repositoryRootPath);
+
+        // Assert
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(new Uri(IssueUrl), repositoryRootPath,
+                TestContext.Current.CancellationToken))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task CreateAsync_IssueTitleWithControlCharacter_ThrowsInvalidFeatureTitleExceptionNamingIssueTitle()
+    {
+        // Arrange
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(DefaultIssue with { Title = "Login\tSSO" });
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidFeatureTitleException>())
+            .Which.Reason
+            .Should().StartWith("The title taken from the issue title contains the control character U+0009;");
+    }
+
+    [Theory]
+    [InlineData("???")]
+    [InlineData("   ")]
+    public async Task CreateAsync_IssueTitleWithoutSlug_ThrowsInvalidFeatureTitleException(string issueTitle)
+    {
+        // Arrange
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(DefaultIssue with { Title = issueTitle });
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidFeatureTitleException>())
+            .Which.Reason.Should().Contain("contains no letter or digit").And.Contain("--title");
+    }
+
+    [Fact]
+    public async Task CreateAsync_IssueTitleWithoutSlugAndExplicitTitle_UsesExplicitTitle()
+    {
+        // Arrange
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Returns(DefaultIssue with { Title = "???" });
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, IssueUrl, "Login SSO");
+
+        // Assert
+        identity.Id
+            .Should().Be("gh-142-login-sso");
+    }
+
+    [Fact]
+    public async Task CreateAsync_GhNotFound_ThrowsInvalidFeatureSourceExceptionWithReaderException()
+    {
+        // Arrange
+        var readerException = new GhNotFoundException(["issue", "view", IssueUrl],
+            "The GitHub CLI gh was not found in any absolute directory of the PATH environment variable.");
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(readerException);
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<InvalidFeatureSourceException>()).Which;
+
+        exception.SourceText
+            .Should().Be(IssueUrl);
+
+        exception.Reason
+            .Should().Be("The issue cannot be read: The GitHub CLI gh was not found in any absolute directory of " +
+                         "the PATH environment variable.");
+
+        exception.InnerException
+            .Should().BeSameAs(readerException);
+    }
+
+    [Fact]
+    public async Task CreateAsync_TrackerIssueReadFails_ThrowsInvalidFeatureSourceExceptionWithReaderException()
+    {
+        // Arrange
+        var readerException = new TrackerIssueReadFailedException(new Uri(IssueUrl),
+            "gh exited with the exit code 1: Could not resolve to an issue.");
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(readerException);
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, IssueUrl, "Login SSO");
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<InvalidFeatureSourceException>()).Which;
+
+        exception.SourceText
+            .Should().Be(IssueUrl);
+
+        exception.Reason
+            .Should().Be("The issue cannot be read: gh exited with the exit code 1: Could not resolve to an issue.");
+
+        exception.InnerException
+            .Should().BeSameAs(readerException);
+    }
+
+    [Fact]
+    public async Task CreateAsync_TrackerIssueReadCanceled_ThrowsOperationCanceledExceptionUnwrapped()
+    {
+        // Arrange
+        var canceledException = new OperationCanceledException("Canceled by the test.");
+        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(canceledException);
+        var factory = CreateFactory();
+
+        // Act
+        var act = () => CreateAsync(factory, IssueUrl, null);
+
+        // Assert
+        (await act.Should().ThrowAsync<OperationCanceledException>())
+            .Which.Should().BeSameAs(canceledException);
     }
 
     [Theory]
@@ -264,8 +673,8 @@ public sealed class FeatureIdFactoryTests : IDisposable
         identity.Source
             .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.Url, Value = url });
 
-        identity.OriginalInput
-            .Should().Be(url);
+        identity.RequestContent
+            .Should().Be(TrackerIssueMarkdown.Format(DefaultIssue));
     }
 
     [Fact]
@@ -317,6 +726,11 @@ public sealed class FeatureIdFactoryTests : IDisposable
 
         identity.Source
             .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.Url, Value = url });
+
+        identity.RequestContent
+            .Should().Be(WebContent);
+
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
     }
 
     [Fact]
@@ -361,19 +775,27 @@ public sealed class FeatureIdFactoryTests : IDisposable
 
         exception.Reason
             .Should().Contain("github.com");
+
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
     }
 
-    [Fact]
-    public async Task CreateAsync_TrackerUrlWithoutNumberAndWithoutTitle_ThrowsInvalidFeatureSourceException()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Login\nSSO")]
+    public async Task CreateAsync_TrackerUrlWithoutNumberAndAnyTitle_ThrowsInvalidFeatureSourceExceptionBeforeGh(
+        string? title)
     {
         // Arrange
         var factory = CreateFactory();
 
         // Act
-        var act = () => CreateAsync(factory, "https://github.com/acme/shop", null);
+        var act = () => CreateAsync(factory, "https://github.com/acme/shop", title);
 
         // Assert
         await act.Should().ThrowAsync<InvalidFeatureSourceException>();
+
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
     }
 
     [Theory]
@@ -411,10 +833,54 @@ public sealed class FeatureIdFactoryTests : IDisposable
             .Should().Be($"{TimePrefix}-login-sso");
 
         identity.Source
-            .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.Text });
+            .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.Text, Value = source });
 
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(source);
+    }
+
+    [Theory]
+    [InlineData("https://example.com/login is broken please fix")]
+    [InlineData("https://github.com/acme/shop/issues/142 login fails")]
+    [InlineData("https://example.com/login\tis broken")]
+    [InlineData("https://example.com/login\nis broken")]
+    public async Task CreateAsync_UrlFollowedByWords_TreatsSourceAsTextWithoutReading(string source)
+    {
+        // Arrange
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, source, "Login SSO");
+
+        // Assert
+        identity.Id
+            .Should().Be($"{TimePrefix}-login-sso");
+
+        identity.Source
+            .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.Text, Value = source });
+
+        identity.RequestContent
+            .Should().Be(source);
+
+        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+        A.CallTo(_urlContentReader).MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task CreateAsync_UrlWithLeadingAndTrailingWhitespace_TreatsSourceAsUrl()
+    {
+        // Arrange
+        var factory = CreateFactory();
+
+        // Act
+        var identity = await CreateAsync(factory, $"  {WebUrl}\n", "Login SSO");
+
+        // Assert
+        identity.Source.Kind
+            .Should().Be(FeatureSourceKind.Url);
+
+        A.CallTo(() => _urlContentReader.ReadAsync(new Uri(WebUrl), A<int>._, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
     }
 
     [Fact]
@@ -502,7 +968,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         var identity = await CreateAsync(factory, "request.md", null);
 
         // Assert
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(content);
 
         identity.Title
@@ -521,7 +987,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         var identity = await CreateAsync(factory, "request.md", null);
 
         // Assert
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(content);
     }
 
@@ -748,7 +1214,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         identity.Source.Kind
             .Should().Be(FeatureSourceKind.Text);
 
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(text);
 
         identity.Id
@@ -770,7 +1236,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         identity.Source
             .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.File, Value = "link.md" });
 
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be("# Login SSO\n");
 
         identity.Title
@@ -778,7 +1244,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateAsync_SourceIsDevNull_ReturnsFileSourceWithEmptyOriginalInputAndFileNameTitle()
+    public async Task CreateAsync_SourceIsDevNull_ReturnsFileSourceWithEmptyRequestContentAndFileNameTitle()
     {
         // Arrange
         Assert.SkipWhen(OperatingSystem.IsWindows(), "/dev/null is a Unix device.");
@@ -791,7 +1257,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         identity.Source
             .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.File, Value = "/dev/null" });
 
-        identity.OriginalInput
+        identity.RequestContent
             .Should().BeEmpty();
 
         identity.Title
@@ -825,7 +1291,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public async Task CreateAsync_FileOfExactlyMaximumSize_ReturnsFileSourceWithCompleteContent()
     {
         // Arrange
-        var content = CreateFileContent(FeatureIdFactory.MaxSourceFileSize);
+        var content = CreateFileContent(FeatureSourceReader.MaxSourceLength);
         _repository.WriteFile(content, "request.md");
         var factory = CreateFactory();
 
@@ -836,7 +1302,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         identity.Source
             .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.File, Value = "request.md" });
 
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(content);
 
         identity.Title
@@ -849,7 +1315,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         // Arrange
         // 'ü' takes two bytes in UTF-8, so the file has fewer characters than the limit but more bytes.
         const string heading = "# Login SSO\n";
-        var characterCount = (FeatureIdFactory.MaxSourceFileSize - heading.Length) / 2 + 1;
+        var characterCount = (FeatureSourceReader.MaxSourceLength - heading.Length) / 2 + 1;
         _repository.WriteFile(heading + new string('ü', characterCount), "request.md");
         var factory = CreateFactory();
 
@@ -867,7 +1333,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     {
         // Arrange
         const string lastCharacter = "\U0001F600";
-        var content = CreateFileContent(FeatureIdFactory.MaxSourceFileSize - 4) + lastCharacter;
+        var content = CreateFileContent(FeatureSourceReader.MaxSourceLength - 4) + lastCharacter;
         _repository.WriteFile(content, "request.md");
         var factory = CreateFactory();
 
@@ -875,7 +1341,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         var identity = await CreateAsync(factory, "request.md", null);
 
         // Assert
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(content);
     }
 
@@ -883,7 +1349,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public async Task CreateAsync_Utf8BomPlusContentOfExactlyMaximumSize_ReturnsContentWithoutBom()
     {
         // Arrange
-        var text = CreateFileContent(FeatureIdFactory.MaxSourceFileSize - 3);
+        var text = CreateFileContent(FeatureSourceReader.MaxSourceLength - 3);
         _repository.WriteFileBytes([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(text)], "request.md");
         var factory = CreateFactory();
 
@@ -891,7 +1357,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         var identity = await CreateAsync(factory, "request.md", null);
 
         // Assert
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(text);
     }
 
@@ -900,7 +1366,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     {
         // Arrange
         // The byte order mark counts toward the limit.
-        var text = CreateFileContent(FeatureIdFactory.MaxSourceFileSize - 2);
+        var text = CreateFileContent(FeatureSourceReader.MaxSourceLength - 2);
         _repository.WriteFileBytes([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(text)], "request.md");
         var factory = CreateFactory();
 
@@ -917,7 +1383,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public async Task CreateAsync_FileOverLimitWithNulByte_ThrowsSizeLimitExceptionBeforeEncodingCheck()
     {
         // Arrange
-        var content = Encoding.UTF8.GetBytes(CreateFileContent(FeatureIdFactory.MaxSourceFileSize + 1));
+        var content = Encoding.UTF8.GetBytes(CreateFileContent(FeatureSourceReader.MaxSourceLength + 1));
         content[^1] = 0x00;
         _repository.WriteFileBytes(content, "request.md");
         var factory = CreateFactory();
@@ -938,7 +1404,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         string expectedReasonStart)
     {
         // Arrange
-        var content = Encoding.UTF8.GetBytes(CreateFileContent(FeatureIdFactory.MaxSourceFileSize));
+        var content = Encoding.UTF8.GetBytes(CreateFileContent(FeatureSourceReader.MaxSourceLength));
         content[^1] = lastByte;
         _repository.WriteFileBytes(content, "request.md");
         var factory = CreateFactory();
@@ -980,7 +1446,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public async Task CreateAsync_FileOneByteLargerThanMaximumSize_ThrowsInvalidFeatureSourceExceptionNamingSizeLimit()
     {
         // Arrange
-        _repository.WriteFile(CreateFileContent(FeatureIdFactory.MaxSourceFileSize + 1), "request.md");
+        _repository.WriteFile(CreateFileContent(FeatureSourceReader.MaxSourceLength + 1), "request.md");
         var factory = CreateFactory();
 
         // Act
@@ -1122,7 +1588,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateAsync_FileWithUtf8BomOnly_ReturnsEmptyOriginalInputAndFileNameTitle()
+    public async Task CreateAsync_FileWithUtf8BomOnly_ReturnsEmptyRequestContentAndFileNameTitle()
     {
         // Arrange
         _repository.WriteFileBytes(TestText.Utf8Bom, "login-sso.md");
@@ -1132,7 +1598,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         var identity = await CreateAsync(factory, "login-sso.md", null);
 
         // Assert
-        identity.OriginalInput
+        identity.RequestContent
             .Should().BeEmpty();
 
         identity.Title
@@ -1258,7 +1724,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         identity.Title
             .Should().Be("Login SSO");
 
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(text);
     }
 
@@ -1447,7 +1913,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         identity.Source.Kind
             .Should().Be(FeatureSourceKind.Text);
 
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(text);
     }
 
@@ -1563,7 +2029,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         var identity = await CreateAsync(factory, "request.md", null);
 
         // Assert
-        identity.OriginalInput
+        identity.RequestContent
             .Should().Be(content);
 
         identity.Title
@@ -1612,7 +2078,7 @@ public sealed class FeatureIdFactoryTests : IDisposable
         var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 10, 21, 2, 5, 0, TimeSpan.Zero));
         timeProvider.SetLocalTimeZone(
             TimeZoneInfo.CreateCustomTimeZone("Test UTC-05", TimeSpan.FromHours(-5), "Test UTC-05", "Test UTC-05"));
-        var factory = new FeatureIdFactory(timeProvider);
+        var factory = new FeatureIdFactory(timeProvider, new FeatureSourceReader(_trackerIssueReader, _urlContentReader));
 
         // Act
         var identity = await CreateAsync(factory, "Login SSO", null);
@@ -1742,11 +2208,22 @@ public sealed class FeatureIdFactoryTests : IDisposable
     public void Ctor_NullTimeProvider_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => new FeatureIdFactory(null!);
+        var act = () => new FeatureIdFactory(null!, new FeatureSourceReader(_trackerIssueReader, _urlContentReader));
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("timeProvider");
+    }
+
+    [Fact]
+    public void Ctor_NullFeatureSourceReader_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => new FeatureIdFactory(TimeProvider.System, null!);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("featureSourceReader");
     }
 
     // Creates UTF-8 text of exactly the specified number of bytes that starts with the level-1 heading "Login SSO".
@@ -1755,6 +2232,14 @@ public sealed class FeatureIdFactoryTests : IDisposable
         const string heading = "# Login SSO\n";
 
         return heading + new string('a', byteCount - heading.Length);
+    }
+
+    // Creates an issue without comments whose Markdown in request.md has exactly the specified number of bytes.
+    private static TrackerIssue CreateIssueWithMarkdownLength(int byteCount)
+    {
+        var overhead = Encoding.UTF8.GetByteCount(TrackerIssueMarkdown.Format(new TrackerIssue("Login SSO", "a", []))) - 1;
+
+        return new TrackerIssue("Login SSO", new string('a', byteCount - overhead), []);
     }
 
     private static void SkipWhenReadable(string filePath)
@@ -1771,12 +2256,12 @@ public sealed class FeatureIdFactoryTests : IDisposable
         Assert.Skip($"'{filePath}' is readable without permissions, for example because the tests run as root.");
     }
 
-    private static FeatureIdFactory CreateFactory(DateTimeOffset? utcNow = null)
+    private FeatureIdFactory CreateFactory(DateTimeOffset? utcNow = null)
     {
         var timeProvider = new FakeTimeProvider(utcNow ?? UtcNow);
         timeProvider.SetLocalTimeZone(UtcPlusTwo);
 
-        return new FeatureIdFactory(timeProvider);
+        return new FeatureIdFactory(timeProvider, new FeatureSourceReader(_trackerIssueReader, _urlContentReader));
     }
 
     private Task<FeatureIdentity> CreateAsync(FeatureIdFactory factory, string source, string? title,

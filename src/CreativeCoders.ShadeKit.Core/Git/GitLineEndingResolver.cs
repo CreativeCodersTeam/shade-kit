@@ -440,8 +440,7 @@ public sealed class GitLineEndingResolver : IGitLineEndingResolver
 
         if (result.ExitCode != SuccessExitCode)
         {
-            throw new GitUnavailableException(arguments,
-                GitCommandRunnerExtensions.CreateUnexpectedExitCodeReason(result));
+            throw new GitUnavailableException(arguments, result.CreateUnexpectedExitCodeReason("git"));
         }
 
         return ParseAttributes(result.StandardOutput);

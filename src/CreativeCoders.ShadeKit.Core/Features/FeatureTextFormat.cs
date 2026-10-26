@@ -1,11 +1,12 @@
 using System.Globalization;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Formats;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
 /// <summary>
 /// Formats the values of a feature as text in the same way wherever SHADE kit writes them for people, for example in
-/// <c>request.md</c> and in the plain output of <c>shade-kit feature show</c>.
+/// the <c>request.md</c> of a tracker issue and in the plain output of <c>shade-kit feature show</c>.
 /// </summary>
 public static class FeatureTextFormat
 {
@@ -25,6 +26,27 @@ public static class FeatureTextFormat
     public static string FormatCreatedAt(DateTimeOffset createdAt)
     {
         return createdAt.ToString(CreatedAtFormat, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Formats the specified source of a feature as one line.
+    /// </summary>
+    /// <remarks>
+    /// The text of a text source can span many lines, so it is left out; it is in <c>request.md</c>.
+    /// </remarks>
+    /// <param name="source">The source of the feature.</param>
+    /// <returns>
+    /// The kind followed by the URL or the file path, for example <c>url https://github.com/octo/repo/issues/1</c>,
+    /// or the kind alone for a text source or a source without value, for example <c>text</c>.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="source" /> is <see langword="null" />.</exception>
+    public static string FormatSource(FeatureSource source)
+    {
+        Ensure.NotNull(source);
+
+        return source.Kind == FeatureSourceKind.Text || source.Value is null
+            ? source.Kind.ToJsonName()
+            : $"{source.Kind.ToJsonName()} {source.Value}";
     }
 
     /// <summary>

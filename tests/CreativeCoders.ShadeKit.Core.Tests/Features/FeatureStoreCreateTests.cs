@@ -14,9 +14,10 @@ using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
-using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
@@ -28,16 +29,10 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
     private const string IssueFeatureId = "gh-142-login-sso";
 
-    // A raw string literal takes the line endings of the checked-out source file, which are CRLF on Windows.
-    private static readonly string TestTemplate =
-        """
-        # {{feature-title}}
-        id: {{feature-id}}
-        source: {{source kind and source reference}}
-        input: {{original input, unchanged}}
-        created: {{created at and created by}}
+    private const string WebUrl = "https://example.com/requests/login-sso";
 
-        """.ReplaceLineEndings("\n");
+    // The request template of earlier versions; feature new ignores it.
+    private const string ObsoleteRequestTemplate = "# Request: {{feature-title}}\n\n{{original input, unchanged}}\n";
 
     private readonly FeatureStoreTestContext _context = new FeatureStoreTestContext();
 
@@ -344,7 +339,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
     {
         // Arrange
         var filePath = _context.Repository.WriteFile(
-            "# Login SSO\n" + new string('a', FeatureIdFactory.MaxSourceFileSize), "request.md");
+            "# Login SSO\n" + new string('a', FeatureSourceReader.MaxSourceLength), "request.md");
         var snapshot = _context.Repository.TakeSnapshot();
         var featureStore = _context.CreateFeatureStore();
 
@@ -571,17 +566,95 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().BeEquivalentTo(snapshot);
     }
 
-    [Fact]
-    public async Task CreateAsync_RequestTemplateCannotBeRead_RemovesFeatureFolderAndWritesNoOverride()
+    [Theory]
+    [InlineData(IssueUrl, null)]
+    [InlineData(IssueUrl, "Login SSO")]
+    [InlineData(WebUrl, "Login SSO")]
+    public async Task CreateAsync_GitIdentityMissing_ThrowsBeforeSourceContentIsRead(string source, string? title)
     {
         // Arrange
-        var shippedTemplateReader = A.Fake<IShippedTemplateReader>();
-        A.CallTo(() => shippedTemplateReader.ReadContent(A<ShippedTemplate>._))
-            .Throws(new InvalidOperationException("The shipped template resource is missing."));
+        A.CallTo(() => _context.GitRepositoryInfo.GetIdentityAsync(A<string>._, A<CancellationToken>._))
+            .Throws(new GitIdentityNotConfiguredException(_context.RepositoryRootPath, ["user.name"]));
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(source, title),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowAsync<GitIdentityNotConfiguredException>();
+
+        A.CallTo(_context.TrackerIssueReader)
+            .MustNotHaveHappened();
+
+        A.CallTo(_context.UrlContentReader)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task CreateAsync_GitIdentityMissingAndSourceUnusable_ThrowsGitIdentityNotConfiguredException()
+    {
+        // Arrange
+        A.CallTo(() => _context.GitRepositoryInfo.GetIdentityAsync(A<string>._, A<CancellationToken>._))
+            .Throws(new GitIdentityNotConfiguredException(_context.RepositoryRootPath, ["user.email"]));
+        A.CallTo(() => _context.TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(new TrackerIssueReadFailedException(new Uri(IssueUrl), "gh exited with the exit code 1."));
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowAsync<GitIdentityNotConfiguredException>();
+    }
+
+    [Theory]
+    [InlineData(IssueUrl, null)]
+    [InlineData(IssueUrl, "Login SSO")]
+    [InlineData(WebUrl, "Login SSO")]
+    public async Task CreateAsync_OverrideCannotBeRead_ThrowsBeforeSourceContentIsRead(string source, string? title)
+    {
+        // Arrange
+        _context.WriteFeature("gh-7-checkout");
+        _context.WriteOverride("gh-7-checkout");
+        var exception = new IOException("The override cannot be read.");
+        var store = A.Fake<IKitStore>(options => options.Wrapping(_context.CreateStore()));
+        A.CallTo(() => store.ReadJsonAsync<CurrentFeatureDocument>(KitStorePaths.CurrentFeatureFilePath,
+                A<string>._, A<FormatAccess>._, A<CancellationToken>._))
+            .ThrowsAsync(exception);
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(store, _context.CreateRequest(source, title),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<IOException>())
+            .Which.Should().BeSameAs(exception);
+
+        A.CallTo(_context.TrackerIssueReader)
+            .MustNotHaveHappened();
+
+        A.CallTo(_context.UrlContentReader)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task CreateAsync_RequestCannotBeWritten_RemovesFeatureFolderAndWritesNoOverride()
+    {
+        // Arrange
+        var resolver = A.Fake<ILineEndingResolver>();
+        A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .ReturnsLazily((RepositoryFile file, CancellationToken _) =>
+                file.GitPath.EndsWith("/request.md", StringComparison.Ordinal)
+                    ? throw new InvalidOperationException("The request cannot be written.")
+                    : new LineEndingResolution(LineEnding.Lf, []));
+        _context.LineEndingResolver = resolver;
         _context.WriteFeature("gh-7-checkout");
         _context.WriteOverride("gh-7-checkout");
         var snapshot = _context.Repository.TakeSnapshot();
-        var featureStore = _context.CreateFeatureStore(shippedTemplateReader);
+        var featureStore = _context.CreateFeatureStore();
 
         // Act
         var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
@@ -589,7 +662,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("The shipped template resource is missing.");
+            .WithMessage("The request cannot be written.");
 
         _context.Repository.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
@@ -600,27 +673,31 @@ public sealed class FeatureStoreCreateTests : IDisposable
     {
         // Arrange
         using var cancellationTokenSource = new CancellationTokenSource();
-        var shippedTemplateReader = A.Fake<IShippedTemplateReader>();
-        A.CallTo(() => shippedTemplateReader.ReadContent(A<ShippedTemplate>._))
-            .ReturnsLazily(() =>
+        var resolver = A.Fake<ILineEndingResolver>();
+        A.CallTo(() => resolver.GetLineEndingAsync(A<RepositoryFile>._, A<CancellationToken>._))
+            .ReturnsLazily((RepositoryFile file, CancellationToken _) =>
             {
-                // feature.json exists in the staging folder at this point; the feature folder does not exist yet.
-                GetStagingDirectories()
-                    .Should().ContainSingle()
-                    .Which.Should().Match(x => File.Exists(Path.Combine(x, "feature.json")));
+                if (file.GitPath.EndsWith("/request.md", StringComparison.Ordinal))
+                {
+                    // feature.json exists in the staging folder at this point; the feature folder does not exist yet.
+                    GetStagingDirectories()
+                        .Should().ContainSingle()
+                        .Which.Should().Match(x => File.Exists(Path.Combine(x, "feature.json")));
 
-                _context.KitDirectoryExists("features", IssueFeatureId)
-                    .Should().BeFalse();
+                    _context.KitDirectoryExists("features", IssueFeatureId)
+                        .Should().BeFalse();
 
-                cancellationTokenSource.Cancel();
+                    cancellationTokenSource.Cancel();
+                }
 
-                return TestTemplate;
+                return new LineEndingResolution(LineEnding.Lf, []);
             });
+        _context.LineEndingResolver = resolver;
 
         // shade-kit init creates the features folder; only the staging folder of the new feature is removed again.
         _context.Repository.CreateDirectory(".shadekit", "features");
         var snapshot = _context.Repository.TakeSnapshot();
-        var featureStore = _context.CreateFeatureStore(shippedTemplateReader);
+        var featureStore = _context.CreateFeatureStore();
 
         // Act
         var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
@@ -634,64 +711,40 @@ public sealed class FeatureStoreCreateTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateAsync_TextSource_FillsRequestFromRepositoryTemplate()
+    public async Task CreateAsync_TextSource_WritesTextUnchangedAsRequestAndAsSourceValue()
     {
         // Arrange
-        _context.WriteRequestTemplate(TestTemplate);
+        const string text = "Login SSO\nUsers sign in with the company account.";
         var featureStore = _context.CreateFeatureStore();
 
         // Act
-        var result = await featureStore.CreateAsync(_context.CreateStore(),
-            _context.CreateRequest("Login SSO\nUsers sign in with the company account."),
+        var result = await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(text),
             TestContext.Current.CancellationToken);
 
         // Assert
         _context.ReadRequest(result.Feature.Id)
-            .Should().Be(
-                $"""
-                 # Login SSO
-                 id: {FeatureStoreTestContext.TimeBasedIdPrefix}login-sso
-                 source: text: n/a
-                 input: Login SSO
-                 Users sign in with the company account.
-                 created: {FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>
+            .Should().Be(text);
 
-                 """.ReplaceLineEndings("\n"));
-    }
+        var featureJson = _context.Repository.ReadFileText(".shadekit", "features", result.Feature.Id,
+            "feature.json");
+        using var document = JsonDocument.Parse(featureJson);
+        var source = document.RootElement.GetProperty("source");
 
-    [Fact]
-    public async Task CreateAsync_UrlSource_FillsRequestWithUrlAsSourceAndInput()
-    {
-        // Arrange
-        _context.WriteRequestTemplate(TestTemplate);
-        var featureStore = _context.CreateFeatureStore();
+        source.GetProperty("kind").GetString()
+            .Should().Be("text");
 
-        // Act
-        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        _context.ReadRequest(IssueFeatureId)
-            .Should().Be(
-                $"""
-                 # Login SSO
-                 id: gh-142-login-sso
-                 source: url: {IssueUrl}
-                 input: {IssueUrl}
-                 created: {FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>
-
-                 """.ReplaceLineEndings("\n"));
+        source.GetProperty("value").GetString()
+            .Should().Be(text);
     }
 
     [Theory]
     [InlineData(LineEnding.Lf, "\n")]
     [InlineData(LineEnding.CrLf, "\r\n")]
-    public async Task CreateAsync_FileSource_FillsRequestWithRepositoryRelativePathAndNormalisedFileContent(
-        LineEnding lineEnding, string newLine)
+    public async Task CreateAsync_FileSource_WritesFileContentAsRequestWithResolvedLineEnding(LineEnding lineEnding,
+        string newLine)
     {
         // Arrange
         _context.LineEnding = lineEnding;
-        _context.WriteRequestTemplate(TestTemplate);
         _context.Repository.WriteFile("# Login SSO\r\nUsers sign in with the company account.\r\n", "docs",
             "login.md");
         var featureStore = _context.CreateFeatureStore();
@@ -704,24 +757,215 @@ public sealed class FeatureStoreCreateTests : IDisposable
         result.Feature.Source.Value
             .Should().Be("docs/login.md");
 
-        // The original input keeps its text, but not its line endings: the whole file is written with one.
+        // The file content keeps its text, but not its line endings: the whole file is written with one.
         _context.ReadRequest(result.Feature.Id)
-            .Should().Be(
-                $"# Login SSO{newLine}" +
-                $"id: {FeatureStoreTestContext.TimeBasedIdPrefix}login-sso{newLine}" +
-                $"source: file: docs/login.md{newLine}" +
-                $"input: # Login SSO{newLine}Users sign in with the company account.{newLine}{newLine}" +
-                $"created: {FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>{newLine}");
+            .Should().Be($"# Login SSO{newLine}Users sign in with the company account.{newLine}");
     }
 
     [Fact]
-    public async Task CreateAsync_PlaceholdersInUserInputAndTitle_KeepsThemUnchanged()
+    public async Task CreateAsync_FileSourceWithBom_WritesRequestWithoutBom()
     {
         // Arrange
-        _context.WriteRequestTemplate(TestTemplate);
+        _context.Repository.WriteFileBytes([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes("# Login SSO ä\n")], "docs",
+            "login.md");
         var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest("docs/login.md"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        _context.Repository.ReadFileBytes(".shadekit", "features", result.Feature.Id, "request.md")
+            .Should().Equal(Encoding.UTF8.GetBytes("# Login SSO ä\n"));
+    }
+
+    [Fact]
+    public async Task CreateAsync_EmptyFileSource_WritesEmptyRequest()
+    {
+        // Arrange
+        _context.Repository.WriteFile(string.Empty, "docs", "login.md");
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest("docs/login.md"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Feature.Id
+            .Should().Be(FeatureStoreTestContext.TimeBasedIdPrefix + "login");
+
+        _context.Repository.ReadFileBytes(".shadekit", "features", result.Feature.Id, "request.md")
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CreateAsync_TrackerUrlWithoutTitle_WritesIssueAsRequestAndUsesIssueTitle()
+    {
+        // Arrange
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Feature.Id
+            .Should().Be("gh-142-login-with-sso");
+
+        result.Feature.Title
+            .Should().Be("Login with SSO");
+
+        result.Feature.Source
+            .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.Url, Value = IssueUrl });
+
+        _context.ReadRequest(result.Feature.Id)
+            .Should().Be("# Login with SSO\n\nUsers sign in with the company account.\n");
+
+        A.CallTo(() => _context.TrackerIssueReader.ReadIssueAsync(new Uri(IssueUrl), _context.RepositoryRootPath,
+                A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task CreateAsync_WebUrl_WritesUrlContentAsRequest()
+    {
+        // Arrange
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(WebUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Feature.Id
+            .Should().Be(FeatureStoreTestContext.TimeBasedIdPrefix + "login-sso");
+
+        result.Feature.Source
+            .Should().BeEquivalentTo(new FeatureSource { Kind = FeatureSourceKind.Url, Value = WebUrl });
+
+        _context.ReadRequest(result.Feature.Id)
+            .Should().Be(FeatureStoreTestContext.DefaultUrlContent);
+
+        A.CallTo(_context.TrackerIssueReader)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task CreateAsync_IssueCannotBeRead_ThrowsInvalidFeatureSourceExceptionAndChangesNothing()
+    {
+        // Arrange
+        A.CallTo(() => _context.TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(new TrackerIssueReadFailedException(new Uri(IssueUrl), "gh exited with the exit code 1."));
+        _context.Repository.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName);
+        var snapshot = _context.Repository.TakeSnapshot();
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidFeatureSourceException>())
+            .Which.InnerException.Should().BeOfType<TrackerIssueReadFailedException>();
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task CreateAsync_GhNotFound_ThrowsInvalidFeatureSourceExceptionAndChangesNothing()
+    {
+        // Arrange
+        A.CallTo(() => _context.TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(new GhNotFoundException(["issue", "view", IssueUrl], "gh was not found."));
+        _context.Repository.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName);
+        var snapshot = _context.Repository.TakeSnapshot();
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidFeatureSourceException>())
+            .Which.InnerException.Should().BeOfType<GhNotFoundException>();
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task CreateAsync_IssueReadCanceled_RethrowsOperationCanceledExceptionAndChangesNothing()
+    {
+        // Arrange
+        A.CallTo(() => _context.TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+            .Throws(new OperationCanceledException());
+        _context.Repository.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName);
+        var snapshot = _context.Repository.TakeSnapshot();
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowExactlyAsync<OperationCanceledException>();
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task CreateAsync_UrlSources_PassesRunTokenToReaders()
+    {
+        // Arrange
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl),
+            cancellationTokenSource.Token);
+        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(WebUrl, "Login SSO"),
+            cancellationTokenSource.Token);
+
+        // Assert
+        A.CallTo(() => _context.TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._,
+                cancellationTokenSource.Token))
+            .MustHaveHappenedOnceExactly();
+
+        A.CallTo(() => _context.UrlContentReader.ReadAsync(A<Uri>._, FeatureSourceReader.MaxSourceLength, cancellationTokenSource.Token))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task CreateAsync_UrlContentCannotBeRead_ThrowsInvalidFeatureSourceExceptionAndChangesNothing()
+    {
+        // Arrange
+        A.CallTo(() => _context.UrlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
+            .Throws(new UrlContentReadFailedException(new Uri(WebUrl), "The request timed out."));
+        _context.Repository.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName);
+        var snapshot = _context.Repository.TakeSnapshot();
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(WebUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidFeatureSourceException>())
+            .Which.InnerException.Should().BeOfType<UrlContentReadFailedException>();
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task CreateAsync_PlaceholdersInRequestContent_KeepsThemUnchanged()
+    {
+        // Arrange
         const string input = "Login {{feature-id}}\n{{original input, unchanged}} {{feature-title}} " +
                              "{{created at and created by}} {{source kind and source reference}}";
+        var featureStore = _context.CreateFeatureStore();
 
         // Act
         var result = await featureStore.CreateAsync(_context.CreateStore(),
@@ -729,130 +973,47 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
         // Assert
         _context.ReadRequest(result.Feature.Id)
-            .Should().Be(
-                $"""
-                 # {"{{feature-id}}"} Login
-                 id: {FeatureStoreTestContext.TimeBasedIdPrefix}feature-id-login
-                 source: text: n/a
-                 input: {input}
-                 created: {FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>
-
-                 """.ReplaceLineEndings("\n"));
-    }
-
-    [Fact]
-    public async Task CreateAsync_PlaceholderOccursTwice_ReplacesEveryOccurrence()
-    {
-        // Arrange
-        _context.WriteRequestTemplate("{{feature-id}} {{feature-id}} {{unknown}}");
-        var featureStore = _context.CreateFeatureStore();
-
-        // Act
-        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        _context.ReadRequest(IssueFeatureId)
-            .Should().Be("gh-142-login-sso gh-142-login-sso {{unknown}}");
-    }
-
-    [Fact]
-    public async Task CreateAsync_RepositoryTemplateWithBom_WritesRequestWithoutBom()
-    {
-        // Arrange
-        _context.Repository.WriteFileBytes([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes("# {{feature-title}} ä\n")],
-            ".shadekit", "templates", "request.md");
-        var featureStore = _context.CreateFeatureStore();
-
-        // Act
-        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        _context.Repository.ReadFileBytes(".shadekit", "features", IssueFeatureId, "request.md")
-            .Should().Equal(Encoding.UTF8.GetBytes("# Login SSO ä\n"));
+            .Should().Be(input);
     }
 
     [Theory]
-    [InlineData(new byte[] { 0x23, 0x20, 0x4C, 0xE4, 0x6E, 0x67, 0x65 },
-        "The file contains bytes that are not valid UTF-8. Save the file as UTF-8 and run the command again.")]
-    [InlineData(new byte[] { 0xFF, 0xFE, 0x23, 0x00, 0x20, 0x00 },
-        "The file is encoded as UTF-16 LE, not as UTF-8. Save the file as UTF-8 and run the command again.")]
-    [InlineData(new byte[] { 0x23, 0x00, 0x20, 0x00 },
-        "The file contains a NUL byte, so it is not UTF-8 text; it may be UTF-16 or UTF-32 without byte order " +
-        "mark, or a binary file. Save the file as UTF-8 and run the command again.")]
-    public async Task CreateAsync_RepositoryTemplateIsNotUtf8_ThrowsInvalidKitFileExceptionAndChangesNothing(
-        byte[] content, string expectedReason)
+    [InlineData("Login SSO")]
+    [InlineData(IssueUrl)]
+    public async Task CreateAsync_RepositoryRequestTemplateExists_IgnoresAndKeepsIt(string source)
     {
         // Arrange
-        _context.Repository.WriteFileBytes(content, ".shadekit", "templates", "request.md");
-        _context.Repository.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName);
-        var snapshot = _context.Repository.TakeSnapshot();
+        _context.WriteRequestTemplate(ObsoleteRequestTemplate);
         var featureStore = _context.CreateFeatureStore();
 
         // Act
-        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
+        var result = await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(source, "Login SSO"),
             TestContext.Current.CancellationToken);
 
         // Assert
-        var exception = (await act.Should().ThrowAsync<InvalidKitFileException>()).Which;
+        _context.ReadRequest(result.Feature.Id)
+            .Should().NotContain("{{")
+            .And.NotContain("<!--")
+            .And.NotContain("Request:");
 
-        exception.FilePath
-            .Should().Be(".shadekit/templates/request.md");
-
-        exception.Reason
-            .Should().Be(expectedReason);
-
-        _context.Repository.TakeSnapshot()
-            .Should().BeEquivalentTo(snapshot);
+        _context.Repository.ReadFileText(".shadekit", "templates", "request.md")
+            .Should().Be(ObsoleteRequestTemplate);
     }
 
     [Fact]
-    public async Task CreateAsync_RepositoryTemplateExists_DoesNotReadShippedTemplate()
+    public async Task CreateAsync_RepositoryRequestTemplateIsNotUtf8_IgnoresIt()
     {
         // Arrange
-        _context.WriteRequestTemplate(TestTemplate);
-        var shippedTemplateReader = A.Fake<IShippedTemplateReader>();
-        var featureStore = _context.CreateFeatureStore(shippedTemplateReader);
-
-        // Act
-        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        A.CallTo(shippedTemplateReader)
-            .MustNotHaveHappened();
-    }
-
-    [Fact]
-    public async Task CreateAsync_NoRepositoryTemplate_FillsShippedTemplateAndKeepsGuidanceComment()
-    {
-        // Arrange
+        _context.Repository.WriteFileBytes([0xFF, 0xFE, 0x23, 0x00, 0x20, 0x00], ".shadekit", "templates",
+            "request.md");
         var featureStore = _context.CreateFeatureStore();
 
         // Act
-        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
+        var result = await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest("Login SSO"),
             TestContext.Current.CancellationToken);
 
         // Assert
-        var request = _context.ReadRequest(IssueFeatureId);
-
-        request
-            .Should().StartWith("# Request: Login SSO\n")
-            .And.Contain("<!--\nSkeleton template.")
-            .And.Contain("- Replace every {{placeholder}} and remove every guidance comment like this one.")
-            .And.Contain("Feature: `gh-142-login-sso` · Spec: [spec.md](spec.md)")
-            .And.Contain($"## Source\n\nurl: {IssueUrl}\n")
-            .And.Contain($"## Original input\n\n{IssueUrl}\n")
-            .And.Contain($"## Created\n\n{FeatureStoreTestContext.LocalCreatedAt} by Jane Doe <jane@example.com>")
-            .And.NotContain("{{feature-title}}")
-            .And.NotContain("{{feature-id}}")
-            .And.NotContain("{{source kind and source reference}}")
-            .And.NotContain("{{original input, unchanged}}")
-            .And.NotContain("{{created at and created by}}");
-
-        _context.Repository.ReadFileBytes(".shadekit", "features", IssueFeatureId, "request.md")[0]
-            .Should().Be((byte)'#');
+        _context.ReadRequest(result.Feature.Id)
+            .Should().Be("Login SSO");
     }
 
     [Fact]
@@ -1169,27 +1330,25 @@ public sealed class FeatureStoreCreateTests : IDisposable
     }
 
     [Theory]
-    [InlineData("# {{feature-title}}\r\n\r\n{{feature-id}}\r\n", LineEnding.Lf,
-        "# Login SSO\n\ngh-142-login-sso\n")]
-    [InlineData("# {{feature-title}}\r\n\r\n{{feature-id}}\r\n", LineEnding.CrLf,
-        "# Login SSO\r\n\r\ngh-142-login-sso\r\n")]
-    [InlineData("# {{feature-title}}\n\n{{feature-id}}\n", LineEnding.CrLf, "# Login SSO\r\n\r\ngh-142-login-sso\r\n")]
-    [InlineData("# {{feature-title}}\r\n{{feature-id}}\n", LineEnding.Lf, "# Login SSO\ngh-142-login-sso\n")]
-    [InlineData("# {{feature-title}}\r\n{{feature-id}}", LineEnding.CrLf, "# Login SSO\r\ngh-142-login-sso")]
-    public async Task CreateAsync_TemplateLineEndings_WritesRequestWithResolvedLineEnding(string template,
+    [InlineData("Login SSO\r\n\r\nDetails\r\n", LineEnding.Lf, "Login SSO\n\nDetails\n")]
+    [InlineData("Login SSO\r\n\r\nDetails\r\n", LineEnding.CrLf, "Login SSO\r\n\r\nDetails\r\n")]
+    [InlineData("Login SSO\n\nDetails\n", LineEnding.CrLf, "Login SSO\r\n\r\nDetails\r\n")]
+    [InlineData("Login SSO\r\nDetails\n", LineEnding.Lf, "Login SSO\nDetails\n")]
+    [InlineData("Login SSO\r\nDetails", LineEnding.CrLf, "Login SSO\r\nDetails")]
+    [InlineData("Login SSO\rDetails", LineEnding.Lf, "Login SSO\nDetails")]
+    public async Task CreateAsync_RequestContentLineEndings_WritesRequestWithResolvedLineEnding(string text,
         LineEnding lineEnding, string expectedRequest)
     {
         // Arrange
         _context.LineEnding = lineEnding;
-        _context.WriteRequestTemplate(template);
         var featureStore = _context.CreateFeatureStore();
 
         // Act
-        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
+        var result = await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(text, "Login SSO"),
             TestContext.Current.CancellationToken);
 
         // Assert
-        _context.ReadRequest(IssueFeatureId)
+        _context.ReadRequest(result.Feature.Id)
             .Should().Be(expectedRequest);
     }
 
@@ -1243,21 +1402,25 @@ public sealed class FeatureStoreCreateTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateAsync_RequestTemplateIsDirectory_ThrowsPathNotAFileExceptionAndCreatesNoFeature()
+    public async Task CreateAsync_RequestTemplatePathIsDirectory_IgnoresItAndCreatesFeature()
     {
         // Arrange
         _context.Repository.CreateDirectory(".shadekit", "templates", "request.md");
         var featureStore = _context.CreateFeatureStore();
 
         // Act
-        var act = () => featureStore.CreateAsync(_context.CreateStore(),
+        var result = await featureStore.CreateAsync(_context.CreateStore(),
             _context.CreateRequest(IssueUrl, "Login SSO"), TestContext.Current.CancellationToken);
 
         // Assert
-        await act.Should().ThrowAsync<PathNotAFileException>();
+        result.Feature.Id
+            .Should().Be(IssueFeatureId);
 
-        _context.KitDirectoryExists("features", IssueFeatureId)
-            .Should().BeFalse();
+        _context.ReadRequest(IssueFeatureId)
+            .Should().Be(TrackerIssueMarkdown.Format(FeatureStoreTestContext.DefaultIssue));
+
+        _context.KitDirectoryExists("templates", "request.md")
+            .Should().BeTrue();
     }
 
     [Fact]
@@ -1390,25 +1553,6 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().Equal(
                 new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/config.json", 1, 2),
                 editorConfigWarning);
-    }
-
-    [Fact]
-    public async Task CreateAsync_PlaceholderInGitIdentity_KeepsItUnchanged()
-    {
-        // Arrange
-        _context.WriteRequestTemplate("{{created at and created by}}|{{feature-id}}");
-        A.CallTo(() => _context.GitRepositoryInfo.GetIdentityAsync(A<string>._, A<CancellationToken>._))
-            .Returns(new GitIdentity("{{feature-id}}", "jane@example.com"));
-        var featureStore = _context.CreateFeatureStore();
-
-        // Act
-        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        _context.ReadRequest(IssueFeatureId)
-            .Should().Be(
-                $"{FeatureStoreTestContext.LocalCreatedAt} by {{{{feature-id}}}} <jane@example.com>|gh-142-login-sso");
     }
 
     [Fact]

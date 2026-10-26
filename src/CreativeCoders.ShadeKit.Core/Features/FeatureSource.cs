@@ -8,8 +8,9 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// <c>feature.json</c>.
 /// </summary>
 /// <remarks>
-/// <see cref="Kind" /> is required; a <c>url</c> or <c>file</c> source also needs a non-empty <see cref="Value" />.
-/// Unknown fields are kept in <see cref="ExtensionData" />.
+/// <see cref="Kind" /> is required; a <c>url</c> or <c>file</c> source also needs a non-empty <see cref="Value" />. A
+/// <c>text</c> source is read with or without <see cref="Value" />, because features created before the text was
+/// recorded have none. Unknown fields are kept in <see cref="ExtensionData" />.
 /// </remarks>
 public sealed class FeatureSource : IJsonOnDeserialized
 {
@@ -25,8 +26,9 @@ public sealed class FeatureSource : IJsonOnDeserialized
     /// <value>
     /// For <see cref="FeatureSourceKind.Url" />, the URL as given; for <see cref="FeatureSourceKind.File" />, the path
     /// of the file relative to the repository root with <c>/</c> as separator if the file is inside the repository,
-    /// otherwise its absolute full path; for <see cref="FeatureSourceKind.Text" />, <see langword="null" />. A
-    /// <see langword="null" /> value is not written.
+    /// otherwise its absolute full path; for <see cref="FeatureSourceKind.Text" />, the text as given, or
+    /// <see langword="null" /> for a feature that was created without it. A <see langword="null" /> value is not
+    /// written.
     /// </value>
     public string? Value { get; init; }
 

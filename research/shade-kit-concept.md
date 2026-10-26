@@ -80,7 +80,7 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 | `shade-kit feature current --json` | The current feature: id, profile, feature status (`active` or `done`), phase, phase status, artifact paths, and where it was resolved from (`resolvedFrom`: `branch` or `override`). Resolution in section 4.3. **Implemented** without phase and phase status (`FeatureCurrentCommand`). |
 | `shade-kit feature show <id> --json` | The full state of a feature: profile, phases, approval history. **Implemented** without phases and approval history (`FeatureShowCommand`). |
 | `shade-kit feature set <id>` | Writes the local override (`current-feature.json`). **Implemented** (`FeatureSetCommand`). |
-| `shade-kit feature new --source <text\|url\|file> [--profile <p>] [--title <t>]` | Creates the feature folder and `request.md`. **Implemented** (`FeatureNewCommand`). |
+| `shade-kit feature new --source <text\|url\|file> [--profile <p>] [--title <t>]` | Creates the feature folder and `request.md` with the request content: the text, the file content, the issue of a tracker URL read with `gh`, or the content of any other URL read with an HTTP GET (package 03). **Implemented** (`FeatureNewCommand`). |
 | `shade-kit feature drop <id> [--yes]` | Deletes the feature folder. Without `--yes` it only shows what it would delete, or asks in an interactive terminal. **Implemented** (`FeatureDropCommand`). |
 | `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate. If a transition away from the phase is pending, it changes nothing and reports the pending transition; the skill asks the human whether to discard it. The same command reopens an earlier phase. |
 | `shade-kit phase approve <phase>` | Records the human approval in `feature.json` (who, when). |
@@ -144,7 +144,7 @@ The kit root is `.shadekit/` (decided; **Implemented** in `KitStorePaths`).
     ├── current-feature.json    # gitignored; local override only
     └── <feature-id>/
         ├── feature.json        # schemaVersion, id, title, profile, source, created, status; phases and approvals (package 04)
-        ├── request.md          # from the request template, with the original input (text, issue link, file)
+        ├── request.md          # the request content: text, file content, issue read with gh, or URL content; no template
         ├── discussions/        # discuss notes while this feature is current
         ├── researches.md       # research results from refine, map, and diagnose
         ├── diagnosis.md        # bugfix: reproduction, root cause, fix options

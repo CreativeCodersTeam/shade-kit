@@ -8,7 +8,6 @@ using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
-using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
@@ -16,17 +15,20 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// <summary>
 /// Creates, lists, reads, selects, and drops the features of a SHADE kit store.
 /// </summary>
-/// <param name="featureIdFactory">The factory that builds the id and the identity of a new feature.</param>
+/// <remarks>
+/// The <c>request.md</c> of a new feature holds the request content that the <see cref="IFeatureIdFactory" /> loaded
+/// from the source, unchanged except for its line endings; no template is used, so a <c>templates/request.md</c> in
+/// the repository is neither read nor changed.
+/// </remarks>
+/// <param name="featureIdFactory">
+/// The factory that builds the id and the identity of a new feature and loads its request content.
+/// </param>
 /// <param name="currentFeatureResolver">The resolver of the current feature.</param>
 /// <param name="gitRepositoryInfo">The source of the git identity recorded as creator of a new feature.</param>
-/// <param name="shippedTemplateReader">
-/// The reader of the shipped <c>request.md</c> template, used when the repository has no template of its own.
-/// </param>
 public sealed class FeatureStore(
     IFeatureIdFactory featureIdFactory,
     ICurrentFeatureResolver currentFeatureResolver,
-    IGitRepositoryInfo gitRepositoryInfo,
-    IShippedTemplateReader shippedTemplateReader)
+    IGitRepositoryInfo gitRepositoryInfo)
     : IFeatureStore
 {
     private readonly IFeatureIdFactory _featureIdFactory = Ensure.NotNull(featureIdFactory);
@@ -34,8 +36,6 @@ public sealed class FeatureStore(
     private readonly ICurrentFeatureResolver _currentFeatureResolver = Ensure.NotNull(currentFeatureResolver);
 
     private readonly IGitRepositoryInfo _gitRepositoryInfo = Ensure.NotNull(gitRepositoryInfo);
-
-    private readonly IShippedTemplateReader _shippedTemplateReader = Ensure.NotNull(shippedTemplateReader);
 
     /// <inheritdoc />
     public async Task<NewFeatureResult> CreateAsync(IKitStore store, NewFeatureRequest request,
@@ -59,16 +59,10 @@ public sealed class FeatureStore(
             throw new UnknownProfileException(profile);
         }
 
-        var identity = await _featureIdFactory
-            .CreateAsync(request.Source, request.Title, request.WorkingDirectory, config.Trackers, repositoryRootPath,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        if (store.FeatureExists(identity.Id))
-        {
-            throw new FeatureAlreadyExistsException(identity.Id);
-        }
-
+        // The override and the git identity do not depend on the source, so they are checked before the factory loads
+        // the request content: an unreadable override or a missing identity stops the command before gh runs or a
+        // request is sent.
+        //
         // The override is written last and replaces an override that cannot be used because of its format, so only an
         // override that cannot be read at all would stop that write. It is read now as for a write, which never reads
         // config.json, so such an override stops the command before anything is written, and a format problem does not.
@@ -86,6 +80,17 @@ public sealed class FeatureStore(
 
         var creator = await _gitRepositoryInfo.GetIdentityAsync(repositoryRootPath, cancellationToken)
             .ConfigureAwait(false);
+
+        var identity = await _featureIdFactory
+            .CreateAsync(request.Source, request.Title, request.WorkingDirectory, config.Trackers, repositoryRootPath,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        // The id can depend on the loaded content, for example on the issue title, so it is checked only now.
+        if (store.FeatureExists(identity.Id))
+        {
+            throw new FeatureAlreadyExistsException(identity.Id);
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -112,7 +117,7 @@ public sealed class FeatureStore(
             ], cancellationToken)
             .ConfigureAwait(false);
 
-        var featureDirWarnings = await CreateFeatureDirAsync(store, feature, identity.OriginalInput, cancellationToken)
+        var featureDirWarnings = await CreateFeatureDirAsync(store, feature, identity.RequestContent, cancellationToken)
             .ConfigureAwait(false);
 
         var overrideWarnings = await WriteOverrideOrRemoveFeatureAsync(store, identity.Id, cancellationToken)
@@ -351,8 +356,8 @@ public sealed class FeatureStore(
     // it is complete, and an existing folder, also one created by a concurrent run, is never touched. The names of
     // the hidden folders start with a dot, so they are never valid feature ids and ListAsync ignores them. Returns the
     // warnings of the written files.
-    private async Task<IReadOnlyList<KitWarning>> CreateFeatureDirAsync(IKitStore store, FeatureDocument feature,
-        string originalInput, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<KitWarning>> CreateFeatureDirAsync(IKitStore store,
+        FeatureDocument feature, string requestContent, CancellationToken cancellationToken)
     {
         List<KitWarning> warnings = [];
 
@@ -361,7 +366,7 @@ public sealed class FeatureStore(
             await store
                 .CreateDirectoryExclusiveAsync(KitStorePaths.GetFeatureDirPath(feature.Id),
                     async (featureDirWriter, token) => warnings.AddRange(
-                        await WriteFeatureFilesAsync(store, featureDirWriter, feature, originalInput, token)
+                        await WriteFeatureFilesAsync(featureDirWriter, feature, requestContent, token)
                             .ConfigureAwait(false)),
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -384,8 +389,8 @@ public sealed class FeatureStore(
 
     // The writer writes into the staging folder, but determines the line endings for the feature folder in which the
     // files end up, so git attributes and .editorconfig sections for that path apply.
-    private async Task<IReadOnlyList<KitWarning>> WriteFeatureFilesAsync(IKitStore store,
-        IKitDirectoryWriter featureDirWriter, FeatureDocument feature, string originalInput,
+    private static async Task<IReadOnlyList<KitWarning>> WriteFeatureFilesAsync(
+        IKitDirectoryWriter featureDirWriter, FeatureDocument feature, string requestContent,
         CancellationToken cancellationToken)
     {
         var featureFileWarnings = await featureDirWriter
@@ -393,8 +398,8 @@ public sealed class FeatureStore(
                 cancellationToken)
             .ConfigureAwait(false);
 
-        var requestWarnings = await WriteRequestAsync(store, featureDirWriter, feature, originalInput,
-            cancellationToken).ConfigureAwait(false);
+        var requestWarnings = await WriteRequestAsync(featureDirWriter, requestContent, cancellationToken)
+            .ConfigureAwait(false);
 
         return [.. featureFileWarnings, .. requestWarnings];
     }
@@ -416,27 +421,13 @@ public sealed class FeatureStore(
         }
     }
 
-    private async Task<IReadOnlyList<KitWarning>> WriteRequestAsync(IKitStore store,
-        IKitDirectoryWriter featureDirWriter, FeatureDocument feature, string originalInput,
-        CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<KitWarning>> WriteRequestAsync(IKitDirectoryWriter featureDirWriter,
+        string requestContent, CancellationToken cancellationToken)
     {
-        var template = await ReadRequestTemplateAsync(store, cancellationToken).ConfigureAwait(false);
-        var content = FeatureRequestTemplate.Fill(template, feature, originalInput);
-
-        // The whole file, the original input included, is written with the line ending of the repository.
+        // The content is written as it was loaded, with the line ending of the repository and without a final line
+        // ending that the content does not have.
         return await featureDirWriter
-            .WriteFileAsync(KitStorePaths.RequestFileName, TextFileContent.FromText(content), cancellationToken)
+            .WriteFileAsync(KitStorePaths.RequestFileName, TextFileContent.FromText(requestContent), cancellationToken)
             .ConfigureAwait(false);
-    }
-
-    // The store reports a repository template that is not UTF-8 text as an invalid kit file. Its byte order mark is
-    // not kept, so request.md is written without one.
-    private async Task<string> ReadRequestTemplateAsync(IKitStore store, CancellationToken cancellationToken)
-    {
-        var repositoryTemplate = await store.ReadFileAsync(ShippedTemplates.Request.KitPath, cancellationToken)
-            .ConfigureAwait(false);
-
-        return repositoryTemplate?.ToText(LineEnding.Lf)
-               ?? _shippedTemplateReader.ReadContent(ShippedTemplates.Request);
     }
 }

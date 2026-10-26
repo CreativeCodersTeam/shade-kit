@@ -230,7 +230,7 @@ public interface IKitStore
     /// Decoded strictly as UTF-8; content that is not UTF-8 is reported as an invalid kit file.
     /// </remarks>
     /// <param name="relativePath">
-    /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/request.md</c>.
+    /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/spec.md</c>.
     /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
@@ -244,7 +244,7 @@ public interface IKitStore
     /// <exception cref="InvalidKitFileException">
     /// The file is not UTF-8 text: it starts with a UTF-16 or UTF-32 byte order mark, contains a NUL byte, or contains
     /// bytes that are not valid UTF-8. The file path of the exception is relative to the repository root, for example
-    /// <c>.shadekit/templates/request.md</c>.
+    /// <c>.shadekit/templates/spec.md</c>.
     /// </exception>
     Task<TextFileContent?> ReadFileAsync(string relativePath, CancellationToken cancellationToken = default);
 

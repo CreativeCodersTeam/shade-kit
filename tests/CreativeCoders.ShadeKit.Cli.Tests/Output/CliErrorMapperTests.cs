@@ -15,7 +15,9 @@ using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Git.Warnings;
 using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
+using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
 using FakeItEasy;
@@ -341,6 +343,85 @@ public class CliErrorMapperTests
                 ShadeKitCliErrorCodes.InvalidFeatureSource,
                 "The source 'https://github.com/acme/shop' cannot be used: The URL has no issue number. Pass an " +
                 "issue URL, the path of an existing UTF-8 text file, or the request text with --source."));
+    }
+
+    [Fact]
+    public void Map_InvalidFeatureSourceWithGhUnavailableProblem_ReturnsExitCode33WithGhAvailabilityHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidFeatureSourceException("https://github.com/octo/repo/issues/1",
+            "The issue cannot be read: The GitHub CLI gh was not found in any absolute directory of the PATH " +
+            "environment variable.", problem: FeatureSourceProblem.GhUnavailable));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidFeatureSource,
+                ShadeKitCliErrorCodes.InvalidFeatureSource,
+                "The source 'https://github.com/octo/repo/issues/1' cannot be used: The issue cannot be read: The " +
+                "GitHub CLI gh was not found in any absolute directory of the PATH environment variable. Make sure " +
+                "the GitHub CLI gh is installed, on the PATH, and can be executed, then run the command again."));
+    }
+
+    [Fact]
+    public void Map_InvalidFeatureSourceWithIssueReadFailedProblem_ReturnsExitCode33WithGhSignInHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidFeatureSourceException("https://github.com/octo/repo/issues/1",
+            "The issue cannot be read: gh exited with the unexpected exit code 1: Could not resolve to an issue.",
+            problem: FeatureSourceProblem.IssueReadFailed));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidFeatureSource,
+                ShadeKitCliErrorCodes.InvalidFeatureSource,
+                "The source 'https://github.com/octo/repo/issues/1' cannot be used: The issue cannot be read: gh " +
+                "exited with the unexpected exit code 1: Could not resolve to an issue. Check the issue URL and " +
+                "that gh is signed in for its host ('gh auth status'), then run the command again."));
+    }
+
+    [Fact]
+    public void Map_InvalidFeatureSourceWithUrlReadFailedProblem_ReturnsExitCode33WithUrlHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidFeatureSourceException("https://example.com/docs/request.md",
+            "The content of the URL cannot be read: The server answered with the status code 404 (Not Found), not " +
+            "with a success status code (2xx).", problem: FeatureSourceProblem.UrlReadFailed));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidFeatureSource,
+                ShadeKitCliErrorCodes.InvalidFeatureSource,
+                "The source 'https://example.com/docs/request.md' cannot be used: The content of the URL cannot be " +
+                "read: The server answered with the status code 404 (Not Found), not with a success status code " +
+                "(2xx). Check the URL and run the command again, or save the content to a file and pass the path " +
+                "of the file with --source."));
+    }
+
+    [Fact]
+    public void Map_InvalidFeatureSourceWithInnerExceptionAndDefaultProblem_ReturnsExitCode33WithSourceHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidFeatureSourceException("request.md",
+            "The file cannot be read: Access denied.", new IOException("Access denied.")));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidFeatureSource,
+                ShadeKitCliErrorCodes.InvalidFeatureSource,
+                "The source 'request.md' cannot be used: The file cannot be read: Access denied. Pass an issue URL, " +
+                "the path of an existing UTF-8 text file, or the request text with --source."));
     }
 
     [Fact]
@@ -975,8 +1056,18 @@ public class CliErrorMapperTests
     {
         // Arrange
         var mapper = CreateMapper();
+
+        // FeatureSourceReader wraps the exceptions of the source readers into an InvalidFeatureSourceException, so
+        // they never reach the mapper.
+        Type[] wrappedTypes =
+        [
+            typeof(GhUnavailableException), typeof(GhNotFoundException), typeof(TrackerIssueReadFailedException),
+            typeof(UrlContentReadFailedException)
+        ];
+
         var exceptionTypes = typeof(KitFileFormatException).Assembly.GetTypes()
             .Where(x => x is { IsAbstract: false, IsPublic: true } && x.IsAssignableTo(typeof(Exception)))
+            .Except(wrappedTypes)
             .ToArray();
 
         // Act

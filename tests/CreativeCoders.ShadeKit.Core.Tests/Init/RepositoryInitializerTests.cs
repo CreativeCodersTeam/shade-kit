@@ -1105,6 +1105,25 @@ public class RepositoryInitializerTests
     }
 
     [Fact]
+    public async Task InitializeAsync_NewRepository_WritesNoRequestTemplate()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+
+        // Act
+        var result = await CreateInitializer()
+            .InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        File.Exists(Path.Combine(tempDirectory.RootPath, KitRoot, "templates", "request.md"))
+            .Should().BeFalse();
+
+        result.Files
+            .Should().NotContain(x => x.Path == ".shadekit/templates/request.md");
+    }
+
+    [Fact]
     [Trait("Requirement", "FP02-AC8")]
     public async Task InitializeAsync_EveryShippedTemplate_WritesReaderContentAsUtf8WithoutBomAndCarriageReturn()
     {

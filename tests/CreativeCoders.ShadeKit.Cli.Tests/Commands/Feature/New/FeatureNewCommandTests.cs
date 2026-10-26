@@ -275,6 +275,30 @@ public class FeatureNewCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_JsonModeTextSourceWithText_WritesTextAsSourceValue()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        const string text = "Login SSO\nUsers sign in with the company account.";
+        var command = CreateCommand(new TestConsole(),
+            CreateFeatureStore(CreateResult(source: new FeatureSource { Kind = FeatureSourceKind.Text, Value = text })),
+            jsonOutput: jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(CreateOptions(json: true));
+
+        // Assert
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+        var source = document.RootElement.GetProperty("data").GetProperty("source");
+
+        source.GetProperty("kind").GetString()
+            .Should().Be("text");
+
+        source.GetProperty("value").GetString()
+            .Should().Be(text);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_JsonModeWithFormatWarning_WritesWarningIntoEnvelope()
     {
         // Arrange

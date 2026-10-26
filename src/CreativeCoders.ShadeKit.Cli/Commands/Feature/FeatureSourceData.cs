@@ -8,7 +8,8 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Feature;
 /// </summary>
 /// <param name="Kind">The kind of the source, written as <c>text</c>, <c>url</c>, or <c>file</c>.</param>
 /// <param name="Value">
-/// The URL or the file path of the source, or <see langword="null" /> for a <c>text</c> source.
+/// The URL or the file path of the source, or the text of a <c>text</c> source; <see langword="null" /> for a
+/// <c>text</c> source of a feature that was created without its text.
 /// </param>
 public sealed record FeatureSourceData(FeatureSourceKind Kind, string? Value)
 {
