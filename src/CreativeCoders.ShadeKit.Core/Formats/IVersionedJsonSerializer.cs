@@ -14,7 +14,9 @@ public interface IVersionedJsonSerializer
     /// </summary>
     /// <remarks>
     /// An outdated document is migrated in memory if <paramref name="migrateOutdated" /> is <see langword="true" />.
-    /// Unknown fields end up in <see cref="VersionedDocument.ExtensionData" />.
+    /// Unknown fields end up in <see cref="VersionedDocument.ExtensionData" />. An enumeration field holds a single
+    /// name: its lower-case kebab-case JSON name (see <see cref="JsonEnumNames" />) or its member name in any letter
+    /// case. A number, a numeric string, or a list of names separated by commas is invalid.
     /// </remarks>
     /// <typeparam name="T">The type of the document.</typeparam>
     /// <param name="json">The JSON text to parse.</param>
@@ -30,7 +32,8 @@ public interface IVersionedJsonSerializer
     /// </exception>
     /// <exception cref="ArgumentException">No file type with the id <paramref name="formatId" /> is registered.</exception>
     /// <exception cref="InvalidKitFileException">
-    /// The text is not a valid document of the file type, or a migration step failed on its content.
+    /// The text is not a valid document of the file type, for example because an enumeration field lists several
+    /// values separated by commas, or a migration step failed on its content.
     /// </exception>
     /// <exception cref="FormatTooNewException">The document uses a format version newer than the engine supports.</exception>
     /// <exception cref="UpgradeNeededException">

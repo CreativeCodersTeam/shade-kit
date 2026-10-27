@@ -1,6 +1,7 @@
 using System.Globalization;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -63,5 +64,40 @@ public static class FeatureTextFormat
         Ensure.NotNull(feature);
 
         return $"{FormatCreatedAt(feature.CreatedAt)} by {feature.CreatedBy.Name} <{feature.CreatedBy.Email}>";
+    }
+
+    /// <summary>
+    /// Formats the specified entry of the phase history of a feature as one line.
+    /// </summary>
+    /// <remarks>
+    /// The point in time uses the format of <see cref="FormatCreatedAt" />. The action is written with its JSON name.
+    /// A missing <see cref="PhaseHistoryEntry.From" /> or <see cref="PhaseHistoryEntry.To" /> is left out, for
+    /// example the target of a <c>complete</c> entry. The note is written unchanged, so a note with line breaks spans
+    /// several lines.
+    /// </remarks>
+    /// <param name="entry">The <c>history</c> entry of the feature.</param>
+    /// <returns>
+    /// The text <c>&lt;at&gt; &lt;action&gt; &lt;from&gt; -&gt; &lt;to&gt; by &lt;name&gt; &lt;&lt;email&gt;&gt;</c>,
+    /// followed by <c>, note: &lt;note&gt;</c> if the entry has a note, for example
+    /// <c>2026-10-21T09:00:00+02:00 reject refine -&gt; map by Jane Doe &lt;jane@example.com&gt;, note: DOR-04
+    /// failed</c>.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="entry" /> is <see langword="null" />.</exception>
+    public static string FormatHistoryEntry(PhaseHistoryEntry entry)
+    {
+        Ensure.NotNull(entry);
+
+        var transition = (entry.From, entry.To) switch
+        {
+            ({ } from, { } to) => $" {from} -> {to}",
+            ({ } from, null) => $" {from}",
+            (null, { } to) => $" -> {to}",
+            _ => string.Empty
+        };
+
+        var note = entry.Note is null ? string.Empty : $", note: {entry.Note}";
+
+        return $"{FormatCreatedAt(entry.At)} {entry.Action.ToJsonName()}{transition} by {entry.By.Name} " +
+               $"<{entry.By.Email}>{note}";
     }
 }

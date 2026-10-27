@@ -41,6 +41,6 @@ public sealed record FeatureCurrentCommandData(
 
         return new FeatureCurrentCommandData(true, result.Origin,
             new FeatureCurrentCommandFeatureData(result.FeatureId, feature.Title, feature.Profile, feature.Status,
-                result.Paths));
+                result.PhaseState.CurrentPhase, result.PhaseState.CurrentPhaseState, result.Paths));
     }
 }

@@ -1,6 +1,6 @@
 # SHADE kit skills
 
-Status: draft, 2026-10-17, updated 2026-10-18 (consistency review: entry protocol with re-entry and rejection, `quick` phase, seven research agents; findings clarification: phase and workflow skills, optional report skill, pending transition, `phase next`). Result of an interview on [shade-kit-concept.md](shade-kit-concept.md). Lists the skills SHADE kit v1 needs and what each one does roughly. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-17, updated 2026-10-18 (consistency review: entry protocol with re-entry and rejection, `quick` phase, seven research agents; findings clarification: phase and workflow skills, optional report skill, pending transition, `phase next`) and 2026-10-27 (documentation check after package 04). Result of an interview on [shade-kit-concept.md](shade-kit-concept.md). Lists the skills SHADE kit v1 needs and what each one does roughly. Design notes only; nothing here is shipped.
 
 ## 1. Decisions
 
@@ -10,7 +10,7 @@ Status: draft, 2026-10-17, updated 2026-10-18 (consistency review: entry protoco
 - **Phase skills are profile-aware.** They read the profile from `shade-kit feature current --json` and adjust their behaviour (`bugfix`: short plan, failing test first).
 - **`quick` is a phase of its own** (2026-10-18). The `quick` profile is `new` → `quick` → `finish`, and `shade-kit-quick` is the skill of the `quick` phase: a mini run of refine, plan, and implement, not an implement mode. So every phase has exactly one skill named `shade-kit-<phase>`.
 - **General skills** are separate skills only when more than one phase uses them, or when they are optional. `simplify` stays inline in `shade-kit-implement`. The report is the optional general skill `shade-kit-report`, which `shade-kit-finish` loads only when a report is written (`report` in `config.json`: `ask`, `always`, `never`; package 15). Decided on 2026-10-18.
-- **Every phase skill runs the entry protocol itself** as its first step, so a direct call such as `/shade-kit-plan` is gated too. `shade-kit-next-phase` only chooses and hands off. Exception: `shade-kit-new` has no entry protocol, because `shade-kit feature new` creates the feature with `new` already in progress (once package 04 exists; until then `feature new` writes no phase fields).
+- **Every phase skill runs the entry protocol itself** as its first step, so a direct call such as `/shade-kit-plan` is gated too. `shade-kit-next-phase` only chooses and hands off. Exception: `shade-kit-new` has no entry protocol, because `shade-kit feature new` creates the feature with `new` already in progress.
 
 Entry protocol of every phase skill (from concept section 11.4, extended on 2026-10-18):
 

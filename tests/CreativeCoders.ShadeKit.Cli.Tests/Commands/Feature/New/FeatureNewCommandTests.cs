@@ -14,6 +14,8 @@ using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using FakeItEasy;
 using Spectre.Console;
@@ -372,7 +374,7 @@ public class FeatureNewCommandTests
         { new FeatureAlreadyExistsException(Id), ShadeKitCliExitCodes.FeatureAlreadyExists, ShadeKitCliErrorCodes.FeatureAlreadyExists },
         { new InvalidFeatureSourceException(" ", "It is empty."), ShadeKitCliExitCodes.InvalidFeatureSource, ShadeKitCliErrorCodes.InvalidFeatureSource },
         { new InvalidFeatureTitleException("A title is required."), ShadeKitCliExitCodes.InvalidFeatureTitle, ShadeKitCliErrorCodes.InvalidFeatureTitle },
-        { new UnknownProfileException("epic"), ShadeKitCliExitCodes.UnknownProfile, ShadeKitCliErrorCodes.UnknownProfile },
+        { new UnknownProfileException("epic", ["feature"]), ShadeKitCliExitCodes.UnknownProfile, ShadeKitCliErrorCodes.UnknownProfile },
         { new GitIdentityNotConfiguredException("/repo", ["user.email"]), ShadeKitCliExitCodes.GitIdentityMissing, ShadeKitCliErrorCodes.GitIdentityMissing }
     };
 
@@ -510,7 +512,7 @@ public class FeatureNewCommandTests
         };
     }
 
-    private static NewFeatureResult CreateResult(string profile = WorkflowProfiles.Feature,
+    private static NewFeatureResult CreateResult(string profile = WorkflowProfileNames.Feature,
         FeatureSource? source = null, IReadOnlyList<KitWarning>? warnings = null)
     {
         var document = FeatureCommandTestHelper.CreateDocument(source: source);

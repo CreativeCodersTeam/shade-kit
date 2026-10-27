@@ -3,6 +3,8 @@ using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Features;
 
@@ -132,6 +134,10 @@ public class FeatureDocumentTests
     [Theory]
     [InlineData("active", FeatureStatus.Active)]
     [InlineData("done", FeatureStatus.Done)]
+    [InlineData("Active", FeatureStatus.Active)]
+    [InlineData("ACTIVE", FeatureStatus.Active)]
+    [InlineData("Done", FeatureStatus.Done)]
+    [InlineData("DONE", FeatureStatus.Done)]
     public void Deserialize_Status_ReadsStatus(string status, FeatureStatus expectedStatus)
     {
         // Arrange
@@ -144,6 +150,27 @@ public class FeatureDocumentTests
         // Assert
         document.Status
             .Should().Be(expectedStatus);
+    }
+
+    [Theory]
+    [InlineData(""" "status": "active, done" """, null)]
+    [InlineData(""" "status": "active,done" """, null)]
+    [InlineData(""" "status": "active, active" """, null)]
+    [InlineData(""" "status": "Active, Done" """, null)]
+    [InlineData(null, """{ "kind": "text, text" }""")]
+    [InlineData(null, """{ "kind": "url,url", "value": "https://github.com/acme/shop/issues/142" }""")]
+    public void Deserialize_CommaSeparatedEnumValue_ThrowsInvalidKitFileException(string? statusField, string? source)
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var act = () => serializer.Deserialize<FeatureDocument>(CreateJson(statusField, source), FormatIds.Feature,
+            FilePath, false);
+
+        // Assert
+        act.Should().Throw<InvalidKitFileException>()
+            .Which.FilePath.Should().Be(FilePath);
     }
 
     [Fact]
@@ -329,13 +356,419 @@ public class FeatureDocumentTests
             .Which.FilePath.Should().Be(FilePath);
     }
 
+    private const string PhaseStateJson =
+        """
+        {
+          "schemaVersion": 1,
+          "minEngineVersion": "0.1.0",
+          "id": "gh-142-login-sso",
+          "title": "Login SSO",
+          "profile": "feature",
+          "source": {
+            "kind": "url",
+            "value": "https://github.com/acme/shop/issues/142"
+          },
+          "createdAt": "2026-10-20T15:30:00+02:00",
+          "createdBy": {
+            "name": "Jane Doe",
+            "email": "jane@example.com"
+          },
+          "status": "active",
+          "currentPhase": "refine",
+          "phases": {
+            "new": "approved",
+            "refine": "awaiting-approval",
+            "map": "pending",
+            "plan": "pending",
+            "implement": "pending",
+            "verify": "pending",
+            "finish": "pending"
+          },
+          "pendingTransition": "map",
+          "history": [
+            {
+              "at": "2026-10-20T16:00:00+02:00",
+              "by": {
+                "name": "Jane Doe",
+                "email": "jane@example.com"
+              },
+              "action": "start",
+              "from": "new",
+              "to": "refine"
+            },
+            {
+              "at": "2026-10-20T16:05:00+02:00",
+              "by": {
+                "name": "John Roe",
+                "email": "john@example.com"
+              },
+              "action": "approve",
+              "from": "new",
+              "to": "refine",
+              "note": "approval off"
+            },
+            {
+              "at": "2026-10-21T09:00:00+02:00",
+              "by": {
+                "name": "Jane Doe",
+                "email": "jane@example.com"
+              },
+              "action": "start",
+              "from": "refine",
+              "to": "map"
+            }
+          ]
+        }
+
+        """;
+
+    [Fact]
+    public void Serialize_FeatureWithPhaseState_WritesContractShape()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+        var document = CreatePhaseStateDocument();
+
+        // Act
+        var json = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        json
+            .Should().Be(PhaseStateJson.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public void Deserialize_FeatureWithPhaseState_ReadsAllFields()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var document = serializer.Deserialize<FeatureDocument>(PhaseStateJson, FormatIds.Feature, FilePath, false)
+            .Document;
+
+        // Assert
+        document
+            .Should().BeEquivalentTo(CreatePhaseStateDocument(),
+                options => options.Excluding(x => x.SchemaVersion).Excluding(x => x.MinEngineVersion)
+                    .WithStrictOrdering());
+    }
+
+    [Fact]
+    public void SerializeAfterDeserialize_FeatureWithPhaseState_WritesSameText()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var document = serializer.Deserialize<FeatureDocument>(PhaseStateJson, FormatIds.Feature, FilePath, false)
+            .Document;
+        var json = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        json
+            .Should().Be(PhaseStateJson.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public void SerializeAfterDeserialize_PhasesInNonAlphabeticalOrder_KeepsKeyOrder()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+        var json = CreateJson(
+            """ "phases": { "zeta": "pending", "alpha": "in-progress", "mu": "approved", "beta": "pending" } """);
+
+        // Act
+        var document = serializer.Deserialize<FeatureDocument>(json, FormatIds.Feature, FilePath, false).Document;
+        var writtenJson = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        document.Phases!.Keys
+            .Should().Equal("zeta", "alpha", "mu", "beta");
+
+        JsonNode.Parse(writtenJson)!["phases"]!.AsObject().Select(x => x.Key)
+            .Should().Equal("zeta", "alpha", "mu", "beta");
+    }
+
+    [Fact]
+    public void SerializeAfterDeserialize_StateOfReadPhaseChanged_KeepsKeyPosition()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+        var json = CreateJson(""" "phases": { "new": "approved", "quick": "in-progress", "finish": "pending" } """);
+        var document = serializer.Deserialize<FeatureDocument>(json, FormatIds.Feature, FilePath, false).Document;
+
+        // Act
+        document.Phases![WorkflowPhaseNames.Quick] = PhaseState.Approved;
+        document.Phases[WorkflowPhaseNames.Finish] = PhaseState.InProgress;
+        var writtenJson = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        JsonNode.Parse(writtenJson)!["phases"]!.AsObject().Select(x => (x.Key, x.Value!.GetValue<string>()))
+            .Should().Equal(("new", "approved"), ("quick", "approved"), ("finish", "in-progress"));
+    }
+
+    [Fact]
+    public void SerializeAfterDeserialize_EmptyPhasesAndHistory_ReadsEmptyCollectionsAndWritesThemBack()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+        var json = CreateJson(""" "phases": {}, "history": [] """);
+
+        // Act
+        var document = serializer.Deserialize<FeatureDocument>(json, FormatIds.Feature, FilePath, false).Document;
+        var writtenJson = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        document.Phases
+            .Should().NotBeNull().And.BeEmpty();
+
+        document.History
+            .Should().NotBeNull().And.BeEmpty();
+
+        var root = JsonNode.Parse(writtenJson)!.AsObject();
+
+        root["phases"]!.AsObject()
+            .Should().BeEmpty();
+
+        root["history"]!.AsArray()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Serialize_PhasesSetInInsertionOrder_WritesThatOrder()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+        var document = CreateDocument(new FeatureSource { Kind = FeatureSourceKind.Text });
+        document.Phases = new OrderedDictionary<string, PhaseState>
+        {
+            ["new"] = PhaseState.InProgress,
+            ["diagnose"] = PhaseState.Pending,
+            ["finish"] = PhaseState.Pending,
+            ["archived"] = PhaseState.Approved
+        };
+
+        // Act
+        var json = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        JsonNode.Parse(json)!["phases"]!.AsObject().Select(x => x.Key)
+            .Should().Equal("new", "diagnose", "finish", "archived");
+    }
+
+    [Fact]
+    public void Serialize_PendingTransitionNull_OmitsField()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+        var document = CreatePhaseStateDocument();
+        document.PendingTransition = null;
+
+        // Act
+        var json = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        JsonNode.Parse(json)!.AsObject()
+            .Should().NotContainKey("pendingTransition")
+            .And.ContainKeys("currentPhase", "phases", "history");
+    }
+
+    [Fact]
+    public void Serialize_EmptyPhasesAndHistory_WritesEmptyObjectAndArray()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+        var document = CreateDocument(new FeatureSource { Kind = FeatureSourceKind.Text });
+        document.Phases = [];
+        document.History = [];
+
+        // Act
+        var json = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        var root = JsonNode.Parse(json)!.AsObject();
+
+        root["phases"]!.AsObject()
+            .Should().BeEmpty();
+
+        root["history"]!.AsArray()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Deserialize_FeatureWithoutPhaseFields_ReadsNulls()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var document = serializer.Deserialize<FeatureDocument>(ContractJson, FormatIds.Feature, FilePath, false)
+            .Document;
+
+        // Assert
+        document.CurrentPhase
+            .Should().BeNull();
+
+        document.Phases
+            .Should().BeNull();
+
+        document.PendingTransition
+            .Should().BeNull();
+
+        document.History
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void SerializeAfterDeserialize_FeatureWithoutPhaseFields_WritesNoPhaseFields()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var document = serializer.Deserialize<FeatureDocument>(ContractJson, FormatIds.Feature, FilePath, false)
+            .Document;
+        var json = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        json
+            .Should().Be(ContractJson.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public void Deserialize_PhaseFieldsExplicitlyNull_ReadsNullsAndWritesNoPhaseFields()
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+        var json = CreateJson(""" "currentPhase": null, "phases": null, "pendingTransition": null, "history": null """);
+
+        // Act
+        var document = serializer.Deserialize<FeatureDocument>(json, FormatIds.Feature, FilePath, false).Document;
+        var writtenJson = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        document.CurrentPhase
+            .Should().BeNull();
+
+        document.Phases
+            .Should().BeNull();
+
+        document.History
+            .Should().BeNull();
+
+        JsonNode.Parse(writtenJson)!.AsObject()
+            .Should().NotContainKeys("currentPhase", "phases", "pendingTransition", "history");
+    }
+
+    [Fact]
+    public void SerializeAfterDeserialize_FeatureWithPhaseStateAndUnknownFields_KeepsUnknownFields()
+    {
+        // Arrange
+        var root = JsonNode.Parse(PhaseStateJson)!.AsObject();
+        root["gates"] = JsonNode.Parse("""{ "plan": { "checklist": "dor" } }""");
+        root["history"]![0]!["checklist"] = JsonNode.Parse("""[ "DOR-01", null, 2.0 ]""");
+        root["history"]![1]!["by"]!["signingKey"] = "ABC";
+        var original = root.ToJsonString();
+
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var document = serializer.Deserialize<FeatureDocument>(original, FormatIds.Feature, FilePath, false).Document;
+        var json = serializer.Serialize(document, FormatIds.Feature);
+
+        // Assert
+        JsonNode.DeepEquals(JsonNode.Parse(json), JsonNode.Parse(original))
+            .Should().BeTrue($"the written feature file must keep every field, but was:{Environment.NewLine}{json}");
+
+        document.ExtensionData
+            .Should().ContainKey("gates");
+    }
+
+    [Theory]
+    [InlineData(""" "currentPhase": 3 """)]
+    [InlineData(""" "currentPhase": { "name": "plan" } """)]
+    [InlineData(""" "phases": [ "new", "plan" ] """)]
+    [InlineData(""" "phases": "new" """)]
+    [InlineData(""" "phases": { "new": "done" } """)]
+    [InlineData(""" "phases": { "new": "pending", "new": "approved" } """)]
+    [InlineData(""" "pendingTransition": true """)]
+    [InlineData(""" "history": { "action": "start" } """)]
+    [InlineData(""" "history": "start" """)]
+    public void Deserialize_PhaseFieldWithInvalidValue_ThrowsInvalidKitFileException(string field)
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+        var json = CreateJson(field);
+
+        // Act
+        var act = () => serializer.Deserialize<FeatureDocument>(json, FormatIds.Feature, FilePath, false);
+
+        // Assert
+        act.Should().Throw<InvalidKitFileException>()
+            .Which.FilePath.Should().Be(FilePath);
+    }
+
+    private static FeatureDocument CreatePhaseStateDocument()
+    {
+        var jane = new PhaseHistoryActor { Name = "Jane Doe", Email = "jane@example.com" };
+        var document = CreateDocument(new FeatureSource
+        {
+            Kind = FeatureSourceKind.Url,
+            Value = "https://github.com/acme/shop/issues/142"
+        });
+
+        document.CurrentPhase = WorkflowPhaseNames.Refine;
+        document.Phases = new OrderedDictionary<string, PhaseState>
+        {
+            [WorkflowPhaseNames.New] = PhaseState.Approved,
+            [WorkflowPhaseNames.Refine] = PhaseState.AwaitingApproval,
+            [WorkflowPhaseNames.Map] = PhaseState.Pending,
+            [WorkflowPhaseNames.Plan] = PhaseState.Pending,
+            [WorkflowPhaseNames.Implement] = PhaseState.Pending,
+            [WorkflowPhaseNames.Verify] = PhaseState.Pending,
+            [WorkflowPhaseNames.Finish] = PhaseState.Pending
+        };
+        document.PendingTransition = WorkflowPhaseNames.Map;
+        document.History =
+        [
+            new PhaseHistoryEntry
+            {
+                At = new DateTimeOffset(2026, 10, 20, 16, 0, 0, TimeSpan.FromHours(2)),
+                By = jane,
+                Action = PhaseHistoryAction.Start,
+                From = WorkflowPhaseNames.New,
+                To = WorkflowPhaseNames.Refine
+            },
+            new PhaseHistoryEntry
+            {
+                At = new DateTimeOffset(2026, 10, 20, 16, 5, 0, TimeSpan.FromHours(2)),
+                By = new PhaseHistoryActor { Name = "John Roe", Email = "john@example.com" },
+                Action = PhaseHistoryAction.Approve,
+                From = WorkflowPhaseNames.New,
+                To = WorkflowPhaseNames.Refine,
+                Note = "approval off"
+            },
+            new PhaseHistoryEntry
+            {
+                At = new DateTimeOffset(2026, 10, 21, 9, 0, 0, TimeSpan.FromHours(2)),
+                By = jane,
+                Action = PhaseHistoryAction.Start,
+                From = WorkflowPhaseNames.Refine,
+                To = WorkflowPhaseNames.Map
+            }
+        ];
+
+        return document;
+    }
+
     private static FeatureDocument CreateDocument(FeatureSource source)
     {
         return new FeatureDocument
         {
             Id = "gh-142-login-sso",
             Title = "Login SSO",
-            Profile = WorkflowProfiles.Feature,
+            Profile = WorkflowProfileNames.Feature,
             Source = source,
             CreatedAt = new DateTimeOffset(2026, 10, 20, 15, 30, 0, TimeSpan.FromHours(2)),
             CreatedBy = new FeatureCreator { Name = "Jane Doe", Email = "jane@example.com" }

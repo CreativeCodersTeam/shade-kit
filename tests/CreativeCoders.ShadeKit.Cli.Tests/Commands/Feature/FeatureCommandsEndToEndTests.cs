@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Output;
@@ -1104,10 +1105,17 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         // Act
         var (activeExitCode, activeRoot) = await RunJsonAsync("feature", "current", "--json");
 
-        var featureFilePath = GetFeaturePath(IssueFeatureId, "feature.json");
-        var featureJson = await File.ReadAllTextAsync(featureFilePath, TestContext.Current.CancellationToken);
-        await File.WriteAllTextAsync(featureFilePath, StatusRegex().Replace(featureJson, "\"status\": \"done\""),
-            TestContext.Current.CancellationToken);
+        // A done feature needs a consistent end state; 'phase complete' (package 04, task 6) writes the same fields.
+        await EditFeatureFileAsync(IssueFeatureId, feature =>
+        {
+            feature["status"] = "done";
+            feature["currentPhase"] = "finish";
+            feature["phases"] = new JsonObject
+            {
+                ["new"] = "approved", ["refine"] = "approved", ["map"] = "approved", ["plan"] = "approved",
+                ["implement"] = "approved", ["verify"] = "approved", ["finish"] = "approved"
+            };
+        });
 
         var (doneExitCode, doneRoot) = await RunJsonAsync("feature", "current", "--json");
 
@@ -1123,6 +1131,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
 
         doneRoot.GetProperty("data").GetProperty("feature").GetProperty("status").GetString()
             .Should().Be("done");
+
+        doneRoot.GetProperty("data").GetProperty("feature").GetProperty("currentPhase").GetString()
+            .Should().Be("finish");
+
+        doneRoot.GetProperty("data").GetProperty("feature").GetProperty("phaseState").GetString()
+            .Should().Be("approved");
     }
 
     [Fact]
@@ -1186,16 +1200,20 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
                 $"Suggested branch: feature/{IssueFeatureId}");
 
         GetLines(listRun.Output)
-            .Should().Contain($"{IssueFeatureId}  active  quick  Login SSO");
+            .Should().Contain($"{IssueFeatureId}  active  quick  new  Login SSO");
 
         GetLines(currentRun.Output)
-            .Should().ContainInConsecutiveOrder($"{IssueFeatureId} (quick, active)", "Resolved from: override");
+            .Should().ContainInConsecutiveOrder($"{IssueFeatureId} (quick, active)", "Current phase: new (in-progress)",
+                "Resolved from: override");
 
         GetLines(setRun.Output)
             .Should().Contain($"Current feature: {IssueFeatureId}.");
 
         GetLines(showRun.Output)
             .Should().Contain($"Id: {IssueFeatureId}")
+            .And.Contain("Current phase: new")
+            .And.ContainInConsecutiveOrder("Phases:", "  new: in-progress", "  quick: pending", "  finish: pending",
+                "History: none")
             .And.Contain($"Source: url {IssueUrl}")
             .And.Contain(x => x.StartsWith("Created: ", StringComparison.Ordinal) &&
                               x.EndsWith($" by {UserName} <{UserEmail}>", StringComparison.Ordinal));
@@ -1363,6 +1381,261 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().BeEmpty();
     }
 
+    [Theory]
+    [Trait("Requirement", "FP04-AC1")]
+    [InlineData("feature", new[] { "new", "refine", "map", "plan", "implement", "verify", "finish" })]
+    [InlineData("bugfix", new[] { "new", "diagnose", "plan", "implement", "verify", "finish" })]
+    [InlineData("quick", new[] { "new", "quick", "finish" })]
+    public async Task FeatureNew_EveryProfile_WritesInitialPhaseFieldsAndReadingCommandsReturnThem(string profile,
+        string[] phases)
+    {
+        // Arrange
+        await InitAsync();
+
+        // Act
+        var (newExitCode, _) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
+            "--profile", profile, "--json");
+        var (showExitCode, show) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var (listExitCode, list) = await RunJsonAsync("feature", "list", "--json");
+        var (currentExitCode, current) = await RunJsonAsync("feature", "current", "--json");
+
+        // Assert
+        new[] { newExitCode, showExitCode, listExitCode, currentExitCode }
+            .Should().AllBeEquivalentTo(0);
+
+        string[] expectedPhases = [$"{phases[0]}=in-progress", .. phases[1..].Select(x => $"{x}=pending")];
+
+        using var featureFile = JsonDocument.Parse(await File.ReadAllTextAsync(
+            GetFeaturePath(IssueFeatureId, "feature.json"), TestContext.Current.CancellationToken));
+        var stored = featureFile.RootElement;
+
+        FeatureCommandTestHelper.GetPropertyNames(stored)
+            .Should().Equal("schemaVersion", "minEngineVersion", "id", "title", "profile", "source", "createdAt",
+                "createdBy", "status", "currentPhase", "phases", "history");
+
+        stored.GetProperty("currentPhase").GetString()
+            .Should().Be("new");
+
+        GetPhaseEntries(stored.GetProperty("phases"))
+            .Should().Equal(expectedPhases);
+
+        stored.GetProperty("history").GetArrayLength()
+            .Should().Be(0);
+
+        var shown = show.GetProperty("data");
+
+        shown.GetProperty("currentPhase").GetString()
+            .Should().Be("new");
+
+        shown.GetProperty("pendingTransition").ValueKind
+            .Should().Be(JsonValueKind.Null);
+
+        GetPhaseEntries(shown.GetProperty("phases"))
+            .Should().Equal(expectedPhases);
+
+        shown.GetProperty("history").GetArrayLength()
+            .Should().Be(0);
+
+        list.GetProperty("data").GetProperty("features")[0].GetProperty("currentPhase").GetString()
+            .Should().Be("new");
+
+        current.GetProperty("data").GetProperty("feature").GetProperty("currentPhase").GetString()
+            .Should().Be("new");
+
+        current.GetProperty("data").GetProperty("feature").GetProperty("phaseState").GetString()
+            .Should().Be("in-progress");
+    }
+
+    [Fact]
+    public async Task ReadingFeatureCommands_FeatureWithoutPhaseFields_ReturnInitialStateAndLeaveFileUnchanged()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateIssueFeatureAsync();
+        await EditFeatureFileAsync(IssueFeatureId, feature =>
+        {
+            feature.Remove("currentPhase");
+            feature.Remove("phases");
+            feature.Remove("history");
+        });
+        var featureFilePath = GetFeaturePath(IssueFeatureId, "feature.json");
+        var bytesBefore = await File.ReadAllBytesAsync(featureFilePath, TestContext.Current.CancellationToken);
+
+        // Act
+        var (showExitCode, show) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var (listExitCode, list) = await RunJsonAsync("feature", "list", "--json");
+        var (currentExitCode, current) = await RunJsonAsync("feature", "current", "--json");
+        var plainShow = await RunAsync("feature", "show", IssueFeatureId);
+
+        // Assert
+        new[] { showExitCode, listExitCode, currentExitCode, plainShow.ExitCode }
+            .Should().AllBeEquivalentTo(0);
+
+        show.GetProperty("data").GetProperty("currentPhase").GetString()
+            .Should().Be("new");
+
+        GetPhaseEntries(show.GetProperty("data").GetProperty("phases"))
+            .Should().Equal("new=in-progress", "refine=pending", "map=pending", "plan=pending", "implement=pending",
+                "verify=pending", "finish=pending");
+
+        show.GetProperty("data").GetProperty("history").GetArrayLength()
+            .Should().Be(0);
+
+        list.GetProperty("data").GetProperty("features")[0].GetProperty("currentPhase").GetString()
+            .Should().Be("new");
+
+        current.GetProperty("data").GetProperty("feature").GetProperty("phaseState").GetString()
+            .Should().Be("in-progress");
+
+        GetLines(plainShow.Output)
+            .Should().Contain("Current phase: new").And.Contain("History: none");
+
+        (await File.ReadAllBytesAsync(featureFilePath, TestContext.Current.CancellationToken))
+            .Should().Equal(bytesBefore);
+    }
+
+    [Fact]
+    public async Task FeatureShow_PendingTransitionAndHistory_ReturnsThemAsStored()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateIssueFeatureAsync();
+        await EditFeatureFileAsync(IssueFeatureId, feature =>
+        {
+            feature["currentPhase"] = "refine";
+            feature["phases"] = new JsonObject { ["new"] = "approved", ["refine"] = "awaiting-approval" };
+            feature["pendingTransition"] = "map";
+            feature["history"] = new JsonArray
+            {
+                CreateHistoryNode("2026-10-21T09:00:00+02:00", "start", "new", "refine", null),
+                CreateHistoryNode("2026-10-21T09:05:00+02:00", "approve", "new", "refine", "looks good"),
+                CreateHistoryNode("2026-10-21T11:00:00+02:00", "start", "refine", "map", null)
+            };
+        });
+        var featureFilePath = GetFeaturePath(IssueFeatureId, "feature.json");
+        var bytesBefore = await File.ReadAllBytesAsync(featureFilePath, TestContext.Current.CancellationToken);
+
+        // Act
+        var (exitCode, root) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var plainShow = await RunAsync("feature", "show", IssueFeatureId);
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        var data = root.GetProperty("data");
+
+        data.GetProperty("currentPhase").GetString()
+            .Should().Be("refine");
+
+        data.GetProperty("pendingTransition").GetString()
+            .Should().Be("map");
+
+        GetPhaseEntries(data.GetProperty("phases"))
+            .Should().Equal("new=approved", "refine=awaiting-approval", "map=pending", "plan=pending",
+                "implement=pending", "verify=pending", "finish=pending");
+
+        var approve = data.GetProperty("history")[1];
+
+        FeatureCommandTestHelper.GetPropertyNames(approve)
+            .Should().Equal("at", "by", "action", "from", "to", "note");
+
+        approve.GetProperty("at").GetString()
+            .Should().Be("2026-10-21T09:05:00+02:00");
+
+        approve.GetProperty("by").GetProperty("name").GetString()
+            .Should().Be(UserName);
+
+        approve.GetProperty("by").GetProperty("email").GetString()
+            .Should().Be(UserEmail);
+
+        approve.GetProperty("action").GetString()
+            .Should().Be("approve");
+
+        approve.GetProperty("from").GetString()
+            .Should().Be("new");
+
+        approve.GetProperty("to").GetString()
+            .Should().Be("refine");
+
+        approve.GetProperty("note").GetString()
+            .Should().Be("looks good");
+
+        plainShow.ExitCode
+            .Should().Be(0);
+
+        GetLines(plainShow.Output)
+            .Should().Contain("Pending transition: map");
+
+        // The console wraps the long history line, so its parts are folded again.
+        FoldWhitespace(plainShow.Output)
+            .Should().Contain(
+                $" 2026-10-21T09:05:00+02:00 approve new -> refine by {UserName} <{UserEmail}>, note: looks good ");
+
+        (await File.ReadAllBytesAsync(featureFilePath, TestContext.Current.CancellationToken))
+            .Should().Equal(bytesBefore);
+    }
+
+    [Fact]
+    public async Task ReadingFeatureCommands_UnknownProfileInFeatureFile_Return40NamingTheFile()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateIssueFeatureAsync();
+        await EditFeatureFileAsync(IssueFeatureId, feature => feature["profile"] = "legacy");
+
+        // Act
+        var (listExitCode, list) = await RunJsonAsync("feature", "list", "--json");
+        var (showExitCode, show) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var (currentExitCode, current) = await RunJsonAsync("feature", "current", "--json");
+
+        // Assert
+        new[] { listExitCode, showExitCode, currentExitCode }
+            .Should().AllBeEquivalentTo(ShadeKitCliExitCodes.UnknownProfile);
+
+        foreach (var root in new[] { list, show, current })
+        {
+            root.GetProperty("error").GetProperty("code").GetString()
+                .Should().Be(ShadeKitCliErrorCodes.UnknownProfile);
+
+            root.GetProperty("error").GetProperty("message").GetString()
+                .Should().Contain($"'.shadekit/features/{IssueFeatureId}/feature.json'").And.Contain("'legacy'");
+        }
+    }
+
+    [Fact]
+    public async Task ReadingFeatureCommands_InvalidPhaseState_Return46AndLeaveFileUnchanged()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateIssueFeatureAsync();
+        await EditFeatureFileAsync(IssueFeatureId, feature => feature["currentPhase"] = "review");
+        var featureFilePath = GetFeaturePath(IssueFeatureId, "feature.json");
+        var bytesBefore = await File.ReadAllBytesAsync(featureFilePath, TestContext.Current.CancellationToken);
+
+        // Act
+        var (listExitCode, list) = await RunJsonAsync("feature", "list", "--json");
+        var (showExitCode, show) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var (currentExitCode, current) = await RunJsonAsync("feature", "current", "--json");
+
+        // Assert
+        new[] { listExitCode, showExitCode, currentExitCode }
+            .Should().AllBeEquivalentTo(ShadeKitCliExitCodes.PhaseStateInvalid);
+
+        foreach (var root in new[] { list, show, current })
+        {
+            root.GetProperty("error").GetProperty("code").GetString()
+                .Should().Be(ShadeKitCliErrorCodes.PhaseStateInvalid);
+
+            root.GetProperty("error").GetProperty("message").GetString()
+                .Should().Contain($"'.shadekit/features/{IssueFeatureId}/feature.json'")
+                .And.Contain("'currentPhase'");
+        }
+
+        (await File.ReadAllBytesAsync(featureFilePath, TestContext.Current.CancellationToken))
+            .Should().Equal(bytesBefore);
+    }
+
     public void Dispose()
     {
         _currentDirectory.Dispose();
@@ -1453,6 +1726,41 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         }
     }
 
+    private async Task EditFeatureFileAsync(string featureId, Action<JsonObject> edit)
+    {
+        var path = GetFeaturePath(featureId, "feature.json");
+        var feature = JsonNode.Parse(await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken))!
+            .AsObject();
+
+        edit(feature);
+
+        await File.WriteAllTextAsync(path, feature.ToJsonString(), TestContext.Current.CancellationToken);
+    }
+
+    private static JsonObject CreateHistoryNode(string at, string action, string from, string to, string? note)
+    {
+        var entry = new JsonObject
+        {
+            ["at"] = at,
+            ["by"] = new JsonObject { ["name"] = UserName, ["email"] = UserEmail },
+            ["action"] = action,
+            ["from"] = from,
+            ["to"] = to
+        };
+
+        if (note is not null)
+        {
+            entry["note"] = note;
+        }
+
+        return entry;
+    }
+
+    private static string[] GetPhaseEntries(JsonElement phases)
+    {
+        return [.. phases.EnumerateObject().Select(x => $"{x.Name}={x.Value.GetString()}")];
+    }
+
     private string GetCurrentFeatureFilePath()
     {
         return Path.Combine(_tempDirectory.RootPath, ".shadekit", "features", "current-feature.json");
@@ -1481,7 +1789,4 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
 
     [GeneratedRegex(@"\x1B\[[0-9;]*m")]
     private static partial Regex AnsiEscapeSequenceRegex();
-
-    [GeneratedRegex("\"status\"\\s*:\\s*\"active\"")]
-    private static partial Regex StatusRegex();
 }

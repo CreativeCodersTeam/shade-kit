@@ -12,6 +12,10 @@ using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using FakeItEasy;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Features;
@@ -25,11 +29,75 @@ public sealed class FeatureStoreTests : IDisposable
     // A folder whose name differs from FeatureId only in case; it is not the feature on any file system.
     private const string CaseVariantFolderName = "GH-142-Login-SSO";
 
+    // A done feature has phase fields: without them it would have to be in the initial state, which is active.
+    private const string FeatureDonePhaseFields =
+        """
+        "currentPhase": "finish",
+        "phases": { "new": "approved", "refine": "approved", "map": "approved", "plan": "approved",
+          "implement": "approved", "verify": "approved", "finish": "approved" }
+        """;
+
+    private const string BugfixDonePhaseFields =
+        """
+        "currentPhase": "finish",
+        "phases": { "new": "approved", "diagnose": "approved", "plan": "approved", "implement": "approved",
+          "verify": "approved", "finish": "approved" }
+        """;
+
+    private const string QuickDonePhaseFields =
+        """
+        "currentPhase": "finish", "phases": { "new": "approved", "quick": "approved", "finish": "approved" }
+        """;
+
+    // refine awaits the approval of map; "review" is a phase the profile no longer has.
+    private const string RefineAwaitingMapPhaseFields =
+        """
+        "currentPhase": "refine",
+        "phases": { "review": "approved", "new": "approved", "refine": "awaiting-approval" },
+        "pendingTransition": "map",
+        "history": [
+          { "at": "2026-10-21T09:00:00+02:00", "by": { "name": "Jane Doe", "email": "jane@example.com" },
+            "action": "start", "from": "new", "to": "refine" },
+          { "at": "2026-10-21T09:05:00+02:00", "by": { "name": "Jane Doe", "email": "jane@example.com" },
+            "action": "approve", "from": "new", "to": "refine", "note": "looks good" },
+          { "at": "2026-10-21T11:00:00+02:00", "by": { "name": "Jane Doe", "email": "jane@example.com" },
+            "action": "start", "from": "refine", "to": "map" }
+        ]
+        """;
+
     private readonly FeatureStoreTestContext _context = new FeatureStoreTestContext();
 
     public void Dispose()
     {
         _context.Dispose();
+    }
+
+    private byte[] ReadFeatureFileBytes(string featureId)
+    {
+        return File.ReadAllBytes(Path.Combine(_context.RepositoryRootPath, KitStorePaths.RootPath,
+            KitStorePaths.FeaturesDirName, featureId, KitStorePaths.FeatureFileName));
+    }
+
+    private async Task ReadAsync(string methodName)
+    {
+        var featureStore = _context.CreateFeatureStore();
+        var store = _context.CreateStore();
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        switch (methodName)
+        {
+            case nameof(FeatureStore.ListAsync):
+                await featureStore.ListAsync(store, cancellationToken);
+                break;
+
+            case nameof(FeatureStore.ShowAsync):
+                await featureStore.ShowAsync(store, FeatureId, cancellationToken);
+                break;
+
+            default:
+                await featureStore.GetCurrentAsync(store, cancellationToken);
+                break;
+        }
     }
 
     public static TheoryData<string> InvalidFeatureIds =>
@@ -42,8 +110,9 @@ public sealed class FeatureStoreTests : IDisposable
     public async Task ListAsync_SeveralFeatures_ReturnsSummariesSortedOrdinallyById()
     {
         // Arrange
-        _context.WriteFeature("b-feature", "Beta", WorkflowProfiles.Quick, "done");
-        _context.WriteFeature("a-feature-2", "Alpha 2", WorkflowProfiles.Bugfix);
+        _context.WriteFeature("b-feature", "Beta", WorkflowProfileNames.Quick, "done",
+            phaseFields: QuickDonePhaseFields);
+        _context.WriteFeature("a-feature-2", "Alpha 2", WorkflowProfileNames.Bugfix);
         _context.WriteFeature("a-feature", "Alpha");
 
         // Act
@@ -53,9 +122,12 @@ public sealed class FeatureStoreTests : IDisposable
         // Assert
         result.Features
             .Should().Equal(
-                new FeatureSummary("a-feature", "Alpha", WorkflowProfiles.Feature, FeatureStatus.Active),
-                new FeatureSummary("a-feature-2", "Alpha 2", WorkflowProfiles.Bugfix, FeatureStatus.Active),
-                new FeatureSummary("b-feature", "Beta", WorkflowProfiles.Quick, FeatureStatus.Done));
+                new FeatureSummary("a-feature", "Alpha", WorkflowProfileNames.Feature, FeatureStatus.Active,
+                    WorkflowPhaseNames.New),
+                new FeatureSummary("a-feature-2", "Alpha 2", WorkflowProfileNames.Bugfix, FeatureStatus.Active,
+                    WorkflowPhaseNames.New),
+                new FeatureSummary("b-feature", "Beta", WorkflowProfileNames.Quick, FeatureStatus.Done,
+                    WorkflowPhaseNames.Finish));
 
         result.Warnings
             .Should().BeEmpty();
@@ -128,7 +200,8 @@ public sealed class FeatureStoreTests : IDisposable
     public async Task ShowAsync_ExistingFeature_ReturnsDocumentAndPaths()
     {
         // Arrange
-        _context.WriteFeature(FeatureId, "Login SSO", WorkflowProfiles.Bugfix, "done");
+        _context.WriteFeature(FeatureId, "Login SSO", WorkflowProfileNames.Bugfix, "done",
+            phaseFields: BugfixDonePhaseFields);
 
         // Act
         var result = await _context.CreateFeatureStore().ShowAsync(_context.CreateStore(), FeatureId,
@@ -139,7 +212,7 @@ public sealed class FeatureStoreTests : IDisposable
             .Should().Be(FeatureId);
 
         result.Feature.Profile
-            .Should().Be(WorkflowProfiles.Bugfix);
+            .Should().Be(WorkflowProfileNames.Bugfix);
 
         result.Feature.Status
             .Should().Be(FeatureStatus.Done);
@@ -152,6 +225,224 @@ public sealed class FeatureStoreTests : IDisposable
 
         result.Warnings
             .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ListAsync_FeaturesWithAndWithoutPhaseFields_ReturnsNormalizedCurrentPhases()
+    {
+        // Arrange
+        _context.WriteFeature("a-old", profile: WorkflowProfileNames.Bugfix);
+        _context.WriteFeature("b-pending", phaseFields: RefineAwaitingMapPhaseFields);
+
+        // Act
+        var result = await _context.CreateFeatureStore().ListAsync(_context.CreateStore(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Features.Select(x => (x.Id, x.CurrentPhase))
+            .Should().Equal(("a-old", WorkflowPhaseNames.New), ("b-pending", WorkflowPhaseNames.Refine));
+    }
+
+    [Fact]
+    public async Task ShowAsync_FeatureWithoutPhaseFields_ReturnsInitialStateAndLeavesFileUnchanged()
+    {
+        // Arrange
+        _context.WriteFeature(FeatureId, profile: WorkflowProfileNames.Quick);
+        var bytesBefore = ReadFeatureFileBytes(FeatureId);
+
+        // Act
+        var result = await _context.CreateFeatureStore().ShowAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.PhaseState.CurrentPhase
+            .Should().Be(WorkflowPhaseNames.New);
+
+        result.PhaseState.Phases
+            .Should().Equal(KeyValuePair.Create(WorkflowPhaseNames.New, PhaseState.InProgress),
+                KeyValuePair.Create(WorkflowPhaseNames.Quick, PhaseState.Pending),
+                KeyValuePair.Create(WorkflowPhaseNames.Finish, PhaseState.Pending));
+
+        result.PhaseState.PendingTransition
+            .Should().BeNull();
+
+        result.Feature.CurrentPhase
+            .Should().BeNull();
+
+        result.Feature.History
+            .Should().BeNull();
+
+        ReadFeatureFileBytes(FeatureId)
+            .Should().Equal(bytesBefore);
+    }
+
+    [Fact]
+    public async Task ShowAsync_PendingTransitionHistoryAndExtraPhase_ReturnsNormalizedStateAndStoredHistory()
+    {
+        // Arrange
+        _context.WriteFeature(FeatureId, phaseFields: RefineAwaitingMapPhaseFields);
+        var bytesBefore = ReadFeatureFileBytes(FeatureId);
+
+        // Act
+        var result = await _context.CreateFeatureStore().ShowAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.PhaseState.CurrentPhase
+            .Should().Be(WorkflowPhaseNames.Refine);
+
+        result.PhaseState.CurrentPhaseState
+            .Should().Be(PhaseState.AwaitingApproval);
+
+        result.PhaseState.PendingTransition
+            .Should().Be(WorkflowPhaseNames.Map);
+
+        result.PhaseState.Phases.Select(x => x.Key)
+            .Should().Equal(WorkflowPhaseNames.New, WorkflowPhaseNames.Refine, WorkflowPhaseNames.Map,
+                WorkflowPhaseNames.Plan, WorkflowPhaseNames.Implement, WorkflowPhaseNames.Verify,
+                WorkflowPhaseNames.Finish, "review");
+
+        result.Feature.History!.Select(x => (x.Action, x.From, x.To, x.Note))
+            .Should().Equal((PhaseHistoryAction.Start, WorkflowPhaseNames.New, WorkflowPhaseNames.Refine, null),
+                (PhaseHistoryAction.Approve, WorkflowPhaseNames.New, WorkflowPhaseNames.Refine, "looks good"),
+                (PhaseHistoryAction.Start, WorkflowPhaseNames.Refine, WorkflowPhaseNames.Map, null));
+
+        ReadFeatureFileBytes(FeatureId)
+            .Should().Equal(bytesBefore);
+    }
+
+    [Fact]
+    public async Task ShowAsync_DoneFeature_ReturnsApprovedLastPhase()
+    {
+        // Arrange
+        _context.WriteFeature(FeatureId, profile: WorkflowProfileNames.Quick, status: "done",
+            phaseFields: QuickDonePhaseFields);
+
+        // Act
+        var result = await _context.CreateFeatureStore().ShowAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.PhaseState.Status
+            .Should().Be(FeatureStatus.Done);
+
+        result.PhaseState.CurrentPhase
+            .Should().Be(WorkflowPhaseNames.Finish);
+
+        result.PhaseState.CurrentPhaseState
+            .Should().Be(PhaseState.Approved);
+    }
+
+    [Theory]
+    [InlineData(nameof(FeatureStore.ListAsync))]
+    [InlineData(nameof(FeatureStore.ShowAsync))]
+    [InlineData(nameof(FeatureStore.GetCurrentAsync))]
+    public async Task ReadingMethods_UnknownProfileInFeatureFile_ThrowUnknownProfileExceptionNamingFile(
+        string methodName)
+    {
+        // Arrange
+        _context.WriteFeature(FeatureId, profile: "legacy");
+        _context.WriteOverride(FeatureId);
+        var bytesBefore = ReadFeatureFileBytes(FeatureId);
+
+        // Act
+        var act = () => ReadAsync(methodName);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<UnknownProfileException>()).Which;
+
+        exception.Profile
+            .Should().Be("legacy");
+
+        exception.FeatureFilePath
+            .Should().Be(".shadekit/features/gh-142-login-sso/feature.json");
+
+        exception.KnownProfiles
+            .Should().Equal(WorkflowProfileNames.Feature, WorkflowProfileNames.Bugfix, WorkflowProfileNames.Quick);
+
+        ReadFeatureFileBytes(FeatureId)
+            .Should().Equal(bytesBefore);
+    }
+
+    [Theory]
+    [InlineData(nameof(FeatureStore.ListAsync), """ "currentPhase": "review" """, "currentPhase")]
+    [InlineData(nameof(FeatureStore.ShowAsync), """ "currentPhase": "map", "phases": { "map": "approved" } """, "phases")]
+    [InlineData(nameof(FeatureStore.GetCurrentAsync), """ "pendingTransition": "map" """, "pendingTransition")]
+    public async Task ReadingMethods_InvalidPhaseState_ThrowInvalidPhaseStateExceptionAndLeaveFileUnchanged(
+        string methodName, string phaseFields, string field)
+    {
+        // Arrange
+        _context.WriteFeature(FeatureId, phaseFields: phaseFields);
+        _context.WriteOverride(FeatureId);
+        var bytesBefore = ReadFeatureFileBytes(FeatureId);
+
+        // Act
+        var act = () => ReadAsync(methodName);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<InvalidPhaseStateException>()).Which;
+
+        exception.FeatureFilePath
+            .Should().Be(".shadekit/features/gh-142-login-sso/feature.json");
+
+        exception.Field
+            .Should().Be(field);
+
+        ReadFeatureFileBytes(FeatureId)
+            .Should().Equal(bytesBefore);
+    }
+
+    [Fact]
+    public async Task ListAsync_ValidFeatureAndFeatureWithUnknownProfile_ThrowsWithoutPartialResult()
+    {
+        // Arrange
+        _context.WriteFeature("a-valid");
+        _context.WriteFeature(FeatureId, profile: "legacy");
+
+        // Act
+        var act = () => _context.CreateFeatureStore().ListAsync(_context.CreateStore(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<UnknownProfileException>())
+            .Which.FeatureFilePath
+            .Should().Be(".shadekit/features/gh-142-login-sso/feature.json");
+    }
+
+    [Theory]
+    [InlineData(nameof(FeatureStore.ListAsync))]
+    [InlineData(nameof(FeatureStore.ShowAsync))]
+    [InlineData(nameof(FeatureStore.GetCurrentAsync))]
+    public async Task ReadingMethods_FeatureFileWithOtherIdAndInvalidPhaseState_NameTheFileOfTheFolder(
+        string methodName)
+    {
+        // Arrange
+        _context.WriteFeature(FeatureId, recordedId: OtherFeatureId, phaseFields: """ "currentPhase": "review" """);
+        _context.WriteOverride(FeatureId);
+
+        // Act
+        var act = () => ReadAsync(methodName);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidPhaseStateException>())
+            .Which.FeatureFilePath
+            .Should().Be(".shadekit/features/gh-142-login-sso/feature.json");
+    }
+
+    [Fact]
+    public async Task ListAsync_DoneFeatureWithoutPhaseFields_ThrowsInvalidPhaseStateException()
+    {
+        // Arrange
+        _context.WriteFeature(FeatureId, status: "done");
+
+        // Act
+        var act = () => _context.CreateFeatureStore().ListAsync(_context.CreateStore(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidPhaseStateException>())
+            .Which.Field
+            .Should().Be("currentPhase");
     }
 
     [Fact]
@@ -188,6 +479,38 @@ public sealed class FeatureStoreTests : IDisposable
     }
 
     [Theory]
+    [InlineData(""" "phases": { "new": "skipped" } """)]
+    [InlineData(""" "history": [ { "at": "2026-10-21T09:00:00+02:00", "by": { "name": "Jane Doe", "email": "jane@example.com" }, "action": "close" } ] """)]
+    [InlineData(""" "history": [ null ] """)]
+    public async Task ShowAsync_FeatureFileWithInvalidPhaseField_ThrowsInvalidKitFileException(string field)
+    {
+        // Arrange
+        _context.WriteKitFile(
+            $$"""
+              {
+                "schemaVersion": 1,
+                "minEngineVersion": "0.1.0",
+                "id": "{{FeatureId}}",
+                "title": "Login SSO",
+                "profile": "feature",
+                "source": { "kind": "text" },
+                "createdAt": "2026-10-20T15:30:00+02:00",
+                "createdBy": { "name": "Jane Doe", "email": "jane@example.com" },
+                {{field}}
+              }
+              """,
+            KitStorePaths.FeaturesDirName, FeatureId, KitStorePaths.FeatureFileName);
+
+        // Act
+        var act = () => _context.CreateFeatureStore().ShowAsync(_context.CreateStore(), FeatureId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidKitFileException>())
+            .Which.FilePath.Should().Be(".shadekit/features/gh-142-login-sso/feature.json");
+    }
+
+    [Theory]
     [MemberData(nameof(InvalidFeatureIds))]
     public async Task ShowAsync_InvalidFeatureId_ThrowsInvalidFeatureIdExceptionWithoutStoreAccess(string featureId)
     {
@@ -218,7 +541,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result
-            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, []));
+            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, null, []));
 
         result.IsResolved
             .Should().BeFalse();
@@ -278,7 +601,7 @@ public sealed class FeatureStoreTests : IDisposable
     public async Task GetCurrentAsync_FeatureFileWithStatusDone_ReturnsStatusDone()
     {
         // Arrange
-        _context.WriteFeature(FeatureId, status: "done");
+        _context.WriteFeature(FeatureId, status: "done", phaseFields: FeatureDonePhaseFields);
         _context.WriteOverride(FeatureId);
 
         // Act
@@ -288,6 +611,57 @@ public sealed class FeatureStoreTests : IDisposable
         // Assert
         result.Feature?.Status
             .Should().Be(FeatureStatus.Done);
+
+        result.PhaseState?.CurrentPhase
+            .Should().Be(WorkflowPhaseNames.Finish);
+
+        result.PhaseState?.CurrentPhaseState
+            .Should().Be(PhaseState.Approved);
+    }
+
+    [Fact]
+    public async Task GetCurrentAsync_FeatureWithoutPhaseFields_ReturnsInitialStateAndLeavesFileUnchanged()
+    {
+        // Arrange
+        _context.WriteFeature(FeatureId, profile: WorkflowProfileNames.Bugfix);
+        _context.SetBranch($"feature/{FeatureId}");
+        var bytesBefore = ReadFeatureFileBytes(FeatureId);
+
+        // Act
+        var result = await _context.CreateFeatureStore().GetCurrentAsync(_context.CreateStore(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.PhaseState?.CurrentPhase
+            .Should().Be(WorkflowPhaseNames.New);
+
+        result.PhaseState?.CurrentPhaseState
+            .Should().Be(PhaseState.InProgress);
+
+        result.PhaseState?.Profile.Name
+            .Should().Be(WorkflowProfileNames.Bugfix);
+
+        ReadFeatureFileBytes(FeatureId)
+            .Should().Equal(bytesBefore);
+    }
+
+    [Fact]
+    public async Task GetCurrentAsync_PendingTransition_ReturnsCurrentPhaseAwaitingApproval()
+    {
+        // Arrange
+        _context.WriteFeature(FeatureId, phaseFields: RefineAwaitingMapPhaseFields);
+        _context.WriteOverride(FeatureId);
+
+        // Act
+        var result = await _context.CreateFeatureStore().GetCurrentAsync(_context.CreateStore(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.PhaseState?.CurrentPhase
+            .Should().Be(WorkflowPhaseNames.Refine);
+
+        result.PhaseState?.CurrentPhaseState
+            .Should().Be(PhaseState.AwaitingApproval);
     }
 
     [Fact]
@@ -1587,7 +1961,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         current
-            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, []));
+            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, null, []));
 
         await secondDrop.Should().ThrowAsync<FeatureNotFoundException>();
     }
@@ -1777,7 +2151,7 @@ public sealed class FeatureStoreTests : IDisposable
 
         // Assert
         result
-            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, []));
+            .Should().BeEquivalentTo(new CurrentFeatureResult(null, null, null, null, []));
     }
 
     [Fact]

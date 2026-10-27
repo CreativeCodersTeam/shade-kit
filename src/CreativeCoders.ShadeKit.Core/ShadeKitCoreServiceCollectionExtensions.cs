@@ -9,6 +9,9 @@ using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Web;
+using CreativeCoders.ShadeKit.Core.Workflow;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -61,7 +64,11 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IFeatureSourceReader, FeatureSourceReader>();
         services.TryAddSingleton<IFeatureIdFactory, FeatureIdFactory>();
         services.TryAddSingleton<ICurrentFeatureResolver, CurrentFeatureResolver>();
+        services.TryAddSingleton<IWorkflowProfileCatalog, BuiltInWorkflowProfileCatalog>();
         services.TryAddSingleton<IFeatureStore, FeatureStore>();
+        services.TryAddSingleton<IPhaseEngine, PhaseEngine>();
+        services.TryAddSingleton<ITransitionGateProvider, DefaultTransitionGateProvider>();
+        services.TryAddSingleton<IPhaseWorkflow, PhaseWorkflow>();
 
         services.AddHttpClient(HttpUrlContentReader.HttpClientName)
             .ConfigureHttpClient((serviceProvider, httpClient) =>

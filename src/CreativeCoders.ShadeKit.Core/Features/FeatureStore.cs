@@ -9,6 +9,9 @@ using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Workflow;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -25,10 +28,18 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// </param>
 /// <param name="currentFeatureResolver">The resolver of the current feature.</param>
 /// <param name="gitRepositoryInfo">The source of the git identity recorded as creator of a new feature.</param>
+/// <param name="workflowProfileCatalog">
+/// The catalog that the workflow profile of a new or a read feature must be known to.
+/// </param>
+/// <param name="phaseEngine">
+/// The engine that creates the phase state of a new feature and normalizes the phase state of a read feature.
+/// </param>
 public sealed class FeatureStore(
     IFeatureIdFactory featureIdFactory,
     ICurrentFeatureResolver currentFeatureResolver,
-    IGitRepositoryInfo gitRepositoryInfo)
+    IGitRepositoryInfo gitRepositoryInfo,
+    IWorkflowProfileCatalog workflowProfileCatalog,
+    IPhaseEngine phaseEngine)
     : IFeatureStore
 {
     private readonly IFeatureIdFactory _featureIdFactory = Ensure.NotNull(featureIdFactory);
@@ -36,6 +47,10 @@ public sealed class FeatureStore(
     private readonly ICurrentFeatureResolver _currentFeatureResolver = Ensure.NotNull(currentFeatureResolver);
 
     private readonly IGitRepositoryInfo _gitRepositoryInfo = Ensure.NotNull(gitRepositoryInfo);
+
+    private readonly IWorkflowProfileCatalog _workflowProfileCatalog = Ensure.NotNull(workflowProfileCatalog);
+
+    private readonly IPhaseEngine _phaseEngine = Ensure.NotNull(phaseEngine);
 
     /// <inheritdoc />
     public async Task<NewFeatureResult> CreateAsync(IKitStore store, NewFeatureRequest request,
@@ -52,12 +67,7 @@ public sealed class FeatureStore(
             .ConfigureAwait(false);
         var config = configResult?.Document ?? new KitConfig();
 
-        var profile = request.Profile ?? config.DefaultProfile;
-
-        if (!WorkflowProfiles.IsKnown(profile))
-        {
-            throw new UnknownProfileException(profile);
-        }
+        var profile = _workflowProfileCatalog.GetProfile(request.Profile ?? config.DefaultProfile);
 
         // The override and the git identity do not depend on the source, so they are checked before the factory loads
         // the request content: an unreadable override or a missing identity stops the command before gh runs or a
@@ -98,12 +108,15 @@ public sealed class FeatureStore(
         {
             Id = identity.Id,
             Title = identity.Title,
-            Profile = profile,
+            Profile = profile.Name,
             Source = identity.Source,
             CreatedAt = identity.CreatedAt,
             CreatedBy = new FeatureCreator { Name = creator.Name, Email = creator.Email },
             Status = FeatureStatus.Active
         };
+
+        FeaturePhaseFields.Apply(feature,
+            _phaseEngine.CreateInitialState(profile, feature.Id, FeaturePhaseFields.GetFeatureFilePath(feature.Id)));
 
         // The three files are known now, so their git attributes are read at once instead of once per write; the
         // feature files are prepared with the paths of the feature folder, for which their line endings are
@@ -164,10 +177,12 @@ public sealed class FeatureStore(
                 continue;
             }
 
+            var phaseState = ReadPhaseState(result.Document, featureName);
+
             warnings.AddRange(result.Warnings);
-            warnings.AddRange(CheckFeatureId(featureName, result.Document));
+            warnings.AddRange(KitStoreFeatureExtensions.CheckFeatureId(featureName, result.Document));
             features.Add(new FeatureSummary(featureName, result.Document.Title, result.Document.Profile,
-                result.Document.Status));
+                result.Document.Status, phaseState.CurrentPhase));
         }
 
         return new FeatureListResult(features, KitWarningOrder.Arrange(warnings));
@@ -180,10 +195,12 @@ public sealed class FeatureStore(
         Ensure.NotNull(store);
         EnsureFeatureExists(store, featureId);
 
-        var result = await ReadFeatureAsync(store, featureId, cancellationToken).ConfigureAwait(false);
+        var result = await store.ReadFeatureAsync(featureId, FormatAccess.Read, cancellationToken)
+            .ConfigureAwait(false);
 
-        return new FeatureShowResult(featureId, result.Document,
-            KitWarningOrder.Arrange([.. result.Warnings, .. CheckFeatureId(featureId, result.Document)]));
+        return new FeatureShowResult(featureId, result.Document, ReadPhaseState(result.Document, featureId),
+            KitWarningOrder.Arrange(
+                [.. result.Warnings, .. KitStoreFeatureExtensions.CheckFeatureId(featureId, result.Document)]));
     }
 
     /// <inheritdoc />
@@ -196,15 +213,20 @@ public sealed class FeatureStore(
 
         if (!resolution.IsResolved)
         {
-            return new CurrentFeatureResult(null, null, null, resolution.Warnings);
+            return new CurrentFeatureResult(null, null, null, null, resolution.Warnings);
         }
 
         var featureId = resolution.FeatureId;
-        var result = await ReadFeatureAsync(store, featureId, cancellationToken).ConfigureAwait(false);
+        var result = await store.ReadFeatureAsync(featureId, FormatAccess.Read, cancellationToken)
+            .ConfigureAwait(false);
 
         return new CurrentFeatureResult(featureId, result.Document, resolution.Origin,
+            ReadPhaseState(result.Document, featureId),
             KitWarningOrder.Arrange(
-                [.. resolution.Warnings, .. result.Warnings, .. CheckFeatureId(featureId, result.Document)]));
+            [
+                .. resolution.Warnings, .. result.Warnings,
+                .. KitStoreFeatureExtensions.CheckFeatureId(featureId, result.Document)
+            ]));
     }
 
     /// <inheritdoc />
@@ -238,7 +260,8 @@ public sealed class FeatureStore(
         EnsureFeatureExists(store, featureId);
 
         var files = GetFeatureFiles(store, featureId);
-        var overrideAffected = await OverrideSelectsAsync(store, featureId, cancellationToken).ConfigureAwait(false);
+        var overrideAffected = await CurrentFeatureOverride.SelectsAsync(store, featureId, cancellationToken)
+            .ConfigureAwait(false);
 
         return new FeatureDropPreview(featureId, files, overrideAffected);
     }
@@ -283,6 +306,12 @@ public sealed class FeatureStore(
         return new FeatureDropResult(featureId, preview.Files, preview.OverrideAffected);
     }
 
+    // The reading commands show the same normalized phase state as the phase commands, without writing it.
+    private FeaturePhaseState ReadPhaseState(FeatureDocument document, string featureId)
+    {
+        return FeaturePhaseFields.ReadState(document, featureId, _workflowProfileCatalog, _phaseEngine);
+    }
+
     // An invalid id is reported as such, not as a missing feature.
     private static void EnsureFeatureExists(IKitStore store, string featureId)
     {
@@ -294,50 +323,9 @@ public sealed class FeatureStore(
         }
     }
 
-    private static async Task<VersionedReadResult<FeatureDocument>> ReadFeatureAsync(IKitStore store,
-        string featureId, CancellationToken cancellationToken)
-    {
-        var featureFilePath = KitStorePaths.GetFeatureFilePath(featureId);
-
-        return await store
-                   .ReadJsonAsync<FeatureDocument>(featureFilePath, FormatIds.Feature, FormatAccess.Read,
-                       cancellationToken)
-                   .ConfigureAwait(false)
-               ?? throw new InvalidKitFileException(KitStorePaths.GetRepositoryPath(featureFilePath),
-                   "The file is missing, although the feature folder exists.");
-    }
-
-    // The folder name is the id of the feature; a different id in feature.json is reported, not corrected.
-    private static IReadOnlyList<KitWarning> CheckFeatureId(string featureId, FeatureDocument feature)
-    {
-        return string.Equals(feature.Id, featureId, StringComparison.Ordinal)
-            ? []
-            : [new FeatureIdMismatchWarning(featureId, feature.Id)];
-    }
-
     private static IReadOnlyList<string> GetFeatureFiles(IKitStore store, string featureId)
     {
         return [.. store.GetFiles(KitStorePaths.GetFeatureDirPath(featureId)).Select(KitStorePaths.GetRepositoryPath)];
-    }
-
-    private static async Task<bool> OverrideSelectsAsync(IKitStore store, string featureId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var result = await store
-                .ReadJsonAsync<CurrentFeatureDocument>(KitStorePaths.CurrentFeatureFilePath, FormatIds.CurrentFeature,
-                    FormatAccess.Read, cancellationToken)
-                .ConfigureAwait(false);
-
-            return result is not null && string.Equals(result.Document.FeatureId, featureId, StringComparison.Ordinal);
-        }
-        catch (KitFileFormatException)
-        {
-            // An override that cannot be read, also because of config.json, selects no feature that can be proven;
-            // it is left alone.
-            return false;
-        }
     }
 
     private static void ClearOverrideBestEffort(IKitStore store)

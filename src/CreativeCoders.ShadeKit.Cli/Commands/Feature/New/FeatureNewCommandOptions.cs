@@ -1,3 +1,4 @@
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using CreativeCoders.SysConsole.Cli.Parsing;
 
 namespace CreativeCoders.ShadeKit.Cli.Commands.Feature.New;
@@ -11,11 +12,13 @@ public class FeatureNewCommandOptions : JsonCommandOptions
     /// Gets or sets the workflow profile of the new feature.
     /// </summary>
     /// <value>
-    /// <c>feature</c>, <c>bugfix</c>, or <c>quick</c>, or <see langword="null" /> to use <c>defaultProfile</c> of
+    /// The name of a profile of the <see cref="IWorkflowProfileCatalog" />, for example
+    /// <see cref="WorkflowProfileNames.Feature" />, or <see langword="null" /> to use <c>defaultProfile</c> of
     /// <c>config.json</c>. The default is <see langword="null" />.
     /// </value>
     [OptionParameter('p', "profile",
-        HelpText = "The workflow profile: feature, bugfix, or quick (default: defaultProfile of config.json)")]
+        HelpText = $"The workflow profile: {WorkflowProfileNames.Feature}, {WorkflowProfileNames.Bugfix}, or " +
+                   $"{WorkflowProfileNames.Quick} (default: defaultProfile of config.json)")]
     public string? Profile { get; set; }
 
     /// <summary>

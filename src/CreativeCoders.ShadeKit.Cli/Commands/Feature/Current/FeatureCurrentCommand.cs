@@ -34,7 +34,8 @@ public class FeatureCurrentCommand(
     /// Resolves the current feature and writes it, as plain text or as a JSON envelope.
     /// </summary>
     /// <remarks>
-    /// The branch wins over the local override. A feature that cannot be resolved is a result, not an error.
+    /// The branch wins over the local override. A feature that cannot be resolved is a result, not an error. The
+    /// current phase and its state are normalized against the workflow profile; <c>feature.json</c> is not changed.
     /// </remarks>
     /// <param name="options">The options of the command.</param>
     /// <returns>
@@ -43,7 +44,8 @@ public class FeatureCurrentCommand(
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// No SHADE kit store is found, <c>git</c> cannot be run, or a kit file is missing, invalid, or too new.
+    /// No SHADE kit store is found, <c>git</c> cannot be run, a kit file is missing, invalid, or too new, or the
+    /// <c>feature.json</c> of the current feature names an unknown workflow profile or holds an invalid phase state.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(FeatureCurrentCommandOptions options)
@@ -72,6 +74,7 @@ public class FeatureCurrentCommand(
         }
 
         _context.Console.WriteLine($"{feature.Id} ({feature.Profile}, {feature.Status.ToJsonName()})");
+        _context.Console.WriteLine($"Current phase: {feature.CurrentPhase} ({feature.PhaseState.ToJsonName()})");
         _context.Console.WriteLine($"Resolved from: {resolvedFrom.ToJsonName()}");
     }
 }

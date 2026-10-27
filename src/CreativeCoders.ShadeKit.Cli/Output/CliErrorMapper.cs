@@ -7,6 +7,7 @@ using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Features.Warnings;
 using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Files.Warnings;
+using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
@@ -18,6 +19,8 @@ using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Core.Web.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
 
@@ -32,6 +35,8 @@ namespace CreativeCoders.ShadeKit.Cli.Output;
 /// <param name="engineVersionProvider">The provider of the running engine version, which messages mention.</param>
 public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
 {
+    private const string PhaseNextHint = "Run 'shade-kit phase next' to see the possible next steps.";
+
     private readonly IEngineVersionProvider _engineVersionProvider = Ensure.NotNull(engineVersionProvider);
 
     /// <summary>
@@ -121,10 +126,40 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 $"'{GetFeaturesDirectoryPath()}' and that no other program, such as an editor, a virus scanner, or " +
                 "a search indexer, holds a file in the folder open, then run the command again."),
 
+            NoCurrentFeatureException => CliError.Create(ShadeKitCliExitCodes.NoCurrentFeature,
+                "No current feature is selected: neither the current branch nor the local override " +
+                $"'{KitStorePaths.GetRepositoryPath(KitStorePaths.CurrentFeatureFilePath)}' selects an existing " +
+                "feature. Run 'shade-kit feature list' to see the existing features, then 'shade-kit feature set " +
+                "<id>' to select one, or switch to the branch of the feature."),
+
             UnknownProfileException e => CliError.Create(ShadeKitCliExitCodes.UnknownProfile,
-                $"The workflow profile '{e.Profile}' is unknown. Pass one of " +
-                $"{string.Join(", ", WorkflowProfiles.All.Select(x => $"'{x}'"))} with --profile, or set " +
-                $"'defaultProfile' in '{KitStorePaths.GetRepositoryPath(KitStorePaths.ConfigFileName)}' to one of them."),
+                CreateUnknownProfileMessage(e)),
+
+            PhaseNotInProfileException e => CliError.Create(ShadeKitCliExitCodes.PhaseNotInProfile,
+                CreatePhaseNotInProfileMessage(e)),
+
+            PhaseTransitionNotAllowedException e => CliError.Create(ShadeKitCliExitCodes.TransitionNotAllowed,
+                $"The feature '{e.FeatureId}' cannot move to the phase '{e.Phase}': " +
+                $"{CreateTransitionRefusalSentence(e)} The current phase is '{e.CurrentPhase}' " +
+                $"({e.CurrentState.ToJsonName()}). Nothing was changed. {PhaseNextHint}"),
+
+            NoPendingTransitionException e => CliError.Create(ShadeKitCliExitCodes.NoPendingTransition,
+                $"The feature '{e.FeatureId}' has no pending transition to '{e.Phase}'; " +
+                $"{CreatePendingTransitionText(e.PendingTransition)} Nothing was changed. {PhaseNextHint}"),
+
+            FeatureDoneException e => CliError.Create(ShadeKitCliExitCodes.FeatureDone,
+                $"The feature '{e.FeatureId}' is done, so its phases cannot change any more. Nothing was changed. " +
+                "Run 'shade-kit feature list' to see the features, and 'shade-kit feature set <id>' to work on " +
+                "another one."),
+
+            PhaseCompleteNotAllowedException e => CliError.Create(ShadeKitCliExitCodes.CompleteNotAllowed,
+                $"The feature '{e.FeatureId}' cannot be completed: only the last phase '{e.LastPhase}' can be " +
+                $"completed while it is in progress, but the current phase is '{e.CurrentPhase}' " +
+                $"({e.CurrentState.ToJsonName()}). Nothing was changed. {PhaseNextHint}"),
+
+            InvalidPhaseStateException e => CliError.Create(ShadeKitCliExitCodes.PhaseStateInvalid,
+                $"The phase state in '{e.FeatureFilePath}' is invalid: the field '{e.Field}' {e.Reason} Fix the " +
+                "field or restore the file from git, then run the command again."),
 
             _ => null
         };
@@ -469,6 +504,60 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         return $"The git identity is not configured: {missingKeysText} not set for the repository " +
                $"'{exception.RepositoryRootPath}'. Set each missing value with 'git config --global <key> <value>', " +
                "then run the command again.";
+    }
+
+    private static string CreateUnknownProfileMessage(UnknownProfileException exception)
+    {
+        var knownProfilesText = exception.KnownProfiles is { Count: > 0 } knownProfiles
+            ? string.Join(", ", knownProfiles.Select(x => $"'{x}'"))
+            : "the known profiles";
+
+        // A profile read from feature.json names the file; only a new feature has --profile and defaultProfile.
+        if (exception.FeatureFilePath is { } featureFilePath)
+        {
+            return $"The workflow profile '{exception.Profile}' in the field 'profile' of '{featureFilePath}' is " +
+                   $"unknown. Set the field to one of {knownProfilesText} or restore the file from git, then run " +
+                   "the command again.";
+        }
+
+        return $"The workflow profile '{exception.Profile}' is unknown. Pass one of {knownProfilesText} with " +
+               $"--profile, or set 'defaultProfile' in '{KitStorePaths.GetRepositoryPath(KitStorePaths.ConfigFileName)}' " +
+               "to one of them.";
+    }
+
+    private static string CreatePhaseNotInProfileMessage(PhaseNotInProfileException exception)
+    {
+        var phasesText = exception.ProfilePhases is { Count: > 0 } phases
+            ? $" Its phases are {string.Join(", ", phases.Select(x => $"'{x}'"))}."
+            : string.Empty;
+
+        return $"The phase '{exception.Phase}' is not a phase of the workflow profile '{exception.Profile}' of the " +
+               $"feature.{phasesText} Nothing was changed. {PhaseNextHint}";
+    }
+
+    private static string CreateTransitionRefusalSentence(PhaseTransitionNotAllowedException exception)
+    {
+        return exception.Reason switch
+        {
+            PhaseTransitionRefusalReason.OtherTransitionPending =>
+                $"the transition to '{exception.PendingTransition}' is pending; approve or reject it first.",
+
+            PhaseTransitionRefusalReason.ReopenWhilePending =>
+                "an earlier phase can only be reopened while the current phase is in progress, but the transition " +
+                $"to '{exception.PendingTransition}' is pending; approve or reject it first.",
+
+            PhaseTransitionRefusalReason.PhaseCannotBeReopened =>
+                $"the workflow profile does not allow to reopen the phase '{exception.Phase}'.",
+
+            _ => "the transition would skip phases; only the phase after the current phase can be started."
+        };
+    }
+
+    private static string CreatePendingTransitionText(string? pendingTransition)
+    {
+        return pendingTransition is null
+            ? "no transition is pending."
+            : $"the pending transition is to '{pendingTransition}'.";
     }
 
     private string CreateFormatTooNewMessage(FormatTooNewException exception)

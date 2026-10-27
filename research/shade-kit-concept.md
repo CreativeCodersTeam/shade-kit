@@ -1,6 +1,6 @@
 # SHADE kit concept
 
-Status: draft, 2026-10-13, updated 2026-10-17 (template interview), 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over), 2026-10-21 (feature commands implemented, package 03), and 2026-10-24 (documentation check against the code). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-13, updated 2026-10-17 (template interview), 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over), 2026-10-21 (feature commands implemented, package 03), 2026-10-24 (documentation check against the code), 2026-10-25 (rework of `feature new`), and 2026-10-27 (documentation check after package 04: phase commands and phase states implemented, phase state diagram completed). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
 
 Labels used in this document:
 
@@ -77,17 +77,17 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 
 | Command (proposed name) | Returns / does |
 |---|---|
-| `shade-kit feature current --json` | The current feature: id, profile, feature status (`active` or `done`), phase, phase status, artifact paths, and where it was resolved from (`resolvedFrom`: `branch` or `override`). Resolution in section 4.3. **Implemented** without phase and phase status (`FeatureCurrentCommand`). |
-| `shade-kit feature show <id> --json` | The full state of a feature: profile, phases, approval history. **Implemented** without phases and approval history (`FeatureShowCommand`). |
+| `shade-kit feature current --json` | The current feature: id, profile, feature status (`active` or `done`), phase, phase status, artifact paths, and where it was resolved from (`resolvedFrom`: `branch` or `override`). Resolution in section 4.3. **Implemented** (`FeatureCurrentCommand`). |
+| `shade-kit feature show <id> --json` | The full state of a feature: profile, phases, approval history. **Implemented** (`FeatureShowCommand`). |
 | `shade-kit feature set <id>` | Writes the local override (`current-feature.json`). **Implemented** (`FeatureSetCommand`). |
 | `shade-kit feature new --source <text\|url\|file> [--profile <p>] [--title <t>]` | Creates the feature folder and `request.md` with the request content: the text, the file content, the issue of a tracker URL read with `gh`, or the content of any other URL read with an HTTP GET (package 03). **Implemented** (`FeatureNewCommand`). |
 | `shade-kit feature drop <id> [--yes]` | Deletes the feature folder. Without `--yes` it only shows what it would delete, or asks in an interactive terminal. **Implemented** (`FeatureDropCommand`). |
-| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate. If a transition away from the phase is pending, it changes nothing and reports the pending transition; the skill asks the human whether to discard it. The same command reopens an earlier phase. |
-| `shade-kit phase approve <phase>` | Records the human approval in `feature.json` (who, when). |
-| `shade-kit phase reject <phase> [--note <text>]` | Cancels the pending transition after a "no"; the previous phase is in progress again. Recorded in the history with the note. |
-| `shade-kit phase complete` | Ends the last phase (`finish`); the feature status becomes `done`. |
-| `shade-kit phase next --json` | The possible next steps of the current feature: continue, the pending transition, forward, and reopen, each with its gate and skill. Used by `shade-kit-next-phase`. |
-| `shade-kit phase skills <phase> --json` | The skills to load before the phase runs, including extension skills later. |
+| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate. If a transition away from the phase is pending, it changes nothing and reports the pending transition; the skill asks the human whether to discard it. The same command reopens an earlier phase. **Implemented** (`PhaseStartCommand`; gates from `gates.json` come with package 05). |
+| `shade-kit phase approve <phase>` | Records the human approval in `feature.json` (who, when). **Implemented** (`PhaseApproveCommand`). |
+| `shade-kit phase reject <phase> [--note <text>]` | Cancels the pending transition after a "no"; the previous phase is in progress again. Recorded in the history with the note. **Implemented** (`PhaseRejectCommand`). |
+| `shade-kit phase complete` | Ends the last phase (`finish`); the feature status becomes `done`, and the local override is cleared if it selects this feature. **Implemented** (`PhaseCompleteCommand`). |
+| `shade-kit phase next --json` | The possible next steps of the current feature: continue, the pending transition, forward, and reopen; the pending transition and forward with their gate, every step with its skill. Used by `shade-kit-next-phase`. **Implemented** (`PhaseNextCommand`). |
+| `shade-kit phase skills <phase> --json` | The skills to load before the phase runs, including extension skills later. **Implemented** without extension skills (`PhaseSkillsCommand`). |
 | `shade-kit extensions get --phase <p> [--slot <s>] --json` | Extension bindings for a phase. **Later.** |
 | `shade-kit memory get [--topic <t>] --json` | Relevant memory entries. **Later.** |
 
@@ -143,7 +143,7 @@ The kit root is `.shadekit/` (decided; **Implemented** in `KitStorePaths`).
 └── features/
     ├── current-feature.json    # gitignored; local override only
     └── <feature-id>/
-        ├── feature.json        # schemaVersion, id, title, profile, source, created, status; phases and approvals (package 04)
+        ├── feature.json        # schemaVersion, id, title, profile, source, created, status; phases and approval history (package 04, implemented)
         ├── request.md          # the request content: text, file content, issue read with gh, or URL content; no template
         ├── discussions/        # discuss notes while this feature is current
         ├── researches.md       # research results from refine, map, and diagnose
@@ -249,7 +249,7 @@ Content and format of the checklists, decided in the template interview on 2026-
 
 ### 5.3 Phase state
 
-Proposed states per phase in `feature.json`: `pending` → `in-progress` → `awaiting-approval` → `approved`. A phase can go back to `in-progress` (another `refine` round, review findings). Approvals and phase changes are recorded in a history list with time and user.
+States per phase in `feature.json`: `pending` → `in-progress` → `awaiting-approval` → `approved`. A phase can go back to `in-progress` (another `refine` round, review findings). Approvals and phase changes are recorded in a history list with time and user. **Implemented** (package 04, `PhaseState`); the transitions are in [section 11.3](#113-phase-state-machine).
 
 ### 5.4 Workflow profiles
 
@@ -383,7 +383,7 @@ Every new JSON file in this concept (`gates.json`, `local.json`, `extension.yml`
 
 ### 11.1 Phase flow and gates (`feature` profile)
 
-Every transition needs a human approval (v1), shown as an edge labelled "approval". The hexagons are the checklist gates, checked when the next phase starts. Dashed shapes and lines are optional paths. `discuss` and `drop` are outside the phase order: `discuss` can feed `new` and run during any phase, `drop` is possible from any phase. Any phase can reopen an earlier phase with an approval (package 04); only the common path back from `verify` to `implement` is drawn.
+Every transition needs a human approval (v1), shown as an edge labelled "approval". The hexagons are the checklist gates, checked when the next phase starts. Dashed shapes and lines are optional paths. `discuss` and `drop` are outside the phase order: `discuss` can feed `new` and run during any phase, `drop` is possible from any phase. Any phase can reopen an earlier phase except `new` with an approval (package 04); only the common path back from `verify` to `implement` is drawn.
 
 ```mermaid
 flowchart TB
@@ -449,17 +449,21 @@ flowchart LR
 
 ### 11.3 Phase state machine
 
-State of one phase in `feature.json` (proposed, section 5.3).
+State of one phase in `feature.json` (section 5.3, **Implemented** in package 04). A reopen is requested from the current phase like a forward transition; once approved, the reopened phase is in progress again and every later phase, the requesting one included, is pending.
 
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> pending
-    pending --> in_progress: phase start, entry gate approved
-    in_progress --> awaiting_approval: phase work done, next phase requested
+    [*] --> in_progress: feature new (first phase)
+    [*] --> pending: feature new (every other phase)
+    pending --> in_progress: phase approve (entry gate approved), or phase start with approval off
+    in_progress --> awaiting_approval: phase start of the next or an earlier phase
     awaiting_approval --> in_progress: phase reject (gate failed or changes requested)
-    awaiting_approval --> approved: human approves the transition
+    awaiting_approval --> approved: phase approve of a forward transition
+    awaiting_approval --> pending: phase approve of a reopen
+    in_progress --> approved: phase start with approval off, or phase complete (last phase)
     approved --> in_progress: reopened (another refine round, review findings)
+    approved --> pending: a phase between the reopened and the current phase
     approved --> [*]
 
     in_progress: in-progress

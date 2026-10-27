@@ -1,3 +1,5 @@
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
+
 namespace CreativeCoders.ShadeKit.Cli;
 
 /// <summary>
@@ -139,10 +141,58 @@ public static class ShadeKitCliExitCodes
     public const int GitIdentityMissing = 36;
 
     /// <summary>
-    /// Represents the exit code returned when a workflow profile is not <c>feature</c>, <c>bugfix</c>, or
-    /// <c>quick</c>. The error code is <see cref="ShadeKitCliErrorCodes.UnknownProfile" />.
+    /// Represents the exit code returned when a command works on the current feature, but neither the current git
+    /// branch nor the local override selects an existing feature; nothing is changed. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.NoCurrentFeature" />.
+    /// </summary>
+    public const int NoCurrentFeature = 37;
+
+    /// <summary>
+    /// Represents the exit code returned when a workflow profile is not one of the profiles of the
+    /// <see cref="IWorkflowProfileCatalog" />. The error code is <see cref="ShadeKitCliErrorCodes.UnknownProfile" />.
     /// </summary>
     public const int UnknownProfile = 40;
+
+    /// <summary>
+    /// Represents the exit code returned when a phase command names a phase that is not a phase of the workflow
+    /// profile of the feature. The error code is <see cref="ShadeKitCliErrorCodes.PhaseNotInProfile" />.
+    /// </summary>
+    public const int PhaseNotInProfile = 41;
+
+    /// <summary>
+    /// Represents the exit code returned when <c>shade-kit phase start</c> or <c>shade-kit phase approve</c> requests a
+    /// transition that the profile does not allow from the current phase state, for example because it would skip
+    /// phases, another transition is pending, or the phase cannot be reopened; nothing is changed. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.TransitionNotAllowed" />.
+    /// </summary>
+    public const int TransitionNotAllowed = 42;
+
+    /// <summary>
+    /// Represents the exit code returned when <c>shade-kit phase approve</c> or <c>shade-kit phase reject</c> names a
+    /// phase to which no transition is pending; nothing is changed. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.NoPendingTransition" />.
+    /// </summary>
+    public const int NoPendingTransition = 43;
+
+    /// <summary>
+    /// Represents the exit code returned when a phase command would change the phases of a feature that is done;
+    /// nothing is changed. The error code is <see cref="ShadeKitCliErrorCodes.FeatureDone" />.
+    /// </summary>
+    public const int FeatureDone = 44;
+
+    /// <summary>
+    /// Represents the exit code returned when <c>shade-kit phase complete</c> runs while the current phase is not the
+    /// last phase of the profile or is not in progress; nothing is changed. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.CompleteNotAllowed" />.
+    /// </summary>
+    public const int CompleteNotAllowed = 45;
+
+    /// <summary>
+    /// Represents the exit code returned when the phase fields of a <c>feature.json</c> file do not fit the workflow
+    /// profile of the feature or contradict each other. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.PhaseStateInvalid" />.
+    /// </summary>
+    public const int PhaseStateInvalid = 46;
 
     /// <summary>
     /// Represents the exit code returned when the user cancels a running command, for example by pressing Ctrl+C. The
