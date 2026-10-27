@@ -39,7 +39,6 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 | `.github/` | GitHub Actions workflows and Dependabot configuration |
 | `research/` | Design notes and investigations. Not shipped. Shipped code and skills must not depend on it. |
 | `docs/feature-packages/` | v1 feature packages: functional description, acceptance criteria, implementation state; `README.md` has the order, milestones, and the consistency log |
-| `docs/reviews/` | Code review reports of the current branch; removed when the branch is merged |
 | `docs/specs/`, `docs/plans/` | Only created when the spec-driven workflow is used (see below) |
 
 ## .NET conventions

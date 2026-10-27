@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items), 2026-10-18 (`quick` phase; DOR-10, DOD-01, items that do not apply), 2026-10-24 (documentation check: the engine replaces `{{feature-id}}` in a checklist copy), 2026-10-25 (reference to the removed `request.md` template dropped), and 2026-10-26 (package 04 implementation: gate part of the `phase start` result as built) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items), 2026-10-18 (`quick` phase; DOR-10, DOD-01, items that do not apply), 2026-10-24 (documentation check: the engine replaces `{{feature-id}}` in a checklist copy), 2026-10-25 (reference to the removed `request.md` template dropped), 2026-10-26 (package 04 implementation: gate part of the `phase start` result as built), and 2026-10-27 (documentation check: "approval off" is built in the engine) |
 | Source | Concept §2 (Gates), §4.1 (`checks/`), §5.2, §6, §11.1, §11.4 |
 | Depends on | 02, 04 |
 | Enables | 12 (DoR), 15 (DoD), every phase transition |
@@ -71,7 +71,7 @@ The concept's example is keyed by phase only. Because the `quick` profile needs 
 ```
 
 - A transition with no entry uses `{ "approval": true }`. Approval is the safe default. **Decided** (confirmation list, 2026-10-18).
-- With `approval: false`, `phase start` performs the transition at once and records it in `history` with the note "approval off". **Proposed.**
+- With `approval: false`, `phase start` performs the transition at once and records it in `history` as `approve` with the note "approval off". **Implemented** in the engine (package 04, `PhaseEngine`); reachable once this package's gate provider reads `gates.json`.
 - With `approval: false` and a `checklist`, the checklist copy is still created and checked by the agent, but a failed item is only reported as a warning; it does not block, because nobody is asked to decide. An agent never approves on its own instead. **Decided** (confirmation list, 2026-10-18).
 - The defaults follow concept §5.2: every transition needs an approval, except the `quick` profile's transition into the `quick` phase (concept §5.4: "one approval at the end").
 
