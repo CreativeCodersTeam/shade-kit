@@ -17,9 +17,9 @@ It has two deliverables:
 
 ### v1 scope
 
-- **Gated workflow profiles** *(planned)*: `feature` (new → refine → map → plan → implement → verify → finish), `bugfix` (new → diagnose → plan → implement → verify → finish), and `quick` (new → quick → finish). The agent checks each gate when the next phase starts; the human approves the transition. Each gate's approval and checklist can be switched off in `gates.json`.
+- **Gated workflow profiles:** `feature` (new → refine → map → plan → implement → verify → finish), `bugfix` (new → diagnose → plan → implement → verify → finish), and `quick` (new → quick → finish). The agent checks each gate when the next phase starts; the human approves the transition. Each gate's approval and checklist can be switched off in `gates.json` *(planned; until then every transition needs an approval and has no checklist)*.
 - **Quality gates** *(planned)*: the Definition of Ready (gate into `plan`) and Definition of Done (gate into `finish`) are checklists. In v1 the agent runs build, test, lint, and coverage with the commands approved in `plan.md` and records the results; the CLI enforcing and running them comes later.
-- **State & traceability:** workflow state and approval history are saved in `.shadekit/` (features: built; phases, approvals, traceability, report *(planned)*), requirements are mapped to the tests that prove them, and `finish` can write a report (`report` in `config.json`).
+- **State & traceability:** workflow state and approval history are saved in `.shadekit/` (features, phases, and approval history: built; traceability, report *(planned)*), requirements are mapped to the tests that prove them, and `finish` can write a report (`report` in `config.json`).
 - **Install/sync:** the engine installs and updates the kit's skills at user level for each supported agent (`integrations install/update` *(planned)*) and initialises and upgrades a repository's `.shadekit/` (`init`, `upgrade` *(planned)*). Nothing is installed into a repository.
 
 ## Target agents
@@ -33,7 +33,7 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 | Path | Purpose |
 |---|---|
 | `skills/` | Shipped plugin content |
-| `src/` | Production .NET projects: `CreativeCoders.ShadeKit.Cli` (the `shade-kit` CLI) and `CreativeCoders.ShadeKit.Core` (engine logic). The templates that `init` writes live in `src/CreativeCoders.ShadeKit.Core/Templates/Resources/` (`<name>.template.md`, checklists in `checks/`) and are embedded into the Core assembly; their repository paths are listed in `ShippedTemplates`. |
+| `src/` | Production .NET projects: `CreativeCoders.ShadeKit.Cli` (the `shade-kit` CLI) and `CreativeCoders.ShadeKit.Core` (engine logic). The templates that `init` writes live in `src/CreativeCoders.ShadeKit.Core/Templates/Resources/` (`<name>.template.md`, checklists in `checks/`) and are embedded into the Core assembly; their repository paths are listed in `ShippedTemplates`. The phase workflow lives in `src/CreativeCoders.ShadeKit.Core/Workflow/`: `Profiles/` (built-in profiles in `BuiltInWorkflowProfiles` behind `IWorkflowProfileCatalog`), `Engine/` (the pure state machine `IPhaseEngine`), and the orchestration `PhaseWorkflow` with the gate seam `ITransitionGateProvider`. |
 | `tests/` | One test project per production project (`<Project>.Tests`); `tests/Shared/` holds test helpers that both projects compile in (`<Compile Include="..\Shared\**\*.cs">`) |
 | `build/` | Cake Frosting build project (`CreativeCoders.CakeBuild`), run through `build.sh` / `build.ps1` / `build.cmd`. Not part of `ShadeKit.slnx`; it has its own `Directory.Build.props` and `Directory.Packages.props`. |
 | `.github/` | GitHub Actions workflows and Dependabot configuration |
@@ -58,6 +58,7 @@ If a design choice can stay agent-agnostic **without losing functionality or pre
 - Text file content is held as `TextFileContent` (lines, UTF-8 BOM flag, final-line-ending flag), never as `byte[]`, and is written only through `ITextFileWriter` (`IKitStore.WriteFileAsync` uses it for `.shadekit/`). The writer is the only place that encodes to bytes; it resolves the line ending with `ILineEndingResolver`: git (attributes as git's `convert_attrs`: resolved `text`, legacy `crlf` only while `text` is unspecified; `-text` → no decision, `eol` attribute, `text=input`/`crlf=input` → LF, `core.autocrlf`, `core.eol` for text files; config values and a failing `git` cached per repository root for the resolver's lifetime, i.e. one command run; a `git` that is installed but fails gives a `GitAttributesUnavailableWarning`, a missing one (`GitNotFoundException`) none; `ILineEndingResolver.PrepareAsync` / `IKitStore.PrepareLineEndingsAsync` read the attributes of several files with one `git check-attr`, as `init` and `feature new` do) → `.editorconfig` `end_of_line` (parsed files kept per resolver while their write time, size, and Unix mode are unchanged) → operating system. Paths reach the writer and the resolvers as `RepositoryFile`, checked once where it is created (`RepositoryFile.Resolve`, or `KitStore` for `.shadekit/`). Lines are split at CRLF, LF, and a lone CR. Files, the versioned JSON files included, are read as strict UTF-8; an unreadable `.editorconfig` falls back with an `EditorConfigUnreadableWarning`, one the parser cannot evaluate (e.g. an overflowing numeric-range glob, or a glob that expands into more than 10 000 patterns, checked before the parser expands it) with an `EditorConfigInvalidWarning`.
 - External tools (`git`, and `gh` for tracker issues in `feature new`) are started only through the helpers in `src/CreativeCoders.ShadeKit.Core/Processes/` (`PathExecutableSearch`: absolute `PATH` entries only, behind the caching `PathExecutableLocator` base of the tool locators; `ExternalProcessRunner`: absolute path, no shell, process tree killed on cancellation; `ExternalToolRunner`: locate, refuse a missing or relative path, start, map a start failure to the tool's `ExternalToolUnavailableException`), behind one runner interface per tool (`IGitCommandRunner`, `IGhCommandRunner`, both returning `ExternalProcessResult`). HTTP goes through `IHttpClientFactory` with the named client `HttpUrlContentReader.HttpClientName` (`Microsoft.Extensions.Http`), not a typed client, because the services that use it are singletons. Tests never start `git` or `gh` and never send a request: they fake the runner or use `tests/Shared/StubHttpMessageHandler.cs`.
 - Core services are registered with `services.AddShadeKitCore()`.
+- Phase engine: `Workflow/Engine/` contains no profile, phase, or skill name (checked by `PhaseEngineArchitectureTests`); a new profile or a changed phase order is a change to `BuiltInWorkflowProfiles` only. The engine has no I/O; `PhaseWorkflow` does the reads and writes, and `feature.json` stays format version 1 with optional phase fields.
 
 ```sh
 dotnet build                     # from repo root (.slnx)
@@ -70,6 +71,12 @@ dotnet run --project src/CreativeCoders.ShadeKit.Cli -- feature current --json
 dotnet run --project src/CreativeCoders.ShadeKit.Cli -- feature set <id>
 dotnet run --project src/CreativeCoders.ShadeKit.Cli -- feature show <id>
 dotnet run --project src/CreativeCoders.ShadeKit.Cli -- feature drop <id> [--yes]
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- phase start <phase> --json     # phase commands work on the current feature
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- phase approve <phase>
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- phase reject <phase> [--note <text>]
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- phase complete
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- phase skills <phase> --json
+dotnet run --project src/CreativeCoders.ShadeKit.Cli -- phase next --json
 dotnet pack src/CreativeCoders.ShadeKit.Cli          # dotnet global tool package (command: shade-kit)
 dotnet publish src/CreativeCoders.ShadeKit.Cli -c Release -r <rid>   # self-contained single-file binary
 ```

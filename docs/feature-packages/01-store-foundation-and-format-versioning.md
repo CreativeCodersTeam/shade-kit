@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (implementation state; package 02 implementation: missing `features/` is valid, exit codes 11, 13, 23; code review rework: exit codes 14, 24) and 2026-10-21 (package 03 implementation: exit codes 15, 16, 30–34, 36, 40, warning codes, store file operations; code review rework: exit codes 2 and 130, warning codes `feature-folder-invalid`, `feature-id-mismatch`, `current-feature-invalid`, `MoveDirectory`; second code review: exit code 35). Implemented except the integration versions in `version --json` (package 07). |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (implementation state; package 02 implementation: missing `features/` is valid, exit codes 11, 13, 23; code review rework: exit codes 14, 24), 2026-10-21 (package 03 implementation: exit codes 15, 16, 30–34, 36, 40, warning codes, store file operations; code review rework: exit codes 2 and 130, warning codes `feature-folder-invalid`, `feature-id-mismatch`, `current-feature-invalid`, `MoveDirectory`; second code review: exit code 35), and 2026-10-26 (package 04 implementation: exit codes 37, 41–46; 40 owned by 04). Implemented except the integration versions in `version --json` (package 07). |
 | Source | Concept §3.1, §3.2, §4.1, [§9](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | — |
 | Enables | Every later package |
@@ -88,7 +88,7 @@ Every file the kit writes into a repository is safe across branch merges and kit
 
   On failure, `ok` is `false`, `data` is `null`, and `error` is `{ "code": "…", "message": "…" }`. **Implemented** (`CliJsonEnvelope`, `ICliJsonWriter`, `CliErrorMapper`).
 - Every failure has a stable exit code from `ShadeKitCliExitCodes` and, in JSON mode, a stable error code string, so skills can branch on it without parsing messages. **Decided** (implemented in code). Error and warning codes are kebab-case. **Decided** (implemented in code). Codes that only appear as warnings are in `ShadeKitCliWarningCodes`: `current-feature-mismatch`, `current-feature-missing`, `current-feature-invalid`, `feature-file-missing`, `feature-folder-invalid`, and `feature-id-mismatch`, all from package 03; `upgrade-needed` is both an error code and a warning code. **Implemented** (`ShadeKitCliWarningCodes`, since 2026-10-21).
-- Exit codes are grouped in ranges per area: 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, 255 host errors. **Decided** (implemented in code). Two codes are outside the area ranges, because they apply to every command: 2 (`invalid-arguments`) is the usage code for arguments the option parser rejects, for example a missing required argument; the message names the problem and points to `shade-kit <command> --help`, and there is no stack trace. **Decided** on 2026-10-21 (package 03 code review rework). 130 (`canceled`, 128 + SIGINT) ends a run canceled with Ctrl+C. **Decided** on 2026-10-21 (package 03 code review rework). Both are **Implemented** (`CliErrorMapper.MapArgumentError`, `CliErrorMapper.MapCancellation`, `Program`); in JSON mode each writes one failure envelope. An option class the parser cannot create is a defect of the CLI and stays 255 (`host-error`). Codes owned by packages 01, 02, and 03, all **Implemented** (`ShadeKitCliExitCodes`, `ShadeKitCliErrorCodes`, `CliErrorMapper`). Exit code 11 is free since 2026-10-18 (see [Kit root](#kit-root)). Exit code 35 (`feature-io-failed`) was added on 2026-10-21 after the second code review of package 03. Exit code 40 is in the range of package 04, because profiles belong to it; package 03 owns the profile check until package 04 exists:
+- Exit codes are grouped in ranges per area: 10–19 store and kit root, 20–29 format and version, 30–39 features, 40–49 phases and gates, 255 host errors. **Decided** (implemented in code). Two codes are outside the area ranges, because they apply to every command: 2 (`invalid-arguments`) is the usage code for arguments the option parser rejects, for example a missing required argument; the message names the problem and points to `shade-kit <command> --help`, and there is no stack trace. **Decided** on 2026-10-21 (package 03 code review rework). 130 (`canceled`, 128 + SIGINT) ends a run canceled with Ctrl+C. **Decided** on 2026-10-21 (package 03 code review rework). Both are **Implemented** (`CliErrorMapper.MapArgumentError`, `CliErrorMapper.MapCancellation`, `Program`); in JSON mode each writes one failure envelope. An option class the parser cannot create is a defect of the CLI and stays 255 (`host-error`). Codes owned by packages 01, 02, 03, and 04, all **Implemented** (`ShadeKitCliExitCodes`, `ShadeKitCliErrorCodes`, `CliErrorMapper`). Exit code 11 is free since 2026-10-18 (see [Kit root](#kit-root)). Exit code 35 (`feature-io-failed`) was added on 2026-10-21 after the second code review of package 03. Exit code 37 (`no-current-feature`) was added on 2026-10-26 with package 04, in the features range because it is about features. Exit code 40 is owned by package 04 since 2026-10-26, because profiles belong to it; package 04 added 41–46 (package 04, [Errors](04-phase-engine-and-workflow-profiles.md#errors)):
 
   | Exit code | Error code | Owner |
   |---|---|---|
@@ -111,11 +111,18 @@ Every file the kit writes into a repository is safe across branch merges and kit
   | 34 | `invalid-title` | 03 |
   | 35 | `feature-io-failed` | 03 |
   | 36 | `git-identity-missing` | 03 |
-  | 40 | `unknown-profile` | 03 (until 04) |
+  | 37 | `no-current-feature` | 04 |
+  | 40 | `unknown-profile` | 04 |
+  | 41 | `phase-not-in-profile` | 04 |
+  | 42 | `transition-not-allowed` | 04 |
+  | 43 | `no-pending-transition` | 04 |
+  | 44 | `feature-done` | 04 |
+  | 45 | `complete-not-allowed` | 04 |
+  | 46 | `phase-state-invalid` | 04 |
   | 130 | `canceled` | 03 (every command) |
   | 255 | `host-error` | 01 |
 
-- "Not found" or "not resolved" answers that are part of normal flow (for example no current feature) are results, not errors. **Proposed.**
+- "Not found" or "not resolved" answers that are part of normal flow (for example no current feature) are results, not errors. **Proposed.** `feature current` returns "not resolved" as a result; the `phase` commands, which need a current feature, stop with exit code 37 (`no-current-feature`). **Decided** on 2026-10-26 (package 04 implementation clarification).
 - Command names in this and all later packages are the proposals from the concept §3 (concept open question 6).
 
 ## Acceptance criteria

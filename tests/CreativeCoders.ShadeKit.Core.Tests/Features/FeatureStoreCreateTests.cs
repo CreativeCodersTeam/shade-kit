@@ -18,6 +18,9 @@ using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Web.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 
@@ -75,7 +78,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().Be("Login SSO");
 
         feature.Profile
-            .Should().Be(WorkflowProfiles.Feature);
+            .Should().Be(WorkflowProfileNames.Feature);
 
         feature.Source.Kind
             .Should().Be(FeatureSourceKind.Url);
@@ -223,6 +226,101 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().Be(FeatureStatus.Active);
     }
 
+    public static TheoryData<string, string[]> BuiltInProfilePhases() => new TheoryData<string, string[]>
+    {
+        {
+            WorkflowProfileNames.Feature,
+            [
+                WorkflowPhaseNames.New, WorkflowPhaseNames.Refine, WorkflowPhaseNames.Map, WorkflowPhaseNames.Plan,
+                WorkflowPhaseNames.Implement, WorkflowPhaseNames.Verify, WorkflowPhaseNames.Finish
+            ]
+        },
+        {
+            WorkflowProfileNames.Bugfix,
+            [
+                WorkflowPhaseNames.New, WorkflowPhaseNames.Diagnose, WorkflowPhaseNames.Plan,
+                WorkflowPhaseNames.Implement, WorkflowPhaseNames.Verify, WorkflowPhaseNames.Finish
+            ]
+        },
+        { WorkflowProfileNames.Quick, [WorkflowPhaseNames.New, WorkflowPhaseNames.Quick, WorkflowPhaseNames.Finish] }
+    };
+
+    [Theory]
+    [Trait("Requirement", "FP04-AC1")]
+    [MemberData(nameof(BuiltInProfilePhases))]
+    public async Task CreateAsync_EveryBuiltInProfile_WritesFirstPhaseInProgressAndOtherPhasesPending(string profile,
+        string[] phases)
+    {
+        // Arrange
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(_context.CreateStore(),
+            _context.CreateRequest(IssueUrl, "Login SSO", profile), TestContext.Current.CancellationToken);
+
+        // Assert
+        var feature = await _context.ReadFeatureFileAsync(IssueFeatureId);
+
+        feature.CurrentPhase
+            .Should().Be(WorkflowPhaseNames.New);
+
+        feature.Phases!.Keys
+            .Should().Equal(phases);
+
+        feature.Phases.Values
+            .Should().Equal([PhaseState.InProgress, .. Enumerable.Repeat(PhaseState.Pending, phases.Length - 1)]);
+
+        feature.PendingTransition
+            .Should().BeNull();
+
+        feature.History
+            .Should().NotBeNull().And.BeEmpty();
+
+        feature.Status
+            .Should().Be(FeatureStatus.Active);
+
+        using var json = JsonDocument.Parse(_context.Repository.ReadFileText(KitStorePaths.RootPath,
+            KitStorePaths.FeaturesDirName, IssueFeatureId, KitStorePaths.FeatureFileName));
+
+        json.RootElement.TryGetProperty("pendingTransition", out _)
+            .Should().BeFalse();
+
+        json.RootElement.GetProperty("history").GetArrayLength()
+            .Should().Be(0);
+
+        result.Feature.CurrentPhase
+            .Should().Be(WorkflowPhaseNames.New);
+
+        result.Feature.Phases
+            .Should().Equal(feature.Phases);
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP04-AC1")]
+    public async Task CreateAsync_NewFeature_ReadingMethodsReturnInitialPhaseState()
+    {
+        // Arrange
+        var featureStore = _context.CreateFeatureStore();
+        var store = _context.CreateStore();
+
+        // Act
+        await featureStore.CreateAsync(store, _context.CreateRequest(IssueUrl, "Login SSO", WorkflowProfileNames.Quick),
+            TestContext.Current.CancellationToken);
+
+        var current = await featureStore.GetCurrentAsync(store, TestContext.Current.CancellationToken);
+        var list = await featureStore.ListAsync(store, TestContext.Current.CancellationToken);
+
+        // Assert
+        current.PhaseState?.CurrentPhase
+            .Should().Be(WorkflowPhaseNames.New);
+
+        current.PhaseState?.CurrentPhaseState
+            .Should().Be(PhaseState.InProgress);
+
+        list.Features.Select(x => x.CurrentPhase)
+            .Should().Equal(WorkflowPhaseNames.New);
+    }
+
     [Fact]
     public async Task CreateAsync_NoConfig_UsesDefaultProfileAndGitHubTracker()
     {
@@ -235,7 +333,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
         // Assert
         result.Feature.Profile
-            .Should().Be(WorkflowProfiles.Feature);
+            .Should().Be(WorkflowProfileNames.Feature);
 
         result.Feature.Id
             .Should().Be(IssueFeatureId);
@@ -254,10 +352,28 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
         // Assert
         result.Feature.Profile
-            .Should().Be(WorkflowProfiles.Bugfix);
+            .Should().Be(WorkflowProfileNames.Bugfix);
 
         (await _context.ReadFeatureFileAsync(result.Feature.Id)).Profile
-            .Should().Be(WorkflowProfiles.Bugfix);
+            .Should().Be(WorkflowProfileNames.Bugfix);
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP04-AC1")]
+    public async Task CreateAsync_DefaultProfileOfConfig_WritesPhasesOfThatProfile()
+    {
+        // Arrange
+        _context.WriteConfig(""", "defaultProfile": "bugfix" """);
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        await featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest(IssueUrl, "Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await _context.ReadFeatureFileAsync(IssueFeatureId)).Phases!.Keys
+            .Should().Equal(WorkflowPhaseNames.New, WorkflowPhaseNames.Diagnose, WorkflowPhaseNames.Plan,
+                WorkflowPhaseNames.Implement, WorkflowPhaseNames.Verify, WorkflowPhaseNames.Finish);
     }
 
     [Fact]
@@ -269,11 +385,97 @@ public sealed class FeatureStoreCreateTests : IDisposable
 
         // Act
         var result = await featureStore.CreateAsync(_context.CreateStore(),
-            _context.CreateRequest("Login SSO", profile: WorkflowProfiles.Quick), TestContext.Current.CancellationToken);
+            _context.CreateRequest("Login SSO", profile: WorkflowProfileNames.Quick), TestContext.Current.CancellationToken);
 
         // Assert
         result.Feature.Profile
-            .Should().Be(WorkflowProfiles.Quick);
+            .Should().Be(WorkflowProfileNames.Quick);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ExplicitProfileAndUnknownDefaultProfile_UsesExplicitProfile()
+    {
+        // Arrange
+        _context.WriteConfig(""", "defaultProfile": "hotfix" """);
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var result = await featureStore.CreateAsync(_context.CreateStore(),
+            _context.CreateRequest("Login SSO", profile: WorkflowProfileNames.Quick), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Feature.Profile
+            .Should().Be(WorkflowProfileNames.Quick);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("Feature")]
+    [InlineData(" quick")]
+    public async Task CreateAsync_EmptyOrNotExactExplicitProfile_ThrowsUnknownProfileExceptionWithoutFallback(
+        string profile)
+    {
+        // Arrange
+        var snapshot = _context.Repository.TakeSnapshot();
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(),
+            _context.CreateRequest("Login SSO", profile: profile), TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<UnknownProfileException>())
+            .Which.Profile
+            .Should().Be(profile);
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task CreateAsync_EmptyDefaultProfileInConfig_ThrowsUnknownProfileException()
+    {
+        // Arrange
+        _context.WriteConfig(""", "defaultProfile": "" """);
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(), _context.CreateRequest("Login SSO"),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<UnknownProfileException>())
+            .Which.Profile
+            .Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(IssueUrl)]
+    [InlineData(WebUrl)]
+    public async Task CreateAsync_UnknownProfileAndGitIdentityMissing_ThrowsUnknownProfileBeforeAnyExternalCall(
+        string source)
+    {
+        // Arrange
+        A.CallTo(() => _context.GitRepositoryInfo.GetIdentityAsync(A<string>._, A<CancellationToken>._))
+            .Throws(new GitIdentityNotConfiguredException(_context.RepositoryRootPath, ["user.name"]));
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(_context.CreateStore(),
+            _context.CreateRequest(source, "Login SSO", profile: "hotfix"), TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowAsync<UnknownProfileException>();
+
+        A.CallTo(() => _context.GitRepositoryInfo.GetIdentityAsync(A<string>._, A<CancellationToken>._))
+            .MustNotHaveHappened();
+
+        A.CallTo(_context.TrackerIssueReader)
+            .MustNotHaveHappened();
+
+        A.CallTo(_context.UrlContentReader)
+            .MustNotHaveHappened();
     }
 
     [Fact]
@@ -305,9 +507,13 @@ public sealed class FeatureStoreCreateTests : IDisposable
             _context.CreateRequest("Login SSO", profile: "hotfix"), TestContext.Current.CancellationToken);
 
         // Assert
-        (await act.Should().ThrowAsync<UnknownProfileException>())
-            .Which.Profile
+        var exception = (await act.Should().ThrowAsync<UnknownProfileException>()).Which;
+
+        exception.Profile
             .Should().Be("hotfix");
+
+        exception.KnownProfiles
+            .Should().Equal(WorkflowProfileNames.Feature, WorkflowProfileNames.Bugfix, WorkflowProfileNames.Quick);
 
         _context.Repository.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
@@ -450,9 +656,13 @@ public sealed class FeatureStoreCreateTests : IDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        (await act.Should().ThrowAsync<UnknownProfileException>())
-            .Which.Profile
+        var exception = (await act.Should().ThrowAsync<UnknownProfileException>()).Which;
+
+        exception.Profile
             .Should().Be("hotfix");
+
+        exception.KnownProfiles
+            .Should().Equal(WorkflowProfileNames.Feature, WorkflowProfileNames.Bugfix, WorkflowProfileNames.Quick);
 
         _context.Repository.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
@@ -1308,7 +1518,7 @@ public sealed class FeatureStoreCreateTests : IDisposable
             .Should().Equal(new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/config.json", 1, 2));
 
         result.Feature.Profile
-            .Should().Be(WorkflowProfiles.Bugfix);
+            .Should().Be(WorkflowProfileNames.Bugfix);
     }
 
     [Fact]

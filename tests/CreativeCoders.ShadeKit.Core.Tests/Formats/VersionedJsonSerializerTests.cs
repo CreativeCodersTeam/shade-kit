@@ -660,6 +660,76 @@ public class VersionedJsonSerializerTests
         json.Should().Contain("\"title\": \"Grüße <b> & 'quotes'\"");
     }
 
+    [Theory]
+    [InlineData("default, longer-value")]
+    [InlineData("default,longer-value")]
+    [InlineData("longer-value, longer-value")]
+    [InlineData("Default, LongerValue")]
+    [InlineData("default,")]
+    [InlineData(",default")]
+    [InlineData(",")]
+    [InlineData("default\\u002C longer-value")]
+    public void Deserialize_CommaSeparatedEnumValues_ThrowsInvalidKitFileException(string mode)
+    {
+        // Arrange
+        var serializer = CreateSerializer(1);
+
+        // Act
+        var act = () => serializer.Deserialize<SampleDocument>(
+            $$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "mode": "{{mode}}" }""",
+            SampleFormat.Id, SampleFormat.FilePath, false);
+
+        // Assert
+        act.Should().Throw<InvalidKitFileException>()
+            .Which.FilePath.Should().Be(SampleFormat.FilePath);
+    }
+
+    [Theory]
+    [InlineData("longer-value", SampleMode.LongerValue)]
+    [InlineData("LongerValue", SampleMode.LongerValue)]
+    [InlineData("longervalue", SampleMode.LongerValue)]
+    [InlineData("LONGERVALUE", SampleMode.LongerValue)]
+    [InlineData("default", SampleMode.Default)]
+    [InlineData("Default", SampleMode.Default)]
+    [InlineData("DEFAULT", SampleMode.Default)]
+    public void Deserialize_SingleEnumNameOrMemberNameInAnyLetterCase_ReadsValue(string mode, SampleMode expected)
+    {
+        // Arrange
+        var serializer = CreateSerializer(1);
+
+        // Act
+        var document = serializer.Deserialize<SampleDocument>(
+            $$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "mode": "{{mode}}" }""",
+            SampleFormat.Id, SampleFormat.FilePath, false).Document;
+
+        // Assert
+        document.Mode
+            .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("1")]
+    [InlineData("\"0\"")]
+    [InlineData("\"1\"")]
+    [InlineData("\"Longer-Value\"")]
+    [InlineData("\"LONGER-VALUE\"")]
+    [InlineData("null")]
+    public void Deserialize_IntegerOrUnknownEnumValue_ThrowsInvalidKitFileException(string mode)
+    {
+        // Arrange
+        var serializer = CreateSerializer(1);
+
+        // Act
+        var act = () => serializer.Deserialize<SampleDocument>(
+            $$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "mode": {{mode}} }""",
+            SampleFormat.Id, SampleFormat.FilePath, false);
+
+        // Assert
+        act.Should().Throw<InvalidKitFileException>()
+            .Which.FilePath.Should().Be(SampleFormat.FilePath);
+    }
+
     [Fact]
     public void Serialize_EnumValue_WritesKebabCaseText()
     {

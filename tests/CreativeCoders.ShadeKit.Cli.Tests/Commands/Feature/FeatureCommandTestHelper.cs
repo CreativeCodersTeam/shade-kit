@@ -2,6 +2,8 @@ using System.Text.Json;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using FakeItEasy;
 using Spectre.Console.Testing;
 
@@ -44,11 +46,16 @@ internal static class FeatureCommandTestHelper
         return kitStoreFactory;
     }
 
+    /// <summary>
+    /// Creates a <c>feature.json</c> document without phase fields, like one of an older engine; a document with the
+    /// status <see cref="FeatureStatus.Done" /> gets the phase fields of a completed profile instead, because a done
+    /// feature without phase fields is invalid.
+    /// </summary>
     public static FeatureDocument CreateDocument(string id = FeatureId, string title = "Login SSO",
         FeatureStatus status = FeatureStatus.Active, FeatureSource? source = null,
-        string profile = WorkflowProfiles.Feature)
+        string profile = WorkflowProfileNames.Feature)
     {
-        return new FeatureDocument
+        var document = new FeatureDocument
         {
             SchemaVersion = 1,
             MinEngineVersion = "0.1.0",
@@ -64,6 +71,29 @@ internal static class FeatureCommandTestHelper
             CreatedBy = new FeatureCreator { Name = "Jane Doe", Email = "jane@example.com" },
             Status = status
         };
+
+        if (status == FeatureStatus.Done && new BuiltInWorkflowProfileCatalog().TryGetProfile(profile, out var known))
+        {
+            document.CurrentPhase = known.Phases[^1].Name;
+            document.Phases = new OrderedDictionary<string, PhaseState>(
+                known.Phases.Select(x => KeyValuePair.Create(x.Name, PhaseState.Approved)));
+            document.History = [];
+        }
+
+        return document;
+    }
+
+    /// <summary>
+    /// Reads the normalized phase state of the specified document as <see cref="IFeatureStore" /> does, with the real
+    /// <see cref="PhaseEngine" /> and the built-in profiles.
+    /// </summary>
+    public static FeaturePhaseState ReadPhaseState(FeatureDocument document, string featureId = FeatureId)
+    {
+        var profile = new BuiltInWorkflowProfileCatalog().GetProfile(document.Profile);
+
+        return new PhaseEngine().ReadState(profile,
+            new StoredPhaseState(featureId, $".shadekit/features/{featureId}/feature.json", document.Status,
+                document.CurrentPhase, document.Phases, document.PendingTransition));
     }
 
     public static JsonDocument ParseOutput(StringWriter jsonOutput)

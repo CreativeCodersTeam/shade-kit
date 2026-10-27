@@ -53,6 +53,38 @@ internal static class CurrentFeatureOverride
     }
 
     /// <summary>
+    /// Determines whether the local override of the specified store can be read and selects the specified feature.
+    /// </summary>
+    /// <remarks>
+    /// An override that cannot be read because of its format, or because of <c>config.json</c>, selects no feature
+    /// that can be proven, so it counts as not selecting the feature and is left alone.
+    /// </remarks>
+    /// <param name="store">The SHADE kit store whose override is read.</param>
+    /// <param name="featureId">The id of the feature.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task that represents the asynchronous read operation. The task result is <see langword="true" /> if the
+    /// override exists, can be read, and selects <paramref name="featureId" />; otherwise, <see langword="false" />.
+    /// </returns>
+    public static async Task<bool> SelectsAsync(IKitStore store, string featureId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await store
+                .ReadJsonAsync<CurrentFeatureDocument>(KitStorePaths.CurrentFeatureFilePath, FormatIds.CurrentFeature,
+                    FormatAccess.Read, cancellationToken)
+                .ConfigureAwait(false);
+
+            return result is not null && string.Equals(result.Document.FeatureId, featureId, StringComparison.Ordinal);
+        }
+        catch (KitFileFormatException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Writes the local override of the specified store so that it selects the specified feature.
     /// </summary>
     /// <remarks>

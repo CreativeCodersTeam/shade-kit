@@ -698,9 +698,9 @@ public sealed class ProgramTests : IDisposable
 
         lines[^3..]
             .Should().Equal(
-                "10-billing  active  feature  Title of 10-billing",
-                "9-billing  active  feature  Title of 9-billing",
-                "login  active  feature  Title of login");
+                "10-billing  active  feature  new  Title of 10-billing",
+                "9-billing  active  feature  new  Title of 9-billing",
+                "login  active  feature  new  Title of login");
     }
 
     [Fact]

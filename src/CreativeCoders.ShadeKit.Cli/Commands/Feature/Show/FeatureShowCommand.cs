@@ -33,6 +33,10 @@ public class FeatureShowCommand(
     /// <summary>
     /// Reads the feature and writes its state, as plain text or as a JSON envelope.
     /// </summary>
+    /// <remarks>
+    /// The phase state is normalized against the workflow profile, so a feature without phase fields shows the
+    /// initial state of its profile; <c>feature.json</c> is not changed. The history is written as it is stored.
+    /// </remarks>
     /// <param name="options">The options of the command.</param>
     /// <returns>
     /// A task that represents the asynchronous operation. The task result is <see cref="CommandResult.Success" />.
@@ -40,7 +44,7 @@ public class FeatureShowCommand(
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
     /// No SHADE kit store is found, the id is not valid, the feature does not exist, or its <c>feature.json</c> is
-    /// missing, invalid, or too new.
+    /// missing, invalid, or too new, names an unknown workflow profile, or holds an invalid phase state.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(FeatureShowCommandOptions options)
@@ -67,10 +71,48 @@ public class FeatureShowCommand(
         _context.Console.WriteLine($"Title: {data.Title}");
         _context.Console.WriteLine($"Profile: {data.Profile}");
         _context.Console.WriteLine($"Status: {data.Status.ToJsonName()}");
+        _context.Console.WriteLine($"Current phase: {data.CurrentPhase}");
+
+        if (data.PendingTransition is not null)
+        {
+            _context.Console.WriteLine($"Pending transition: {data.PendingTransition}");
+        }
+
         _context.Console.WriteLine($"Source: {source}");
         _context.Console.WriteLine($"Created: {created}");
         _context.Console.WriteLine($"Feature directory: {data.Paths.FeatureDir}");
         _context.Console.WriteLine($"Feature file: {data.Paths.FeatureFile}");
         _context.Console.WriteLine($"Request: {data.Paths.Request}");
+
+        WritePhases(data);
+        WriteHistory(feature);
+    }
+
+    private void WritePhases(FeatureShowCommandData data)
+    {
+        _context.Console.WriteLine("Phases:");
+
+        foreach (var (phase, state) in data.Phases)
+        {
+            _context.Console.WriteLine($"  {phase}: {state.ToJsonName()}");
+        }
+    }
+
+    // The entries are formatted from the stored document, so the plain text and a report use the same lines.
+    private void WriteHistory(FeatureDocument feature)
+    {
+        if (feature.History is not { Count: > 0 } history)
+        {
+            _context.Console.WriteLine("History: none");
+
+            return;
+        }
+
+        _context.Console.WriteLine("History:");
+
+        foreach (var entry in history)
+        {
+            _context.Console.WriteLine($"  {FeatureTextFormat.FormatHistoryEntry(entry)}");
+        }
     }
 }

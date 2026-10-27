@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items), 2026-10-18 (`quick` phase; DOR-10, DOD-01, items that do not apply), 2026-10-24 (documentation check: the engine replaces `{{feature-id}}` in a checklist copy), and 2026-10-25 (reference to the removed `request.md` template dropped) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (checklist format and default items), 2026-10-18 (`quick` phase; DOR-10, DOD-01, items that do not apply), 2026-10-24 (documentation check: the engine replaces `{{feature-id}}` in a checklist copy), 2026-10-25 (reference to the removed `request.md` template dropped), and 2026-10-26 (package 04 implementation: gate part of the `phase start` result as built) |
 | Source | Concept §2 (Gates), §4.1 (`checks/`), §5.2, §6, §11.1, §11.4 |
 | Depends on | 02, 04 |
 | Enables | 12 (DoR), 15 (DoD), every phase transition |
@@ -126,7 +126,7 @@ A checklist item that refers to a phase or artifact the feature's profile does n
 
 ### `phase start` result
 
-The gate part of the result contains: target phase, `approval` (true or false), `checklist` (path in the feature folder, or none), whether the transition was already performed because approval is off, and whether the phase was already in progress (re-entry, package 04; then there is no gate).
+The gate part of the result (`gate`, package 04) contains: target phase, `approval` (true or false), and `checklist` (path in the feature folder, or `null`). Whether the transition was already performed because approval is off, and whether the phase was already in progress, is the `outcome` of the result (`transition-performed`, `already-in-progress`; package 04); for a re-entry and for a resumed phase whose transition is pending, `gate` is `null`. **Implemented** in package 04 with the default gate (approval, no checklist); this package supplies the gates from `gates.json`.
 
 ## Acceptance criteria
 

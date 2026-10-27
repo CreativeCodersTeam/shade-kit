@@ -7,6 +7,18 @@ namespace CreativeCoders.ShadeKit.Core.Tests.Features.Exceptions;
 public class FeatureExceptionsTests
 {
     [Fact]
+    public void NoCurrentFeatureException_Created_SaysThatNoFeatureIsSelected()
+    {
+        // Act
+        var exception = new NoCurrentFeatureException();
+
+        // Assert
+        exception.Message
+            .Should().Be("No current feature is selected: neither the current branch nor the local override " +
+                         "selects an existing feature.");
+    }
+
+    [Fact]
     public void InvalidFeatureIdException_Id_ExposesIdAndNamesItInMessage()
     {
         // Act
@@ -77,20 +89,6 @@ public class FeatureExceptionsTests
 
         exception.Message
             .Should().Be("The feature title cannot be used: Pass the title with --title.");
-    }
-
-    [Fact]
-    public void UnknownProfileException_Profile_ExposesProfileAndListsKnownProfilesInMessage()
-    {
-        // Act
-        var exception = new UnknownProfileException("hotfix");
-
-        // Assert
-        exception.Profile
-            .Should().Be("hotfix");
-
-        exception.Message
-            .Should().Be("The workflow profile 'hotfix' is unknown. Known profiles: feature, bugfix, quick.");
     }
 
     [Fact]
@@ -168,7 +166,7 @@ public class FeatureExceptionsTests
     [InlineData(typeof(FeatureNotFoundException))]
     [InlineData(typeof(InvalidFeatureSourceException))]
     [InlineData(typeof(InvalidFeatureTitleException))]
-    [InlineData(typeof(UnknownProfileException))]
+    [InlineData(typeof(NoCurrentFeatureException))]
     [InlineData(typeof(GitUnavailableException))]
     [InlineData(typeof(GitIdentityNotConfiguredException))]
     public void ExceptionType_CoreConvention_IsNotSealed(Type exceptionType)

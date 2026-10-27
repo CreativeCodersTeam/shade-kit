@@ -31,7 +31,8 @@ public class FeatureListCommand(
     private readonly IFeatureStore _featureStore = Ensure.NotNull(featureStore);
 
     /// <summary>
-    /// Writes the id, status, profile, and title of every feature, as plain text or as a JSON envelope.
+    /// Writes the id, status, profile, current phase, and title of every feature, as plain text or as a JSON
+    /// envelope.
     /// </summary>
     /// <remarks>
     /// A feature folder without <c>feature.json</c> is skipped with a warning. A store without features is a result,
@@ -43,7 +44,8 @@ public class FeatureListCommand(
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
     /// <exception cref="CliCommandAbortException">
-    /// No SHADE kit store is found, or a <c>feature.json</c> is invalid or too new.
+    /// No SHADE kit store is found, or a <c>feature.json</c> is invalid or too new, names an unknown workflow profile,
+    /// or holds an invalid phase state.
     /// </exception>
     /// <exception cref="OperationCanceledException">The user canceled the run.</exception>
     public async Task<CommandResult> ExecuteAsync(FeatureListCommandOptions options)
@@ -72,8 +74,8 @@ public class FeatureListCommand(
 
         foreach (var feature in data.Features)
         {
-            _context.Console.WriteLine(
-                $"{feature.Id}  {feature.Status.ToJsonName()}  {feature.Profile}  {feature.Title}");
+            _context.Console.WriteLine($"{feature.Id}  {feature.Status.ToJsonName()}  {feature.Profile}  " +
+                                       $"{feature.CurrentPhase}  {feature.Title}");
         }
     }
 }

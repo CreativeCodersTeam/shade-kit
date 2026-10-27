@@ -13,6 +13,9 @@ using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Web;
+using CreativeCoders.ShadeKit.Core.Workflow;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
@@ -77,7 +80,11 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFeatureSourceReader), typeof(FeatureSourceReader))]
     [InlineData(typeof(IFeatureIdFactory), typeof(FeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver), typeof(CurrentFeatureResolver))]
+    [InlineData(typeof(IWorkflowProfileCatalog), typeof(BuiltInWorkflowProfileCatalog))]
     [InlineData(typeof(IFeatureStore), typeof(FeatureStore))]
+    [InlineData(typeof(IPhaseEngine), typeof(PhaseEngine))]
+    [InlineData(typeof(ITransitionGateProvider), typeof(DefaultTransitionGateProvider))]
+    [InlineData(typeof(IPhaseWorkflow), typeof(PhaseWorkflow))]
     [InlineData(typeof(IUrlContentReader), typeof(HttpUrlContentReader))]
     [InlineData(typeof(IGhExecutableLocator), typeof(GhExecutableLocator))]
     [InlineData(typeof(IGhCommandRunner), typeof(GhCommandRunner))]
@@ -176,7 +183,11 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFeatureSourceReader))]
     [InlineData(typeof(IFeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver))]
+    [InlineData(typeof(IWorkflowProfileCatalog))]
     [InlineData(typeof(IFeatureStore))]
+    [InlineData(typeof(IPhaseEngine))]
+    [InlineData(typeof(ITransitionGateProvider))]
+    [InlineData(typeof(IPhaseWorkflow))]
     [InlineData(typeof(IUrlContentReader))]
     [InlineData(typeof(IGhExecutableLocator))]
     [InlineData(typeof(IGhCommandRunner))]
@@ -219,7 +230,11 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFeatureSourceReader))]
     [InlineData(typeof(IFeatureIdFactory))]
     [InlineData(typeof(ICurrentFeatureResolver))]
+    [InlineData(typeof(IWorkflowProfileCatalog))]
     [InlineData(typeof(IFeatureStore))]
+    [InlineData(typeof(IPhaseEngine))]
+    [InlineData(typeof(ITransitionGateProvider))]
+    [InlineData(typeof(IPhaseWorkflow))]
     [InlineData(typeof(IUrlContentReader))]
     [InlineData(typeof(IGhExecutableLocator))]
     [InlineData(typeof(IGhCommandRunner))]

@@ -18,6 +18,9 @@ using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Core.Web.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
 using FakeItEasy;
@@ -543,13 +546,239 @@ public class CliErrorMapperTests
         var mapper = CreateMapper();
 
         // Act
-        var error = mapper.Map(new UnknownProfileException("hotfix"));
+        var error = mapper.Map(new UnknownProfileException("hotfix", ["feature", "bugfix", "quick"]));
 
         // Assert
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.UnknownProfile, ShadeKitCliErrorCodes.UnknownProfile,
                 "The workflow profile 'hotfix' is unknown. Pass one of 'feature', 'bugfix', 'quick' with " +
                 "--profile, or set 'defaultProfile' in '.shadekit/config.json' to one of them."));
+    }
+
+    [Fact]
+    public void Map_UnknownProfileWithOtherKnownProfiles_ListsKnownProfilesOfException()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new UnknownProfileException("hotfix", ["alpha", "beta"]));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.UnknownProfile, ShadeKitCliErrorCodes.UnknownProfile,
+                "The workflow profile 'hotfix' is unknown. Pass one of 'alpha', 'beta' with " +
+                "--profile, or set 'defaultProfile' in '.shadekit/config.json' to one of them."));
+    }
+
+    [Fact]
+    public void Map_UnknownProfileWithoutKnownProfiles_NamesKnownProfilesGenerically()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new UnknownProfileException("hotfix", []));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.UnknownProfile, ShadeKitCliErrorCodes.UnknownProfile,
+                "The workflow profile 'hotfix' is unknown. Pass one of the known profiles with " +
+                "--profile, or set 'defaultProfile' in '.shadekit/config.json' to one of them."));
+    }
+
+    [Fact]
+    public void Map_UnknownProfileOfFeatureFile_ReturnsExitCode40NamingFileAndFieldInsteadOfProfileOption()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new UnknownProfileException("hotfix", ["feature", "bugfix", "quick"],
+            ".shadekit/features/gh-142-login-sso/feature.json"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.UnknownProfile, ShadeKitCliErrorCodes.UnknownProfile,
+                "The workflow profile 'hotfix' in the field 'profile' of " +
+                "'.shadekit/features/gh-142-login-sso/feature.json' is unknown. Set the field to one of 'feature', " +
+                "'bugfix', 'quick' or restore the file from git, then run the command again."));
+    }
+
+    [Fact]
+    public void Map_UnknownProfileOfFeatureFileWithoutKnownProfiles_NamesKnownProfilesGenerically()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new UnknownProfileException("hotfix", [], ".shadekit/features/a/feature.json"));
+
+        // Assert
+        error!.Message
+            .Should().Be("The workflow profile 'hotfix' in the field 'profile' of '.shadekit/features/a/feature.json' " +
+                         "is unknown. Set the field to one of the known profiles or restore the file from git, then " +
+                         "run the command again.");
+    }
+
+    [Fact]
+    public void Map_NoCurrentFeature_ReturnsExitCode37WithFeatureListAndSetHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new NoCurrentFeatureException());
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.NoCurrentFeature, ShadeKitCliErrorCodes.NoCurrentFeature,
+                "No current feature is selected: neither the current branch nor the local override " +
+                "'.shadekit/features/current-feature.json' selects an existing feature. Run 'shade-kit feature " +
+                "list' to see the existing features, then 'shade-kit feature set <id>' to select one, or switch to " +
+                "the branch of the feature."));
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP04-AC3")]
+    public void Map_PhaseNotInProfile_ReturnsExitCode41ListingPhasesOfProfile()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new PhaseNotInProfileException("refine", "quick", ["new", "quick", "finish"]));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.PhaseNotInProfile, ShadeKitCliErrorCodes.PhaseNotInProfile,
+                "The phase 'refine' is not a phase of the workflow profile 'quick' of the feature. Its phases are " +
+                "'new', 'quick', 'finish'. Nothing was changed. Run 'shade-kit phase next' to see the possible " +
+                "next steps."));
+    }
+
+    [Fact]
+    public void Map_PhaseNotInProfileWithoutPhases_OmitsPhaseList()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new PhaseNotInProfileException("refine", "quick", []));
+
+        // Assert
+        error!.Message
+            .Should().Be("The phase 'refine' is not a phase of the workflow profile 'quick' of the feature. Nothing " +
+                         "was changed. Run 'shade-kit phase next' to see the possible next steps.");
+    }
+
+    [Theory]
+    [Trait("Requirement", "FP04-AC3")]
+    [InlineData(PhaseTransitionRefusalReason.SkipsPhases, PhaseState.InProgress, null,
+        "the transition would skip phases; only the phase after the current phase can be started. The current " +
+        "phase is 'refine' (in-progress).")]
+    [InlineData(PhaseTransitionRefusalReason.OtherTransitionPending, PhaseState.AwaitingApproval, "map",
+        "the transition to 'map' is pending; approve or reject it first. The current phase is 'refine' " +
+        "(awaiting-approval).")]
+    [InlineData(PhaseTransitionRefusalReason.ReopenWhilePending, PhaseState.AwaitingApproval, "map",
+        "an earlier phase can only be reopened while the current phase is in progress, but the transition to " +
+        "'map' is pending; approve or reject it first. The current phase is 'refine' (awaiting-approval).")]
+    [InlineData(PhaseTransitionRefusalReason.PhaseCannotBeReopened, PhaseState.InProgress, null,
+        "the workflow profile does not allow to reopen the phase 'plan'. The current phase is 'refine' " +
+        "(in-progress).")]
+    public void Map_PhaseTransitionNotAllowed_ReturnsExitCode42WithReasonCurrentStateAndNextHint(
+        PhaseTransitionRefusalReason reason, PhaseState currentState, string? pendingTransition,
+        string expectedReasonText)
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new PhaseTransitionNotAllowedException("gh-142-login-sso", "plan", "refine",
+            currentState, pendingTransition, reason));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.TransitionNotAllowed,
+                ShadeKitCliErrorCodes.TransitionNotAllowed,
+                $"The feature 'gh-142-login-sso' cannot move to the phase 'plan': {expectedReasonText} Nothing was " +
+                "changed. Run 'shade-kit phase next' to see the possible next steps."));
+    }
+
+    [Theory]
+    [Trait("Requirement", "FP04-AC4")]
+    [Trait("Requirement", "FP04-AC6")]
+    [InlineData(null, "no transition is pending.")]
+    [InlineData("plan", "the pending transition is to 'plan'.")]
+    public void Map_NoPendingTransition_ReturnsExitCode43NamingActualPendingTransitionAndNextHint(
+        string? pendingTransition, string expectedPendingText)
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new NoPendingTransitionException("gh-142-login-sso", "map", pendingTransition));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.NoPendingTransition,
+                ShadeKitCliErrorCodes.NoPendingTransition,
+                $"The feature 'gh-142-login-sso' has no pending transition to 'map'; {expectedPendingText} Nothing " +
+                "was changed. Run 'shade-kit phase next' to see the possible next steps."));
+    }
+
+    [Fact]
+    public void Map_FeatureDone_ReturnsExitCode44WithFeatureListAndSetHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new FeatureDoneException("gh-142-login-sso"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.FeatureDone, ShadeKitCliErrorCodes.FeatureDone,
+                "The feature 'gh-142-login-sso' is done, so its phases cannot change any more. Nothing was changed. " +
+                "Run 'shade-kit feature list' to see the features, and 'shade-kit feature set <id>' to work on " +
+                "another one."));
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP04-AC8")]
+    public void Map_PhaseCompleteNotAllowed_ReturnsExitCode45NamingLastAndCurrentPhase()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new PhaseCompleteNotAllowedException("gh-142-login-sso", "verify",
+            PhaseState.InProgress, "finish"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.CompleteNotAllowed, ShadeKitCliErrorCodes.CompleteNotAllowed,
+                "The feature 'gh-142-login-sso' cannot be completed: only the last phase 'finish' can be completed " +
+                "while it is in progress, but the current phase is 'verify' (in-progress). Nothing was changed. Run " +
+                "'shade-kit phase next' to see the possible next steps."));
+    }
+
+    [Fact]
+    public void Map_InvalidPhaseState_ReturnsExitCode46NamingFileFieldAndRestoreHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidPhaseStateException(".shadekit/features/gh-142-login-sso/feature.json",
+            "currentPhase", "names the phase 'refine', which is not a phase of the workflow profile 'bugfix'."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.PhaseStateInvalid, ShadeKitCliErrorCodes.PhaseStateInvalid,
+                "The phase state in '.shadekit/features/gh-142-login-sso/feature.json' is invalid: the field " +
+                "'currentPhase' names the phase 'refine', which is not a phase of the workflow profile 'bugfix'. " +
+                "Fix the field or restore the file from git, then run the command again."));
     }
 
     [Fact]

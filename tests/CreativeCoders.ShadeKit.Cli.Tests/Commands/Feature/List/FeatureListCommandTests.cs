@@ -13,6 +13,8 @@ using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using FakeItEasy;
 using Spectre.Console;
 using Spectre.Console.Testing;
@@ -28,9 +30,9 @@ public class FeatureListCommandTests
         var console = new TestConsole();
         var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
             CreateFeatureStore(
-                new FeatureSummary("Billing", "Billing run", "quick", FeatureStatus.Done),
-                new FeatureSummary("auth", "Auth", "bugfix", FeatureStatus.Active),
-                new FeatureSummary("login", "Login SSO", "feature", FeatureStatus.Active)));
+                new FeatureSummary("Billing", "Billing run", "quick", FeatureStatus.Done, "finish"),
+                new FeatureSummary("auth", "Auth", "bugfix", FeatureStatus.Active, "diagnose"),
+                new FeatureSummary("login", "Login SSO", "feature", FeatureStatus.Active, "new")));
 
         // Act
         await command.ExecuteAsync(new FeatureListCommandOptions());
@@ -38,9 +40,9 @@ public class FeatureListCommandTests
         // Assert
         console.Lines
             .Should().Equal(
-                "Billing  done  quick  Billing run",
-                "auth  active  bugfix  Auth",
-                "login  active  feature  Login SSO");
+                "Billing  done  quick  finish  Billing run",
+                "auth  active  bugfix  diagnose  Auth",
+                "login  active  feature  new  Login SSO");
     }
 
     [Fact]
@@ -48,7 +50,7 @@ public class FeatureListCommandTests
     {
         // Arrange
         var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
-            CreateFeatureStore(new FeatureSummary("auth", "Auth", "feature", FeatureStatus.Active)));
+            CreateFeatureStore(new FeatureSummary("auth", "Auth", "feature", FeatureStatus.Active, "new")));
 
         // Act
         var result = await command.ExecuteAsync(new FeatureListCommandOptions());
@@ -64,14 +66,14 @@ public class FeatureListCommandTests
         // Arrange
         var console = new TestConsole();
         var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
-            CreateFeatureStore(new FeatureSummary("login", "[red]feature[/]", "feature", FeatureStatus.Active)));
+            CreateFeatureStore(new FeatureSummary("login", "[red]feature[/]", "feature", FeatureStatus.Active, "new")));
 
         // Act
         await command.ExecuteAsync(new FeatureListCommandOptions());
 
         // Assert
         console.Lines
-            .Should().Equal("login  active  feature  [red]feature[/]");
+            .Should().Equal("login  active  feature  new  [red]feature[/]");
     }
 
     [Fact]
@@ -132,7 +134,7 @@ public class FeatureListCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
-            CreateFeatureStore([new FeatureSummary("login", "Login", "feature", FeatureStatus.Active)],
+            CreateFeatureStore([new FeatureSummary("login", "Login", "feature", FeatureStatus.Active, "new")],
                 [FeatureCommandTestHelper.UpgradeWarning, new FeatureFileMissingWarning("broken")]));
 
         // Act
@@ -149,7 +151,7 @@ public class FeatureListCommandTests
             .Should().StartWith("Warning: ").And.Contain(".shadekit/features/broken/");
 
         console.Lines[2]
-            .Should().Be("login  active  feature  Login");
+            .Should().Be("login  active  feature  new  Login");
     }
 
     [Fact]
@@ -237,6 +239,51 @@ public class FeatureListCommandTests
         console.Output
             .Should().BeEmpty();
     }
+
+    [Theory]
+    [MemberData(nameof(PhaseReadFailures))]
+    public async Task ExecuteAsync_JsonModeFeatureStoreThrowsPhaseReadFailure_WritesErrorEnvelopeWithMappedCode(
+        Exception exception, int exitCode, string errorCode)
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var featureStore = A.Fake<IFeatureStore>();
+        A.CallTo(() => featureStore.ListAsync(A<IKitStore>._, A<CancellationToken>._))
+            .ThrowsAsync(exception);
+
+        var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
+            featureStore, jsonOutput);
+
+        // Act
+        var act = () => command.ExecuteAsync(new FeatureListCommandOptions { Json = true });
+
+        // Assert
+        (await act.Should().ThrowAsync<CliCommandAbortException>())
+            .Which.ExitCode.Should().Be(exitCode);
+
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+
+        document.RootElement.GetProperty("ok").GetBoolean()
+            .Should().BeFalse();
+
+        document.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(errorCode);
+    }
+
+    public static TheoryData<Exception, int, string> PhaseReadFailures() =>
+        new TheoryData<Exception, int, string>
+        {
+            {
+                new UnknownProfileException("legacy", ["feature", "bugfix", "quick"],
+                    ".shadekit/features/login/feature.json"),
+                ShadeKitCliExitCodes.UnknownProfile, ShadeKitCliErrorCodes.UnknownProfile
+            },
+            {
+                new InvalidPhaseStateException(".shadekit/features/login/feature.json", "currentPhase",
+                    "names the phase 'review', which is not a phase of the workflow profile 'feature'."),
+                ShadeKitCliExitCodes.PhaseStateInvalid, ShadeKitCliErrorCodes.PhaseStateInvalid
+            }
+        };
 
     [Fact]
     public async Task ExecuteAsync_FeatureStoreThrowsFormatTooNew_ThrowsAbortExceptionWithFormatTooNewExitCode()
@@ -389,8 +436,8 @@ public class FeatureListCommandTests
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(console, FeatureCommandTestHelper.CreateKitStoreFactory(),
             CreateFeatureStore(
-                new FeatureSummary("Billing", "Billing run", "quick", FeatureStatus.Done),
-                new FeatureSummary("auth", "Auth", "bugfix", FeatureStatus.Active)),
+                new FeatureSummary("Billing", "Billing run", "quick", FeatureStatus.Done, "finish"),
+                new FeatureSummary("auth", "Auth", "bugfix", FeatureStatus.Active, "diagnose")),
             jsonOutput);
 
         // Act
@@ -409,7 +456,7 @@ public class FeatureListCommandTests
         var features = root.GetProperty("data").GetProperty("features").EnumerateArray().ToArray();
 
         features.Select(FeatureCommandTestHelper.GetPropertyNames)
-            .Should().AllSatisfy(x => x.Should().Equal("id", "title", "profile", "status"));
+            .Should().AllSatisfy(x => x.Should().Equal("id", "title", "profile", "status", "currentPhase"));
 
         features.Select(x => x.GetProperty("id").GetString())
             .Should().Equal("Billing", "auth");
@@ -422,6 +469,9 @@ public class FeatureListCommandTests
 
         features.Select(x => x.GetProperty("status").GetString())
             .Should().Equal("done", "active");
+
+        features.Select(x => x.GetProperty("currentPhase").GetString())
+            .Should().Equal("finish", "diagnose");
 
         root.GetProperty("warnings").GetArrayLength()
             .Should().Be(0);
@@ -578,7 +628,7 @@ public class FeatureListCommandTests
         // Arrange
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
-            CreateFeatureStore(new FeatureSummary("auth", "Auth", "feature", FeatureStatus.Active)), jsonOutput);
+            CreateFeatureStore(new FeatureSummary("auth", "Auth", "feature", FeatureStatus.Active, "new")), jsonOutput);
 
         // Act
         await command.ExecuteAsync(new FeatureListCommandOptions());
@@ -594,7 +644,7 @@ public class FeatureListCommandTests
         // Arrange
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(new TestConsole(), FeatureCommandTestHelper.CreateKitStoreFactory(),
-            CreateFeatureStore(new FeatureSummary("login", "[red]feature[/]", "feature", FeatureStatus.Active)),
+            CreateFeatureStore(new FeatureSummary("login", "[red]feature[/]", "feature", FeatureStatus.Active, "new")),
             jsonOutput);
 
         // Act

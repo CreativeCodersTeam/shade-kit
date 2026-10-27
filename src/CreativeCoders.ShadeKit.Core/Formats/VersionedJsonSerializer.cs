@@ -30,7 +30,7 @@ public sealed class VersionedJsonSerializer(IFormatRegistry formatRegistry) : IV
         IndentSize = 2,
         NewLine = "\n",
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonEnumNames.NamingPolicy, allowIntegerValues: false) }
+        Converters = { new SingleValueJsonStringEnumConverter(JsonEnumNames.NamingPolicy) }
     };
 
     private readonly IFormatRegistry _formatRegistry = Ensure.NotNull(formatRegistry);

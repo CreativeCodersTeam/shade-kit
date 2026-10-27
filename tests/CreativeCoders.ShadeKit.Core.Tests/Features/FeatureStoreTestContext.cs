@@ -9,6 +9,8 @@ using CreativeCoders.ShadeKit.Core.Tests.Store;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Core.Web;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using Microsoft.Extensions.Time.Testing;
@@ -144,7 +146,8 @@ internal sealed class FeatureStoreTestContext : IDisposable
         timeProvider.SetLocalTimeZone(UtcPlusTwo);
 
         return new FeatureStore(new FeatureIdFactory(timeProvider, new FeatureSourceReader(TrackerIssueReader, UrlContentReader)),
-            new CurrentFeatureResolver(GitRepositoryInfo), GitRepositoryInfo);
+            new CurrentFeatureResolver(GitRepositoryInfo), GitRepositoryInfo, new BuiltInWorkflowProfileCatalog(),
+            new PhaseEngine());
     }
 
     public NewFeatureRequest CreateRequest(string source, string? title = null, string? profile = null)
@@ -175,11 +178,15 @@ internal sealed class FeatureStoreTestContext : IDisposable
 
     /// <summary>
     /// Writes <c>features/&lt;featureId&gt;/feature.json</c>; its <c>id</c> is <paramref name="recordedId" /> if given,
-    /// otherwise the folder name.
+    /// otherwise the folder name. <paramref name="phaseFields" /> are JSON members appended after <c>status</c>, for
+    /// example <c>"currentPhase": "refine"</c>; without them the file has no phase fields, like a file of an older
+    /// engine.
     /// </summary>
     public void WriteFeature(string featureId, string title = "Login SSO", string profile = "feature",
-        string status = "active", string? recordedId = null)
+        string status = "active", string? recordedId = null, string? phaseFields = null)
     {
+        var phaseMembers = phaseFields is null ? string.Empty : "," + phaseFields;
+
         WriteKitFile(
             $$"""
               {
@@ -191,7 +198,7 @@ internal sealed class FeatureStoreTestContext : IDisposable
                 "source": { "kind": "text" },
                 "createdAt": "2026-10-20T15:30:00+02:00",
                 "createdBy": { "name": "Jane Doe", "email": "jane@example.com" },
-                "status": "{{status}}"
+                "status": "{{status}}"{{phaseMembers}}
               }
               """,
             KitStorePaths.FeaturesDirName, featureId, KitStorePaths.FeatureFileName);

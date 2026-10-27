@@ -13,6 +13,10 @@ using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using FakeItEasy;
 using Spectre.Console;
 using Spectre.Console.Testing;
@@ -38,7 +42,8 @@ public class FeatureCurrentCommandTests
 
         // Assert
         console.Lines
-            .Should().Equal($"{Id} (feature, active)", $"Resolved from: {originName}");
+            .Should().Equal($"{Id} (feature, active)", "Current phase: new (in-progress)",
+                $"Resolved from: {originName}");
 
         result.ExitCode
             .Should().Be(0);
@@ -96,7 +101,7 @@ public class FeatureCurrentCommandTests
 
         // Assert
         console.Lines.Count
-            .Should().Be(3);
+            .Should().Be(4);
 
         console.Lines[0]
             .Should().StartWith("Warning: ").And.Contain("other-feature").And.Contain(Id);
@@ -134,7 +139,7 @@ public class FeatureCurrentCommandTests
             .Should().Be("override");
 
         FeatureCommandTestHelper.GetPropertyNames(feature)
-            .Should().Equal("id", "title", "profile", "status", "paths");
+            .Should().Equal("id", "title", "profile", "status", "currentPhase", "phaseState", "paths");
 
         feature.GetProperty("id").GetString()
             .Should().Be(Id);
@@ -147,6 +152,12 @@ public class FeatureCurrentCommandTests
 
         feature.GetProperty("status").GetString()
             .Should().Be("done");
+
+        feature.GetProperty("currentPhase").GetString()
+            .Should().Be("finish");
+
+        feature.GetProperty("phaseState").GetString()
+            .Should().Be("approved");
 
         feature.GetProperty("paths").GetProperty("featureDir").GetString()
             .Should().Be($".shadekit/features/{Id}/");
@@ -368,6 +379,113 @@ public class FeatureCurrentCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_JsonModeAwaitingApproval_WritesCurrentPhaseAndKebabCasePhaseState()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var feature = FeatureCommandTestHelper.CreateDocument();
+        feature.CurrentPhase = WorkflowPhaseNames.Refine;
+        feature.Phases = new OrderedDictionary<string, PhaseState>
+        {
+            [WorkflowPhaseNames.New] = PhaseState.Approved,
+            [WorkflowPhaseNames.Refine] = PhaseState.AwaitingApproval
+        };
+        feature.PendingTransition = WorkflowPhaseNames.Map;
+        var resolved = new CurrentFeatureResult(Id, feature, CurrentFeatureOrigin.Branch,
+            FeatureCommandTestHelper.ReadPhaseState(feature), []);
+        var command = CreateCommand(new TestConsole(), CreateFeatureStore(resolved), jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(new FeatureCurrentCommandOptions { Json = true });
+
+        // Assert
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+        var data = document.RootElement.GetProperty("data").GetProperty("feature");
+
+        data.GetProperty("currentPhase").GetString()
+            .Should().Be("refine");
+
+        data.GetProperty("phaseState").GetString()
+            .Should().Be("awaiting-approval");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeAwaitingApproval_WritesCurrentPhaseWithState()
+    {
+        // Arrange
+        var console = new TestConsole();
+        var feature = FeatureCommandTestHelper.CreateDocument(profile: WorkflowProfileNames.Quick);
+        feature.CurrentPhase = WorkflowPhaseNames.Quick;
+        feature.Phases = new OrderedDictionary<string, PhaseState>
+        {
+            [WorkflowPhaseNames.New] = PhaseState.Approved,
+            [WorkflowPhaseNames.Quick] = PhaseState.AwaitingApproval
+        };
+        feature.PendingTransition = WorkflowPhaseNames.Finish;
+        var resolved = new CurrentFeatureResult(Id, feature, CurrentFeatureOrigin.Override,
+            FeatureCommandTestHelper.ReadPhaseState(feature), []);
+        var command = CreateCommand(console, CreateFeatureStore(resolved));
+
+        // Act
+        await command.ExecuteAsync(new FeatureCurrentCommandOptions());
+
+        // Assert
+        console.Lines
+            .Should().Equal($"{Id} (quick, active)", "Current phase: quick (awaiting-approval)",
+                "Resolved from: override");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeInvalidPhaseState_WritesFailureEnvelopeWithExitCode46()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var featureStore = A.Fake<IFeatureStore>();
+        A.CallTo(() => featureStore.GetCurrentAsync(A<IKitStore>._, A<CancellationToken>._))
+            .ThrowsAsync(new InvalidPhaseStateException($".shadekit/features/{Id}/feature.json", "currentPhase",
+                "names the phase 'review', which is not a phase of the workflow profile 'feature'."));
+        var command = CreateCommand(new TestConsole(), featureStore, jsonOutput);
+
+        // Act
+        var act = () => command.ExecuteAsync(new FeatureCurrentCommandOptions { Json = true });
+
+        // Assert
+        (await act.Should().ThrowAsync<CliCommandAbortException>())
+            .Which.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.PhaseStateInvalid);
+
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+
+        document.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.PhaseStateInvalid);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeUnknownProfileInFeatureFile_WritesFailureEnvelopeWithExitCode40()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var featureStore = A.Fake<IFeatureStore>();
+        A.CallTo(() => featureStore.GetCurrentAsync(A<IKitStore>._, A<CancellationToken>._))
+            .ThrowsAsync(new UnknownProfileException("legacy", ["feature", "bugfix", "quick"],
+                $".shadekit/features/{Id}/feature.json"));
+        var command = CreateCommand(new TestConsole(), featureStore, jsonOutput);
+
+        // Act
+        var act = () => command.ExecuteAsync(new FeatureCurrentCommandOptions { Json = true });
+
+        // Assert
+        (await act.Should().ThrowAsync<CliCommandAbortException>())
+            .Which.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.UnknownProfile);
+
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+
+        document.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.UnknownProfile);
+    }
+
+    [Fact]
     public void FeatureCurrentCommandOptions_Type_DerivesFromJsonCommandOptions()
     {
         // Assert
@@ -378,13 +496,15 @@ public class FeatureCurrentCommandTests
     private static CurrentFeatureResult CreateResolvedResult(CurrentFeatureOrigin origin,
         IReadOnlyList<KitWarning>? warnings = null, FeatureStatus status = FeatureStatus.Active)
     {
-        return new CurrentFeatureResult(Id, FeatureCommandTestHelper.CreateDocument(status: status), origin,
+        var document = FeatureCommandTestHelper.CreateDocument(status: status);
+
+        return new CurrentFeatureResult(Id, document, origin, FeatureCommandTestHelper.ReadPhaseState(document),
             warnings ?? []);
     }
 
     private static CurrentFeatureResult CreateUnresolvedResult()
     {
-        return new CurrentFeatureResult(null, null, null, []);
+        return new CurrentFeatureResult(null, null, null, null, []);
     }
 
     private static IFeatureStore CreateFeatureStore(CurrentFeatureResult result)

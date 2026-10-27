@@ -3,6 +3,10 @@ using CreativeCoders.ShadeKit.Core.Features.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Features;
 
@@ -11,10 +15,20 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// commands do.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A feature exists if its folder <c>features/&lt;id&gt;</c> exists. The folder name is the id in every result; a
 /// different <c>id</c> in <c>feature.json</c> gives a <see cref="FeatureIdMismatchWarning" />. Folders whose names
 /// start with a dot, such as staging and dropping folders, are no features. Every feature id is checked with
 /// <see cref="FeatureIds.EnsureValid" /> before a path is built from it.
+/// </para>
+/// <para>
+/// The reading methods <see cref="ListAsync" />, <see cref="ShowAsync" />, and <see cref="GetCurrentAsync" /> return
+/// the phase state that the phase commands see: normalized with <see cref="IPhaseEngine.ReadState" /> against the
+/// current definition of the workflow profile, so a <c>feature.json</c> without phase fields, written by an older
+/// engine, shows the initial state of its profile. They never write. A <c>feature.json</c> whose profile is unknown or
+/// whose phase state is invalid stops them, like an invalid <c>feature.json</c>; <see cref="ListAsync" /> then lists
+/// no feature at all.
+/// </para>
 /// </remarks>
 public interface IFeatureStore
 {
@@ -23,6 +37,11 @@ public interface IFeatureStore
     /// <c>shade-kit feature new</c> does.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The new <c>feature.json</c> holds the initial phase state of the workflow profile from
+    /// <see cref="IPhaseEngine.CreateInitialState" />: the first phase of the profile is the current phase and
+    /// <c>in-progress</c>, every other phase is <c>pending</c>, no transition is pending, and the history is empty.
+    /// </para>
     /// <para>
     /// Everything is checked before anything is written. The feature is built in a hidden staging folder and moved
     /// into place, so the feature folder appears only when complete; the local override is written last and replaces
@@ -51,8 +70,8 @@ public interface IFeatureStore
     /// <paramref name="request" /> is empty.
     /// </exception>
     /// <exception cref="UnknownProfileException">
-    /// The workflow profile, or <c>defaultProfile</c> of <c>config.json</c>, is not one of
-    /// <see cref="WorkflowProfiles.All" />.
+    /// The workflow profile, or <c>defaultProfile</c> of <c>config.json</c>, is not one of the profiles of the
+    /// <see cref="IWorkflowProfileCatalog" />.
     /// </exception>
     /// <exception cref="InvalidFeatureSourceException">
     /// The source is empty; it is a URL of a tracker in <c>config.json</c> without an issue number or whose issue
@@ -106,7 +125,7 @@ public interface IFeatureStore
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous list operation. The task result contains the features sorted ordinally
-    /// by id, together with the feature and format warnings.
+    /// by id, each with its normalized current phase, together with the feature and format warnings.
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="store" /> is <see langword="null" />.</exception>
     /// <exception cref="InvalidKitFileException">A <c>feature.json</c>, or <c>config.json</c>, is invalid.</exception>
@@ -115,6 +134,12 @@ public interface IFeatureStore
     /// </exception>
     /// <exception cref="UpgradeNeededException">
     /// A <c>feature.json</c> uses an older format version and <c>outdatedFormatOnRead</c> is <c>stop</c>.
+    /// </exception>
+    /// <exception cref="UnknownProfileException">
+    /// A <c>feature.json</c> names a workflow profile that the <see cref="IWorkflowProfileCatalog" /> does not know.
+    /// </exception>
+    /// <exception cref="InvalidPhaseStateException">
+    /// The phase fields of a <c>feature.json</c> do not fit its workflow profile or contradict each other.
     /// </exception>
     Task<FeatureListResult> ListAsync(IKitStore store, CancellationToken cancellationToken = default);
 
@@ -126,7 +151,8 @@ public interface IFeatureStore
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous read operation. The task result contains the id, the
-    /// <c>feature.json</c> document, and the paths of the feature, together with the feature and format warnings.
+    /// <c>feature.json</c> document as it is stored, the normalized phase state, and the paths of the feature, together
+    /// with the feature and format warnings.
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="store" /> or <paramref name="featureId" /> is <see langword="null" />.
@@ -144,6 +170,14 @@ public interface IFeatureStore
     /// The <c>feature.json</c> of the feature uses an older format version and <c>outdatedFormatOnRead</c> is
     /// <c>stop</c>.
     /// </exception>
+    /// <exception cref="UnknownProfileException">
+    /// The <c>feature.json</c> of the feature names a workflow profile that the <see cref="IWorkflowProfileCatalog" />
+    /// does not know.
+    /// </exception>
+    /// <exception cref="InvalidPhaseStateException">
+    /// The phase fields of the <c>feature.json</c> of the feature do not fit its workflow profile or contradict each
+    /// other.
+    /// </exception>
     Task<FeatureShowResult> ShowAsync(IKitStore store, string featureId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -157,8 +191,9 @@ public interface IFeatureStore
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous read operation. The task result contains the id, the
-    /// <c>feature.json</c> document, the origin, and the paths of the current feature, or none of them if no current
-    /// feature is resolved, together with the feature and format warnings.
+    /// <c>feature.json</c> document as it is stored, the origin, the normalized phase state, and the paths of the
+    /// current feature, or none of them if no current feature is resolved, together with the feature and format
+    /// warnings.
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="store" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentException">
@@ -178,6 +213,14 @@ public interface IFeatureStore
     /// <exception cref="UpgradeNeededException">
     /// The <c>feature.json</c> of the current feature uses an older format version and <c>outdatedFormatOnRead</c> is
     /// <c>stop</c>.
+    /// </exception>
+    /// <exception cref="UnknownProfileException">
+    /// The <c>feature.json</c> of the current feature names a workflow profile that the
+    /// <see cref="IWorkflowProfileCatalog" /> does not know.
+    /// </exception>
+    /// <exception cref="InvalidPhaseStateException">
+    /// The phase fields of the <c>feature.json</c> of the current feature do not fit its workflow profile or
+    /// contradict each other.
     /// </exception>
     Task<CurrentFeatureResult> GetCurrentAsync(IKitStore store, CancellationToken cancellationToken = default);
 

@@ -106,9 +106,44 @@ public static class ShadeKitCliErrorCodes
     public const string FeatureIoFailed = "feature-io-failed";
 
     /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.NoCurrentFeature" />.
+    /// </summary>
+    public const string NoCurrentFeature = "no-current-feature";
+
+    /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.UnknownProfile" />.
     /// </summary>
     public const string UnknownProfile = "unknown-profile";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.PhaseNotInProfile" />.
+    /// </summary>
+    public const string PhaseNotInProfile = "phase-not-in-profile";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.TransitionNotAllowed" />.
+    /// </summary>
+    public const string TransitionNotAllowed = "transition-not-allowed";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.NoPendingTransition" />.
+    /// </summary>
+    public const string NoPendingTransition = "no-pending-transition";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.FeatureDone" />.
+    /// </summary>
+    public const string FeatureDone = "feature-done";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.CompleteNotAllowed" />.
+    /// </summary>
+    public const string CompleteNotAllowed = "complete-not-allowed";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.PhaseStateInvalid" />.
+    /// </summary>
+    public const string PhaseStateInvalid = "phase-state-invalid";
 
     /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.Canceled" />.
@@ -151,7 +186,14 @@ public static class ShadeKitCliErrorCodes
             ShadeKitCliExitCodes.InvalidFeatureTitle => InvalidFeatureTitle,
             ShadeKitCliExitCodes.FeatureIoFailed => FeatureIoFailed,
             ShadeKitCliExitCodes.GitIdentityMissing => GitIdentityMissing,
+            ShadeKitCliExitCodes.NoCurrentFeature => NoCurrentFeature,
             ShadeKitCliExitCodes.UnknownProfile => UnknownProfile,
+            ShadeKitCliExitCodes.PhaseNotInProfile => PhaseNotInProfile,
+            ShadeKitCliExitCodes.TransitionNotAllowed => TransitionNotAllowed,
+            ShadeKitCliExitCodes.NoPendingTransition => NoPendingTransition,
+            ShadeKitCliExitCodes.FeatureDone => FeatureDone,
+            ShadeKitCliExitCodes.CompleteNotAllowed => CompleteNotAllowed,
+            ShadeKitCliExitCodes.PhaseStateInvalid => PhaseStateInvalid,
             ShadeKitCliExitCodes.Canceled => Canceled,
             ShadeKitCliExitCodes.HostError => HostError,
             _ => throw new ArgumentOutOfRangeException(nameof(exitCode), exitCode, "The exit code is not defined.")

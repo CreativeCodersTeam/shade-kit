@@ -407,6 +407,29 @@ public class KitConfigTests
     }
 
     [Theory]
+    [InlineData(""" "report": "always, never" """)]
+    [InlineData(""" "report": "always,never" """)]
+    [InlineData(""" "report": "never, never" """)]
+    [InlineData(""" "report": "Always, Never" """)]
+    [InlineData(""" "outdatedFormatOnRead": "migrate-and-warn, stop" """)]
+    [InlineData(""" "outdatedFormatOnRead": "stop,stop" """)]
+    [InlineData(""" "outdatedFormatOnRead": "MigrateAndWarn, Stop" """)]
+    public void Deserialize_CommaSeparatedPolicy_ThrowsInvalidKitFileException(string field)
+    {
+        // Arrange
+        var serializer = new VersionedJsonSerializer(FormatRegistry.CreateDefault());
+
+        // Act
+        var act = () => serializer.Deserialize<KitConfig>(
+            $$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", {{field}} }""", FormatIds.Config, FilePath,
+            false);
+
+        // Assert
+        act.Should().Throw<InvalidKitFileException>()
+            .Which.FilePath.Should().Be(FilePath);
+    }
+
+    [Theory]
     [InlineData("\"sometimes\"")]
     [InlineData("\"\"")]
     [InlineData("0")]

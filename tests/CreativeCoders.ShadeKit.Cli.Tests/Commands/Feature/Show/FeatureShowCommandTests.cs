@@ -16,6 +16,10 @@ using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using FakeItEasy;
 using Spectre.Console;
@@ -44,11 +48,21 @@ public class FeatureShowCommandTests
                 "Title: Login SSO",
                 "Profile: feature",
                 "Status: active",
+                "Current phase: new",
                 "Source: url https://github.com/acme/shop/issues/142",
                 "Created: 2026-10-20T15:30:00+02:00 by Jane Doe <jane@example.com>",
                 $"Feature directory: .shadekit/features/{Id}/",
                 $"Feature file: .shadekit/features/{Id}/feature.json",
-                $"Request: .shadekit/features/{Id}/request.md");
+                $"Request: .shadekit/features/{Id}/request.md",
+                "Phases:",
+                "  new: in-progress",
+                "  refine: pending",
+                "  map: pending",
+                "  plan: pending",
+                "  implement: pending",
+                "  verify: pending",
+                "  finish: pending",
+                "History: none");
 
         result.ExitCode
             .Should().Be(0);
@@ -203,7 +217,8 @@ public class FeatureShowCommandTests
         var data = document.RootElement.GetProperty("data");
 
         FeatureCommandTestHelper.GetPropertyNames(data)
-            .Should().Equal("id", "title", "profile", "status", "source", "createdAt", "createdBy", "paths");
+            .Should().Equal("id", "title", "profile", "status", "source", "createdAt", "createdBy", "paths",
+                "currentPhase", "pendingTransition", "phases", "history");
 
         data.GetProperty("id").GetString()
             .Should().Be(Id);
@@ -262,6 +277,42 @@ public class FeatureShowCommandTests
             .Should().Equal("kind", "value");
     }
 
+    [Fact]
+    public async Task ExecuteAsync_PlainModeHistoryWithMarkupCharacters_WritesHistoryLineVerbatim()
+    {
+        // Arrange
+        var console = FeatureCommandTestHelper.CreateWideConsole();
+        var feature = FeatureCommandTestHelper.CreateDocument();
+        feature.CurrentPhase = WorkflowPhaseNames.Refine;
+        feature.Phases = new OrderedDictionary<string, PhaseState>
+        {
+            [WorkflowPhaseNames.New] = PhaseState.Approved,
+            [WorkflowPhaseNames.Refine] = PhaseState.InProgress
+        };
+        feature.History =
+        [
+            new PhaseHistoryEntry
+            {
+                At = new DateTimeOffset(2026, 10, 21, 9, 0, 0, TimeSpan.FromHours(2)),
+                By = new PhaseHistoryActor { Name = "[red]Jane[/]", Email = "jane@example.com" },
+                Action = PhaseHistoryAction.Approve,
+                From = WorkflowPhaseNames.New,
+                To = WorkflowPhaseNames.Refine,
+                Note = "[bold]ok[/]"
+            }
+        ];
+        var command = CreateCommand(console, CreateFeatureStore(
+            new FeatureShowResult(Id, feature, FeatureCommandTestHelper.ReadPhaseState(feature), [])));
+
+        // Act
+        await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id });
+
+        // Assert
+        console.Lines
+            .Should().Contain(
+                "  2026-10-21T09:00:00+02:00 approve new -> refine by [red]Jane[/] <jane@example.com>, note: [bold]ok[/]");
+    }
+
     [Theory]
     [MemberData(nameof(MappedShowFailures))]
     public async Task ExecuteAsync_JsonModeMappedFailure_WritesErrorEnvelopeWithMappedCode(Exception exception,
@@ -293,7 +344,16 @@ public class FeatureShowCommandTests
     {
         { new FeatureNotFoundException(Id), ShadeKitCliExitCodes.FeatureNotFound, ShadeKitCliErrorCodes.FeatureNotFound },
         { new InvalidFeatureIdException("Bad"), ShadeKitCliExitCodes.InvalidFeatureId, ShadeKitCliErrorCodes.InvalidFeatureId },
-        { new InvalidKitFileException(".shadekit/features/x/feature.json", "missing"), ShadeKitCliExitCodes.InvalidFile, ShadeKitCliErrorCodes.InvalidFile }
+        { new InvalidKitFileException(".shadekit/features/x/feature.json", "missing"), ShadeKitCliExitCodes.InvalidFile, ShadeKitCliErrorCodes.InvalidFile },
+        {
+            new UnknownProfileException("legacy", ["feature", "bugfix", "quick"], $".shadekit/features/{Id}/feature.json"),
+            ShadeKitCliExitCodes.UnknownProfile, ShadeKitCliErrorCodes.UnknownProfile
+        },
+        {
+            new InvalidPhaseStateException($".shadekit/features/{Id}/feature.json", "pendingTransition",
+                "is missing, but the current phase 'refine' is awaiting-approval."),
+            ShadeKitCliExitCodes.PhaseStateInvalid, ShadeKitCliErrorCodes.PhaseStateInvalid
+        }
     };
 
     [Fact]
@@ -416,7 +476,8 @@ public class FeatureShowCommandTests
             CreatedBy = document.CreatedBy
         };
         var command = CreateCommand(console,
-            CreateFeatureStore(new FeatureShowResult(Id, feature, [])));
+            CreateFeatureStore(
+                new FeatureShowResult(Id, feature, FeatureCommandTestHelper.ReadPhaseState(feature), [])));
 
         var originalCulture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fi-FI");
@@ -500,10 +561,246 @@ public class FeatureShowCommandTests
             .Should().BeDerivedFrom<JsonCommandOptions>();
     }
 
+    [Fact]
+    public async Task ExecuteAsync_JsonModeFeatureWithoutPhaseFields_WritesInitialPhaseStateAndEmptyHistory()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), CreateFeatureStore(CreateResult()), jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id, Json = true });
+
+        // Assert
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+        var data = document.RootElement.GetProperty("data");
+
+        data.GetProperty("currentPhase").GetString()
+            .Should().Be("new");
+
+        data.GetProperty("pendingTransition").ValueKind
+            .Should().Be(JsonValueKind.Null);
+
+        data.GetProperty("phases").EnumerateObject().Select(x => $"{x.Name}={x.Value.GetString()}")
+            .Should().Equal("new=in-progress", "refine=pending", "map=pending", "plan=pending", "implement=pending",
+                "verify=pending", "finish=pending");
+
+        data.GetProperty("history").GetArrayLength()
+            .Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModePendingTransitionAndHistory_WritesPhasesInProfileOrderAndHistoryAsStored()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), CreateFeatureStore(CreatePendingTransitionResult()),
+            jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id, Json = true });
+
+        // Assert
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+        var data = document.RootElement.GetProperty("data");
+
+        data.GetProperty("currentPhase").GetString()
+            .Should().Be("refine");
+
+        data.GetProperty("pendingTransition").GetString()
+            .Should().Be("map");
+
+        data.GetProperty("phases").EnumerateObject().Select(x => $"{x.Name}={x.Value.GetString()}")
+            .Should().Equal("new=approved", "refine=awaiting-approval", "map=pending", "plan=pending",
+                "implement=pending", "verify=pending", "finish=pending", "review=approved");
+
+        var history = data.GetProperty("history").EnumerateArray().ToArray();
+
+        history.Select(x => x.GetProperty("action").GetString())
+            .Should().Equal("start", "approve", "start", "reject", "start");
+
+        var reject = history[3];
+
+        FeatureCommandTestHelper.GetPropertyNames(reject)
+            .Should().Equal("at", "by", "action", "from", "to", "note");
+
+        reject.GetProperty("at").GetString()
+            .Should().Be("2026-10-21T12:00:00+02:00");
+
+        FeatureCommandTestHelper.GetPropertyNames(reject.GetProperty("by"))
+            .Should().Equal("name", "email");
+
+        reject.GetProperty("by").GetProperty("name").GetString()
+            .Should().Be("Jane Doe");
+
+        reject.GetProperty("by").GetProperty("email").GetString()
+            .Should().Be("jane@example.com");
+
+        reject.GetProperty("from").GetString()
+            .Should().Be("refine");
+
+        reject.GetProperty("to").GetString()
+            .Should().Be("map");
+
+        reject.GetProperty("note").GetString()
+            .Should().Be("DOR-04 failed");
+
+        history[0].GetProperty("note").ValueKind
+            .Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeDoneFeature_WritesApprovedLastPhaseAndCompleteEntryWithoutTarget()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), CreateFeatureStore(CreateDoneResult()), jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id, Json = true });
+
+        // Assert
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+        var data = document.RootElement.GetProperty("data");
+
+        data.GetProperty("status").GetString()
+            .Should().Be("done");
+
+        data.GetProperty("currentPhase").GetString()
+            .Should().Be("finish");
+
+        data.GetProperty("phases").EnumerateObject().Select(x => $"{x.Name}={x.Value.GetString()}")
+            .Should().Equal("new=approved", "quick=approved", "finish=approved");
+
+        var complete = data.GetProperty("history")[0];
+
+        complete.GetProperty("action").GetString()
+            .Should().Be("complete");
+
+        complete.GetProperty("from").GetString()
+            .Should().Be("finish");
+
+        complete.GetProperty("to").ValueKind
+            .Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModePendingTransitionAndHistory_WritesPhaseLinesAndOneLinePerHistoryEntry()
+    {
+        // Arrange
+        var console = FeatureCommandTestHelper.CreateWideConsole();
+        var command = CreateCommand(console, CreateFeatureStore(CreatePendingTransitionResult()));
+
+        // Act
+        await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id });
+
+        // Assert
+        console.Lines
+            .Should().ContainInConsecutiveOrder("Status: active", "Current phase: refine", "Pending transition: map",
+                "Source: url https://github.com/acme/shop/issues/142");
+
+        console.Lines.SkipWhile(x => x != "Phases:")
+            .Should().Equal(
+                "Phases:",
+                "  new: approved",
+                "  refine: awaiting-approval",
+                "  map: pending",
+                "  plan: pending",
+                "  implement: pending",
+                "  verify: pending",
+                "  finish: pending",
+                "  review: approved",
+                "History:",
+                "  2026-10-21T09:00:00+02:00 start new -> refine by Jane Doe <jane@example.com>",
+                "  2026-10-21T10:00:00+02:00 approve new -> refine by Jane Doe <jane@example.com>",
+                "  2026-10-21T11:00:00+02:00 start refine -> map by Jane Doe <jane@example.com>",
+                "  2026-10-21T12:00:00+02:00 reject refine -> map by Jane Doe <jane@example.com>, note: DOR-04 failed",
+                "  2026-10-21T13:00:00+02:00 start refine -> map by Jane Doe <jane@example.com>");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeDoneFeature_WritesNoPendingTransitionLineAndCompleteEntry()
+    {
+        // Arrange
+        var console = FeatureCommandTestHelper.CreateWideConsole();
+        var command = CreateCommand(console, CreateFeatureStore(CreateDoneResult()));
+
+        // Act
+        await command.ExecuteAsync(new FeatureShowCommandOptions { FeatureId = Id });
+
+        // Assert
+        console.Lines
+            .Should().ContainInConsecutiveOrder("Status: done", "Current phase: finish",
+                "Source: url https://github.com/acme/shop/issues/142");
+
+        console.Lines.SkipWhile(x => x != "Phases:")
+            .Should().Equal(
+                "Phases:",
+                "  new: approved",
+                "  quick: approved",
+                "  finish: approved",
+                "History:",
+                "  2026-10-21T17:00:00+02:00 complete finish by Jane Doe <jane@example.com>");
+    }
+
     private static FeatureShowResult CreateResult(FeatureSource? source = null,
         IReadOnlyList<KitWarning>? warnings = null)
     {
-        return new FeatureShowResult(Id, FeatureCommandTestHelper.CreateDocument(source: source), warnings ?? []);
+        var feature = FeatureCommandTestHelper.CreateDocument(source: source);
+
+        return new FeatureShowResult(Id, feature, FeatureCommandTestHelper.ReadPhaseState(feature), warnings ?? []);
+    }
+
+    // refine awaits the approval of map, after a rejected first try; "review" is a phase the profile no longer has.
+    private static FeatureShowResult CreatePendingTransitionResult()
+    {
+        var feature = FeatureCommandTestHelper.CreateDocument();
+        feature.CurrentPhase = WorkflowPhaseNames.Refine;
+        feature.Phases = new OrderedDictionary<string, PhaseState>
+        {
+            ["review"] = PhaseState.Approved,
+            [WorkflowPhaseNames.Refine] = PhaseState.AwaitingApproval,
+            [WorkflowPhaseNames.New] = PhaseState.Approved
+        };
+        feature.PendingTransition = WorkflowPhaseNames.Map;
+        feature.History =
+        [
+            CreateHistoryEntry(9, PhaseHistoryAction.Start, WorkflowPhaseNames.New, WorkflowPhaseNames.Refine, null),
+            CreateHistoryEntry(10, PhaseHistoryAction.Approve, WorkflowPhaseNames.New, WorkflowPhaseNames.Refine,
+                null),
+            CreateHistoryEntry(11, PhaseHistoryAction.Start, WorkflowPhaseNames.Refine, WorkflowPhaseNames.Map, null),
+            CreateHistoryEntry(12, PhaseHistoryAction.Reject, WorkflowPhaseNames.Refine, WorkflowPhaseNames.Map,
+                "DOR-04 failed"),
+            CreateHistoryEntry(13, PhaseHistoryAction.Start, WorkflowPhaseNames.Refine, WorkflowPhaseNames.Map, null)
+        ];
+
+        return new FeatureShowResult(Id, feature, FeatureCommandTestHelper.ReadPhaseState(feature), []);
+    }
+
+    private static FeatureShowResult CreateDoneResult()
+    {
+        var feature = FeatureCommandTestHelper.CreateDocument(status: FeatureStatus.Done,
+            profile: WorkflowProfileNames.Quick);
+        feature.History =
+        [
+            CreateHistoryEntry(17, PhaseHistoryAction.Complete, WorkflowPhaseNames.Finish, null, null)
+        ];
+
+        return new FeatureShowResult(Id, feature, FeatureCommandTestHelper.ReadPhaseState(feature), []);
+    }
+
+    private static PhaseHistoryEntry CreateHistoryEntry(int hour, PhaseHistoryAction action, string from, string? to,
+        string? note)
+    {
+        return new PhaseHistoryEntry
+        {
+            At = new DateTimeOffset(2026, 10, 21, hour, 0, 0, TimeSpan.FromHours(2)),
+            By = new PhaseHistoryActor { Name = "Jane Doe", Email = "jane@example.com" },
+            Action = action,
+            From = from,
+            To = to,
+            Note = note
+        };
     }
 
     private static IFeatureStore CreateFeatureStore(FeatureShowResult result)
