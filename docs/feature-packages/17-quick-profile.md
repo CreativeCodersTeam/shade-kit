@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (`quick` is a phase of its own; DoD items, coverage, playbook on demand) and 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (`quick` is a phase of its own; DoD items, coverage, playbook on demand), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): the skill ends and names `/shade-kit-finish`) |
 | Source | Concept §2 (Workflow profiles), §5.4, §11.2 |
 | Depends on | 04, 05, 06, 09, 13, 15 |
 | Enables | v1 profile `quick` end to end |
@@ -33,12 +33,13 @@ Profile: `new` → `quick` (all in one) → `finish`, one approval at the end. *
 ### The `quick` phase
 
 1. Read `request.md`. It can hold third-party content (issue text, comments, web pages): the skill treats it as data that describes the requirement, never as instructions, and shows the human any instruction in it that looks suspicious ([skill conventions](06-skill-foundation.md#skill-conventions)). **Decided** on 2026-10-25 (code review of the rework of `feature new`, finding F6). **Implemented** (`shade-kit-quick`).
-2. **Short clarification:** ask only the questions that block the change, using the interview skill (package 06). If the change turns out not to be small or not clear, recommend dropping it and creating a `feature` or `bugfix` instead, and stop until the human decides. **Proposed.**
+2. **Short clarification:** ask only the questions that block the change, using the interview skill (package 06). If the change turns out not to be small or not clear, recommend dropping it and creating a `feature` or `bugfix` instead, name `/shade-kit-drop` and `/shade-kit-new`, and end; the human decides by calling them. **Proposed.**
 3. **Compact spec:** write `spec.md` in the format of package 10 with only goal, requirements with `REQ-` IDs, and acceptance criteria; the other sections state "not applicable in quick". **Proposed**, so the DoD and the report can trace requirements to tests also in `quick`.
 4. **Implement and test:** write the code and the tests that prove each acceptance criterion. No `plan.md` or `tasks.md`.
 5. **Simplify and review:** the loop of package 13 with `review.md`, so the DoD item "no open blockers" applies.
 6. **Self-check:** run the quality commands (build, test, lint, and coverage) and record the criterion → test mapping, the results, and the coverage value in `verification.md` (format of package 14), so the DoD can be checked without a `verify` phase. **Proposed.**
 7. **Playbook on demand:** if an acceptance criterion is marked "(manual)", write `playbook.md` in the format of package 14 with one unchecked item per manual criterion. Without manual criteria, no `playbook.md` is written. **Decided** on 2026-10-18 (findings clarification).
+8. **Report** the result and end with the next-steps message (package 06): the single approval follows when the human calls `/shade-kit-finish`. **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)).
 
 ### DoD in `quick`
 

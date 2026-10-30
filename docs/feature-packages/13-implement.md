@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (task checkboxes, commands from `plan.md`) and 2026-10-18 (owner of the review skill) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (task checkboxes, commands from `plan.md`), 2026-10-18 (owner of the review skill), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): the skill ends instead of reopening `plan` itself) |
 | Source | Concept §5.1 (`implement`), §11.1 (implement loop), §4.1 (`review.md`), §6 |
 | Depends on | 06, 12 |
 | Enables | 14 (`verify`), 15 (DoD item "no open blockers") |
@@ -43,7 +43,7 @@ implement ──► simplify ──► review ──(blockers)──► implemen
 3. **Review:** an independent review of the change against `spec.md`, `plan.md`, and the repository's conventions. Independent means a separate context that did not write the code (a subagent where the agent supports it, see package 08 for the fallback). Findings go into `review.md`.
 4. If the review has open blockers, fix them and repeat the loop.
 
-The loop stops after three rounds with open blockers and asks the human how to continue (go on, accept a finding, or reopen `plan`). **Proposed.**
+The loop stops after three rounds with open blockers and asks the human how to continue: go on, accept a finding, or end here to reopen `plan`. **Proposed.** The skill does not reopen `plan` itself: on "reopen `plan`" it ends and names `/shade-kit-plan`, which the human calls (package 06). **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)).
 
 ### Quality commands
 

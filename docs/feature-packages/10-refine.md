@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (`spec.md` template), 2026-10-18 (consistency review: router reference replaced by `shade-kit-next-phase`), 2026-10-24 (documentation check: the `quick` phase writes the `quick` spec), and 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (`spec.md` template), 2026-10-18 (consistency review: router reference replaced by `shade-kit-next-phase`), 2026-10-24 (documentation check: the `quick` phase writes the `quick` spec), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): the human reopens `refine` by calling its skill) |
 | Source | Concept §3.3 (research focuses), §5.1 (`refine`), §5.2 (DoR), §6 |
 | Depends on | 06, 09 |
 | Enables | 11 (`map`), 12 (`plan`, DoR) |
@@ -61,7 +61,7 @@ IDs are never renumbered. A removed requirement keeps its ID with the status "re
 
 ### Repeated rounds
 
-`refine` can run several times. **Decided** (concept §5.1). A new round starts from the current `spec.md`. If the feature has moved on, the human reopens `refine` through `shade-kit-next-phase` (package 04 reopen). Later phases then go back to `pending`, and their artifacts must be checked against the changed spec when they run again.
+`refine` can run several times. **Decided** (concept §5.1). A new round starts from the current `spec.md`. If the feature has moved on, the human reopens `refine` by calling `/shade-kit-refine` (package 04 reopen; `shade-kit-next-phase` names the skill). **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)). Later phases then go back to `pending`, and their artifacts must be checked against the changed spec when they run again.
 
 ## Acceptance criteria
 

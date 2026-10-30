@@ -6,12 +6,13 @@ How to fill this template:
 - Replace every {{placeholder}} and remove every guidance comment like this one.
 - discuss writes these notes at the end of a discussion, or when the human asks. Writing them never changes the feature state.
 - Feature: the id of the current feature, or "none" when the discussion is not about a feature.
+- Request: the link to the feature's request.md; the notes are in the feature's discussions/ folder, so the link is ../request.md. Remove "· Request: …" when the discussion is not about a feature.
 - Participants: the git users who took part.
 - Options: every option that was discussed, with its pros and cons.
 - Open questions: every question that is still unresolved. Write "None." when empty.
 -->
 
-Feature: `{{feature-id | none}}` · Date: {{date}} · Participants: {{participants}}
+Feature: `{{feature-id | none}}` · Request: [request.md](../request.md) · Date: {{date}} · Participants: {{participants}}
 
 ## Context
 

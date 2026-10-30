@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), and 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), and 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill, `shade-kit-next-phase` is advisory, next-steps message, active phase asks the human) |
 | Source | Concept §3.2, §3.3, §3.4, §11.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 01, 03, 04, 05 |
 | Enables | 07, 08, and every phase package (09–17) |
 
 ## Benefit
 
-A developer only has to say "continue" (or start a new feature) and the agent finds the current feature, its phase, and the possible next steps, and starts the phase skill the human chooses. That phase skill runs the gate check and asks for approval itself, so a phase is gated also when its skill is called directly. Every phase skill builds on the same small set of shared skills, so interviews, gate checks, research, and reports work the same way everywhere.
+A developer starts every phase by calling its skill (for example `/shade-kit-plan`), so no phase starts behind their back. The skill checks through the CLI whether the phase can start, tells the developer what they can do instead when it cannot, and asks before it continues a phase that is already active. It runs the gate check and asks for approval itself. When the developer does not know where a feature stands, `shade-kit-next-phase` shows the current phase and names the skill to call for each possible next step. Every phase skill builds on the same small set of shared skills, so interviews, gate checks, research, and reports work the same way everywhere.
 
 ## Scope
 
@@ -18,7 +18,8 @@ A developer only has to say "continue" (or start a new feature) and the agent fi
 - Conventions every kit skill follows.
 - The version handshake on the skill side.
 - The entry protocol every phase skill runs.
-- `shade-kit-next-phase`, the entry point that offers the next steps.
+- The next-steps message every skill ends with.
+- `shade-kit-next-phase`, which shows where a feature stands and which skill to call next.
 - The general skills: interview, checklist check, research orchestration, report writing.
 - The shared format of `researches.md`.
 
@@ -33,6 +34,7 @@ A developer only has to say "continue" (or start a new feature) and the agent fi
 ### Skill conventions
 
 - Skills are written in the shared `SKILL.md` format and the plugin layout of `skills/`. Claude-only features (for example subagents) are only used where an agent-neutral way would lose function, and each such use is named in the skill. **Decided** (constraint, concept §1), **Unverified** (format compatibility, resolved in package 08).
+- A phase starts only when the human calls its phase skill (`/shade-kit-<phase>`). No skill starts a phase skill, and no phase skill calls `phase start` for a phase other than its own; a skill that ends names the skills the human can call ([Next-steps message](#next-steps-message)). **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)). The rule holds by convention, not technically: the description of every phase skill says that it runs only when the user calls it by name, the skill texts contain no hand-off, and the managed section in `CLAUDE.md` / `AGENTS.md` tells the agent (package 02). A restriction such as Claude Code's `disable-model-invocation` frontmatter field is not used in v1. **Decided** on 2026-10-30. Known weak point, like approvals (package 04): nothing technically stops an agent from loading a phase skill on its own.
 - Skills never read or write `feature.json`, `gates.json`, or `config.json` directly. They use the CLI with `--json`. Skills read and write Markdown artifacts in the feature folder directly. **Proposed.** This keeps every state change behind the engine's version check (package 01).
 - A shipped skill references no path under `research/` or `docs/` of the kit repository; those folders are design notes and are not shipped. The source comments of the skeletons are removed when a skill is worked out. **Decided** on 2026-10-18 (findings clarification).
 - Every artifact a skill creates starts from the repository's template in `.shadekit/templates/`, not from text built into the skill, so team edits to templates take effect. **Proposed.** The skill follows the template conventions of package 02: it follows the guidance comments, replaces every placeholder, and removes the guidance comments; checklist copies (package 05) keep their guidance comments.
@@ -46,36 +48,66 @@ A developer only has to say "continue" (or start a new feature) and the agent fi
 
 ### Entry protocol
 
-Every phase skill runs it as its first step, so a direct call such as `/shade-kit-plan` is gated too. **Decided** in the skills interview on 2026-10-17 ([shade-kit-skills.md](../../research/shade-kit-skills.md)); steps 2 and 4 extended on 2026-10-18. `shade-kit-new` has no entry protocol, because `feature new` creates the feature with `new` already in progress (package 04).
+Every phase skill runs it as its first step, so a phase skill called directly, such as `/shade-kit-plan`, is gated too. **Decided** in the skills interview on 2026-10-17 ([shade-kit-skills.md](../../research/shade-kit-skills.md)); steps 2 and 4 extended on 2026-10-18; steps 2, 4, and 6 changed on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)). `shade-kit-new` has no entry protocol, because `feature new` creates the feature with `new` already in progress (package 04); it has its own check (package 09).
+
+The CLI check of a phase start is `phase start` itself: it refuses a transition that is not allowed without changing `feature.json`, and its outcomes for an active phase or a pending transition change nothing (package 04). There is no separate check command. **Decided** on 2026-10-30.
 
 1. Version handshake.
-2. `shade-kit phase start <phase> --json`. If the transition is not allowed, stop and show the reason. If the phase is already in progress (a new session, another `refine` round), the engine changes nothing and returns no gate (package 04): continue with step 5. If a transition away from this phase is pending, the engine changes nothing and reports the pending transition (package 04): the skill asks the human whether to discard it; on yes it calls `phase reject <pending> --note "resumed <phase>"` and continues with step 5, on no it hands off to `shade-kit-next-phase`.
+2. Check and start: `shade-kit phase start <phase> --json`, then by result:
+   - Refused (failure envelope): the skill ends with the [next-steps message](#next-steps-message) for the refusal. Nothing has changed.
+   - `transition-requested`: continue with step 3.
+   - `transition-performed` (approval off, package 05): continue with step 3 for the checklist, then step 5.
+   - `transition-pending`: the transition into this phase was requested earlier and still waits for approval. Say so, then continue with step 3 with the returned gate.
+   - `already-in-progress`: the phase is already active. Tell the human and ask, with the agent's structured question tool where one exists: **continue the phase** (resume the work, or another round in `refine`) → step 5; or **end here** → the next-steps message. No phase work before the answer.
+   - `resume-pending`: the phase is active and the transition to `<pending>` waits for approval. Tell the human and ask: **discard the pending transition and continue** → `phase reject <pending> --note "resumed <phase>"`, then step 5; **keep it** → end, naming `/shade-kit-<pending>`, which decides on the pending transition; or **end here** → the next-steps message.
 3. If the gate has a checklist, run the checklist check skill on it.
 4. Gate decision:
-   - Approval on: show the result and ask the human for an explicit approval, also when the check passed. On yes: `phase approve <phase>`. On no: `phase reject <phase> --note "<gaps>"`; the previous phase is in progress again, and the skill hands off to `shade-kit-next-phase` with the reported gaps.
+   - Approval on: show the result and ask the human for an explicit approval, also when the check passed. On yes: `phase approve <phase>`. On no: `phase reject <phase> --note "<gaps>"`; the previous phase is in progress again, and the skill ends with the next-steps message, which names the reported gaps.
    - Approval off: the engine has already performed the transition (package 05). A failed checklist is reported as a warning and does not block.
 5. Load the skills the CLI returned and run the phase.
+6. End with the next-steps message. The skill never starts another phase skill.
 
 A phase skill never approves without a human answer in the conversation. **Decided** (concept §3.2).
 
+### Next-steps message
+
+Every kit skill that ends, after a refused start, a "no", or the end of its work, ends with a message that says what the human can do now and which skill to call for it. **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)).
+
+- With a current feature, the steps come from `shade-kit phase next --json` (package 04), so the skill derives no steps from the profile: continue the current phase, decide on the pending transition, move forward, or reopen an earlier phase, each with its phase skill (`/shade-kit-<phase>`), plus `/shade-kit-discuss` and `/shade-kit-drop`.
+- After a refusal, the message names the reason from the failure envelope and the options for it. **Proposed:**
+
+  | Refusal | Options named |
+  |---|---|
+  | Version mismatch or `shade-kit` missing (handshake) | What to update and how |
+  | 10 `kit-root-not-found` | `shade-kit init` |
+  | 20–22 (format too new, upgrade needed, invalid file) | Update the engine, run `shade-kit upgrade`, or fix the named file |
+  | 36 `git-identity-missing` | Set `user.name` and `user.email` |
+  | 37 `no-current-feature` | `shade-kit feature list`, `shade-kit feature set <id>`, `/shade-kit-new` |
+  | 40 `unknown-profile` | The known profiles from the message; fix `feature.json` or update the engine |
+  | 41 `phase-not-in-profile` | The phases of the profile and the steps of `phase next` (for example `/shade-kit-diagnose` instead of `/shade-kit-refine` in `bugfix`) |
+  | 42 `transition-not-allowed` | The steps of `phase next` |
+  | 44 `feature-done` | `shade-kit feature set <id>` for another feature, `/shade-kit-new` |
+  | 46 `phase-state-invalid` | Fix the named field of `feature.json` |
+
+- The message starts nothing: the human chooses by calling the skill.
+
 ### `shade-kit-next-phase`
 
-The entry point for the human when they say "continue" or ask where a feature stands. It only chooses and hands off: it never runs a gate check and never calls `phase approve`. **Decided** in the skills interview on 2026-10-17.
+Shows the human where a feature stands and which skill to call next, when they say "continue" or ask about a feature. It is advisory: it starts no phase skill, never runs a gate check, and never calls `phase start`, `phase approve`, or `phase reject`. **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)), replacing "starts the phase skill the human chooses" from the skills interview on 2026-10-17.
 
 1. Version handshake.
-2. `shade-kit feature current --json`. If not resolved: list features (`feature list --json`), ask which one or offer to create a new one, then `feature set` or hand off to `shade-kit-new` (package 09).
-3. `shade-kit phase next --json` (package 04) and offer the possible next steps it returns. The skill does not derive them from the profile.
+2. `shade-kit feature current --json`. If not resolved: list the features (`feature list --json`) and ask which one to use; after the human picks one, the skill may call `feature set <id>`, which starts no phase. Otherwise name `/shade-kit-new` and end.
+3. `shade-kit phase next --json` (package 04). The skill does not derive the steps from the profile.
 
-| State | `phase next` returns | Offered |
+| State | `phase next` returns | Shown |
 |---|---|---|
-| feature `done` | only the status | Report that the feature is finished; offer to pick another feature. |
-| current phase `in-progress` | `continue`, `forward` | Continue the current phase, or move on to the next phase of the profile. |
-| current phase `awaiting-approval` | `pending` | Repeat the pending transition (the phase skill of the pending phase runs its entry protocol again). |
-| current phase `in-progress`, earlier phases exist | `reopen[]` | Reopen an earlier phase. |
-| any state of an active feature | | Always offered as well: `shade-kit-discuss`, `shade-kit-drop`. |
+| feature `done` | only the status | Report that the feature is finished; name `shade-kit feature set <id>` for another feature and `/shade-kit-new`. |
+| current phase `in-progress` | `continue`, `forward` | Continue the current phase: `/shade-kit-<current>`; move on: `/shade-kit-<next>`. |
+| current phase `awaiting-approval` | `pending` | Decide on the pending transition: `/shade-kit-<pending>`; discard it and continue the current phase: `/shade-kit-<current>`. |
+| current phase `in-progress`, earlier phases exist | `reopen[]` | Reopen an earlier phase: `/shade-kit-<earlier>` (always needs approval). |
+| any state of an active feature | | Always shown as well: `/shade-kit-discuss`, `/shade-kit-drop`. |
 
-4. Let the human choose, with the agent's structured question tool where one exists.
-5. Start the phase skill of the chosen phase. Its entry protocol performs the transition: forward, re-entry, or reopen (package 04).
+4. End with these steps (the [next-steps message](#next-steps-message)). The human chooses by calling the skill.
 
 ### General skills
 
@@ -96,19 +128,25 @@ The entry point for the human when they say "continue" or ask where a feature st
 ## Acceptance criteria
 
 - **FP06-AC1** With an engine whose minor version differs from the skill's, every kit skill stops before doing any work and names what to update.
-- **FP06-AC2** With no resolvable current feature, `shade-kit-next-phase` lists the features and offers to create a new one.
-- **FP06-AC3** For a feature whose current phase is `in-progress`, `shade-kit-next-phase` offers to continue it, and the phase skill then continues without a gate.
+- **FP06-AC2** With no resolvable current feature, `shade-kit-next-phase` lists the features and names `/shade-kit-new`; it starts no skill.
+- **FP06-AC3** For a feature whose current phase is `in-progress`, `shade-kit-next-phase` names the phase skill of the current phase; that phase skill, called by the human, runs no gate.
 - **FP06-AC4** The entry protocol asks for approval also when the checklist passed, and calls `phase approve` only after a yes in the conversation.
-- **FP06-AC5** On a no, the phase skill calls `phase reject <phase>`, the previous phase is back in `in-progress`, and `shade-kit-next-phase` takes over.
+- **FP06-AC5** On a no, the phase skill calls `phase reject <phase>`, the previous phase is back in `in-progress`, and the skill ends with the next-steps message.
 - **FP06-AC6** The checklist check marks an item that refers to an artifact the profile does not have as not applicable with a reason.
 - **FP06-AC7** The research skill writes one section per focus into `researches.md` and leaves sections of other phases unchanged.
 - **FP06-AC8** No kit skill writes a kit JSON file directly; a review of the skill texts finds only CLI calls for state changes.
 - **FP06-AC9** `shade-kit-next-phase` never runs a gate check and never calls `phase approve`.
 - **FP06-AC10** A phase skill called directly, without `shade-kit-next-phase`, runs the entry protocol before any phase work.
-- **FP06-AC11** A phase skill called while a transition away from its phase is pending calls `phase reject` only after the human agreed to discard the pending transition.
-- **FP06-AC12** `shade-kit-next-phase` offers exactly the steps `phase next --json` returns, plus `shade-kit-discuss` and `shade-kit-drop`.
+- **FP06-AC11** A phase skill called while a transition away from its phase is pending tells the human, offers to discard the pending transition and continue, to keep it, or to end, and calls `phase reject` only after the human chose to discard it.
+- **FP06-AC12** `shade-kit-next-phase` shows exactly the steps `phase next --json` returns, plus `shade-kit-discuss` and `shade-kit-drop`, each with the skill to call, and starts no skill.
 - **FP06-AC13** No shipped skill references a path under `research/` or `docs/`.
+- **FP06-AC14** A phase skill whose `phase start` is refused ends with a message that names the reason and the human's options, and does no phase work.
+- **FP06-AC15** A phase skill called while its phase is already in progress tells the human and asks whether to continue the phase or to end, before any phase work.
+- **FP06-AC16** No skill starts a phase skill, and no phase skill calls `phase start` for a phase other than its own; a review of the skill texts finds no hand-off.
+- **FP06-AC17** Every phase skill ends with the next-steps message, built from `phase next --json` when a current feature exists.
+- **FP06-AC18** The description of every phase skill says that it runs only when the user calls it by name.
 
 ## Open points
 
 - Exact skill names (concept open question 6).
+- Phase skills are restricted to user invocation only by convention (see [Skill conventions](#skill-conventions)); a technical restriction (Claude Code `disable-model-invocation`, and whatever Copilot and Codex offer) is a possible later addition.

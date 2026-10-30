@@ -1,31 +1,36 @@
 # SHADE kit skills
 
-Status: draft, 2026-10-17, updated 2026-10-18 (consistency review: entry protocol with re-entry and rejection, `quick` phase, seven research agents; findings clarification: phase and workflow skills, optional report skill, pending transition, `phase next`) and 2026-10-27 (documentation check after package 04). Result of an interview on [shade-kit-concept.md](shade-kit-concept.md). Lists the skills SHADE kit v1 needs and what each one does roughly. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-17, updated 2026-10-18 (consistency review: entry protocol with re-entry and rejection, `quick` phase, seven research agents; findings clarification: phase and workflow skills, optional report skill, pending transition, `phase next`) 2026-10-27 (documentation check after package 04), and 2026-10-30 (phases start only when the user calls the phase skill; [shade-kit-phase-start-analysis.md](shade-kit-phase-start-analysis.md)). Result of an interview on [shade-kit-concept.md](shade-kit-concept.md). Lists the skills SHADE kit v1 needs and what each one does roughly. Design notes only; nothing here is shipped.
 
 ## 1. Decisions
 
 - **One skill per phase**, including the thin phases `new` and `finish`. Each phase can later be replaced on its own through the `replace` extension slot (concept section 7).
 - **Phase skills and workflow skills.** Phase skills run a phase of a profile (`new`, `refine`, `map`, `diagnose`, `plan`, `implement`, `quick`, `verify`, `finish`). Workflow skills (`next-phase`, `discuss`, `drop`) belong to no profile; they run no entry protocol, only the version handshake. `discuss` and `drop` are not phases (concept §5.4, package 04).
-- **No router skill.** It is replaced by `shade-kit-next-phase`, which finds the current phase, offers the possible next phases, lets the user choose, and starts the chosen phase.
+- **No router skill.** It is replaced by `shade-kit-next-phase`, which finds the current phase and names the skill to call for each possible next step. It starts no skill (2026-10-30).
+- **A phase starts only when the user calls its phase skill** (2026-10-30, [shade-kit-phase-start-analysis.md](shade-kit-phase-start-analysis.md)). No skill starts a phase skill, and no phase skill calls `phase start` for a phase other than its own. Every skill ends with a next-steps message that names the skills the user can call. The rule holds by convention: each phase skill's description says it runs only when the user calls it by name; no technical restriction in v1.
 - **Phase skills are profile-aware.** They read the profile from `shade-kit feature current --json` and adjust their behaviour (`bugfix`: short plan, failing test first).
 - **`quick` is a phase of its own** (2026-10-18). The `quick` profile is `new` → `quick` → `finish`, and `shade-kit-quick` is the skill of the `quick` phase: a mini run of refine, plan, and implement, not an implement mode. So every phase has exactly one skill named `shade-kit-<phase>`.
 - **General skills** are separate skills only when more than one phase uses them, or when they are optional. `simplify` stays inline in `shade-kit-implement`. The report is the optional general skill `shade-kit-report`, which `shade-kit-finish` loads only when a report is written (`report` in `config.json`: `ask`, `always`, `never`; package 15). Decided on 2026-10-18.
-- **Every phase skill runs the entry protocol itself** as its first step, so a direct call such as `/shade-kit-plan` is gated too. `shade-kit-next-phase` only chooses and hands off. Exception: `shade-kit-new` has no entry protocol, because `shade-kit feature new` creates the feature with `new` already in progress.
+- **Every phase skill runs the entry protocol itself** as its first step, so a direct call such as `/shade-kit-plan` is gated too. `phase start` is the CLI check: a refusal and the outcomes for an active phase change nothing. Exception: `shade-kit-new` has no entry protocol, because `shade-kit feature new` creates the feature with `new` already in progress.
 
-Entry protocol of every phase skill (from concept section 11.4, extended on 2026-10-18):
+Entry protocol of every phase skill (from concept section 11.4, extended on 2026-10-18 and 2026-10-30):
 
 1. Version handshake: `shade-kit version --json`. Stop on a mismatch and name what to update.
-2. `shade-kit phase start <phase> --json`. If the phase is already in progress (new session, another `refine` round), the engine changes nothing and returns no gate: go to step 5. If a transition away from this phase is pending, the engine changes nothing and reports it: ask the human whether to discard it; on yes `shade-kit phase reject <pending> --note "resumed <phase>"` and go to step 5, on no hand off to `shade-kit-next-phase` and stop.
+2. `shade-kit phase start <phase> --json`.
+   - Refused: end with the reason and the user's options (from `shade-kit phase next --json` when a feature is current). Nothing has changed.
+   - Already in progress (new session, another `refine` round): the engine changes nothing and returns no gate. Tell the user and ask: continue the phase (go to step 5) or end with the next steps.
+   - A transition away from this phase is pending: the engine changes nothing and reports it. Tell the user and ask: discard it and continue (`shade-kit phase reject <pending> --note "resumed <phase>"`, go to step 5), keep it (end and name `/shade-kit-<pending>`), or end with the next steps.
 3. `shade-kit-gate-check` against the returned checklist, if the checklist is switched on.
 4. If the gate needs approval: show the result and ask the human.
    - Yes: `shade-kit phase approve <phase>`.
-   - No: `shade-kit phase reject <phase> --note "<gaps>"`. The previous phase is in progress again; hand off to `shade-kit-next-phase` and stop.
+   - No: `shade-kit phase reject <phase> --note "<gaps>"`. The previous phase is in progress again; end with the gaps and the next steps.
    - If approval is switched off, the engine has already performed the transition; a failed checklist is reported as a warning only.
 5. Load the skills the CLI returned and run the phase.
+6. End with the next steps. Never start another phase skill.
 
 ## 2. Phase skills
 
-Called by the user, directly or through `shade-kit-next-phase`. Each runs the entry protocol (exception: `shade-kit-new`).
+Called only by the user, by name (`/shade-kit-<phase>`); `shade-kit-next-phase` names them but does not start them. Each runs the entry protocol (exception: `shade-kit-new`, which first checks for an active current feature).
 
 | Skill | Purpose |
 |---|---|
@@ -45,7 +50,7 @@ Called by the user; outside every profile. No entry protocol, only the version h
 
 | Skill | Purpose |
 |---|---|
-| `shade-kit-next-phase` | Finds the current feature and phase, offers the next steps from `shade-kit phase next --json`, lets the user choose, and starts the chosen phase skill. |
+| `shade-kit-next-phase` | Finds the current feature and phase and shows the next steps from `shade-kit phase next --json`, each with the skill the user calls. Starts no skill. |
 | `shade-kit-discuss` | Free brainstorming on any topic. Can run as input for `new` or in any other phase. |
 | `shade-kit-drop` | Deletes the feature and clears the local override only if it points to the dropped feature. |
 
