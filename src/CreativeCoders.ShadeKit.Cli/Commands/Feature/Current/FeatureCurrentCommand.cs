@@ -4,6 +4,7 @@ using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -67,14 +68,17 @@ public class FeatureCurrentCommand(
     {
         if (data is not { Feature: { } feature, ResolvedFrom: { } resolvedFrom })
         {
-            _context.Console.WriteLine("No current feature.");
-            _context.Console.WriteLine("Run 'shade-kit feature set <id>' to select one.");
+            _context.Console.MarkupLine("No current feature.".ToWarningMarkup());
+            _context.Console.MarkupLine(
+                $"Run '{"shade-kit feature set <id>".ToEscapedMarkup().ToCommandMarkup()}' to select one.");
 
             return;
         }
 
-        _context.Console.WriteLine($"{feature.Id} ({feature.Profile}, {feature.Status.ToJsonName()})");
-        _context.Console.WriteLine($"Current phase: {feature.CurrentPhase} ({feature.PhaseState.ToJsonName()})");
-        _context.Console.WriteLine($"Resolved from: {resolvedFrom.ToJsonName()}");
+        _context.Console.MarkupLine($"{feature.Id.ToEscapedMarkup().ToBoldMarkup()} " +
+                                    $"({feature.Profile.ToEscapedMarkup()}, {feature.Status.ToMarkup()})");
+        _context.Console.MarkupLine($"Current phase: {feature.CurrentPhase.ToEscapedMarkup().ToInfoMarkup()} " +
+                                    $"({feature.PhaseState.ToMarkup()})");
+        _context.Console.MarkupLine($"Resolved from: {resolvedFrom.ToJsonName().ToEscapedMarkup()}");
     }
 }

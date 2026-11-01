@@ -4,6 +4,7 @@ using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -81,8 +82,9 @@ public class FeatureDropCommand(
 
         if (!_confirmation.CanAsk)
         {
-            _context.Console.WriteLine(
-                $"Nothing was dropped. Run 'shade-kit feature drop {preview.FeatureId} --yes' to drop it.");
+            var command = $"shade-kit feature drop {preview.FeatureId} --yes".ToEscapedMarkup().ToCommandMarkup();
+
+            _context.Console.MarkupLine($"{"Nothing was dropped.".ToWarningMarkup()} Run '{command}' to drop it.");
 
             return CommandResult.Success;
         }
@@ -90,7 +92,7 @@ public class FeatureDropCommand(
         if (!await _confirmation.ConfirmAsync($"Drop feature {preview.FeatureId}?", _context.CancellationToken)
                 .ConfigureAwait(false))
         {
-            _context.Console.WriteLine("Nothing was dropped.");
+            _context.Console.MarkupLine("Nothing was dropped.".ToWarningMarkup());
 
             return CommandResult.Success;
         }
@@ -114,7 +116,8 @@ public class FeatureDropCommand(
 
     private void WriteDropped(FeatureDropResult result)
     {
-        _context.Console.WriteLine($"Dropped feature {result.FeatureId}.");
+        _context.Console.MarkupLine(
+            $"Dropped feature {result.FeatureId.ToEscapedMarkup().ToBoldMarkup()}.".ToSuccessMarkup());
 
         if (result.OverrideAffected)
         {
@@ -124,11 +127,13 @@ public class FeatureDropCommand(
 
     private void WritePreview(FeatureDropPreview preview)
     {
-        _context.Console.WriteLine($"Feature {preview.FeatureId} would be dropped. Files:");
+        _context.Console.MarkupLine(
+            $"Feature {preview.FeatureId.ToEscapedMarkup().ToBoldMarkup()} would be dropped.".ToWarningMarkup() +
+            " Files:");
 
         foreach (var file in preview.Files)
         {
-            _context.Console.WriteLine($"  {file}");
+            _context.Console.MarkupLine($"  {file.ToEscapedMarkup().ToMutedMarkup()}");
         }
 
         if (preview.OverrideAffected)

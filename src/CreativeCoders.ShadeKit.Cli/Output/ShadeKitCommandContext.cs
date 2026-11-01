@@ -2,6 +2,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.SysConsole.Core;
 using Spectre.Console;
 
 namespace CreativeCoders.ShadeKit.Cli.Output;
@@ -174,7 +175,7 @@ public sealed class ShadeKitCommandContext(
 
         foreach (var message in messages)
         {
-            Console.WriteLine($"Warning: {message.Message}");
+            Console.MarkupLine($"Warning: {message.Message.ToEscapedMarkup()}".ToWarningMarkup());
         }
 
         writePlain();

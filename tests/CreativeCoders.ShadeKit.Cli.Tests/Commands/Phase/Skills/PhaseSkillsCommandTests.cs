@@ -64,6 +64,27 @@ public class PhaseSkillsCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_PlainModeValuesWithMarkupCharacters_WritesValuesVerbatim()
+    {
+        // Arrange
+        var console = FeatureCommandTestHelper.CreateWideConsole();
+        var result = new PhaseSkillsResult(Id, "bug[fix]", "pl[an]",
+            new PhaseSkills("shade-kit-[plan]", ["[red]x[/]"]), []);
+        var command = CreateCommand(console, CreateWorkflow(result));
+
+        // Act
+        await command.ExecuteAsync(new PhaseSkillsCommandOptions { Phase = "plan" });
+
+        // Assert
+        console.Lines
+            .Should().Equal(
+                $"Feature: {Id} (bug[fix])",
+                "Phase: pl[an]",
+                "Phase skill: shade-kit-[plan]",
+                "General skills: [red]x[/]");
+    }
+
+    [Fact]
     public async Task ExecuteAsync_JsonModeWithWarning_WritesWarningCode()
     {
         // Arrange

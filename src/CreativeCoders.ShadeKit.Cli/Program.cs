@@ -156,7 +156,7 @@ internal static class Program
     private static ICliHost CreateHost(ICliJsonWriter jsonWriter, TextWriter consoleOutput,
         ICliCancellation cancellation, Action<IServiceCollection>? configureServices)
     {
-        var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(consoleOutput) });
+        var console = CreateConsole(consoleOutput);
 
         // The host runs the ConfigureServices actions in the order they were added, so the overrides come first and
         // the TryAdd registrations of AddShadeKitCore and AddShadeKitCli keep them. The console and the JSON writer
@@ -176,6 +176,42 @@ internal static class Program
             .PrintFooterText([""])
             .EnableHelp(HelpCommandKind.CommandOrArgument, HelpCommandKind.EmptyArgs)
             .Build();
+    }
+
+    /// <summary>
+    /// Creates the console that writes the plain output to the specified writer and lets its profile enrichers read
+    /// the specified environment variables.
+    /// </summary>
+    /// <remarks>
+    /// Behaves like <see cref="CreateConsole(TextWriter,Dictionary{string,string})" />.
+    /// <paramref name="environmentVariables" /> is the seam for
+    /// tests that simulate a CI environment without changing the environment of the process.
+    /// </remarks>
+    /// <param name="consoleOutput">The writer that receives the plain output.</param>
+    /// <param name="environmentVariables">
+    /// The environment variables the profile enrichers read, or <see langword="null" /> to read the ones of the
+    /// process.
+    /// </param>
+    /// <returns>The console.</returns>
+    internal static IAnsiConsole CreateConsole(TextWriter consoleOutput,
+        Dictionary<string, string>? environmentVariables = null)
+    {
+        var output = new AnsiConsoleOutput(consoleOutput);
+
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = output,
+            Ansi = output.IsTerminal ? AnsiSupport.Detect : AnsiSupport.No,
+            ColorSystem = output.IsTerminal ? ColorSystemSupport.Detect : ColorSystemSupport.NoColors,
+            EnvironmentVariables = environmentVariables
+        });
+
+        if (!output.IsTerminal)
+        {
+            console.Profile.Capabilities.Ansi = false;
+        }
+
+        return console;
     }
 
     private static Task<int> CompleteFailedJsonRunAsync(CliJsonWriter jsonWriter, TextWriter error,

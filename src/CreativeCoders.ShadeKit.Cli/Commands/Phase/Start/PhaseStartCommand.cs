@@ -5,6 +5,7 @@ using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Workflow;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -70,24 +71,28 @@ public class PhaseStartCommand(
     private void WriteResult(PhaseStartCommandData data)
     {
         var transition = data.Transition is null
-            ? PhaseTextFormat.None
+            ? PhaseTextFormat.NoneMarkup
             : PhaseTextFormat.FormatTransition(data.Transition);
         var gate = data.Gate is null
-            ? PhaseTextFormat.None
-            : $"{data.Gate.Phase} ({PhaseTextFormat.FormatGate(data.Gate.Approval, data.Gate.Checklist)})";
+            ? PhaseTextFormat.NoneMarkup
+            : $"{PhaseTextFormat.FormatPhaseName(data.Gate.Phase)} " +
+              $"({PhaseTextFormat.FormatGate(data.Gate.Approval, data.Gate.Checklist)})";
 
-        _context.Console.WriteLine($"Feature: {data.FeatureId} ({data.Profile})");
-        _context.Console.WriteLine($"Outcome: {data.Outcome.ToJsonName()}");
-        _context.Console.WriteLine($"Transition: {transition}");
-        _context.Console.WriteLine($"Current phase: {PhaseTextFormat.FormatPhase(data.CurrentPhase)}");
-        _context.Console.WriteLine($"Gate: {gate}");
-        _context.Console.WriteLine($"Phase skill: {data.Skills.PhaseSkill}");
-        _context.Console.WriteLine($"General skills: {PhaseTextFormat.FormatSkills(data.Skills.GeneralSkills)}");
+        _context.Console.MarkupLine(
+            $"Feature: {data.FeatureId.ToEscapedMarkup().ToBoldMarkup()} ({data.Profile.ToEscapedMarkup()})");
+        _context.Console.MarkupLine($"Outcome: {data.Outcome.ToJsonName().ToEscapedMarkup().ToBoldMarkup()}");
+        _context.Console.MarkupLine($"Transition: {transition}");
+        _context.Console.MarkupLine($"Current phase: {PhaseTextFormat.FormatPhase(data.CurrentPhase)}");
+        _context.Console.MarkupLine($"Gate: {gate}");
+        _context.Console.MarkupLine($"Phase skill: {data.Skills.PhaseSkill.ToEscapedMarkup()}");
+        _context.Console.MarkupLine($"General skills: {PhaseTextFormat.FormatSkills(data.Skills.GeneralSkills)}");
 
         if (data is { CurrentPhase.State: PhaseState.AwaitingApproval, Transition.To: { } pending })
         {
-            _context.Console.WriteLine(
-                $"Approve with 'shade-kit phase approve {pending}' or reject with 'shade-kit phase reject {pending}'.");
+            var approve = $"shade-kit phase approve {pending}".ToEscapedMarkup().ToCommandMarkup();
+            var reject = $"shade-kit phase reject {pending}".ToEscapedMarkup().ToCommandMarkup();
+
+            _context.Console.MarkupLine($"Approve with '{approve}' or reject with '{reject}'.");
         }
     }
 }

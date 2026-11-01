@@ -3,6 +3,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Workflow;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -56,10 +57,11 @@ public class PhaseSkillsCommand(
 
         _context.WriteSuccess(options.Json, data, result.Warnings, () =>
         {
-            _context.Console.WriteLine($"Feature: {data.FeatureId} ({data.Profile})");
-            _context.Console.WriteLine($"Phase: {data.Phase}");
-            _context.Console.WriteLine($"Phase skill: {data.PhaseSkill}");
-            _context.Console.WriteLine($"General skills: {PhaseTextFormat.FormatSkills(data.GeneralSkills)}");
+            _context.Console.MarkupLine(
+                $"Feature: {data.FeatureId.ToEscapedMarkup().ToBoldMarkup()} ({data.Profile.ToEscapedMarkup()})");
+            _context.Console.MarkupLine($"Phase: {PhaseTextFormat.FormatPhaseName(data.Phase)}");
+            _context.Console.MarkupLine($"Phase skill: {data.PhaseSkill.ToEscapedMarkup()}");
+            _context.Console.MarkupLine($"General skills: {PhaseTextFormat.FormatSkills(data.GeneralSkills)}");
         });
 
         return CommandResult.Success;
