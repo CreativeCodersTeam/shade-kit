@@ -156,7 +156,7 @@ internal static class Program
     private static ICliHost CreateHost(ICliJsonWriter jsonWriter, TextWriter consoleOutput,
         ICliCancellation cancellation, Action<IServiceCollection>? configureServices)
     {
-        var console = AnsiConsole.Create(CreateConsoleSettings(consoleOutput));
+        var console = CreateConsole(consoleOutput);
 
         // The host runs the ConfigureServices actions in the order they were added, so the overrides come first and
         // the TryAdd registrations of AddShadeKitCore and AddShadeKitCli keep them. The console and the JSON writer
@@ -179,25 +179,39 @@ internal static class Program
     }
 
     /// <summary>
-    /// Creates the settings of the console that writes the plain output to the specified writer.
+    /// Creates the console that writes the plain output to the specified writer and lets its profile enrichers read
+    /// the specified environment variables.
     /// </summary>
     /// <remarks>
-    /// Spectre.Console detects ANSI support from the terminal type only, so output that goes to a pipe, a file, or a
-    /// test writer would get escape sequences. Such output is written without ANSI sequences and colors; only a
-    /// terminal gets the detected support, which also honors <c>NO_COLOR</c>.
+    /// Behaves like <see cref="CreateConsole(TextWriter,Dictionary{string,string})" />.
+    /// <paramref name="environmentVariables" /> is the seam for
+    /// tests that simulate a CI environment without changing the environment of the process.
     /// </remarks>
     /// <param name="consoleOutput">The writer that receives the plain output.</param>
-    /// <returns>The settings of the console.</returns>
-    internal static AnsiConsoleSettings CreateConsoleSettings(TextWriter consoleOutput)
+    /// <param name="environmentVariables">
+    /// The environment variables the profile enrichers read, or <see langword="null" /> to read the ones of the
+    /// process.
+    /// </param>
+    /// <returns>The console.</returns>
+    internal static IAnsiConsole CreateConsole(TextWriter consoleOutput,
+        Dictionary<string, string>? environmentVariables = null)
     {
         var output = new AnsiConsoleOutput(consoleOutput);
 
-        return new AnsiConsoleSettings
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
             Out = output,
             Ansi = output.IsTerminal ? AnsiSupport.Detect : AnsiSupport.No,
-            ColorSystem = output.IsTerminal ? ColorSystemSupport.Detect : ColorSystemSupport.NoColors
-        };
+            ColorSystem = output.IsTerminal ? ColorSystemSupport.Detect : ColorSystemSupport.NoColors,
+            EnvironmentVariables = environmentVariables
+        });
+
+        if (!output.IsTerminal)
+        {
+            console.Profile.Capabilities.Ansi = false;
+        }
+
+        return console;
     }
 
     private static Task<int> CompleteFailedJsonRunAsync(CliJsonWriter jsonWriter, TextWriter error,

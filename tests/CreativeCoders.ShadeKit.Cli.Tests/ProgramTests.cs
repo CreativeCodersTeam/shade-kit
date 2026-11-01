@@ -76,31 +76,31 @@ public sealed class ProgramTests : IDisposable
     }
 
     [Fact]
-    public void CreateConsoleSettings_WriterIsNoTerminal_TurnsOffAnsiAndColors()
+    public void CreateConsole_WriterIsNoTerminal_TurnsOffAnsiAndColors()
     {
         // Arrange
         using var output = new StringWriter();
 
         // Act
-        var settings = Program.CreateConsoleSettings(output);
+        var console = Program.CreateConsole(output);
 
         // Assert
-        settings.Ansi
-            .Should().Be(AnsiSupport.No);
+        console.Profile.Capabilities.Ansi
+            .Should().BeFalse();
 
-        settings.ColorSystem
-            .Should().Be(ColorSystemSupport.NoColors);
+        console.Profile.Capabilities.ColorSystem
+            .Should().Be(ColorSystem.NoColors);
 
-        settings.Out!.Writer
+        console.Profile.Out.Writer
             .Should().BeSameAs(output);
     }
 
     [Fact]
-    public void CreateConsoleSettings_WriterIsNoTerminal_ConsoleWritesMarkupWithoutEscapeSequences()
+    public void CreateConsole_WriterIsNoTerminal_ConsoleWritesMarkupWithoutEscapeSequences()
     {
         // Arrange
         using var output = new StringWriter();
-        var console = AnsiConsole.Create(Program.CreateConsoleSettings(output));
+        var console = Program.CreateConsole(output);
 
         // Act
         console.MarkupLine("[green]Created[/] [bold]feature[/]");
@@ -108,6 +108,49 @@ public sealed class ProgramTests : IDisposable
         // Assert
         output.ToString()
             .Should().Be("Created feature" + Environment.NewLine);
+    }
+
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true")]
+    [InlineData("TF_BUILD", "True")]
+    public void CreateConsole_WriterIsNoTerminalInCiThatTurnsOnAnsi_ConsoleWritesMarkupWithoutEscapeSequences(
+        string variable, string value)
+    {
+        // Arrange
+        using var output = new StringWriter();
+        var environmentVariables = new Dictionary<string, string> { [variable] = value };
+        var console = Program.CreateConsole(output, environmentVariables);
+
+        // Act
+        console.MarkupLine("[green]Created[/] [bold]feature[/]");
+
+        // Assert
+        console.Profile.Enrichers
+            .Should().NotBeEmpty("the CI enricher must run, otherwise the test proves nothing");
+
+        console.Profile.Capabilities.Ansi
+            .Should().BeFalse();
+
+        output.ToString()
+            .Should().Be("Created feature" + Environment.NewLine);
+    }
+
+    [Fact]
+    public void CreateConsole_WriterIsNoTerminalInGitHubActions_KeepsConsoleNotInteractive()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        var environmentVariables = new Dictionary<string, string> { ["GITHUB_ACTIONS"] = "true" };
+
+        // Act
+        var console = Program.CreateConsole(output, environmentVariables);
+
+        // Assert
+        console.Profile.Enrichers
+            .Should().Equal("GitHub");
+
+        console.Profile.Capabilities.Interactive
+            .Should().BeFalse();
     }
 
     [Fact]
