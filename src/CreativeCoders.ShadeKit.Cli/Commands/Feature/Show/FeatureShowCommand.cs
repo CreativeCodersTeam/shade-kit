@@ -4,6 +4,7 @@ using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -67,22 +68,23 @@ public class FeatureShowCommand(
         var source = FeatureTextFormat.FormatSource(feature.Source);
         var created = FeatureTextFormat.FormatCreated(feature);
 
-        _context.Console.WriteLine($"Id: {data.Id}");
-        _context.Console.WriteLine($"Title: {data.Title}");
-        _context.Console.WriteLine($"Profile: {data.Profile}");
-        _context.Console.WriteLine($"Status: {data.Status.ToJsonName()}");
-        _context.Console.WriteLine($"Current phase: {data.CurrentPhase}");
+        _context.Console.MarkupLine($"Id: {data.Id.ToEscapedMarkup().ToBoldMarkup()}");
+        _context.Console.MarkupLine($"Title: {data.Title.ToEscapedMarkup()}");
+        _context.Console.MarkupLine($"Profile: {data.Profile.ToEscapedMarkup()}");
+        _context.Console.MarkupLine($"Status: {data.Status.ToMarkup()}");
+        _context.Console.MarkupLine($"Current phase: {data.CurrentPhase.ToEscapedMarkup().ToInfoMarkup()}");
 
         if (data.PendingTransition is not null)
         {
-            _context.Console.WriteLine($"Pending transition: {data.PendingTransition}");
+            _context.Console.MarkupLine(
+                $"Pending transition: {data.PendingTransition.ToEscapedMarkup().ToWarningMarkup()}");
         }
 
-        _context.Console.WriteLine($"Source: {source}");
-        _context.Console.WriteLine($"Created: {created}");
-        _context.Console.WriteLine($"Feature directory: {data.Paths.FeatureDir}");
-        _context.Console.WriteLine($"Feature file: {data.Paths.FeatureFile}");
-        _context.Console.WriteLine($"Request: {data.Paths.Request}");
+        _context.Console.MarkupLine($"Source: {source.ToEscapedMarkup()}");
+        _context.Console.MarkupLine($"Created: {created.ToEscapedMarkup()}");
+        _context.Console.MarkupLine($"Feature directory: {data.Paths.FeatureDir.ToEscapedMarkup()}");
+        _context.Console.MarkupLine($"Feature file: {data.Paths.FeatureFile.ToEscapedMarkup()}");
+        _context.Console.MarkupLine($"Request: {data.Paths.Request.ToEscapedMarkup()}");
 
         WritePhases(data);
         WriteHistory(feature);
@@ -94,7 +96,7 @@ public class FeatureShowCommand(
 
         foreach (var (phase, state) in data.Phases)
         {
-            _context.Console.WriteLine($"  {phase}: {state.ToJsonName()}");
+            _context.Console.MarkupLine($"  {phase.ToEscapedMarkup().ToInfoMarkup()}: {state.ToMarkup()}");
         }
     }
 
@@ -103,7 +105,7 @@ public class FeatureShowCommand(
     {
         if (feature.History is not { Count: > 0 } history)
         {
-            _context.Console.WriteLine("History: none");
+            _context.Console.MarkupLine($"History: {"none".ToMutedMarkup()}");
 
             return;
         }
@@ -112,7 +114,7 @@ public class FeatureShowCommand(
 
         foreach (var entry in history)
         {
-            _context.Console.WriteLine($"  {FeatureTextFormat.FormatHistoryEntry(entry)}");
+            _context.Console.MarkupLine($"  {FeatureTextFormat.FormatHistoryEntry(entry).ToEscapedMarkup()}");
         }
     }
 }

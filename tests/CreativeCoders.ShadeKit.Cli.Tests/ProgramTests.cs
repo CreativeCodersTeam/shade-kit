@@ -76,6 +76,41 @@ public sealed class ProgramTests : IDisposable
     }
 
     [Fact]
+    public void CreateConsoleSettings_WriterIsNoTerminal_TurnsOffAnsiAndColors()
+    {
+        // Arrange
+        using var output = new StringWriter();
+
+        // Act
+        var settings = Program.CreateConsoleSettings(output);
+
+        // Assert
+        settings.Ansi
+            .Should().Be(AnsiSupport.No);
+
+        settings.ColorSystem
+            .Should().Be(ColorSystemSupport.NoColors);
+
+        settings.Out!.Writer
+            .Should().BeSameAs(output);
+    }
+
+    [Fact]
+    public void CreateConsoleSettings_WriterIsNoTerminal_ConsoleWritesMarkupWithoutEscapeSequences()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        var console = AnsiConsole.Create(Program.CreateConsoleSettings(output));
+
+        // Act
+        console.MarkupLine("[green]Created[/] [bold]feature[/]");
+
+        // Assert
+        output.ToString()
+            .Should().Be("Created feature" + Environment.NewLine);
+    }
+
+    [Fact]
     public async Task RunAsync_ServiceRegisteredByHook_ReplacesDefaultService()
     {
         // Arrange

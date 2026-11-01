@@ -4,6 +4,7 @@ using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Workflow;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -58,9 +59,10 @@ public class PhaseCompleteCommand(
 
         _context.WriteSuccess(options.Json, data, result.Warnings, () =>
         {
-            _context.Console.WriteLine($"Feature: {data.FeatureId}");
-            _context.Console.WriteLine($"Completed phase: {data.Phase}");
-            _context.Console.WriteLine($"Status: {data.Status.ToJsonName()}");
+            _context.Console.MarkupLine($"Feature: {data.FeatureId.ToEscapedMarkup().ToBoldMarkup()}");
+            _context.Console.MarkupLine(
+                $"Completed phase: {PhaseTextFormat.FormatPhaseName(data.Phase)}".ToSuccessMarkup());
+            _context.Console.MarkupLine($"Status: {data.Status.ToMarkup()}");
 
             if (data.OverrideCleared)
             {

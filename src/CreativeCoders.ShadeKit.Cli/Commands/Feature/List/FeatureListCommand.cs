@@ -4,6 +4,7 @@ using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -67,15 +68,17 @@ public class FeatureListCommand(
     {
         if (data.Features.Count == 0)
         {
-            _context.Console.WriteLine("No features found.");
+            _context.Console.MarkupLine("No features found.".ToWarningMarkup());
 
             return;
         }
 
         foreach (var feature in data.Features)
         {
-            _context.Console.WriteLine($"{feature.Id}  {feature.Status.ToJsonName()}  {feature.Profile}  " +
-                                       $"{feature.CurrentPhase}  {feature.Title}");
+            _context.Console.MarkupLine($"{feature.Id.ToEscapedMarkup().ToBoldMarkup()}  {feature.Status.ToMarkup()}  " +
+                                        $"{feature.Profile.ToEscapedMarkup()}  " +
+                                        $"{feature.CurrentPhase.ToEscapedMarkup().ToInfoMarkup()}  " +
+                                        $"{feature.Title.ToEscapedMarkup()}");
         }
     }
 }

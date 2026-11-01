@@ -5,6 +5,7 @@ using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Workflow;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -74,22 +75,24 @@ public class PhaseNextCommand(
     {
         var current = data.Current;
 
-        _context.Console.WriteLine($"Feature: {current.FeatureId} ({current.Status.ToJsonName()})");
-        _context.Console.WriteLine($"Current phase: {current.Phase} ({current.State.ToJsonName()})");
+        _context.Console.MarkupLine(
+            $"Feature: {current.FeatureId.ToEscapedMarkup().ToBoldMarkup()} ({current.Status.ToMarkup()})");
+        _context.Console.MarkupLine(
+            $"Current phase: {PhaseTextFormat.FormatPhaseName(current.Phase)} ({current.State.ToMarkup()})");
 
         if (data.Continue is { } continueStep)
         {
-            _context.Console.WriteLine($"Continue: {FormatStep(continueStep)}");
+            _context.Console.MarkupLine($"Continue: {FormatStep(continueStep)}");
         }
 
         if (data.Pending is { } pendingStep)
         {
-            _context.Console.WriteLine($"Pending: {FormatGatedStep(pendingStep)}");
+            _context.Console.MarkupLine($"Pending: {FormatGatedStep(pendingStep)}");
         }
 
         if (data.Forward is { } forwardStep)
         {
-            _context.Console.WriteLine($"Forward: {FormatGatedStep(forwardStep)}");
+            _context.Console.MarkupLine($"Forward: {FormatGatedStep(forwardStep)}");
         }
 
         WriteReopen(data.Reopen);
@@ -102,7 +105,7 @@ public class PhaseNextCommand(
             case null:
                 return;
             case []:
-                _context.Console.WriteLine($"Reopen: {PhaseTextFormat.None}");
+                _context.Console.MarkupLine($"Reopen: {PhaseTextFormat.NoneMarkup}");
 
                 return;
         }
@@ -111,19 +114,19 @@ public class PhaseNextCommand(
 
         foreach (var step in reopen)
         {
-            _context.Console.WriteLine($"  {FormatStep(step)}");
+            _context.Console.MarkupLine($"  {FormatStep(step)}");
         }
     }
 
     private static string FormatStep(PhaseNextCommandStepData step)
     {
-        return $"{step.Phase} (skill: {step.Skill})";
+        return $"{PhaseTextFormat.FormatPhaseName(step.Phase)} (skill: {step.Skill.ToEscapedMarkup()})";
     }
 
     private static string FormatGatedStep(PhaseNextCommandGatedStepData step)
     {
         var gate = PhaseTextFormat.FormatGate(step.Gate.Approval, step.Gate.Checklist);
 
-        return $"{step.Phase} (skill: {step.Skill}, {gate})";
+        return $"{PhaseTextFormat.FormatPhaseName(step.Phase)} (skill: {step.Skill.ToEscapedMarkup()}, {gate})";
     }
 }

@@ -5,6 +5,7 @@ using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -61,15 +62,16 @@ public class InitCommand(
 
     private void WriteSummary(InitCommandData data)
     {
-        _context.Console.MarkupLine($"Initialised SHADE kit in {Markup.Escape(data.RepositoryRoot)}.");
+        _context.Console.MarkupLine(
+            $"Initialised SHADE kit in {data.RepositoryRoot.ToEscapedMarkup().ToBoldMarkup()}.".ToSuccessMarkup());
 
         foreach (var file in data.Files)
         {
-            _context.Console.MarkupLine(
-                $"{Markup.Escape(file.Action.ToJsonName())}  {Markup.Escape(file.Path)}");
+            _context.Console.MarkupLine($"{file.Action.ToMarkup()}  {file.Path.ToEscapedMarkup()}");
         }
 
         _context.Console.MarkupLine(
-            $"Commit {Markup.Escape($"'{KitStorePaths.RootPath}/'")} and the changed files together with your code.");
+            $"Commit '{$"{KitStorePaths.RootPath}/".ToEscapedMarkup().ToBoldMarkup()}' and the changed files " +
+            "together with your code.");
     }
 }

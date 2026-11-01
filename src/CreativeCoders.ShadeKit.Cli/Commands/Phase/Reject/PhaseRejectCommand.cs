@@ -3,6 +3,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Workflow;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -58,10 +59,11 @@ public class PhaseRejectCommand(
 
         _context.WriteSuccess(options.Json, data, result.Warnings, () =>
         {
-            _context.Console.WriteLine($"Feature: {data.FeatureId}");
-            _context.Console.WriteLine($"Rejected: {PhaseTextFormat.FormatTransition(data.Rejected)}");
-            _context.Console.WriteLine($"Current phase: {PhaseTextFormat.FormatPhase(data.CurrentPhase)}");
-            _context.Console.WriteLine($"Note: {data.Note ?? PhaseTextFormat.None}");
+            _context.Console.MarkupLine($"Feature: {data.FeatureId.ToEscapedMarkup().ToBoldMarkup()}");
+            _context.Console.MarkupLine(
+                $"Rejected: {PhaseTextFormat.FormatTransition(data.Rejected)}".ToErrorMarkup());
+            _context.Console.MarkupLine($"Current phase: {PhaseTextFormat.FormatPhase(data.CurrentPhase)}");
+            _context.Console.MarkupLine($"Note: {data.Note?.ToEscapedMarkup() ?? PhaseTextFormat.NoneMarkup}");
         });
 
         return CommandResult.Success;

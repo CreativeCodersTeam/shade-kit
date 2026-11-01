@@ -4,6 +4,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -72,9 +73,11 @@ public class FeatureNewCommand(
 
     private void WriteSummary(FeatureNewCommandData data)
     {
-        _context.Console.WriteLine($"Created feature {data.Id} ({data.Profile}).");
-        _context.Console.WriteLine($"  {data.Paths.FeatureFile}");
-        _context.Console.WriteLine($"  {data.Paths.Request}");
-        _context.Console.WriteLine($"Suggested branch: {data.SuggestedBranch}");
+        _context.Console.MarkupLine(
+            $"Created feature {data.Id.ToEscapedMarkup().ToBoldMarkup()} ({data.Profile.ToEscapedMarkup()})."
+                .ToSuccessMarkup());
+        _context.Console.MarkupLine($"  {data.Paths.FeatureFile.ToEscapedMarkup()}");
+        _context.Console.MarkupLine($"  {data.Paths.Request.ToEscapedMarkup()}");
+        _context.Console.MarkupLine($"Suggested branch: {data.SuggestedBranch.ToEscapedMarkup().ToBoldMarkup()}");
     }
 }

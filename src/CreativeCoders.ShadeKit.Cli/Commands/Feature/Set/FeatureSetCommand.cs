@@ -4,6 +4,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -64,7 +65,8 @@ public class FeatureSetCommand(
         var data = new FeatureSetCommandData(result.FeatureId);
 
         _context.WriteSuccess(options.Json, data, result.Warnings,
-            () => _context.Console.WriteLine($"Current feature: {data.Id}."));
+            () => _context.Console.MarkupLine(
+                $"Current feature: {data.Id.ToEscapedMarkup().ToBoldMarkup()}.".ToSuccessMarkup()));
 
         return CommandResult.Success;
     }

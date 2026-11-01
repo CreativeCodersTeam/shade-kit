@@ -3,6 +3,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Workflow;
+using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
 
@@ -60,9 +61,10 @@ public class PhaseApproveCommand(
 
         _context.WriteSuccess(options.Json, data, result.Warnings, () =>
         {
-            _context.Console.WriteLine($"Feature: {data.FeatureId}");
-            _context.Console.WriteLine($"Approved: {PhaseTextFormat.FormatTransition(data.Transition)}");
-            _context.Console.WriteLine($"Current phase: {PhaseTextFormat.FormatPhase(data.CurrentPhase)}");
+            _context.Console.MarkupLine($"Feature: {data.FeatureId.ToEscapedMarkup().ToBoldMarkup()}");
+            _context.Console.MarkupLine(
+                $"Approved: {PhaseTextFormat.FormatTransition(data.Transition)}".ToSuccessMarkup());
+            _context.Console.MarkupLine($"Current phase: {PhaseTextFormat.FormatPhase(data.CurrentPhase)}");
         });
 
         return CommandResult.Success;

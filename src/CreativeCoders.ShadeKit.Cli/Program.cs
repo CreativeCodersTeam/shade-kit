@@ -156,7 +156,7 @@ internal static class Program
     private static ICliHost CreateHost(ICliJsonWriter jsonWriter, TextWriter consoleOutput,
         ICliCancellation cancellation, Action<IServiceCollection>? configureServices)
     {
-        var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(consoleOutput) });
+        var console = AnsiConsole.Create(CreateConsoleSettings(consoleOutput));
 
         // The host runs the ConfigureServices actions in the order they were added, so the overrides come first and
         // the TryAdd registrations of AddShadeKitCore and AddShadeKitCli keep them. The console and the JSON writer
@@ -176,6 +176,28 @@ internal static class Program
             .PrintFooterText([""])
             .EnableHelp(HelpCommandKind.CommandOrArgument, HelpCommandKind.EmptyArgs)
             .Build();
+    }
+
+    /// <summary>
+    /// Creates the settings of the console that writes the plain output to the specified writer.
+    /// </summary>
+    /// <remarks>
+    /// Spectre.Console detects ANSI support from the terminal type only, so output that goes to a pipe, a file, or a
+    /// test writer would get escape sequences. Such output is written without ANSI sequences and colors; only a
+    /// terminal gets the detected support, which also honors <c>NO_COLOR</c>.
+    /// </remarks>
+    /// <param name="consoleOutput">The writer that receives the plain output.</param>
+    /// <returns>The settings of the console.</returns>
+    internal static AnsiConsoleSettings CreateConsoleSettings(TextWriter consoleOutput)
+    {
+        var output = new AnsiConsoleOutput(consoleOutput);
+
+        return new AnsiConsoleSettings
+        {
+            Out = output,
+            Ansi = output.IsTerminal ? AnsiSupport.Detect : AnsiSupport.No,
+            ColorSystem = output.IsTerminal ? ColorSystemSupport.Detect : ColorSystemSupport.NoColors
+        };
     }
 
     private static Task<int> CompleteFailedJsonRunAsync(CliJsonWriter jsonWriter, TextWriter error,

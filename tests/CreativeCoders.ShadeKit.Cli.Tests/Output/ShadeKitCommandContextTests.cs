@@ -377,6 +377,24 @@ public sealed class ShadeKitCommandContextTests : IDisposable
     }
 
     [Fact]
+    public void WriteSuccess_PlainModeWithWarningOnColorConsole_WritesWarningLineInYellow()
+    {
+        // Arrange
+        using var console = new TestConsole().Colors(ColorSystem.Standard).EmitAnsiSequences();
+        console.Profile.Width = 1000;
+        var context = TestShadeKitCommandContext.Create(console, null, _jsonOutput, null);
+
+        // Act
+        context.WriteSuccess(false, new FeatureSetCommandData("gh-1-x"), [new CurrentFeatureMissingWarning("[x]")],
+            () => { });
+
+        // Assert
+        console.Output
+            .Should().StartWith("\u001b[93mWarning: ")
+            .And.Contain("[x]");
+    }
+
+    [Fact]
     public void WriteSuccess_JsonModeWithoutWarnings_WritesEnvelopeWithEmptyWarnings()
     {
         // Arrange
