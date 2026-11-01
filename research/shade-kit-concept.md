@@ -1,6 +1,6 @@
 # SHADE kit concept
 
-Status: draft, 2026-10-13, updated 2026-10-17 (template interview), 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over), 2026-10-21 (feature commands implemented, package 03), 2026-10-24 (documentation check against the code), 2026-10-25 (rework of `feature new`), and 2026-10-27 (documentation check after package 04: phase commands and phase states implemented, phase state diagram completed). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-13, updated 2026-10-17 (template interview), 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over), 2026-10-21 (feature commands implemented, package 03), 2026-10-24 (documentation check against the code), 2026-10-25 (rework of `feature new`), 2026-10-27 (documentation check after package 04: phase commands and phase states implemented, phase state diagram completed), and 2026-10-30 (phases start only when the user calls the phase skill; [shade-kit-phase-start-analysis.md](shade-kit-phase-start-analysis.md)). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
 
 Labels used in this document:
 
@@ -82,11 +82,11 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 | `shade-kit feature set <id>` | Writes the local override (`current-feature.json`). **Implemented** (`FeatureSetCommand`). |
 | `shade-kit feature new --source <text\|url\|file> [--profile <p>] [--title <t>]` | Creates the feature folder and `request.md` with the request content: the text, the file content, the issue of a tracker URL read with `gh`, or the content of any other URL read with an HTTP GET (package 03). **Implemented** (`FeatureNewCommand`). |
 | `shade-kit feature drop <id> [--yes]` | Deletes the feature folder. Without `--yes` it only shows what it would delete, or asks in an interactive terminal. **Implemented** (`FeatureDropCommand`). |
-| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate. If a transition away from the phase is pending, it changes nothing and reports the pending transition; the skill asks the human whether to discard it. The same command reopens an earlier phase. **Implemented** (`PhaseStartCommand`; gates from `gates.json` come with package 05). |
+| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate; the skill tells the human and asks whether to continue the phase or to end. If a transition away from the phase is pending, it changes nothing and reports the pending transition; the skill offers to discard it and continue, to keep it, or to end. The same command reopens an earlier phase. It is the CLI check of every phase skill: a refusal changes nothing, and the skill ends with the human's options (**Decided** on 2026-10-30). **Implemented** (`PhaseStartCommand`; gates from `gates.json` come with package 05). |
 | `shade-kit phase approve <phase>` | Records the human approval in `feature.json` (who, when). **Implemented** (`PhaseApproveCommand`). |
 | `shade-kit phase reject <phase> [--note <text>]` | Cancels the pending transition after a "no"; the previous phase is in progress again. Recorded in the history with the note. **Implemented** (`PhaseRejectCommand`). |
 | `shade-kit phase complete` | Ends the last phase (`finish`); the feature status becomes `done`, and the local override is cleared if it selects this feature. **Implemented** (`PhaseCompleteCommand`). |
-| `shade-kit phase next --json` | The possible next steps of the current feature: continue, the pending transition, forward, and reopen; the pending transition and forward with their gate, every step with its skill. Used by `shade-kit-next-phase`. **Implemented** (`PhaseNextCommand`). |
+| `shade-kit phase next --json` | The possible next steps of the current feature: continue, the pending transition, forward, and reopen; the pending transition and forward with their gate, every step with its skill. Used by `shade-kit-next-phase` and by the next-steps message every skill ends with. **Implemented** (`PhaseNextCommand`). |
 | `shade-kit phase skills <phase> --json` | The skills to load before the phase runs, including extension skills later. **Implemented** without extension skills (`PhaseSkillsCommand`). |
 | `shade-kit extensions get --phase <p> [--slot <s>] --json` | Extension bindings for a phase. **Later.** |
 | `shade-kit memory get [--topic <t>] --json` | Relevant memory entries. **Later.** |
@@ -95,7 +95,8 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 
 ### 3.3 Skills and agents
 
-- **Phase skills:** one per phase (`shade-kit-refine`, `shade-kit-plan`, …). Each runs the entry protocol (phase start, gate check, approval) itself, so a direct call is gated too. There is no router: `shade-kit-next-phase` finds the current feature and phase, offers the possible next steps, and starts the chosen phase skill. **Decided** in the skills interview on 2026-10-17 ([shade-kit-skills.md](shade-kit-skills.md)).
+- **Phase skills:** one per phase (`shade-kit-refine`, `shade-kit-plan`, …). Each runs the entry protocol (phase start, gate check, approval) itself. **Decided** in the skills interview on 2026-10-17 ([shade-kit-skills.md](shade-kit-skills.md)).
+- **A phase starts only when the user calls its phase skill** (`/shade-kit-plan`). The skill checks with `phase start` whether the phase can start; if not, it ends with a message that names the user's options; if the phase is already active, it tells the user and lets them choose. No skill starts a phase skill. There is no router: `shade-kit-next-phase` finds the current feature and phase and names the skill to call for each possible next step, but starts none. **Decided** on 2026-10-30 ([shade-kit-phase-start-analysis.md](shade-kit-phase-start-analysis.md)), replacing "`shade-kit-next-phase` … starts the chosen phase skill". The rule holds by convention in the skill texts; nothing technically stops an agent from loading a phase skill on its own (known weak point, like approvals).
 - **General skills:** used across phases: an interview skill, a checklist-check skill for gates, a research skill, a review skill, and an optional skill that writes reports. **Decided** on 2026-10-18.
 - **Research agents:** one subagent per focus, run in parallel, results merged into `researches.md`. Seven agent definitions, one per row; security is split by level. **Decided** on 2026-10-18.
 
@@ -472,6 +473,8 @@ stateDiagram-v2
 
 ### 11.4 Phase transition sequence (v1)
 
+The user starts every phase by calling its skill (section 3.3). `shade-kit-next-phase` only shows the steps; it is not part of this sequence.
+
 ```mermaid
 sequenceDiagram
     actor Dev as Developer
@@ -479,35 +482,34 @@ sequenceDiagram
     participant CLI as shade-kit CLI
     participant Store as .shadekit/
 
-    Dev->>Agent: continue with the next phase
-    Agent->>CLI: feature current --json
-    CLI->>Store: resolve: branch name, then current-feature.json
-    alt no feature found
-        CLI-->>Agent: not resolved
-        Agent->>Dev: which feature?
-        Dev->>Agent: gh-142-login-sso
-        Agent->>CLI: feature set gh-142-login-sso
-    end
-    CLI-->>Agent: feature, profile, status, phase, phase status
-    Agent->>Dev: possible next steps (shade-kit-next-phase)
-    Dev->>Agent: plan
+    Dev->>Agent: /shade-kit-plan
     Note over Agent: shade-kit-plan runs its entry protocol
     Agent->>CLI: phase start plan --json
-    CLI->>Store: read profile and gates.json
-    CLI-->>Agent: transition allowed, checklist checks/definition-of-ready.md, skills to load
-    opt checklist is switched on
-        Agent->>Agent: check DoR against spec.md
-    end
-    Agent->>Dev: gate result, ask for approval
-    alt approved
-        Dev->>Agent: yes
-        Agent->>CLI: phase approve plan
-        CLI->>Store: write approval and history to feature.json
-        Agent->>Agent: load skills and run plan
-    else rejected or gaps found
-        Dev->>Agent: no, fix the gaps first
-        Agent->>CLI: phase reject plan --note "gaps"
-        CLI->>Store: map back to in-progress, reject in history
-        Agent->>Agent: hand off to shade-kit-next-phase, continue in map
+    CLI->>Store: resolve the current feature, read profile and gates.json
+    alt start refused (no current feature, phase not allowed, feature done, ...)
+        CLI-->>Agent: failure envelope, nothing changed
+        Agent->>CLI: phase next --json
+        Agent->>Dev: reason and options, each with the skill to call
+    else phase already active (already-in-progress, resume-pending)
+        CLI-->>Agent: outcome, nothing changed
+        Agent->>Dev: phase is active: continue, discard or keep the pending transition, or end?
+    else transition allowed
+        CLI-->>Agent: transition requested, checklist checks/definition-of-ready.md, skills to load
+        opt checklist is switched on
+            Agent->>Agent: check DoR against spec.md
+        end
+        Agent->>Dev: gate result, ask for approval
+        alt approved
+            Dev->>Agent: yes
+            Agent->>CLI: phase approve plan
+            CLI->>Store: write approval and history to feature.json
+            Agent->>Agent: load skills and run plan
+            Agent->>Dev: result and next steps (phase next)
+        else rejected or gaps found
+            Dev->>Agent: no, fix the gaps first
+            Agent->>CLI: phase reject plan --note "gaps"
+            CLI->>Store: map back to in-progress, reject in history
+            Agent->>Dev: gaps and next steps, for example /shade-kit-map
+        end
     end
 ```

@@ -22,7 +22,10 @@ public class ManagedInstructionSectionTests
                 "This repository uses SHADE kit. Its data lives in `.shadekit/` (configuration, templates, features) " +
                 "and is committed with the code.\n" +
                 "\n" +
-                "- To start or continue work on a feature, use the `shade-kit-next-phase` skill.\n" +
+                "- A phase starts only when the user calls its phase skill (`/shade-kit-<phase>`). Never start a " +
+                "phase skill on your own or from another skill.\n" +
+                "- To see where a feature stands and which skill to call next, use the `shade-kit-next-phase` " +
+                "skill.\n" +
                 "- Call the engine as `shade-kit <command> --json` and act on its JSON result.\n" +
                 "- Change feature state only through `shade-kit` commands, never by editing `.shadekit/features/` " +
                 "by hand.\n" +

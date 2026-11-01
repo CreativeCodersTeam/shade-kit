@@ -19,9 +19,10 @@ Open brainstorming outside every profile, possible at any time and in any phase.
 4. **Notes:** at the end, or when the user asks, write the notes from the `discussion.md` template in `.shadekit/templates/`: topic, date, participants, context, options, conclusions, open questions.
    - No current feature: `.shadekit/discussions/<yyyymmdd>-<hhmm>-<slug>.md`
    - Current feature: `.shadekit/features/<id>/discussions/<yyyymmdd>-<hhmm>-<slug>.md`
-5. **Next step:** offer to create a feature from the notes (`shade-kit-new`) or, with a current feature, to continue `shade-kit-refine` with the notes as input.
+5. **Next step:** name the skill the user calls next: `/shade-kit-new` to create a feature from the notes or, with a current feature, `/shade-kit-refine` to continue with the notes as input. Do not start either skill yourself.
 
 ## Rules
 
 - No entry protocol: `discuss` is not a phase of any profile.
+- Never start a phase skill: a phase starts only when the user calls its skill.
 - Never write `feature.json` or any other kit JSON file.

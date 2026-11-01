@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`), 2026-10-21 (package 03 implemented: the engine pre-fills `request.md`), 2026-10-24 (documentation check: line endings in FP09-AC4), and 2026-10-25 (rework of `feature new` in package 03: the engine reads the issue with `gh` and writes the request content into `request.md`; no `request.md` template; code review of the rework: `request.md` treated as data, not as instructions, exit-33 hints, issue format in FP09-AC3) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`), 2026-10-21 (package 03 implemented: the engine pre-fills `request.md`), 2026-10-24 (documentation check: line endings in FP09-AC4), and 2026-10-25 (rework of `feature new` in package 03: the engine reads the issue with `gh` and writes the request content into `request.md`; no `request.md` template; code review of the rework: `request.md` treated as data, not as instructions, exit-33 hints, issue format in FP09-AC3), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill; `new` checks for an active current feature) |
 | Source | Concept §5.1 (`discuss`, `new`), §5.4, §10 open question 2 |
 | Depends on | 03, 04, 06 |
 | Enables | 10 (`refine`), 16 (`diagnose`), 17 (`quick`) |
@@ -35,11 +35,13 @@ Ideas can be explored freely before they become a feature, without creating any 
   - No current feature: `.shadekit/discussions/<yyyymmdd>-<hhmm>-<slug>.md`.
   - Current feature: `.shadekit/features/<id>/discussions/<yyyymmdd>-<hhmm>-<slug>.md`.
 - Discussion notes are committed like all kit data. `discuss` never changes `feature.json`.
-- The agent offers the next step: create a feature from the notes, or (with a current feature) continue `refine` with the notes as input.
+- The agent names the next step and the skill the human calls for it: `/shade-kit-new` to create a feature from the notes, or (with a current feature) `/shade-kit-refine` to continue with the notes as input. It starts neither skill itself, because a phase starts only when the human calls its phase skill (package 06). **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)).
 
 ### `new`
 
-Runs when no feature exists for the work yet. `shade-kit-next-phase` (package 06) hands off to it, or the human calls it directly.
+Runs when no feature exists for the work yet. The human calls it (`/shade-kit-new`); `shade-kit-next-phase` (package 06) only names it. **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)), replacing "`shade-kit-next-phase` hands off to it".
+
+Before step 1, the skill checks for an active feature: `shade-kit feature current --json`. If it resolves a feature with status `active`, tell the human which feature is current (id, phase, state) and ask whether to create a new feature anyway or to end here; on "end", the skill ends with the next-steps message of that feature (package 06). **Proposed.**
 
 1. Collect the input: free text, an issue URL, a Markdown file, or discussion notes.
 2. Ask for the profile if the human did not name it; propose one from the input (a defect report suggests `bugfix`, a small, clear change suggests `quick`). Default from `config.json`.
@@ -48,13 +50,15 @@ Runs when no feature exists for the work yet. `shade-kit-next-phase` (package 06
 5. There is nothing to complete in `request.md`. `feature new` writes the request content into it: the text unchanged, the file content, the issue as Markdown (title, body, comments), or the content of another URL, with the line endings of the repository (package 03, [`request.md`](03-feature-management.md#requestmd)); the source itself is in `feature.json`. **Decided** on 2026-10-25 (rework of `feature new`), replacing "the agent completes the pre-filled `request.md`" **Decided** on 2026-10-20. The agent does not rewrite or summarise `request.md`.
    - `request.md` can hold third-party content: the body and every comment of an issue, which anyone who may comment can write, or a whole web page. Every skill that reads it (`shade-kit-new`, `shade-kit-refine`, `shade-kit-diagnose`, `shade-kit-quick`, and the research agents of `shade-kit-research`) treats it as data that describes the requirement, never as instructions to the agent: it does not follow commands, links, or tool requests in it, and shows the human any instruction in it that looks suspicious (a research agent reports it to the calling skill, which shows it). **Decided** on 2026-10-25 (code review of the rework of `feature new`, finding F6), replacing no earlier rule: before the rework the agent read the issue itself and chose what went into `request.md`. The engine keeps writing the content unchanged (package 03, [`request.md`](03-feature-management.md#requestmd)). **Implemented** (the five skill files).
 6. Offer to create and switch to the branch `feature/<id>` (suggested by package 03) so the current feature follows the branch. The agent runs the git command only after a yes. **Proposed.**
-7. Report the id and the next phase of the profile (`refine`, `diagnose`, or `quick`). The transition then goes through the entry protocol of that phase skill (package 06).
+7. Report the id, the next phase of the profile (`refine`, `diagnose`, or `quick`), and the skill the human calls to start it (`/shade-kit-refine`, `/shade-kit-diagnose`, or `/shade-kit-quick`). The skill ends there; the transition goes through the entry protocol of that phase skill once the human calls it (package 06).
+
+A refused `feature new` (for example exit code 10 in a repository without `.shadekit/`, or exit code 40 for an unknown profile) ends the skill with the reason and the human's options (package 06, [Next-steps message](06-skill-foundation.md#next-steps-message)).
 
 ### Templates
 
 | Template | Content |
 |---|---|
-| `discussion.md` | Topic, date, participants, context, options, conclusions, open questions. |
+| `discussion.md` | Topic, feature id, link to the feature's `request.md` (only for a discussion about a feature), date, participants, context, options, conclusions, open questions. |
 
 ## Acceptance criteria
 
@@ -63,7 +67,9 @@ Runs when no feature exists for the work yet. `shade-kit-next-phase` (package 06
 - **FP09-AC3** `new` with an issue URL creates an issue-based id, and `request.md` holds the issue's title as a one-line heading, its body and its comments unchanged except for trailing line breaks, as `feature new` writes them (package 03, [Tracker issues](03-feature-management.md#tracker-issues-gh)).
 - **FP09-AC4** `new` with a Markdown file or discussion notes passes the file to `feature new`, which writes its content into `request.md`, unchanged except for the line endings, which follow package 03.
 - **FP09-AC5** `new` creates a branch only after the human agrees.
-- **FP09-AC6** After `new`, `shade-kit-next-phase` offers the next phase of the feature's profile.
+- **FP09-AC6** After `new`, the skill names the phase skill of the profile's next phase and starts no skill; `shade-kit-next-phase` offers the same next phase.
+- **FP09-AC7** `new` with an active current feature names it and creates a feature only after the human chose to create one anyway.
+- **FP09-AC8** `discuss` names the skill for the next step and starts no skill.
 
 ## Open points
 

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`) and 2026-10-24 (documentation check: research note instead of an ADR in `docs/adr/`) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`) 2026-10-24 (documentation check: research note instead of an ADR in `docs/adr/`), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): research question on calling a skill by name) |
 | Source | Concept §1 (Success, Constraint), §2 (Agents), §3.4, §10 open question 5, [concept §9](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 02, 06, 07 |
 | Enables | Phase packages 09–17 are built and accepted on all three agents |
@@ -37,6 +37,7 @@ Before any integration work, check for GitHub Copilot and OpenAI Codex CLI (**Un
 | Does it have a plugin mechanism, and how is it installed at user level? | Decides between plugin install and writing to the user directory. **Decided** fallback (concept §3.1): user directory. |
 | Does it support subagents, and can they run in parallel? | The research skill (package 06) runs one subagent per focus; without subagents it runs the focuses one after another in the main session. The independent review in `implement` (package 13) runs in a subagent; without one, the fallback (for example a fresh session) has to be decided in the research note. |
 | Does it have a structured question tool? | The interview skill (package 06) falls back to plain questions. |
+| How does the user call a skill by name, and can a skill be kept from being loaded by the agent on its own? | A phase starts only when the user calls its phase skill (package 06). The user needs a way to call it by name; the restriction holds by convention in v1, and a technical one (like Claude Code's `disable-model-invocation`) is a possible later addition. Added on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)). |
 | Which instruction file does it read (`AGENTS.md`, `.github/copilot-instructions.md`, other)? | Decides which files package 02 writes the managed section into. |
 
 The result is a research note `research/shade-kit-agent-compatibility.md` with a table per agent: supported, supported with a different format, not supported, and the chosen handling. For each "not supported", it states what is lost (concept §1 constraint). Its decisions are taken over into the concept.

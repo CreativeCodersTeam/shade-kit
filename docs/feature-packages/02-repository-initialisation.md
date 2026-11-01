@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions), 2026-10-18 (implementation state; code review rework: exit codes 14 and 24, `.gitignore` rule, separator line), 2026-10-22 (code review verification of package 03: `trackers` id prefixes validated), 2026-10-23 (rework of file content handling: line endings of `.gitignore`, `CLAUDE.md`, and `AGENTS.md`, strict UTF-8, warnings; code review: `editorconfig-invalid`, legacy `crlf` attribute, `text=input`), and 2026-10-24 (documentation check: exit code 14 also for the `request.md` template, warnings sentence, resolved open point removed), and 2026-10-25 (rework of `feature new` in package 03: the `request.md` template is removed, `init` no longer writes `.shadekit/templates/request.md`, exit code 14 no longer covers it; `trackers` hosts are read with `gh`), and 2026-10-26 (package 04 implementation: comma-separated enum values make a `.shadekit/` JSON file invalid). Implemented except the final content of the templates owned by later packages (skeletons until then), the `gates.json` defaults (package 05), and a possible Copilot instruction file (package 08). |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions), 2026-10-18 (implementation state; code review rework: exit codes 14 and 24, `.gitignore` rule, separator line), 2026-10-22 (code review verification of package 03: `trackers` id prefixes validated), 2026-10-23 (rework of file content handling: line endings of `.gitignore`, `CLAUDE.md`, and `AGENTS.md`, strict UTF-8, warnings; code review: `editorconfig-invalid`, legacy `crlf` attribute, `text=input`), and 2026-10-24 (documentation check: exit code 14 also for the `request.md` template, warnings sentence, resolved open point removed), and 2026-10-25 (rework of `feature new` in package 03: the `request.md` template is removed, `init` no longer writes `.shadekit/templates/request.md`, exit code 14 no longer covers it; `trackers` hosts are read with `gh`), and 2026-10-26 (package 04 implementation: comma-separated enum values make a `.shadekit/` JSON file invalid), and 2026-10-30 (managed section text). Implemented except the final content of the templates owned by later packages (skeletons until then), the `gates.json` defaults (package 05), and a possible Copilot instruction file (package 08). |
 | Source | Concept §3.1 (`init`), §4.1, [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.5) |
 | Depends on | 01 |
 | Enables | 03, 05, 18 and every phase package (they ship templates through this mechanism) |
@@ -209,7 +209,7 @@ Every template follows the same conventions. **Decided** in the template intervi
 ### Managed instruction section
 
 - A short section in `CLAUDE.md` and `AGENTS.md` at the repository root, delimited by begin and end markers so the engine can find and replace exactly that section later. **Decided** on 2026-10-18 (implementation clarification). **Implemented** (`IInstructionSectionPlanner` / `InstructionSectionPlanner`; the text and the markers are `ManagedInstructionSection.Text`, `.BeginMarkerPrefix`, and `.EndMarker`).
-- Content: the repository uses SHADE kit, the kit data lives in `.shadekit/`, how to start (`shade-kit-next-phase` from package 06), and that the engine is called as `shade-kit … --json`. The text `init` writes:
+- Content: the repository uses SHADE kit, the kit data lives in `.shadekit/`, that a phase starts only when the user calls its phase skill and where to see the next steps (`shade-kit-next-phase` from package 06), and that the engine is called as `shade-kit … --json`. The phase-start sentence **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md), F10), replacing "To start or continue work on a feature, use the `shade-kit-next-phase` skill." **Implemented** (`ManagedInstructionSection.Text`). The text `init` writes:
 
   ```markdown
   <!-- shade-kit:begin - managed by shade-kit, content between the markers is replaced on upgrade -->
@@ -217,7 +217,8 @@ Every template follows the same conventions. **Decided** in the template intervi
 
   This repository uses SHADE kit. Its data lives in `.shadekit/` (configuration, templates, features) and is committed with the code.
 
-  - To start or continue work on a feature, use the `shade-kit-next-phase` skill.
+  - A phase starts only when the user calls its phase skill (`/shade-kit-<phase>`). Never start a phase skill on your own or from another skill.
+  - To see where a feature stands and which skill to call next, use the `shade-kit-next-phase` skill.
   - Call the engine as `shade-kit <command> --json` and act on its JSON result.
   - Change feature state only through `shade-kit` commands, never by editing `.shadekit/features/` by hand.
   <!-- shade-kit:end -->
@@ -260,8 +261,8 @@ Every criterion is **Implemented**. The tests that prove it carry `[Trait("Requi
 - **FP02-AC1** `init` in a git repository without `.shadekit/` creates `config.json`, `gates.json`, `templates/` with every shipped template, `templates.lock.json`, and `features/`. Proven by `RepositoryInitializerTests`, `InitCommandTests`, `InitCommandEndToEndTests`.
 - **FP02-AC2** Every JSON file `init` writes carries `schemaVersion`. Proven by `RepositoryInitializerTests`.
 - **FP02-AC3** `templates.lock.json` contains one entry per shipped template whose hash matches the written file. Proven by `RepositoryInitializerTests`.
-- **FP02-AC4** `.gitignore` contains the entries for `local.json` and `current-feature.json` exactly once, also when `init` runs in a repository whose `.gitignore` already has them. Proven by `GitIgnorePlannerTests`, `RepositoryInitializerTests`, `InitCommandEndToEndTests`.
-- **FP02-AC5** `CLAUDE.md` and `AGENTS.md` contain exactly one managed section; existing content outside the section is unchanged. Proven by `InstructionSectionPlannerTests`, `RepositoryInitializerTests`, `InitCommandEndToEndTests`.
+- **FP02-AC4** `.gitignore` contains the entries for `local.json` and `current-feature.json` exactly once, also when `init` runs in a repository whose `.gitignore` already has them. Proven by `GitIgnorePlannerTests`, `KitGitIgnoreEntriesTests`, `RepositoryInitializerTests`, `InitCommandEndToEndTests`.
+- **FP02-AC5** `CLAUDE.md` and `AGENTS.md` contain exactly one managed section; existing content outside the section is unchanged. Proven by `InstructionSectionPlannerTests`, `ManagedInstructionSectionTests`, `RepositoryInitializerTests`, `InitCommandEndToEndTests`.
 - **FP02-AC6** `init` in an initialised repository changes no file and points to `shade-kit upgrade`. Proven by `RepositoryInitializerTests`, `InitCommandTests`, `InitCommandEndToEndTests`, `CliErrorMapperTests`.
 - **FP02-AC7** `init` outside a git repository stops with an exit code and creates nothing. Proven by `RepositoryInitializerTests`, `InitCommandTests`, `InitCommandEndToEndTests`.
 - **FP02-AC8** `init` writes every shipped template to its repository path from the template table, for example `spec.template.md` to `.shadekit/templates/spec.md` and `checks/definition-of-ready.template.md` to `.shadekit/templates/checks/definition-of-ready.md`. Proven by `RepositoryInitializerTests`, `InitCommandEndToEndTests`, and `ShippedTemplatesTests` (`All_Fp02Ac8Examples_MapToRepositoryPathFromTemplateTable`, without the trait).
