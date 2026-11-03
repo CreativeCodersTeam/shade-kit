@@ -200,7 +200,7 @@ public sealed class RepositoryInitializer(
 
         await WriteDocumentAsync(KitStorePaths.ConfigFileName, FormatIds.Config, config).ConfigureAwait(false);
 
-        await WriteDocumentAsync(KitStorePaths.GatesFileName, FormatIds.Gates, new GatesConfig())
+        await WriteDocumentAsync(KitStorePaths.GatesFileName, FormatIds.Gates, GatesConfig.CreateDefault())
             .ConfigureAwait(false);
 
         var templatesLock = await WriteTemplatesAsync(kitStore, kitVersion, result, cancellationToken)

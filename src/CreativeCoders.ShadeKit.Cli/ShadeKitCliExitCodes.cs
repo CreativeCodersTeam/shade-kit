@@ -195,6 +195,13 @@ public static class ShadeKitCliExitCodes
     public const int PhaseStateInvalid = 46;
 
     /// <summary>
+    /// Represents the exit code returned when the template of the checklist that a gate names does not exist in
+    /// <c>.shadekit/templates/</c>, so the checklist cannot be copied into the feature folder; nothing is changed. The
+    /// error code is <see cref="ShadeKitCliErrorCodes.ChecklistTemplateNotFound" />.
+    /// </summary>
+    public const int ChecklistTemplateNotFound = 47;
+
+    /// <summary>
     /// Represents the exit code returned when the user cancels a running command, for example by pressing Ctrl+C. The
     /// error code is <see cref="ShadeKitCliErrorCodes.Canceled" />.
     /// </summary>

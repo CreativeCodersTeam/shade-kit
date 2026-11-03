@@ -66,6 +66,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     [Trait("Requirement", "FP04-AC5")]
     [Trait("Requirement", "FP04-AC8")]
     [Trait("Requirement", "FP04-AC14")]
+    [Trait("Requirement", "FP05-AC4")]
+    [Trait("Requirement", "FP05-AC7")]
     public async Task QuickProfile_FullRun_CompletesFeatureRecordsHistoryAndClearsOverride()
     {
         // Arrange
@@ -75,7 +77,6 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
 
         // Act
         var startQuick = await RunJsonAtAsync(1, "phase", "start", "quick", "--json");
-        var approveQuick = await RunJsonAtAsync(2, "phase", "approve", "quick", "--json");
         var startFinish = await RunJsonAtAsync(3, "phase", "start", "finish", "--json");
         var approveFinish = await RunJsonAtAsync(4, "phase", "approve", "finish", "--json");
         var nextInFinish = await RunJsonAtAsync(5, "phase", "next", "--json");
@@ -86,7 +87,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         // Assert
         new[]
             {
-                startQuick.ExitCode, approveQuick.ExitCode, startFinish.ExitCode, approveFinish.ExitCode,
+                startQuick.ExitCode, startFinish.ExitCode, approveFinish.ExitCode,
                 nextInFinish.ExitCode, complete.ExitCode, nextWhenDone.ExitCode, current.ExitCode
             }
             .Should().AllBeEquivalentTo(0);
@@ -94,25 +95,24 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         startQuick.Root.GetProperty("data").ShouldBeJson(
             """
             {
-              "featureId": "gh-142-login-sso", "profile": "quick", "outcome": "transition-requested",
+              "featureId": "gh-142-login-sso", "profile": "quick", "outcome": "transition-performed",
               "transition": { "kind": "forward", "from": "new", "to": "quick" },
-              "currentPhase": { "name": "new", "state": "awaiting-approval" },
-              "gate": { "phase": "quick", "approval": true, "checklist": null },
+              "currentPhase": { "name": "quick", "state": "in-progress" },
+              "gate": { "phase": "quick", "approval": false, "checklist": null },
               "skills": { "phaseSkill": "shade-kit-quick", "generalSkills": ["shade-kit-interview", "shade-kit-review"] }
             }
             """);
 
-        approveQuick.Root.GetProperty("data").ShouldBeJson(
+        startFinish.Root.GetProperty("data").ShouldBeJson(
             """
             {
-              "featureId": "gh-142-login-sso",
-              "transition": { "kind": "forward", "from": "new", "to": "quick" },
-              "currentPhase": { "name": "quick", "state": "in-progress" }
+              "featureId": "gh-142-login-sso", "profile": "quick", "outcome": "transition-requested",
+              "transition": { "kind": "forward", "from": "quick", "to": "finish" },
+              "currentPhase": { "name": "quick", "state": "awaiting-approval" },
+              "gate": { "phase": "finish", "approval": true, "checklist": "checks/definition-of-done.md" },
+              "skills": { "phaseSkill": "shade-kit-finish", "generalSkills": ["shade-kit-report"] }
             }
             """);
-
-        startFinish.Root.GetProperty("data").GetProperty("skills").ShouldBeJson(
-            """{ "phaseSkill": "shade-kit-finish", "generalSkills": ["shade-kit-report"] }""");
 
         approveFinish.Root.GetProperty("data").GetProperty("currentPhase").ShouldBeJson(
             """{ "name": "finish", "state": "in-progress" }""");
@@ -128,6 +128,13 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
               "reopen": [ { "phase": "quick", "skill": "shade-kit-quick" } ]
             }
             """);
+
+        var definitionOfDone = await File.ReadAllTextAsync(GetFeaturePath("checks", "definition-of-done.md"),
+            TestContext.Current.CancellationToken);
+
+        definitionOfDone
+            .Should().StartWith($"# Definition of Done: {FeatureId}")
+            .And.NotContain("{{feature-id}}");
 
         complete.Root.GetProperty("data").ShouldBeJson(
             """{ "featureId": "gh-142-login-sso", "phase": "finish", "status": "done", "overrideCleared": true }""");
@@ -171,9 +178,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
             """
             [
               { "at": "2026-10-26T09:01:00+02:00", "by": { "name": "Jane Doe", "email": "jane@example.com" },
-                "action": "start", "from": "new", "to": "quick" },
-              { "at": "2026-10-26T09:02:00+02:00", "by": { "name": "Jane Doe", "email": "jane@example.com" },
-                "action": "approve", "from": "new", "to": "quick" },
+                "action": "approve", "from": "new", "to": "quick", "note": "approval off" },
               { "at": "2026-10-26T09:03:00+02:00", "by": { "name": "Jane Doe", "email": "jane@example.com" },
                 "action": "start", "from": "quick", "to": "finish" },
               { "at": "2026-10-26T09:04:00+02:00", "by": { "name": "Jane Doe", "email": "jane@example.com" },
@@ -191,8 +196,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         await InitAsync();
         _branch = $"feature/{FeatureId}";
         await CreateFeatureAsync("quick");
-        await RunAllOkAsync(["phase", "start", "quick"], ["phase", "approve", "quick"], ["phase", "start", "finish"],
-            ["phase", "approve", "finish"], ["phase", "complete"]);
+        await RunAllOkAsync(["phase", "start", "quick"], ["phase", "start", "finish"], ["phase", "approve", "finish"],
+            ["phase", "complete"]);
         var bytesBefore = await ReadFeatureFileBytesAsync();
 
         // Act
@@ -479,7 +484,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         // Arrange
         await InitAsync();
         await CreateFeatureAsync("quick");
-        await RunAllOkAsync(["phase", "start", "quick"], ["phase", "approve", "quick"]);
+        await RunAllOkAsync(["phase", "start", "quick"]);
         var bytesBefore = await ReadFeatureFileBytesAsync();
 
         // Act
@@ -644,10 +649,275 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
             .Should().Be("Needs a repro", "the note is trimmed");
     }
 
+    [Fact]
+    [Trait("Requirement", "FP05-AC2")]
+    public async Task FeatureProfile_StartPlan_CopiesDefinitionOfReadyWithFeatureIdAndReturnsItsPath()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateFeatureAsync("feature");
+        await RunAllOkAsync(StartAndApproveRefineAndMap);
+
+        // Act
+        var startPlan = await RunJsonAsync("phase", "start", "plan", "--json");
+
+        // Assert
+        startPlan.ExitCode
+            .Should().Be(0);
+
+        startPlan.Root.GetProperty("data").GetProperty("gate").ShouldBeJson(
+            """{ "phase": "plan", "approval": true, "checklist": "checks/definition-of-ready.md" }""");
+
+        var template = await File.ReadAllTextAsync(GetKitPath("templates", "checks", "definition-of-ready.md"),
+            TestContext.Current.CancellationToken);
+        var copy = await File.ReadAllTextAsync(GetFeaturePath("checks", "definition-of-ready.md"),
+            TestContext.Current.CancellationToken);
+
+        copy
+            .Should().StartWith($"# Definition of Ready: {FeatureId}")
+            .And.NotContain("{{feature-id}}")
+            .And.Be(template.Replace("{{feature-id}}", FeatureId, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP05-AC3")]
+    public async Task FeatureProfile_ReopenAndStartPlanAgain_KeepsFilledChecklistCopyByteForByte()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateFeatureAsync("feature");
+        await RunAllOkAsync([.. StartAndApproveRefineAndMap, ["phase", "start", "plan"], ["phase", "approve", "plan"]]);
+        var copyPath = GetFeaturePath("checks", "definition-of-ready.md");
+        await File.AppendAllTextAsync(copyPath, "| DOR-01 | filled by the agent | pass | spec.md |\n",
+            TestContext.Current.CancellationToken);
+        var filledBytes = await File.ReadAllBytesAsync(copyPath, TestContext.Current.CancellationToken);
+
+        // Act
+        var reopen = await RunJsonAsync("phase", "start", "map", "--json");
+        var approveReopen = await RunJsonAsync("phase", "approve", "map", "--json");
+        var startPlanAgain = await RunJsonAsync("phase", "start", "plan", "--json");
+        var startPlanRepeated = await RunJsonAsync("phase", "start", "plan", "--json");
+
+        // Assert
+        new[] { reopen.ExitCode, approveReopen.ExitCode, startPlanAgain.ExitCode, startPlanRepeated.ExitCode }
+            .Should().AllBeEquivalentTo(0);
+
+        reopen.Root.GetProperty("data").GetProperty("transition").GetProperty("kind").GetString()
+            .Should().Be("reopen");
+
+        startPlanAgain.Root.GetProperty("data").GetProperty("gate").GetProperty("checklist").GetString()
+            .Should().Be("checks/definition-of-ready.md");
+
+        startPlanRepeated.Root.GetProperty("data").GetProperty("outcome").GetString()
+            .Should().Be("transition-pending");
+
+        (await File.ReadAllBytesAsync(copyPath, TestContext.Current.CancellationToken))
+            .Should().Equal(filledBytes);
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP05-AC4")]
+    public async Task FeatureProfile_TeamGateWithApprovalOff_PerformsTransitionAndRecordsApprovalOff()
+    {
+        // Arrange
+        await InitAsync();
+        await WriteGatesAsync("""{ "feature": { "refine": { "approval": false } } }""");
+        await CreateFeatureAsync("feature");
+
+        // Act
+        var startRefine = await RunJsonAtAsync(1, "phase", "start", "refine", "--json");
+
+        // Assert
+        startRefine.ExitCode
+            .Should().Be(0);
+
+        var data = startRefine.Root.GetProperty("data");
+
+        data.GetProperty("outcome").GetString()
+            .Should().Be("transition-performed");
+
+        data.GetProperty("currentPhase").ShouldBeJson("""{ "name": "refine", "state": "in-progress" }""");
+
+        data.GetProperty("gate").ShouldBeJson("""{ "phase": "refine", "approval": false, "checklist": null }""");
+
+        using var featureFile = await ReadFeatureFileAsync();
+
+        featureFile.RootElement.GetProperty("history").ShouldBeJson(
+            """
+            [
+              { "at": "2026-10-26T09:01:00+02:00", "by": { "name": "Jane Doe", "email": "jane@example.com" },
+                "action": "approve", "from": "new", "to": "refine", "note": "approval off" }
+            ]
+            """);
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP05-AC5")]
+    public async Task FeatureProfile_TransitionWithoutChecklist_ReturnsNullChecklistAndCopiesNothing()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateFeatureAsync("feature");
+        await RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"]);
+
+        // Act
+        var startMap = await RunJsonAsync("phase", "start", "map", "--json");
+
+        // Assert
+        startMap.ExitCode
+            .Should().Be(0);
+
+        startMap.Root.GetProperty("data").GetProperty("gate").ShouldBeJson(
+            """{ "phase": "map", "approval": true, "checklist": null }""");
+
+        var checksPath = GetFeaturePath("checks");
+
+        (Directory.Exists(checksPath) ? Directory.EnumerateFileSystemEntries(checksPath) : [])
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP05-AC6")]
+    public async Task FeatureProfile_GatesWithoutEntryForTransition_RequiresApproval()
+    {
+        // Arrange
+        await InitAsync();
+        await WriteGatesAsync("""{ "feature": { "map": { "approval": false } } }""");
+        await CreateFeatureAsync("feature");
+
+        // Act
+        var startRefine = await RunJsonAsync("phase", "start", "refine", "--json");
+
+        // Assert
+        startRefine.ExitCode
+            .Should().Be(0);
+
+        var data = startRefine.Root.GetProperty("data");
+
+        data.GetProperty("outcome").GetString()
+            .Should().Be("transition-requested");
+
+        data.GetProperty("currentPhase").ShouldBeJson("""{ "name": "new", "state": "awaiting-approval" }""");
+
+        data.GetProperty("gate").ShouldBeJson("""{ "phase": "refine", "approval": true, "checklist": null }""");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP05-AC8")]
+    public async Task FeatureProfile_TeamChecklistTemplate_CopiesItIntoFeatureFolderAndReturnsItsPath()
+    {
+        // Arrange
+        await InitAsync();
+        await WriteGatesAsync("""{ "feature": { "refine": { "approval": true, "checklist": "checks/refine.md" } } }""");
+        Directory.CreateDirectory(GetKitPath("templates", "checks"));
+        await File.WriteAllTextAsync(GetKitPath("templates", "checks", "refine.md"),
+            "# Refine check: {{feature-id}}\n\n- [ ] Request understood\n", TestContext.Current.CancellationToken);
+        await CreateFeatureAsync("feature");
+
+        // Act
+        var startRefine = await RunJsonAsync("phase", "start", "refine", "--json");
+
+        // Assert
+        startRefine.ExitCode
+            .Should().Be(0);
+
+        startRefine.Root.GetProperty("data").GetProperty("gate").ShouldBeJson(
+            """{ "phase": "refine", "approval": true, "checklist": "checks/refine.md" }""");
+
+        (await File.ReadAllTextAsync(GetFeaturePath("checks", "refine.md"), TestContext.Current.CancellationToken))
+            .Should().Be($"# Refine check: {FeatureId}\n\n- [ ] Request understood\n");
+    }
+
+    [Fact]
+    public async Task PhaseStart_ChecklistTemplateMissing_Returns47AndLeavesFeatureFileUnchanged()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateFeatureAsync("feature");
+        await RunAllOkAsync(StartAndApproveRefineAndMap);
+        File.Delete(GetKitPath("templates", "checks", "definition-of-ready.md"));
+        var featureBytes = await ReadFeatureFileBytesAsync();
+
+        // Act
+        var startPlan = await RunJsonAsync("phase", "start", "plan", "--json");
+
+        // Assert
+        AssertError(startPlan, 47, "checklist-template-not-found");
+
+        startPlan.Root.GetProperty("data").ValueKind
+            .Should().Be(JsonValueKind.Null);
+
+        (await ReadFeatureFileBytesAsync())
+            .Should().Equal(featureBytes);
+
+        File.Exists(GetFeaturePath("checks", "definition-of-ready.md"))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task PhaseStartAndNext_GatesFileWithoutProfiles_WarnDefaultsUsedAndCopyDefinitionOfReady()
+    {
+        // Arrange
+        await InitAsync();
+        await File.WriteAllTextAsync(GetKitPath("gates.json"),
+            """{ "schemaVersion": 1, "minEngineVersion": "0.1.0" }""", TestContext.Current.CancellationToken);
+        await CreateFeatureAsync("feature");
+        await RunAllOkAsync(StartAndApproveRefineAndMap);
+
+        // Act
+        var startPlan = await RunJsonAsync("phase", "start", "plan", "--json");
+        var next = await RunJsonAsync("phase", "next", "--json");
+
+        // Assert
+        startPlan.ExitCode
+            .Should().Be(0);
+
+        // The fake git fails `git check-attr`, so the two writes (the copy and feature.json) report the attributes
+        // warning, once, after the warning of reading gates.json.
+        GetWarningCodes(startPlan.Root)
+            .Should().Equal("gates-defaults-used", "git-attributes-unavailable");
+
+        GetWarningCodes(next.Root)
+            .Should().Equal("gates-defaults-used");
+
+        startPlan.Root.GetProperty("data").GetProperty("gate").GetProperty("checklist").GetString()
+            .Should().Be("checks/definition-of-ready.md");
+
+        File.Exists(GetFeaturePath("checks", "definition-of-ready.md"))
+            .Should().BeTrue();
+    }
+
     public void Dispose()
     {
         _currentDirectory.Dispose();
         _tempDirectory.Dispose();
+    }
+
+    private static string[][] StartAndApproveRefineAndMap =>
+    [
+        ["phase", "start", "refine"], ["phase", "approve", "refine"],
+        ["phase", "start", "map"], ["phase", "approve", "map"]
+    ];
+
+    private static string[] GetWarningCodes(JsonElement root)
+    {
+        return [.. root.GetProperty("warnings").EnumerateArray().Select(x => x.GetProperty("code").GetString()!)];
+    }
+
+    /// <summary>
+    /// Replaces <c>.shadekit/gates.json</c> with a file of format version 1 whose <c>profiles</c> field is the
+    /// specified JSON object.
+    /// </summary>
+    private Task WriteGatesAsync(string profiles)
+    {
+        return File.WriteAllTextAsync(GetKitPath("gates.json"),
+            $$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "profiles": {{profiles}} }""",
+            TestContext.Current.CancellationToken);
+    }
+
+    private string GetKitPath(params string[] parts)
+    {
+        return Path.Combine([_tempDirectory.RootPath, ".shadekit", .. parts]);
     }
 
     private static void AssertError((int ExitCode, JsonElement Root) run, int exitCode, string errorCode)

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions), 2026-10-18 (implementation state; code review rework: exit codes 14 and 24, `.gitignore` rule, separator line), 2026-10-22 (code review verification of package 03: `trackers` id prefixes validated), 2026-10-23 (rework of file content handling: line endings of `.gitignore`, `CLAUDE.md`, and `AGENTS.md`, strict UTF-8, warnings; code review: `editorconfig-invalid`, legacy `crlf` attribute, `text=input`), and 2026-10-24 (documentation check: exit code 14 also for the `request.md` template, warnings sentence, resolved open point removed), and 2026-10-25 (rework of `feature new` in package 03: the `request.md` template is removed, `init` no longer writes `.shadekit/templates/request.md`, exit code 14 no longer covers it; `trackers` hosts are read with `gh`), and 2026-10-26 (package 04 implementation: comma-separated enum values make a `.shadekit/` JSON file invalid), and 2026-10-30 (managed section text). Implemented except the final content of the templates owned by later packages (skeletons until then), the `gates.json` defaults (package 05), and a possible Copilot instruction file (package 08). |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions), 2026-10-18 (implementation state; code review rework: exit codes 14 and 24, `.gitignore` rule, separator line), 2026-10-22 (code review verification of package 03: `trackers` id prefixes validated), 2026-10-23 (rework of file content handling: line endings of `.gitignore`, `CLAUDE.md`, and `AGENTS.md`, strict UTF-8, warnings; code review: `editorconfig-invalid`, legacy `crlf` attribute, `text=input`), and 2026-10-24 (documentation check: exit code 14 also for the `request.md` template, warnings sentence, resolved open point removed), and 2026-10-25 (rework of `feature new` in package 03: the `request.md` template is removed, `init` no longer writes `.shadekit/templates/request.md`, exit code 14 no longer covers it; `trackers` hosts are read with `gh`), and 2026-10-26 (package 04 implementation: comma-separated enum values make a `.shadekit/` JSON file invalid), 2026-10-30 (managed section text), and 2026-11-01 (package 05 implementation: `init` writes the `gates.json` defaults). Implemented except the final content of the templates owned by later packages (skeletons until then) and a possible Copilot instruction file (package 08). |
 | Source | Concept §3.1 (`init`), §4.1, [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.5) |
 | Depends on | 01 |
 | Enables | 03, 05, 18 and every phase package (they ship templates through this mechanism) |
@@ -40,7 +40,7 @@ A team can turn any git repository into a SHADE kit repository with one command.
 - Runs in a git repository. The repository root is the closest directory, from the working directory upwards, that contains a `.git` directory or file; `init` always works at that root, also when it is called from a subdirectory. Outside a git repository it stops with exit code 12 (`not-a-git-repository`) and creates nothing. **Decided** on 2026-10-18 (implementation clarification), because feature resolution (package 03) depends on git branches. **Implemented** (`IGitRepositoryLocator` / `GitRepositoryLocator`).
 - Creates `.shadekit/` with:
   - `config.json`
-  - `gates.json` (defaults from package 05; until package 05 is built, only `schemaVersion` and `minEngineVersion`). **Implemented** (`GatesConfig`, no fields of its own yet).
+  - `gates.json` with `schemaVersion`, `minEngineVersion`, and the `profiles` defaults of package 05 (`GatesConfig.CreateDefault()`). **Implemented** (`GatesConfig`; until package 05 was built on 2026-11-01, only `schemaVersion` and `minEngineVersion`).
   - `templates/` with every shipped template
   - `templates.lock.json`
   - `features/` (empty). Git does not keep an empty directory, so a clone of a freshly initialised repository has no `features/`; a missing `features/` counts as "no features" (package 01).
@@ -248,7 +248,7 @@ The implementation on 2026-10-18 changed these statements of the earlier draft. 
 | "If it exists, `init` appends the section and leaves the rest unchanged." | A file that already has a valid section gets it replaced, not appended a second time. | Appending to a file that has the section would break FP02-AC5 ("exactly one managed section") and contradicted "Adds or updates" in the `init` list. |
 | Template sources in `templates/` at the repository root (`templates/<name>.template.md`, `templates/checks/`). | Sources in `src/CreativeCoders.ShadeKit.Core/Templates/Resources/`, embedded into the Core assembly. | The engine reads the templates from its own assembly, so both distribution forms carry them. |
 | `features/` is created empty (no statement about a missing one); package 01's code stopped with exit code 11 (`features-dir-not-found`) when it was missing. | A missing `features/` counts as empty. Exit code 11 and `features-dir-not-found` are removed; 11 is free. | Git does not keep the empty `features/` that `init` creates, so every fresh clone of an initialised repository would have failed. |
-| `gates.json` with "only `schemaVersion`" until package 05. | `schemaVersion` and `minEngineVersion`. | Package 01 stamps `minEngineVersion` on every JSON file the engine writes (FP01-AC9). |
+| `gates.json` with "only `schemaVersion`" until package 05. | `schemaVersion` and `minEngineVersion` until package 05; since 2026-11-01 also the `profiles` defaults of package 05. | Package 01 stamps `minEngineVersion` on every JSON file the engine writes (FP01-AC9). |
 
 ### Review
 
@@ -258,7 +258,7 @@ The implementation was reviewed on 2026-10-18. Findings #1–#7 and #9–#11 are
 
 Every criterion is **Implemented**. The tests that prove it carry `[Trait("Requirement", "FP02-ACn")]`.
 
-- **FP02-AC1** `init` in a git repository without `.shadekit/` creates `config.json`, `gates.json`, `templates/` with every shipped template, `templates.lock.json`, and `features/`. Proven by `RepositoryInitializerTests`, `InitCommandTests`, `InitCommandEndToEndTests`.
+- **FP02-AC1** `init` in a git repository without `.shadekit/` creates `config.json`, `gates.json` (with the defaults of package 05, FP05-AC1), `templates/` with every shipped template, `templates.lock.json`, and `features/`. Proven by `RepositoryInitializerTests`, `InitCommandTests`, `InitCommandEndToEndTests`.
 - **FP02-AC2** Every JSON file `init` writes carries `schemaVersion`. Proven by `RepositoryInitializerTests`.
 - **FP02-AC3** `templates.lock.json` contains one entry per shipped template whose hash matches the written file. Proven by `RepositoryInitializerTests`.
 - **FP02-AC4** `.gitignore` contains the entries for `local.json` and `current-feature.json` exactly once, also when `init` runs in a repository whose `.gitignore` already has them. Proven by `GitIgnorePlannerTests`, `KitGitIgnoreEntriesTests`, `RepositoryInitializerTests`, `InitCommandEndToEndTests`.

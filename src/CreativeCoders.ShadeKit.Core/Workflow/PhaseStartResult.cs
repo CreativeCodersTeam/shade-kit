@@ -17,7 +17,8 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 /// <param name="Gate">
 /// The gate of the target phase of <paramref name="Transition" />; for
 /// <see cref="PhaseStartOutcome.AlreadyInProgress" /> and <see cref="PhaseStartOutcome.ResumePending" />
-/// <see langword="null" />.
+/// <see langword="null" />. Its <see cref="TransitionGate.Checklist" /> is the value from <c>gates.json</c>, which is
+/// also the path of the feature's copy of the checklist relative to the feature folder.
 /// </param>
 /// <param name="Skills">
 /// The skills of the requested phase; for <see cref="PhaseStartOutcome.AlreadyInProgress" /> and

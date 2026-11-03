@@ -10,6 +10,8 @@ using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Gates.Exceptions;
+using CreativeCoders.ShadeKit.Core.Gates.Warnings;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Git.Warnings;
 using CreativeCoders.ShadeKit.Core.Init;
@@ -161,6 +163,12 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 $"The phase state in '{e.FeatureFilePath}' is invalid: the field '{e.Field}' {e.Reason} Fix the " +
                 "field or restore the file from git, then run the command again."),
 
+            ChecklistTemplateNotFoundException e => CliError.Create(ShadeKitCliExitCodes.ChecklistTemplateNotFound,
+                $"The checklist template '{e.TemplatePath}' that a gate in " +
+                $"'{KitStorePaths.GetRepositoryPath(KitStorePaths.GatesFileName)}' names does not exist. Nothing was " +
+                "changed. Restore the template, for example from git, or change the 'checklist' of the gate, then " +
+                "run the command again."),
+
             _ => null
         };
     }
@@ -238,8 +246,9 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="warning" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// The type of <paramref name="warning" />, the kind of a <see cref="FormatWarning" />, or the type of the problem
-    /// of a <see cref="CurrentFeatureInvalidWarning" /> is not supported.
+    /// The type of <paramref name="warning" />, the kind of a <see cref="FormatWarning" />, the type of the problem
+    /// of a <see cref="CurrentFeatureInvalidWarning" />, or the reason of a <see cref="GateEntryIgnoredWarning" /> is
+    /// not supported.
     /// </exception>
     public static CliJsonMessage MapWarning(KitWarning warning)
     {
@@ -287,6 +296,12 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             GitAttributesUnavailableWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.GitAttributesUnavailable,
                 $"git cannot read the line ending settings of the repository '{w.RepositoryRootPath}', so the line " +
                 $"endings come from .editorconfig or the operating system. '{w.Command}' failed: {w.Reason}"),
+
+            GatesDefaultsUsedWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.GatesDefaultsUsed,
+                CreateGatesDefaultsUsedMessage(w.IsFileMissing)),
+
+            GateEntryIgnoredWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.GateEntryIgnored,
+                CreateGateEntryIgnoredMessage(w.ProfileName, w.PhaseName, w.Reason)),
 
             _ => throw new ArgumentOutOfRangeException(nameof(warning), warning,
                 "The warning is not supported.")
@@ -487,6 +502,36 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 "'outdatedFormatOnRead' is 'stop'.",
             _ => throw new ArgumentOutOfRangeException(nameof(problem), problem.GetType(),
                 "The format problem is not supported.")
+        };
+    }
+
+    private static string CreateGatesDefaultsUsedMessage(bool isFileMissing)
+    {
+        var gatesPath = KitStorePaths.GetRepositoryPath(KitStorePaths.GatesFileName);
+
+        return isFileMissing
+            ? $"'{gatesPath}' does not exist, so the built-in gate defaults apply. Add the file with a 'profiles' " +
+              "field to configure the gates."
+            : $"'{gatesPath}' has no 'profiles' field, so the built-in gate defaults apply. Add a 'profiles' field " +
+              "to configure the gates.";
+    }
+
+    private static string CreateGateEntryIgnoredMessage(string profileName, string? phaseName,
+        GateEntryIgnoredReason reason)
+    {
+        var gatesPath = KitStorePaths.GetRepositoryPath(KitStorePaths.GatesFileName);
+
+        return reason switch
+        {
+            GateEntryIgnoredReason.UnknownProfile =>
+                $"'{gatesPath}' configures gates of the unknown profile '{profileName}'; they are ignored.",
+            GateEntryIgnoredReason.UnknownPhase =>
+                $"'{gatesPath}' configures the gate '{phaseName}' of the profile '{profileName}', which has no " +
+                $"phase '{phaseName}'; the gate is ignored.",
+            GateEntryIgnoredReason.FirstPhase =>
+                $"'{gatesPath}' configures the gate '{phaseName}' of the profile '{profileName}', but '{phaseName}' " +
+                "is the first phase of the profile and no transition leads into it; the gate is ignored.",
+            _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "The reason is not supported.")
         };
     }
 

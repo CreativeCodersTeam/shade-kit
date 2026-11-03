@@ -10,7 +10,10 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Phase.Start;
 /// <param name="Approval">
 /// <see langword="true" /> if the transition needs a human approval; otherwise, <see langword="false" />.
 /// </param>
-/// <param name="Checklist">The checklist of the gate, or <see langword="null" /> if the gate has none.</param>
+/// <param name="Checklist">
+/// The path of the checklist of the gate relative to the feature folder, for example
+/// <c>checks/definition-of-ready.md</c>, or <see langword="null" /> if the gate has none.
+/// </param>
 public sealed record PhaseStartCommandGateData(string Phase, bool Approval, string? Checklist)
 {
     /// <summary>

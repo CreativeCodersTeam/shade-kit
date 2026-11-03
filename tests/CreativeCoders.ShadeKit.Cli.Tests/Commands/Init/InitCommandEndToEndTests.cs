@@ -77,6 +77,51 @@ public sealed partial class InitCommandEndToEndTests : IDisposable
     }
 
     [Fact]
+    [Trait("Requirement", "FP05-AC1")]
+    public async Task RunAsync_InitJsonInGitRepository_WritesDefaultGatesAndChecklistTemplates()
+    {
+        // Arrange
+        EnterGitRepository();
+
+        // Act
+        var exitCode = await Program.RunAsync(["init", "--json"], TextWriter.Null, TextWriter.Null);
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        using var gates = JsonDocument.Parse(_tempDirectory.ReadFileText(".shadekit", "gates.json"));
+        var profiles = gates.RootElement.GetProperty("profiles");
+
+        profiles.EnumerateObject().Select(x => x.Name)
+            .Should().Equal("feature", "bugfix", "quick");
+
+        profiles.GetProperty("feature").EnumerateObject().Select(x => x.Name)
+            .Should().Equal("refine", "map", "plan", "implement", "verify", "finish");
+
+        profiles.GetProperty("bugfix").EnumerateObject().Select(x => x.Name)
+            .Should().Equal("diagnose", "plan", "implement", "verify", "finish");
+
+        profiles.GetProperty("quick").EnumerateObject().Select(x => x.Name)
+            .Should().Equal("quick", "finish");
+
+        profiles.GetProperty("quick").GetProperty("quick").GetProperty("approval").GetBoolean()
+            .Should().BeFalse();
+
+        profiles.GetProperty("feature").GetProperty("plan").GetProperty("checklist").GetString()
+            .Should().Be("checks/definition-of-ready.md");
+
+        profiles.GetProperty("quick").GetProperty("finish").GetProperty("checklist").GetString()
+            .Should().Be("checks/definition-of-done.md");
+
+        _tempDirectory.ReadFileText(".shadekit", "templates", "checks", "definition-of-ready.md")
+            .Should().Contain("| DOR-01 |").And.Contain("| DOR-10 |");
+
+        _tempDirectory.ReadFileText(".shadekit", "templates", "checks", "definition-of-done.md")
+            .Should().Contain("| DOD-01 |").And.Contain("| DOD-09 |");
+    }
+
+    [Fact]
     [Trait("Requirement", "FP02-AC6")]
     public async Task RunAsync_InitJsonInInitialisedRepository_Returns13WithUpgradeHintAndChangesNoFile()
     {

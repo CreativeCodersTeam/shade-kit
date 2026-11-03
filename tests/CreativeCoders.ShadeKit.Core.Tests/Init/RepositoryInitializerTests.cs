@@ -15,6 +15,7 @@ using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
+using CreativeCoders.ShadeKit.Core.Tests.Gates;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
 using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Tests.Shared;
@@ -570,11 +571,13 @@ public class RepositoryInitializerTests
     }
 
     [Fact]
-    public async Task InitializeAsync_GitRepositoryWithoutKitRoot_WritesGatesWithVersionFieldsOnly()
+    [Trait("Requirement", "FP05-AC1")]
+    public async Task InitializeAsync_GitRepositoryWithoutKitRoot_WritesDefaultGatesAndBothChecklistTemplates()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateGitRoot();
+        var reader = new ShippedTemplateReader();
 
         // Act
         await CreateInitializer().InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
@@ -582,10 +585,24 @@ public class RepositoryInitializerTests
         // Assert
         tempDirectory.ReadFileBytes(KitRoot, "gates.json")
             .Should().Equal(Encoding.UTF8.GetBytes(
-                "{\n" +
-                "  \"schemaVersion\": 1,\n" +
-                $"  \"minEngineVersion\": \"{GetMinEngineVersion(FormatIds.Gates)}\"\n" +
-                "}\n"));
+                ("{\n" +
+                 "  \"schemaVersion\": 1,\n" +
+                 $"  \"minEngineVersion\": \"{GetMinEngineVersion(FormatIds.Gates)}\",\n" +
+                 GatesConfigTests.DefaultGatesJsonBody).ReplaceLineEndings("\n")));
+
+        foreach (var (checklist, firstItem) in new[]
+                 {
+                     (GatesConfig.DefinitionOfReadyChecklist, "| DOR-01 |"),
+                     (GatesConfig.DefinitionOfDoneChecklist, "| DOD-01 |")
+                 })
+        {
+            var repositoryPath = ".shadekit/templates/" + checklist;
+            var shippedTemplate = ShippedTemplates.All.Single(x => x.RepositoryPath == repositoryPath);
+
+            tempDirectory.ReadFileText(repositoryPath.Split('/'))
+                .Should().Be(reader.ReadContent(shippedTemplate), repositoryPath)
+                .And.Contain(firstItem, repositoryPath);
+        }
     }
 
     [Fact]
@@ -1360,6 +1377,10 @@ public class RepositoryInitializerTests
 
         gates.Warnings
             .Should().BeEmpty();
+
+        gates.Document.Profiles
+            .Should().BeEquivalentTo(GatesConfig.CreateDefault().Profiles,
+                options => options.WithStrictOrdering());
 
         templatesLock
             .Should().NotBeNull();

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (`phase reject`, re-entry, `quick` phase; `phase next`, pending transition on `phase start <current>`), 2026-10-21 (package 03 implemented: `feature new` checks the profile names), and 2026-10-26 (implementation clarification and implementation: profiles as built-in definitions behind a catalog, a pure phase engine, the gate seam for package 05, the six `phase` commands, the phase fields of `feature.json`, exit codes 37 and 41–46), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): `phase start` is the CLI check of a phase skill; skill reactions to an active phase). Implemented; gate configuration and checklists come with package 05. |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (`phase reject`, re-entry, `quick` phase; `phase next`, pending transition on `phase start <current>`), 2026-10-21 (package 03 implemented: `feature new` checks the profile names), and 2026-10-26 (implementation clarification and implementation: profiles as built-in definitions behind a catalog, a pure phase engine, the gate seam for package 05, the six `phase` commands, the phase fields of `feature.json`, exit codes 37 and 41–46), 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): `phase start` is the CLI check of a phase skill; skill reactions to an active phase), and 2026-11-01 (package 05 implementation: the gate seam is served by `GatesConfigTransitionGateProvider`, `DefaultTransitionGateProvider` removed; reading `gates.json` and the checklist copy in the check order). Implemented; gate configuration and checklists are package 05 (implemented on 2026-11-01). |
 | Source | Concept §3.2, §5.1, §5.3, §5.4, §11.2–11.4 |
 | Depends on | 01, 03 |
 | Enables | 05 and every phase package |
@@ -23,7 +23,7 @@ The engine is the referee of the workflow: it knows each feature's phase, allows
 
 ### Out of scope
 
-- Gate configuration and checklists (package 05). Until package 05 exists, every transition needs an approval and has no checklist (`DefaultTransitionGateProvider`).
+- Gate configuration and checklists (package 05). Until package 05 was built on 2026-11-01, every transition needed an approval and had no checklist (`DefaultTransitionGateProvider`, removed with package 05).
 - The `report` setting in the result of `phase start finish` (package 15, [open points](#open-points)).
 - What happens inside a phase (phase packages 09–17).
 - `refactor` and custom profiles (later).
@@ -48,8 +48,8 @@ CLI Commands/Phase/*  ──►  IPhaseWorkflow / PhaseWorkflow           (orche
 
 - **Profiles** (`Workflow/Profiles/`): a `WorkflowProfile` is a name and an ordered list of `WorkflowPhase` (name, phase skill, general skills, `CanReopen`, default `true`). The built-in profiles are C# definitions in `BuiltInWorkflowProfiles`, offered by `IWorkflowProfileCatalog` / `BuiltInWorkflowProfileCatalog`. A profile needs a non-empty name, at least one phase, and unique phase names; the catalog needs unique profile names. Names are compared ordinally. Adding a profile or changing the phase order of a profile means changing `BuiltInWorkflowProfiles` only. The names are constants in `WorkflowProfileNames`, `WorkflowPhaseNames`, and `WorkflowSkillNames` (`ForPhase(phase)` gives `shade-kit-<phase>`). **Implemented** (`BuiltInWorkflowProfilesTests`, `BuiltInWorkflowProfileCatalogTests`, `WorkflowProfileTests`, `WorkflowPhaseTests`).
 - **Engine** (`Workflow/Engine/`): `IPhaseEngine` / `PhaseEngine` is a pure state machine without I/O, clock, or git. It gets the profile, the stored phase state, and the gates, and returns a decision (new state and one history record) or throws. It contains no profile, phase, or skill name; everything comes from the `WorkflowProfile` it is given. The interface `IPhaseEngine` is an explicit decision of the user (2026-10-26). **Implemented** (`PhaseEngineGenericityTests` run synthetic profiles with four, two, and one phase; `PhaseEngineArchitectureTests` scan the IL of the engine namespace for references to the built-in profiles and for profile, phase, and skill name literals).
-- **Gate seam**: `ITransitionGateProvider.GetGateAsync(store, profile, targetPhase)` returns the `TransitionGate(Approval, Checklist)` of the transition into a phase. Package 04 registers `DefaultTransitionGateProvider`: approval required, no checklist, for every transition. The engine already handles `Approval = false` generically ([Transitions](#transitions)); package 05 is to register a provider that reads `gates.json` from the store it gets. A reopen always needs an approval and has no checklist, whatever the provider returns (engine rule). **Implemented** (`DefaultTransitionGateProviderTests`, `PhaseEngineStartTests`).
-- **Orchestration**: `IPhaseWorkflow` / `PhaseWorkflow` resolves the current feature, reads `feature.json`, asks the catalog for the profile and the provider for the gates, calls the engine, reads the git identity only when a write follows, and writes `feature.json` through `IKitStore.WriteJsonAsync`. `phase complete` also clears the local override. **Implemented** (`PhaseWorkflow*Tests`).
+- **Gate seam**: `ITransitionGateProvider.GetGateAsync(store, profile, targetPhase)` returns the `TransitionGate(Approval, Checklist)` of the transition into a phase. Package 04 registered `DefaultTransitionGateProvider` (approval required, no checklist, for every transition). Since 2026-11-01, `AddShadeKitCore()` registers `GatesConfigTransitionGateProvider` of package 05 instead, which reads `gates.json` from the store it gets through the per-store cached `IGatesConfigReader`; the interface is unchanged and `DefaultTransitionGateProvider` is removed ([package 05](05-gates-and-checklists.md#reading-gatesjson)). The engine handles `Approval = false` generically ([Transitions](#transitions)). A reopen always needs an approval and has no checklist, whatever the provider returns (engine rule). **Implemented** (`GatesConfigTransitionGateProviderTests`, `PhaseEngineStartTests`).
+- **Orchestration**: `IPhaseWorkflow` / `PhaseWorkflow` resolves the current feature, reads `feature.json`, asks the catalog for the profile and the provider for the gates, calls the engine, reads the git identity only when a write follows, and writes `feature.json` through `IKitStore.WriteJsonAsync`. `phase start` copies the checklist of the gate into the feature folder between reading the identity and writing (package 05). `phase complete` also clears the local override. **Implemented** (`PhaseWorkflow*Tests`).
 
 **The profile applies live.** **Decided** on 2026-10-26 (implementation clarification). The phase order always comes from the current profile definition, also for existing features:
 
@@ -105,7 +105,7 @@ States per phase (**Proposed** in the concept, adopted): `pending` → `in-progr
   | `phase reject <x> [--note]` | `reject`, with the note | from and to of the pending transition |
   | `phase complete` | `complete` | last phase, no `to` |
 
-  Every no-op (repeated `phase start`, re-entry, resume, `phase next`, `phase skills`) adds no entry and writes nothing; `feature.json` stays byte-for-byte unchanged.
+  Every no-op (repeated `phase start`, re-entry, resume, `phase next`, `phase skills`) adds no entry and writes nothing; `feature.json` stays byte-for-byte unchanged. Exception since package 05: a repeated `phase start` of a pending transition creates a missing checklist copy.
 
 ### Transitions
 
@@ -113,7 +113,7 @@ Every `phase` command works on the current feature, resolved like `feature curre
 
 | Command | Allowed when | Effect | `outcome` |
 |---|---|---|---|
-| `phase start <next>` | `<next>` follows `currentPhase` in the profile, and the current phase is `in-progress` | Gate with approval: current phase → `awaiting-approval`, `pendingTransition` = `<next>`. Gate without approval (only through a package 05 gate provider): current phase → `approved`, `<next>` → `in-progress`, `currentPhase` = `<next>`. | `transition-requested`; without approval `transition-performed` |
+| `phase start <next>` | `<next>` follows `currentPhase` in the profile, and the current phase is `in-progress` | Gate with approval: current phase → `awaiting-approval`, `pendingTransition` = `<next>`. Gate without approval (`approval: false` in `gates.json`, package 05): current phase → `approved`, `<next>` → `in-progress`, `currentPhase` = `<next>`. | `transition-requested`; without approval `transition-performed` |
 | `phase start <x>` (repeated) | `pendingTransition` is `<x>` | Changes nothing and returns the gate again, for example in a new session. A pending forward transition returns approval required and the current checklist, also if its gate no longer needs an approval (**Proposed**); a pending reopen returns the reopen gate. **Decided** on 2026-10-18 (findings clarification). | `transition-pending` |
 | `phase start <current>` (re-entry) | `<current>` is `currentPhase` and `in-progress` | Changes nothing; no gate, no transition, the skills of the current phase, so a phase skill can run again in a new session or for another `refine` round. The phase skill tells the human that the phase is active and asks whether to continue it or to end (package 06). **Decided** on 2026-10-18; the question **Decided** on 2026-10-30. | `already-in-progress` |
 | `phase start <current>` | `<current>` is `currentPhase` and `awaiting-approval` | Changes nothing; no gate, `transition` is the pending transition, the skills of the current phase. The phase skill tells the human and offers to discard the pending transition (`phase reject <pendingTransition>`) and continue, to keep it, or to end (package 06). **Decided** on 2026-10-18 (findings clarification); the three options **Decided** on 2026-10-30. | `resume-pending` |
@@ -134,7 +134,7 @@ The same call is also the CLI check of the phase skill: a refusal and the outcom
 
 ### Approval
 
-- Every transition needs an explicit human approval in v1. Package 05 adds switching it off per transition. **Decided** (concept §5.2).
+- Every transition needs an explicit human approval in v1. Package 05 adds switching it off per transition (implemented on 2026-11-01). **Decided** (concept §5.2).
 - The agent asks the human, and only after the human says yes does it call `phase approve`. **Decided** (concept §3.2).
 - **Known weak point (Decided, accepted for v1):** nothing technically stops an agent from calling `phase approve` on its own. Later options: `approve` only in an interactive terminal, or a hook that blocks the call.
 
@@ -171,7 +171,7 @@ Returns the phase skill for the feature's profile and the general skills it need
   | `phase skills <phase>` | `{ featureId, profile, phase, phaseSkill, generalSkills }` |
   | `phase next` | see [`phase next --json`](#phase-next---json) |
 
-  `warnings` holds the warnings of resolving the current feature and reading `feature.json` (packages 01 and 03) and of writing it (package 02), in the order of package 03.
+  `warnings` holds the warnings of resolving the current feature and reading `feature.json` (packages 01 and 03) and of writing it (package 02), in the order of package 03; `phase start` and `phase next` add the warnings of reading `gates.json`, and `phase start` those of writing the checklist copy (package 05).
 - `--note` (short `-n`) of `phase reject` is trimmed; an empty or whitespace-only note is no note; line breaks are allowed. **Decided** on 2026-10-26 (implementation clarification).
 - Plain: `Key: value` lines like `feature show`, for example `Feature:`, `Outcome:`, `Transition: <from> -> <to> (<kind>)`, `Current phase: <name> (<state>)`, `Gate:`, `Phase skill:`, `General skills:`; `phase start` adds an approve and reject hint while a transition is pending. The wording is **Proposed**.
 
@@ -191,7 +191,7 @@ Returns the phase skill for the feature's profile and the general skills it need
 | 45 | `complete-not-allowed` | `phase complete` outside the last phase, or while the last phase is not `in-progress` (`PhaseCompleteNotAllowedException`). |
 | 46 | `phase-state-invalid` | The phase fields of `feature.json` do not fit the profile or contradict each other (`InvalidPhaseStateException`, [Phase states](#phase-states-and-featurejson)). The message names the file and the field. Also from `feature list`, `current`, and `show`. |
 
-Check order: resolve the current feature (37) → read `feature.json` (20–22 as in package 01; reading commands migrate in memory, writing commands need the current format) → profile known (40) → phase state valid (46) → gates read (only `phase start` and `phase next`; 20–22 for `gates.json` once package 05 reads it) → feature not `done` (44, for `start`, `approve`, `reject`, `complete`) → phase in the profile (41) → transition rule (42, 43, 45) → git identity (36, only if a write follows) → write. Reused codes: 10, 12, 15, 16, 20–22, 2 (`invalid-arguments`, for example a missing phase argument), and 130 (packages 01–03). **Implemented** (`PhaseCommandsEndToEndTests`, `CliErrorMapperTests`).
+Check order: resolve the current feature (37) → read `feature.json` (20–22 as in package 01; reading commands migrate in memory, writing commands need the current format) → profile known (40) → phase state valid (46) → gates read (only `phase start` and `phase next`; 20–22 for `gates.json`, package 05; read with read access, so 21 only with `outdatedFormatOnRead: stop`) → feature not `done` (44, for `start`, `approve`, `reject`, `complete`) → phase in the profile (41) → transition rule (42, 43, 45) → git identity (36, only if a write follows) → checklist copy (only `phase start`; 47, 14, 22, package 05) → write. Reused codes: 10, 12, 15, 16, 20–22, 2 (`invalid-arguments`, for example a missing phase argument), and 130 (packages 01–03). **Implemented** (`PhaseCommandsEndToEndTests`, `CliErrorMapperTests`).
 
 ### Merges
 

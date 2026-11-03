@@ -9,8 +9,15 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 /// checklist the agent checks before it asks.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The <see cref="IPhaseEngine" /> applies the gate. A reopen of an earlier phase always needs an approval and has no
 /// checklist, whatever the provider returns.
+/// </para>
+/// <para>
+/// The <see cref="TransitionGate.Checklist" /> of a gate is the value from <c>gates.json</c>: a path relative to
+/// <c>.shadekit/templates/</c> that equals the path of the feature's copy relative to the feature folder, for example
+/// <c>checks/definition-of-ready.md</c>.
+/// </para>
 /// </remarks>
 public interface ITransitionGateProvider
 {

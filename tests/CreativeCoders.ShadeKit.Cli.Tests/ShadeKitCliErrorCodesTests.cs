@@ -34,6 +34,7 @@ public partial class ShadeKitCliErrorCodesTests
     [InlineData(ShadeKitCliErrorCodes.FeatureDone, "feature-done")]
     [InlineData(ShadeKitCliErrorCodes.CompleteNotAllowed, "complete-not-allowed")]
     [InlineData(ShadeKitCliErrorCodes.PhaseStateInvalid, "phase-state-invalid")]
+    [InlineData(ShadeKitCliErrorCodes.ChecklistTemplateNotFound, "checklist-template-not-found")]
     [InlineData(ShadeKitCliErrorCodes.Canceled, "canceled")]
     [InlineData(ShadeKitCliErrorCodes.HostError, "host-error")]
     public void ErrorCodes_Contract_HaveStableValues(string errorCode, string expectedErrorCode)

@@ -62,4 +62,16 @@ public static class ShadeKitCliWarningCodes
     /// git configuration of the repository, so the line endings come from <c>.editorconfig</c> or the operating system.
     /// </summary>
     public const string GitAttributesUnavailable = "git-attributes-unavailable";
+
+    /// <summary>
+    /// Represents the warning code reported when <c>gates.json</c> does not exist or has no <c>profiles</c> field, so
+    /// the built-in gate defaults apply.
+    /// </summary>
+    public const string GatesDefaultsUsed = "gates-defaults-used";
+
+    /// <summary>
+    /// Represents the warning code reported when an entry of <c>gates.json</c> names an unknown profile, a phase that
+    /// its profile does not have, or the first phase of its profile, and is ignored.
+    /// </summary>
+    public const string GateEntryIgnored = "gate-entry-ignored";
 }
