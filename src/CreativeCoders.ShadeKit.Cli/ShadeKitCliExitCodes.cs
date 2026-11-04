@@ -59,6 +59,14 @@ public static class ShadeKitCliExitCodes
     public const int GitUnavailable = 16;
 
     /// <summary>
+    /// Represents the exit code returned when the file system refuses to write a file of the SHADE kit store, for
+    /// example because a file exists in the place of one of the directories of the checklist copy that
+    /// <c>shade-kit phase start</c> writes, or because the file already exists although it must be new. The error code
+    /// is <see cref="ShadeKitCliErrorCodes.KitFileWriteFailed" />.
+    /// </summary>
+    public const int KitFileWriteFailed = 17;
+
+    /// <summary>
     /// Represents the exit code returned when a file uses a format version that is newer than the engine supports.
     /// The error code is <see cref="ShadeKitCliErrorCodes.FormatTooNew" />.
     /// </summary>

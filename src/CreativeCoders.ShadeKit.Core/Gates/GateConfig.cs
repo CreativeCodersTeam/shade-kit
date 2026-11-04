@@ -31,7 +31,7 @@ public sealed class GateConfig
     /// feature folder, for example <c>checks/definition-of-ready.md</c>; or <see langword="null" /> if the field is
     /// missing or <see langword="null" />, which means that the transition has no checklist. A <see langword="null" />
     /// value is not written. A path that is not a <c>/</c>-separated relative path under <c>checks/</c> whose file
-    /// name ends in <c>.md</c> makes the file invalid.
+    /// name ends in <c>.md</c>, or that contains a <c>:</c> or a control character, makes the file invalid.
     /// </value>
     public string? Checklist { get; set; }
 

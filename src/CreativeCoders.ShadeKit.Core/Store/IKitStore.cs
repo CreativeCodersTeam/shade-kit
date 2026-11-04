@@ -146,13 +146,18 @@ public interface IKitStore
     /// </summary>
     /// <remarks>
     /// Written through an <see cref="ITextFileWriter" /> with the line ending of the repository, directly and not
-    /// atomically; missing directories are created. A file in a directory that is moved into place later is written
-    /// through <see cref="CreateDirectoryWriter" />.
+    /// atomically; missing directories are created. An existing file is overwritten with
+    /// <see cref="FileWriteMode.Overwrite" /> and kept with <see cref="FileWriteMode.CreateNew" />. A file in a
+    /// directory that is moved into place later is written through <see cref="CreateDirectoryWriter" />.
     /// </remarks>
     /// <param name="relativePath">
     /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/spec.md</c>.
     /// </param>
     /// <param name="content">The content of the file.</param>
+    /// <param name="mode">
+    /// One of the enumeration values that specifies whether an existing file is overwritten or makes the write fail.
+    /// The default is <see cref="FileWriteMode.Overwrite" />.
+    /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous write operation. The task result contains the warnings that occurred
@@ -163,8 +168,19 @@ public interface IKitStore
     /// <exception cref="ArgumentException">
     /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
     /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="mode" /> is not a <see cref="FileWriteMode" /> value.
+    /// </exception>
+    /// <exception cref="FileAlreadyExistsException">
+    /// <paramref name="mode" /> is <see cref="FileWriteMode.CreateNew" /> and a file exists at
+    /// <paramref name="relativePath" />; the file is not changed.
+    /// </exception>
+    /// <exception cref="IOException">
+    /// An I/O error occurred while the file was written, for example because a file exists in the place of one of its
+    /// parent directories.
+    /// </exception>
     Task<IReadOnlyList<KitWarning>> WriteFileAsync(string relativePath, TextFileContent content,
-        CancellationToken cancellationToken = default);
+        FileWriteMode mode = FileWriteMode.Overwrite, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a writer for the files of a directory that is written at one path and moved to another path later,
@@ -247,6 +263,22 @@ public interface IKitStore
     /// <c>.shadekit/templates/spec.md</c>.
     /// </exception>
     Task<TextFileContent?> ReadFileAsync(string relativePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the full path of a file or directory of the store.
+    /// </summary>
+    /// <remarks>
+    /// The path is the one that the store puts into its exceptions, for example into a
+    /// <see cref="PathNotAFileException" />; nothing is read or created.
+    /// </remarks>
+    /// <param name="relativePath">
+    /// The path relative to <see cref="RootPath" />, for example <c>features/login/feature.json</c>.
+    /// </param>
+    /// <returns>The normalized full path of <paramref name="relativePath" /> below <see cref="RootPath" />.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
+    /// </exception>
+    string GetFullPath(string relativePath);
 
     /// <summary>
     /// Determines whether a file of the store exists.

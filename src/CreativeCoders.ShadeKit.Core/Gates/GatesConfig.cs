@@ -13,7 +13,8 @@ namespace CreativeCoders.ShadeKit.Core.Gates;
 /// The team owns the values; the engine owns the schema (format version <c>1</c>). The gates are keyed by workflow
 /// profile and then by the target phase of the transition. Unknown fields are kept in
 /// <see cref="VersionedDocument.ExtensionData" /> and <see cref="GateConfig.ExtensionData" />; unknown profile and
-/// phase names are kept as well and do not make the file invalid.
+/// phase names are kept as well and do not make the file invalid. A profile or phase name with a control character
+/// makes the file invalid.
 /// </remarks>
 public sealed class GatesConfig : VersionedDocument, IJsonOnDeserializing, IJsonOnDeserialized
 {
@@ -118,6 +119,13 @@ public sealed class GatesConfig : VersionedDocument, IJsonOnDeserializing, IJson
 
         foreach (var (profileName, gates) in _profiles)
         {
+            if (ContainsControlCharacter(profileName))
+            {
+                throw new JsonException(
+                    $"The profile name '{ToPrintable(profileName)}' in the 'profiles' field contains a control " +
+                    "character.");
+            }
+
             // RespectNullableAnnotations does not cover dictionary values, so null entries are rejected here.
             if (gates is null)
             {
@@ -133,6 +141,13 @@ public sealed class GatesConfig : VersionedDocument, IJsonOnDeserializing, IJson
 
     private static void ValidateGate(string profileName, string phaseName, GateConfig? gate)
     {
+        if (ContainsControlCharacter(phaseName))
+        {
+            throw new JsonException(
+                $"The phase name '{ToPrintable(phaseName)}' of the profile '{profileName}' in the 'profiles' field " +
+                "contains a control character.");
+        }
+
         if (gate is null)
         {
             throw new JsonException(
@@ -142,9 +157,10 @@ public sealed class GatesConfig : VersionedDocument, IJsonOnDeserializing, IJson
         if (gate.Checklist is { } checklist && !IsValidChecklistPath(checklist))
         {
             throw new JsonException(
-                $"The checklist '{checklist}' of the gate '{phaseName}' of the profile '{profileName}' must be a " +
-                $"relative path with '/' separators that starts with '{ChecklistDirectory}' and ends with " +
-                $"'{ChecklistExtension}' after a file name, without '\\' and without empty, '.', or '..' segments.");
+                $"The checklist '{ToPrintable(checklist)}' of the gate '{phaseName}' of the profile '{profileName}' " +
+                $"must be a relative path with '/' separators that starts with '{ChecklistDirectory}' and ends with " +
+                $"'{ChecklistExtension}' after a file name, without '\\', ':', control characters, and empty, '.', " +
+                "or '..' segments.");
         }
     }
 
@@ -154,14 +170,20 @@ public sealed class GatesConfig : VersionedDocument, IJsonOnDeserializing, IJson
     /// <param name="checklist">The checklist path to check.</param>
     /// <returns>
     /// <see langword="true" /> if <paramref name="checklist" /> is a relative path with <c>/</c> separators that
-    /// starts with <c>checks/</c>, ends with <c>.md</c> after a file name, and has no <c>\</c> and no empty,
-    /// <c>.</c>, or <c>..</c> segments; otherwise, <see langword="false" />.
+    /// starts with <c>checks/</c>, ends with <c>.md</c> after a file name, and has no <c>\</c>, no <c>:</c>, no
+    /// control characters, and no empty, <c>.</c>, or <c>..</c> segments; otherwise, <see langword="false" />.
     /// </returns>
+    /// <remarks>
+    /// A <c>:</c> would name an alternate data stream on Windows, for example <c>checks/x.md:hidden.md</c>; a control
+    /// character could reach the terminal through the output of the commands.
+    /// </remarks>
     internal static bool IsValidChecklistPath(string checklist)
     {
         if (!checklist.StartsWith(ChecklistDirectory, StringComparison.Ordinal)
             || !checklist.EndsWith(ChecklistExtension, StringComparison.Ordinal)
-            || checklist.Contains('\\', StringComparison.Ordinal))
+            || checklist.Contains('\\', StringComparison.Ordinal)
+            || checklist.Contains(':', StringComparison.Ordinal)
+            || ContainsControlCharacter(checklist))
         {
             return false;
         }
@@ -171,5 +193,19 @@ public sealed class GatesConfig : VersionedDocument, IJsonOnDeserializing, IJson
         // The file name needs a name in front of the extension; ".md" alone names no checklist.
         return segments.All(segment => segment is not ("" or "." or ".."))
                && segments[^1] != ChecklistExtension;
+    }
+
+    private static bool ContainsControlCharacter(string value)
+    {
+        return value.Any(char.IsControl);
+    }
+
+    // Renders control characters as \uXXXX escapes, so the message of an invalid file never carries them to the
+    // terminal or the agent.
+    private static string ToPrintable(string value)
+    {
+        return ContainsControlCharacter(value)
+            ? string.Concat(value.Select(c => char.IsControl(c) ? $"\\u{(int)c:x4}" : new string(c, 1)))
+            : value;
     }
 }

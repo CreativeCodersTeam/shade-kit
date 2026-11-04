@@ -3,7 +3,8 @@ using CreativeCoders.ShadeKit.Core.Warnings;
 namespace CreativeCoders.ShadeKit.Core.Gates.Warnings;
 
 /// <summary>
-/// Represents a warning that an entry of <c>.shadekit/gates.json</c> is ignored; the entry stays in the file.
+/// Represents a warning that an entry of <c>.shadekit/gates.json</c>, or with
+/// <see cref="GateEntryIgnoredReason.SharedChecklist" /> only its checklist, is ignored; the entry stays in the file.
 /// </summary>
 /// <param name="ProfileName">The name of the workflow profile under which the entry is stored.</param>
 /// <param name="PhaseName">

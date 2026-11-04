@@ -28,8 +28,9 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 /// <para>
 /// A call that changes nothing, also a repeated <c>phase start</c>, leaves <c>feature.json</c> unchanged byte for
 /// byte; a repeated <c>phase start</c> of a pending transition only creates a missing checklist copy.
-/// <see cref="GetSkillsAsync" /> and <see cref="GetNextAsync" /> never write and never read the git identity. A feature without phase fields, created before the phase engine, counts as being in the initial
-/// state of its profile; the first change writes all phase fields.
+/// <see cref="GetSkillsAsync" /> and <see cref="GetNextAsync" /> never write and never read the git identity. A
+/// feature without phase fields, created before the phase engine, counts as being in the initial state of its
+/// profile; the first change writes all phase fields.
 /// </para>
 /// <para>
 /// The warnings of every result are the warnings of resolving the current feature, the format warnings of the read

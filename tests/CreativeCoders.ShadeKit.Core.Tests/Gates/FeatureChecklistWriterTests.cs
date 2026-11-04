@@ -7,6 +7,7 @@ using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Gates.Exceptions;
 using CreativeCoders.ShadeKit.Core.Git.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
@@ -61,7 +62,9 @@ public sealed class FeatureChecklistWriterTests : IDisposable
         "checks/definition-of-ready.txt",
         "/checks/definition-of-ready.md",
         "checks//definition-of-ready.md",
-        "checks/.md"
+        "checks/.md",
+        "checks/definition-of-ready.md:hidden.md",
+        "checks/definition\u001b-of-ready.md"
     };
 
     public void Dispose()
@@ -561,7 +564,7 @@ public sealed class FeatureChecklistWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureCopyAsync_Token_PassesTokenToReadAndWrite()
+    public async Task EnsureCopyAsync_Token_PassesTokenToReadAndWritesCopyAsNewFile()
     {
         // Arrange
         var store = A.Fake<IKitStore>();
@@ -571,7 +574,7 @@ public sealed class FeatureChecklistWriterTests : IDisposable
         var token = cancellationTokenSource.Token;
         A.CallTo(() => store.ReadFileAsync(templatePath, token))
             .Returns(TextFileContent.FromText("# {{feature-id}}\n"));
-        A.CallTo(() => store.WriteFileAsync(copyPath, A<TextFileContent>._, token))
+        A.CallTo(() => store.WriteFileAsync(copyPath, A<TextFileContent>._, FileWriteMode.CreateNew, token))
             .Returns(Array.Empty<KitWarning>());
         var writer = new FeatureChecklistWriter();
 
@@ -583,27 +586,163 @@ public sealed class FeatureChecklistWriterTests : IDisposable
             .Should().BeTrue();
 
         A.CallTo(() => store.WriteFileAsync(copyPath,
-                A<TextFileContent>.That.Matches(x => x.Lines.SequenceEqual(new[] { $"# {FeatureId}" })), token))
+                A<TextFileContent>.That.Matches(x => x.Lines.SequenceEqual(new[] { $"# {FeatureId}" })),
+                FileWriteMode.CreateNew, token))
             .MustHaveHappenedOnceExactly();
     }
 
     [Fact]
-    public async Task EnsureCopyAsync_WriteFails_PropagatesException()
+    public async Task EnsureCopyAsync_WriteFailsWithIOException_ThrowsKitFileWriteFailedExceptionNamingCopy()
     {
         // Arrange
-        var store = A.Fake<IKitStore>();
-        A.CallTo(() => store.ReadFileAsync(A<string>._, A<CancellationToken>._))
-            .Returns(TextFileContent.FromText("# {{feature-id}}\n"));
-        A.CallTo(() => store.WriteFileAsync(A<string>._, A<TextFileContent>._, A<CancellationToken>._))
-            .ThrowsAsync(new IOException("disk full"));
+        var store = CreateFakeStoreWhoseWriteThrows(new IOException("disk full"));
         var writer = new FeatureChecklistWriter();
 
         // Act
         var act = () => writer.EnsureCopyAsync(store, FeatureId, Checklist, TestContext.Current.CancellationToken);
 
         // Assert
-        await act.Should().ThrowAsync<IOException>()
-            .WithMessage("disk full");
+        var exception = (await act.Should().ThrowAsync<KitFileWriteFailedException>()).Which;
+
+        exception.FilePath
+            .Should().Be(".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md");
+
+        exception.InnerException
+            .Should().BeOfType<IOException>()
+            .Which.Message.Should().Be("disk full");
+    }
+
+    [Fact]
+    public async Task EnsureCopyAsync_WriteFailsBecauseCopyExists_ReturnsNotCreatedWithoutWarnings()
+    {
+        // Arrange
+        var store = CreateFakeStoreWhoseWriteThrows(new FileAlreadyExistsException("/repo/copy.md", null));
+        var writer = new FeatureChecklistWriter();
+
+        // Act
+        var result = await writer.EnsureCopyAsync(store, FeatureId, Checklist, TestContext.Current.CancellationToken);
+
+        // Assert
+        result
+            .Should().BeEquivalentTo(new FeatureChecklistCopyResult(Created: false, Warnings: []));
+    }
+
+    [Fact]
+    public async Task EnsureCopyAsync_WriteFailsWithUnauthorizedAccess_PropagatesExceptionUnchanged()
+    {
+        // Arrange
+        var failure = new UnauthorizedAccessException("access denied");
+        var store = CreateFakeStoreWhoseWriteThrows(failure);
+        var writer = new FeatureChecklistWriter();
+
+        // Act
+        var act = () => writer.EnsureCopyAsync(store, FeatureId, Checklist, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<UnauthorizedAccessException>())
+            .Which.Should().BeSameAs(failure);
+    }
+
+    [Fact]
+    public async Task EnsureCopyAsync_WriteCanceled_PropagatesOperationCanceledExceptionUnchanged()
+    {
+        // Arrange
+        var failure = new OperationCanceledException("canceled");
+        var store = CreateFakeStoreWhoseWriteThrows(failure);
+        var writer = new FeatureChecklistWriter();
+
+        // Act
+        var act = () => writer.EnsureCopyAsync(store, FeatureId, Checklist, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<OperationCanceledException>())
+            .Which.Should().BeSameAs(failure);
+    }
+
+    [Fact]
+    public async Task EnsureCopyAsync_FileAtChecksDirectory_ThrowsKitFileWriteFailedExceptionAndKeepsFile()
+    {
+        // Arrange
+        WriteTemplate(Checklist, TemplateText);
+        byte[] strayFile = [.. "stray\n"u8];
+        _repository.WriteFileBytes(strayFile, KitStorePaths.RootPath, KitStorePaths.FeaturesDirName, FeatureId,
+            KitStorePaths.ChecksDirName);
+        var writer = new FeatureChecklistWriter();
+
+        // Act
+        var act = () => writer.EnsureCopyAsync(CreateStore(), FeatureId, Checklist,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<KitFileWriteFailedException>())
+            .Which.FilePath.Should().Be(".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md");
+
+        _repository.ReadFileBytes(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName, FeatureId,
+                KitStorePaths.ChecksDirName)
+            .Should().Equal(strayFile);
+    }
+
+    [Fact]
+    public async Task EnsureCopyAsync_FileAtNestedChecklistDirectory_ThrowsKitFileWriteFailedException()
+    {
+        // Arrange
+        const string nestedChecklist = "checks/team/sign-off.md";
+        WriteTemplate(nestedChecklist, "Sign-off for {{feature-id}}\n");
+        _repository.WriteFileBytes([.. "stray\n"u8], KitStorePaths.RootPath, KitStorePaths.FeaturesDirName,
+            FeatureId, KitStorePaths.ChecksDirName, "team");
+        var writer = new FeatureChecklistWriter();
+
+        // Act
+        var act = () => writer.EnsureCopyAsync(CreateStore(), FeatureId, nestedChecklist,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<KitFileWriteFailedException>())
+            .Which.FilePath.Should().Be(".shadekit/features/gh-142-login-sso/checks/team/sign-off.md");
+    }
+
+    [Fact]
+    public async Task EnsureCopyAsync_CopyCreatedConcurrentlyBeforeWrite_ReturnsNotCreatedAndKeepsOtherCopy()
+    {
+        // Arrange
+        WriteTemplate(Checklist, TemplateText);
+        byte[] concurrentCopy = [.. "# Created by another phase start\n"u8];
+        var realWriter = FixedLineEnding.CreateWriter(LineEnding.Lf);
+        var textFileWriter = A.Fake<ITextFileWriter>();
+        A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._, A<RepositoryFile?>._,
+                A<FileWriteMode>._, A<CancellationToken>._))
+            .ReturnsLazily((RepositoryFile file, TextFileContent content, RepositoryFile? lineEndingFile,
+                FileWriteMode mode, CancellationToken token) =>
+            {
+                // The other call creates the copy after the existence check of this call.
+                WriteCopyBytes(Checklist, concurrentCopy);
+
+                return realWriter.WriteAsync(file, content, lineEndingFile, mode, token);
+            });
+        var writer = new FeatureChecklistWriter();
+
+        // Act
+        var result = await writer.EnsureCopyAsync(TestKitStores.Create(_kitStorePath, textFileWriter), FeatureId,
+            Checklist, TestContext.Current.CancellationToken);
+
+        // Assert
+        result
+            .Should().BeEquivalentTo(new FeatureChecklistCopyResult(Created: false, Warnings: []));
+
+        ReadCopyBytes(Checklist)
+            .Should().Equal(concurrentCopy);
+    }
+
+    private static IKitStore CreateFakeStoreWhoseWriteThrows(Exception exception)
+    {
+        var store = A.Fake<IKitStore>();
+        A.CallTo(() => store.ReadFileAsync(A<string>._, A<CancellationToken>._))
+            .Returns(TextFileContent.FromText("# {{feature-id}}\n"));
+        A.CallTo(() => store.WriteFileAsync(A<string>._, A<TextFileContent>._, A<FileWriteMode>._,
+                A<CancellationToken>._))
+            .ThrowsAsync(exception);
+
+        return store;
     }
 
     private KitStore CreateStore()

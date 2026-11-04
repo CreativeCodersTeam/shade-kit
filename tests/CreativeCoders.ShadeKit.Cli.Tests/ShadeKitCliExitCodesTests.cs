@@ -38,6 +38,7 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.InvalidManagedSection)]
     [InlineData(ShadeKitCliExitCodes.UnsupportedFileEncoding)]
     [InlineData(ShadeKitCliExitCodes.GitUnavailable)]
+    [InlineData(ShadeKitCliExitCodes.KitFileWriteFailed)]
     [InlineData(ShadeKitCliExitCodes.GitIdentityMissing)]
     [InlineData(ShadeKitCliExitCodes.NoCurrentFeature)]
     [InlineData(ShadeKitCliExitCodes.FeatureAlreadyExists)]

@@ -202,7 +202,7 @@ public class RepositoryInitializerTests
         foreach (var fileName in new[] { GitIgnore, ClaudeMd, AgentsMd })
         {
             A.CallTo(() => textFileWriter.WriteAsync(RepositoryFile.Resolve(tempDirectory.RootPath, fileName),
-                    A<TextFileContent>._, A<RepositoryFile?>._, A<CancellationToken>._))
+                    A<TextFileContent>._, A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._))
                 .MustHaveHappenedOnceExactly();
         }
     }
@@ -352,7 +352,7 @@ public class RepositoryInitializerTests
         var textFileWriter = A.Fake<ITextFileWriter>();
         CallToWrite(textFileWriter)
             .ReturnsLazily((RepositoryFile file, TextFileContent content, RepositoryFile? lineEndingFile,
-                CancellationToken token) => realWriter.WriteAsync(file, content, lineEndingFile, token));
+                FileWriteMode mode, CancellationToken token) => realWriter.WriteAsync(file, content, lineEndingFile, mode, token));
         CallToWrite(textFileWriter, failingFileName)
             .ThrowsAsync(new IOException("disk full"));
 
@@ -411,7 +411,7 @@ public class RepositoryInitializerTests
 
         // Assert
         A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
-                A<RepositoryFile?>._, cancellationTokenSource.Token))
+                A<RepositoryFile?>._, A<FileWriteMode>._, cancellationTokenSource.Token))
             .MustHaveHappened(3, Times.Exactly);
     }
 
@@ -426,7 +426,8 @@ public class RepositoryInitializerTests
         var writtenContents = new Dictionary<string, TextFileContent>();
         var textFileWriter = A.Fake<ITextFileWriter>();
         CallToWrite(textFileWriter)
-            .Invokes((RepositoryFile file, TextFileContent content, RepositoryFile? _, CancellationToken _) =>
+            .Invokes((RepositoryFile file, TextFileContent content, RepositoryFile? _, FileWriteMode _,
+                CancellationToken _) =>
                 writtenContents[file.GitPath] = content)
             .Returns(Warnings());
 
@@ -471,7 +472,7 @@ public class RepositoryInitializerTests
             .MustHaveHappenedOnceExactly();
 
         A.CallTo(() => textFileWriter.WriteAsync(RepositoryFile.Resolve(tempDirectory.RootPath, AgentsMd),
-                A<TextFileContent>._, A<RepositoryFile?>._, A<CancellationToken>._))
+                A<TextFileContent>._, A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
 
         result.Warnings
@@ -572,12 +573,11 @@ public class RepositoryInitializerTests
 
     [Fact]
     [Trait("Requirement", "FP05-AC1")]
-    public async Task InitializeAsync_GitRepositoryWithoutKitRoot_WritesDefaultGatesAndBothChecklistTemplates()
+    public async Task InitializeAsync_GitRepositoryWithoutKitRoot_WritesDefaultGates()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
         tempDirectory.CreateGitRoot();
-        var reader = new ShippedTemplateReader();
 
         // Act
         await CreateInitializer().InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
@@ -589,20 +589,28 @@ public class RepositoryInitializerTests
                  "  \"schemaVersion\": 1,\n" +
                  $"  \"minEngineVersion\": \"{GetMinEngineVersion(FormatIds.Gates)}\",\n" +
                  GatesConfigTests.DefaultGatesJsonBody).ReplaceLineEndings("\n")));
+    }
 
-        foreach (var (checklist, firstItem) in new[]
-                 {
-                     (GatesConfig.DefinitionOfReadyChecklist, "| DOR-01 |"),
-                     (GatesConfig.DefinitionOfDoneChecklist, "| DOD-01 |")
-                 })
-        {
-            var repositoryPath = ".shadekit/templates/" + checklist;
-            var shippedTemplate = ShippedTemplates.All.Single(x => x.RepositoryPath == repositoryPath);
+    [Theory]
+    [Trait("Requirement", "FP05-AC1")]
+    [InlineData(GatesConfig.DefinitionOfReadyChecklist, "| DOR-01 |")]
+    [InlineData(GatesConfig.DefinitionOfDoneChecklist, "| DOD-01 |")]
+    public async Task InitializeAsync_GitRepositoryWithoutKitRoot_WritesShippedChecklistTemplate(string checklist,
+        string firstItem)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+        var repositoryPath = ".shadekit/templates/" + checklist;
+        var shippedTemplate = ShippedTemplates.All.Single(x => x.RepositoryPath == repositoryPath);
 
-            tempDirectory.ReadFileText(repositoryPath.Split('/'))
-                .Should().Be(reader.ReadContent(shippedTemplate), repositoryPath)
-                .And.Contain(firstItem, repositoryPath);
-        }
+        // Act
+        await CreateInitializer().InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        tempDirectory.ReadFileText(repositoryPath.Split('/'))
+            .Should().Be(new ShippedTemplateReader().ReadContent(shippedTemplate))
+            .And.Contain(firstItem);
     }
 
     [Fact]
@@ -1768,9 +1776,9 @@ public class RepositoryInitializerTests
     {
         return fileName is null
             ? A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
-                A<RepositoryFile?>._, A<CancellationToken>._))
+                A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._))
             : A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>.That.Matches(file => file.GitPath == fileName),
-                A<TextFileContent>._, A<RepositoryFile?>._, A<CancellationToken>._));
+                A<TextFileContent>._, A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._));
     }
 
     private static Task<IReadOnlyList<KitWarning>> Warnings(params KitWarning[] warnings)

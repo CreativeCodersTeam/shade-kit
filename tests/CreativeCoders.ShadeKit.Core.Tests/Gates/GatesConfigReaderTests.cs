@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
@@ -7,6 +8,7 @@ using CreativeCoders.ShadeKit.Core.Gates.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Tests.Features;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
 using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
@@ -18,6 +20,8 @@ public sealed class GatesConfigReaderTests : IDisposable
     private const string GatesDisplayPath = ".shadekit/gates.json";
 
     private const string Header = """ "schemaVersion": 1, "minEngineVersion": "0.1.0" """;
+
+    private static readonly TimeSpan ReadStartTimeout = TimeSpan.FromSeconds(10);
 
     private readonly TempKitDirectory _repository = new TempKitDirectory();
 
@@ -69,15 +73,15 @@ public sealed class GatesConfigReaderTests : IDisposable
         var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
 
         // Assert
-        result.Config.Profiles
-            .Should().BeEquivalentTo(GatesConfig.CreateDefault().Profiles);
+        result.Profiles
+            .Should().BeEquivalentTo(DefaultProfilesView());
 
         result.Warnings
             .Should().Equal(new GatesDefaultsUsedWarning(IsFileMissing: true));
     }
 
     [Fact]
-    public async Task ReadAsync_FileWithoutProfiles_ReturnsDefaultsKeepsOtherFieldsWithFieldMissingWarning()
+    public async Task ReadAsync_FileWithoutProfilesButOtherFields_ReturnsDefaultsWithFieldMissingWarning()
     {
         // Arrange
         WriteGates("""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "team": "core" }""");
@@ -87,19 +91,8 @@ public sealed class GatesConfigReaderTests : IDisposable
         var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
 
         // Assert
-        result.Config.Profiles
-            .Should().BeEquivalentTo(GatesConfig.CreateDefault().Profiles);
-
-        result.Config.SchemaVersion
-            .Should().Be(1);
-
-        result.Config.MinEngineVersion
-            .Should().Be("0.1.0");
-
-        result.Config.ExtensionData
-            .Should().ContainKey("team")
-            .WhoseValue.GetString()
-            .Should().Be("core");
+        result.Profiles
+            .Should().BeEquivalentTo(DefaultProfilesView());
 
         result.Warnings
             .Should().Equal(new GatesDefaultsUsedWarning(IsFileMissing: false));
@@ -116,7 +109,7 @@ public sealed class GatesConfigReaderTests : IDisposable
         var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
 
         // Assert
-        result.Config.Profiles
+        result.Profiles
             .Should().NotBeNull()
             .And.BeEmpty();
 
@@ -141,7 +134,7 @@ public sealed class GatesConfigReaderTests : IDisposable
         var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
 
         // Assert
-        var profiles = result.Config.Profiles!;
+        var profiles = result.Profiles;
 
         profiles.Keys
             .Should().Equal(WorkflowProfileNames.Feature, WorkflowProfileNames.Quick);
@@ -150,7 +143,7 @@ public sealed class GatesConfigReaderTests : IDisposable
             .Should().Equal(WorkflowPhaseNames.Plan);
 
         profiles[WorkflowProfileNames.Feature][WorkflowPhaseNames.Plan]
-            .Should().BeEquivalentTo(new GateConfig { Approval = false, Checklist = "checks/plan.md" });
+            .Should().Be(new TransitionGate(Approval: false, Checklist: "checks/plan.md"));
 
         profiles[WorkflowProfileNames.Quick].Keys
             .Should().Equal(WorkflowPhaseNames.Quick, WorkflowPhaseNames.Finish);
@@ -178,7 +171,7 @@ public sealed class GatesConfigReaderTests : IDisposable
         result.Warnings
             .Should().Equal(new GateEntryIgnoredWarning("release", null, GateEntryIgnoredReason.UnknownProfile));
 
-        result.Config.Profiles
+        result.Profiles
             .Should().ContainKey("release");
     }
 
@@ -217,7 +210,7 @@ public sealed class GatesConfigReaderTests : IDisposable
         result.Warnings
             .Should().Equal(new GateEntryIgnoredWarning(profileName, phaseName, GateEntryIgnoredReason.UnknownPhase));
 
-        result.Config.Profiles![profileName]
+        result.Profiles[profileName]
             .Should().ContainKey(phaseName);
     }
 
@@ -239,7 +232,7 @@ public sealed class GatesConfigReaderTests : IDisposable
             .Should().Equal(new GateEntryIgnoredWarning(profileName, WorkflowPhaseNames.New,
                 GateEntryIgnoredReason.FirstPhase));
 
-        result.Config.Profiles![profileName]
+        result.Profiles[profileName]
             .Should().ContainKey(WorkflowPhaseNames.New);
     }
 
@@ -272,8 +265,150 @@ public sealed class GatesConfigReaderTests : IDisposable
                 new GateEntryIgnoredWarning("feature", "deploy", GateEntryIgnoredReason.UnknownPhase),
                 new GateEntryIgnoredWarning("archive", null, GateEntryIgnoredReason.UnknownProfile));
 
-        result.Config.Profiles!.Keys
+        result.Profiles.Keys
             .Should().Equal("quick", "release", "feature", "bugfix", "archive");
+    }
+
+    [Fact]
+    public async Task ReadAsync_ExistingFile_ReturnsProfilesThatCannotBeChanged()
+    {
+        // Arrange
+        WriteGatesWithProfiles("""{ "feature": { "plan": { "approval": false } } }""");
+        var reader = CreateReader();
+        var store = CreateStore();
+        var result = await reader.ReadAsync(store, TestContext.Current.CancellationToken);
+        var profiles = (IDictionary<string, IReadOnlyDictionary<string, TransitionGate>>)result.Profiles;
+        var gates = (IDictionary<string, TransitionGate>)result.Profiles[WorkflowProfileNames.Feature];
+
+        // Act
+        var changeProfiles = () => profiles.Remove(WorkflowProfileNames.Feature);
+        var changeGates = () => gates[WorkflowPhaseNames.Plan] = TransitionGate.Default;
+
+        // Assert
+        changeProfiles.Should().Throw<NotSupportedException>();
+        changeGates.Should().Throw<NotSupportedException>();
+
+        (await reader.ReadAsync(store, TestContext.Current.CancellationToken))
+            .Profiles[WorkflowProfileNames.Feature][WorkflowPhaseNames.Plan]
+            .Should().Be(new TransitionGate(Approval: false, Checklist: null));
+    }
+
+    [Fact]
+    public async Task ReadAsync_TwoGatesShareChecklist_WarnsLaterGateAndIgnoresOnlyItsChecklist()
+    {
+        // Arrange
+        WriteGatesWithProfiles(
+            """
+            {
+              "feature": {
+                "implement": { "approval": true, "checklist": "checks/security.md" },
+                "finish": { "approval": false, "checklist": "checks/security.md" }
+              }
+            }
+            """);
+        var reader = CreateReader();
+
+        // Act
+        var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(new GateEntryIgnoredWarning(WorkflowProfileNames.Feature, WorkflowPhaseNames.Finish,
+                GateEntryIgnoredReason.SharedChecklist));
+
+        result.Profiles[WorkflowProfileNames.Feature][WorkflowPhaseNames.Implement]
+            .Should().Be(new TransitionGate(Approval: true, Checklist: "checks/security.md"));
+
+        result.Profiles[WorkflowProfileNames.Feature][WorkflowPhaseNames.Finish]
+            .Should().Be(new TransitionGate(Approval: false, Checklist: null));
+    }
+
+    [Fact]
+    public async Task ReadAsync_SharedChecklistInOtherFileOrder_GateIntoEarliestPhaseKeepsChecklist()
+    {
+        // Arrange
+        WriteGatesWithProfiles(
+            """
+            {
+              "bugfix": {
+                "finish": { "checklist": "checks/review.md" },
+                "verify": { "checklist": "checks/review.md" },
+                "plan": { "checklist": "checks/review.md" }
+              }
+            }
+            """);
+        var reader = CreateReader();
+
+        // Act
+        var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(
+                new GateEntryIgnoredWarning(WorkflowProfileNames.Bugfix, WorkflowPhaseNames.Verify,
+                    GateEntryIgnoredReason.SharedChecklist),
+                new GateEntryIgnoredWarning(WorkflowProfileNames.Bugfix, WorkflowPhaseNames.Finish,
+                    GateEntryIgnoredReason.SharedChecklist));
+
+        result.Profiles[WorkflowProfileNames.Bugfix].Values.Select(gate => gate.Checklist)
+            .Should().Equal(null, null, "checks/review.md");
+    }
+
+    [Fact]
+    public async Task ReadAsync_SharedChecklistWithIgnoredEntries_WarnsOnlyGatesThatApplyAfterOtherWarnings()
+    {
+        // Arrange
+        WriteGatesWithProfiles(
+            """
+            {
+              "quick": {
+                "new": { "checklist": "checks/x.md" },
+                "deploy": { "checklist": "checks/x.md" },
+                "finish": { "checklist": "checks/x.md" },
+                "quick": { "checklist": "checks/x.md" }
+              },
+              "release": { "ship": { "checklist": "checks/x.md" }, "done": { "checklist": "checks/x.md" } }
+            }
+            """);
+        var reader = CreateReader();
+
+        // Act
+        var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(
+                new GateEntryIgnoredWarning(WorkflowProfileNames.Quick, WorkflowPhaseNames.New,
+                    GateEntryIgnoredReason.FirstPhase),
+                new GateEntryIgnoredWarning(WorkflowProfileNames.Quick, "deploy", GateEntryIgnoredReason.UnknownPhase),
+                new GateEntryIgnoredWarning(WorkflowProfileNames.Quick, WorkflowPhaseNames.Finish,
+                    GateEntryIgnoredReason.SharedChecklist),
+                new GateEntryIgnoredWarning("release", null, GateEntryIgnoredReason.UnknownProfile));
+
+        result.Profiles[WorkflowProfileNames.Quick][WorkflowPhaseNames.Quick].Checklist
+            .Should().Be("checks/x.md");
+    }
+
+    [Theory]
+    [InlineData("""{ "feature": { "plan": { "checklist": "checks/a.md" }, "finish": { "checklist": "checks/A.md" } } }""")]
+    [InlineData("""{ "feature": { "plan": { "checklist": "checks/a.md" } }, "bugfix": { "plan": { "checklist": "checks/a.md" } } }""")]
+    [InlineData("""{ "feature": { "plan": { "checklist": "checks/a.md" }, "finish": { "checklist": "checks/team/a.md" } } }""")]
+    public async Task ReadAsync_ChecklistsDifferOrBelongToOtherProfiles_ReturnsNoSharedChecklistWarning(
+        string profiles)
+    {
+        // Arrange
+        WriteGatesWithProfiles(profiles);
+        var reader = CreateReader();
+
+        // Act
+        var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().BeEmpty();
+
+        result.Profiles.Values.SelectMany(gates => gates.Values)
+            .Should().OnlyContain(gate => gate.Checklist != null);
     }
 
     [Fact]
@@ -311,8 +446,8 @@ public sealed class GatesConfigReaderTests : IDisposable
                 new FormatWarning(FormatWarningKind.UpgradeNeeded, GatesDisplayPath, 1, 2),
                 new GatesDefaultsUsedWarning(IsFileMissing: false));
 
-        result.Config.Profiles
-            .Should().BeEquivalentTo(GatesConfig.CreateDefault().Profiles);
+        result.Profiles
+            .Should().BeEquivalentTo(DefaultProfilesView());
     }
 
     [Fact]
@@ -452,8 +587,8 @@ public sealed class GatesConfigReaderTests : IDisposable
         results
             .Should().AllSatisfy(result => result.Should().BeSameAs(results[0]));
 
-        results[0].Config
-            .Should().BeSameAs(config);
+        results[0].Profiles
+            .Should().BeEmpty();
 
         A.CallTo(store)
             .Where(call => call.Method.Name == nameof(IKitStore.ReadJsonAsync))
@@ -571,7 +706,7 @@ public sealed class GatesConfigReaderTests : IDisposable
         var second = await reader.ReadAsync(store, TestContext.Current.CancellationToken);
 
         // Assert
-        second.Config.Profiles
+        second.Profiles
             .Should().BeEmpty();
 
         A.CallTo(store)
@@ -639,8 +774,8 @@ public sealed class GatesConfigReaderTests : IDisposable
         var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
 
         // Assert
-        result.Config.Profiles
-            .Should().BeEquivalentTo(GatesConfig.CreateDefault().Profiles);
+        result.Profiles
+            .Should().BeEquivalentTo(DefaultProfilesView());
 
         result.Warnings
             .Should().BeEmpty();
@@ -657,7 +792,7 @@ public sealed class GatesConfigReaderTests : IDisposable
         var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
 
         // Assert
-        result.Config.Profiles
+        result.Profiles
             .Should().ContainKey(WorkflowProfileNames.Feature)
             .WhoseValue.Should().BeEmpty();
 
@@ -807,6 +942,15 @@ public sealed class GatesConfigReaderTests : IDisposable
             .MustHaveHappenedOnceExactly();
     }
 
+    // The read-only view that the reader returns for the built-in defaults, built independently of the reader.
+    private static Dictionary<string, Dictionary<string, TransitionGate>> DefaultProfilesView()
+    {
+        return GatesConfig.CreateDefault().Profiles!.ToDictionary(
+            profile => profile.Key,
+            profile => profile.Value.ToDictionary(gate => gate.Key,
+                gate => new TransitionGate(gate.Value.Approval, gate.Value.Checklist)));
+    }
+
     private static GatesConfigReader CreateReader()
     {
         return new GatesConfigReader(new BuiltInWorkflowProfileCatalog());
@@ -820,10 +964,19 @@ public sealed class GatesConfigReaderTests : IDisposable
         return null;
     }
 
+    // Bounded on its own, so a read that never starts fails the test instead of hanging until the test token is
+    // canceled.
     private static async Task WaitUntilReadStartedAsync(IKitStore store, CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
+
         while (!Fake.GetCalls(store).Any(call => call.Method.Name == nameof(IKitStore.ReadJsonAsync)))
         {
+            if (stopwatch.Elapsed > ReadStartTimeout)
+            {
+                throw new TimeoutException($"The read of gates.json did not start within {ReadStartTimeout}.");
+            }
+
             await Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken);
         }
     }

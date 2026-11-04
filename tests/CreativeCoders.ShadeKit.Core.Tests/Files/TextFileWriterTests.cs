@@ -1,6 +1,7 @@
 using System.Text;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
@@ -140,6 +141,87 @@ public class TextFileWriterTests
     }
 
     [Fact]
+    public async Task WriteAsync_CreateNewAndFileMissing_CreatesFileAndParentDirectory()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var writer = FixedLineEnding.CreateWriter(LineEnding.CrLf);
+
+        // Act
+        await writer.WriteAsync(FileIn(tempDirectory, "docs/notes.md"), TextFileContent.FromText("a\nb\n"),
+            mode: FileWriteMode.CreateNew, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        tempDirectory.ReadFileText("docs", "notes.md")
+            .Should().Be("a\r\nb\r\n");
+    }
+
+    [Fact]
+    public async Task WriteAsync_CreateNewAndFileExists_ThrowsFileAlreadyExistsExceptionAndKeepsFile()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var filePath = tempDirectory.WriteFile("old content that is longer\n", FileName);
+        var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
+
+        // Act
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("new\n"),
+            mode: FileWriteMode.CreateNew, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<FileAlreadyExistsException>()).Which;
+
+        exception.Path
+            .Should().Be(filePath);
+
+        exception
+            .Should().BeAssignableTo<IOException>();
+
+        tempDirectory.ReadFileText(FileName)
+            .Should().Be("old content that is longer\n");
+    }
+
+    [Fact]
+    public async Task WriteAsync_CreateNewAndParentIsExistingFile_ThrowsIOExceptionThatIsNotFileAlreadyExists()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile("content\n", FileName);
+        var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
+
+        // Act
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, $"{FileName}/sub.md"),
+            TextFileContent.FromText("a\n"), mode: FileWriteMode.CreateNew,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<IOException>())
+            .Which.Should().NotBeOfType<FileAlreadyExistsException>();
+
+        tempDirectory.ReadFileText(FileName)
+            .Should().Be("content\n");
+    }
+
+    [Fact]
+    public async Task WriteAsync_UndefinedMode_ThrowsArgumentOutOfRangeExceptionAndWritesNothing()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
+
+        // Act
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, FileName), TextFileContent.FromText("a\n"),
+            mode: (FileWriteMode)42, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
+            .WithParameterName("mode");
+
+        File.Exists(Path.Combine(tempDirectory.RootPath, FileName))
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public async Task WriteAsync_ParentDirectoryMissing_CreatesIt()
     {
         // Arrange
@@ -217,7 +299,7 @@ public class TextFileWriterTests
 
         // Act
         await writer.WriteAsync(FileIn(tempDirectory, "staging/notes.md"), TextFileContent.FromText("a\n"),
-            FileIn(tempDirectory, "final/notes.md"), TestContext.Current.CancellationToken);
+            FileIn(tempDirectory, "final/notes.md"), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         A.CallTo(() => resolver.GetLineEndingAsync(FileIn(tempDirectory, "final/notes.md"),
@@ -249,7 +331,7 @@ public class TextFileWriterTests
 
         // Act
         await writer.WriteAsync(FileIn(tempDirectory, "staging/notes.md"), TextFileContent.FromText("a\nb\n"),
-            FileIn(tempDirectory, "final/notes.md"), TestContext.Current.CancellationToken);
+            FileIn(tempDirectory, "final/notes.md"), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         tempDirectory.ReadFileBytes("staging", "notes.md")

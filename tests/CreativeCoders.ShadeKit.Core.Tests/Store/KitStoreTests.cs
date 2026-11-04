@@ -266,7 +266,7 @@ public class KitStoreTests
         // Assert
         A.CallTo(() => textFileWriter.WriteAsync(
                 RepositoryFile.Resolve(tempDirectory.RootPath, Path.Combine(".shadekit", "templates", "spec.md")),
-                content, null, TestContext.Current.CancellationToken))
+                content, null, FileWriteMode.Overwrite, TestContext.Current.CancellationToken))
             .MustHaveHappenedOnceExactly();
     }
 
@@ -289,7 +289,7 @@ public class KitStoreTests
                     Path.Combine(".shadekit", "features", ".login.1a2b3c4d.tmp", "request.md")),
                 content,
                 RepositoryFile.Resolve(tempDirectory.RootPath, Path.Combine(".shadekit", "features", "login", "request.md")),
-                TestContext.Current.CancellationToken))
+                FileWriteMode.Overwrite, TestContext.Current.CancellationToken))
             .MustHaveHappenedOnceExactly();
     }
 
@@ -398,7 +398,7 @@ public class KitStoreTests
         var second = new EditorConfigUnreadableWarning("/repo/.shadekit/.editorconfig", "Access denied.");
         var textFileWriter = A.Fake<ITextFileWriter>();
         A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
-                A<RepositoryFile?>._, A<CancellationToken>._))
+                A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._))
             .Returns(Task.FromResult<IReadOnlyList<KitWarning>>([second, first]));
         var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, ".shadekit"), textFileWriter);
 
@@ -419,7 +419,7 @@ public class KitStoreTests
         var warning = new EditorConfigUnreadableWarning("/repo/.editorconfig", "Access denied.");
         var textFileWriter = A.Fake<ITextFileWriter>();
         A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
-                A<RepositoryFile?>._, A<CancellationToken>._))
+                A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._))
             .ReturnsNextFromSequence(
                 Task.FromResult<IReadOnlyList<KitWarning>>([warning]),
                 Task.FromResult<IReadOnlyList<KitWarning>>([]));
@@ -447,7 +447,7 @@ public class KitStoreTests
         using var tempDirectory = new TempKitDirectory();
         var textFileWriter = A.Fake<ITextFileWriter>();
         A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
-                A<RepositoryFile?>._, A<CancellationToken>._))
+                A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._))
             .ThrowsAsync(new IOException("The disk is full."));
         var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, ".shadekit"), textFileWriter);
 
@@ -688,6 +688,101 @@ public class KitStoreTests
         // Assert
         (await act.Should().ThrowAsync<ArgumentException>())
             .WithParameterName(nameof(relativePath));
+    }
+
+    [Fact]
+    public void GetFullPath_PathWithDotSegment_ReturnsNormalizedFullPathBelowRootAndCreatesNothing()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitStorePath = Path.Combine(tempDirectory.RootPath, ".shadekit");
+        var kitStore = CreateStore(kitStorePath);
+
+        // Act
+        var fullPath = kitStore.GetFullPath("features/./login/checks/ready.md");
+
+        // Assert
+        fullPath
+            .Should().Be(Path.Combine(kitStore.RootPath, "features", "login", "checks", "ready.md"));
+
+        Directory.Exists(kitStorePath)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetFullPath_DirectoryAtPath_ReturnsPathThatReadFileAsyncPutsIntoPathNotAFileException()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateDirectory("templates", "checks", "ready.md");
+        var kitStore = CreateStore(tempDirectory.RootPath);
+        var act = () => kitStore.ReadFileAsync("templates/checks/ready.md", TestContext.Current.CancellationToken);
+        var exception = (await act.Should().ThrowAsync<PathNotAFileException>()).Which;
+
+        // Act
+        var fullPath = kitStore.GetFullPath("templates/checks/ready.md");
+
+        // Assert
+        fullPath
+            .Should().Be(exception.Path);
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidRelativePaths))]
+    public void GetFullPath_InvalidPath_ThrowsArgumentException(string? relativePath)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, ".shadekit"));
+
+        // Act
+        var act = () => kitStore.GetFullPath(relativePath!);
+
+        // Assert
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName(nameof(relativePath));
+    }
+
+    [Fact]
+    public async Task WriteFileAsync_CreateNew_PassesModeToWriter()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        var textFileWriter = A.Fake<ITextFileWriter>();
+        var kitStore = CreateStore(Path.Combine(tempDirectory.RootPath, ".shadekit"), textFileWriter);
+        var content = TextFileContent.FromText("# Ready\n");
+
+        // Act
+        await kitStore.WriteFileAsync("features/login/checks/ready.md", content, FileWriteMode.CreateNew,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var expectedFile = RepositoryFile.Resolve(tempDirectory.RootPath,
+            Path.Combine(".shadekit", "features", "login", "checks", "ready.md"));
+
+        A.CallTo(() => textFileWriter.WriteAsync(expectedFile, content, null, FileWriteMode.CreateNew,
+                TestContext.Current.CancellationToken))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task WriteFileAsync_CreateNewAndFileExists_ThrowsFileAlreadyExistsExceptionAndKeepsFile()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile("# Filled\n", "features", "login", "checks", "ready.md");
+        var kitStore = CreateStore(tempDirectory.RootPath);
+
+        // Act
+        var act = () => kitStore.WriteFileAsync("features/login/checks/ready.md", TextFileContent.FromText("new\n"),
+            FileWriteMode.CreateNew, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<FileAlreadyExistsException>())
+            .Which.Path.Should().Be(kitStore.GetFullPath("features/login/checks/ready.md"));
+
+        tempDirectory.ReadFileText("features", "login", "checks", "ready.md")
+            .Should().Be("# Filled\n");
     }
 
     [Fact]

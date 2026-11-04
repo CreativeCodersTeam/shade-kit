@@ -153,10 +153,10 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task GetGateAsync_ConfigWithoutProfiles_ReturnsDefaultGate()
+    public async Task GetGateAsync_EmptyProfiles_ReturnsDefaultGate()
     {
         // Arrange
-        SetUpReader(new GatesConfig());
+        SetUpReader(new GatesConfig { Profiles = [] });
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
@@ -366,9 +366,15 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         };
     }
 
+    // The reader returns a read-only view; the view of the configuration is built here as the reader builds it.
     private void SetUpReader(GatesConfig config)
     {
+        var profiles = config.Profiles!.ToDictionary(
+            profile => profile.Key,
+            IReadOnlyDictionary<string, TransitionGate> (profile) => profile.Value.ToDictionary(gate => gate.Key,
+                gate => new TransitionGate(gate.Value.Approval, gate.Value.Checklist)));
+
         A.CallTo(() => _reader.ReadAsync(_store, A<CancellationToken>._))
-            .Returns(new GatesConfigReadResult(config, []));
+            .Returns(new GatesConfigReadResult(profiles, []));
     }
 }

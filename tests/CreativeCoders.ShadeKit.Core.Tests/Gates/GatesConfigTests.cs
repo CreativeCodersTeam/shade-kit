@@ -101,7 +101,14 @@ public class GatesConfigTests
         "checks/definition-of-ready",
         "checks/",
         "checks/.md",
-        "checks/team/.md"
+        "checks/team/.md",
+        "checks/x.md:hidden.md",
+        "checks/team:x/definition-of-ready.md",
+        "checks/x\u001b]0;title\u0007.md",
+        "checks/x\t.md",
+        "checks/x\n.md",
+        "checks/x\u007f.md",
+        "checks/x\u0085.md"
     };
 
     [Fact]
@@ -407,6 +414,62 @@ public class GatesConfigTests
             .Should().Contain("'plan'")
             .And.Contain("'bugfix'")
             .And.Contain("checks/");
+    }
+
+    [Fact]
+    public void Deserialize_ChecklistWithControlCharacters_ThrowsInvalidKitFileExceptionWithEscapedCharacters()
+    {
+        // Act
+        var act = () => Deserialize("""{ "feature": { "plan": { "checklist": "checks/x\u001b]0;t\u0007.md" } } }""");
+
+        // Assert
+        act.Should().Throw<InvalidKitFileException>()
+            .Which.Message
+            .Should().Contain(@"'checks/x\u001b]0;t\u0007.md'")
+            .And.NotContain("\u001b")
+            .And.NotContain("\u0007");
+    }
+
+    [Theory]
+    [InlineData("""{ "feat\u001bure": { } }""", @"'feat\u001bure'")]
+    [InlineData("""{ "release\n": { "ship": { } } }""", @"'release\u000a'")]
+    [InlineData("""{ "\u0000": { } }""", @"'\u0000'")]
+    public void Deserialize_ProfileNameWithControlCharacter_ThrowsInvalidKitFileExceptionWithEscapedName(
+        string profiles, string expectedName)
+    {
+        // Act
+        var act = () => Deserialize(profiles);
+
+        // Assert
+        var message = act.Should().Throw<InvalidKitFileException>().Which.Message;
+
+        message
+            .Should().Contain($"The profile name {expectedName}")
+            .And.Contain("control character");
+
+        message.Any(char.IsControl)
+            .Should().BeFalse("the message must not carry a control character to the terminal");
+    }
+
+    [Theory]
+    [InlineData("""{ "feature": { "pl\u001ban": { } } }""", @"'pl\u001ban'")]
+    [InlineData("""{ "release": { "ship\r": { "approval": false } } }""", @"'ship\u000d'")]
+    [InlineData("""{ "feature": { "plan": { }, "\t": null } }""", @"'\u0009'")]
+    public void Deserialize_PhaseNameWithControlCharacter_ThrowsInvalidKitFileExceptionWithEscapedName(
+        string profiles, string expectedName)
+    {
+        // Act
+        var act = () => Deserialize(profiles);
+
+        // Assert
+        var message = act.Should().Throw<InvalidKitFileException>().Which.Message;
+
+        message
+            .Should().Contain($"The phase name {expectedName}")
+            .And.Contain("control character");
+
+        message.Any(char.IsControl)
+            .Should().BeFalse("the message must not carry a control character to the terminal");
     }
 
     [Theory]

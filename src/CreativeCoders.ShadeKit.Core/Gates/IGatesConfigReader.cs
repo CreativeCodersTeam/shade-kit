@@ -16,18 +16,24 @@ public interface IGatesConfigReader
     /// <remarks>
     /// <para>
     /// The file is read with <see cref="Formats.FormatAccess.Read" />. A missing file or a missing <c>profiles</c> field
-    /// gives the profiles of <see cref="GatesConfig.CreateDefault" /> and a <see cref="GatesDefaultsUsedWarning" />;
-    /// the other fields of an existing file are kept. An explicit empty <c>profiles</c> field is used as it is, without
-    /// defaults and without a warning. Every entry of the whole file that names an unknown profile, a phase that its
-    /// profile does not have, or the first phase of its profile gives a <see cref="GateEntryIgnoredWarning" />, in
-    /// file order; the entry stays in the configuration.
+    /// gives the profiles of <see cref="GatesConfig.CreateDefault" /> and a <see cref="GatesDefaultsUsedWarning" />.
+    /// An explicit empty <c>profiles</c> field is used as it is, without defaults and without a warning. Every entry of
+    /// the whole file that names an unknown profile, a phase that its profile does not have, or the first phase of its
+    /// profile gives a <see cref="GateEntryIgnoredWarning" />, in file order; the entry stays in the configuration.
+    /// </para>
+    /// <para>
+    /// Of the gates into the phases after the first one of a known profile that name the same checklist (compared
+    /// ordinally), the gate into the earliest phase of the profile keeps it. Every later one gets a
+    /// <see cref="GateEntryIgnoredWarning" /> with <see cref="GateEntryIgnoredReason.SharedChecklist" />, after the
+    /// other warnings of its profile and in phase order, and has no checklist in the result; its approval still
+    /// applies. So two gates never share one filled copy in a feature folder. The file stays valid.
     /// </para>
     /// <para>
     /// The result is cached per store instance: a later call with the same store returns the same result, warnings
-    /// included, without reading the file again, and a call with another store instance reads the file again. Callers
-    /// must not change the returned configuration. Calls that run while a read of the same store is in progress share
-    /// that read and its outcome; the read runs with the cancellation token of the call that started it. A failed or
-    /// canceled read is not cached, so a call after it reads the file again.
+    /// included, without reading the file again, and a call with another store instance reads the file again. The
+    /// result is a read-only view, so no caller can change the cached configuration. Calls that run while a read of
+    /// the same store is in progress share that read and its outcome; the read runs with the cancellation token of
+    /// the call that started it. A failed or canceled read is not cached, so a call after it reads the file again.
     /// </para>
     /// </remarks>
     /// <param name="store">The store whose <c>gates.json</c> is read.</param>
@@ -38,7 +44,9 @@ public interface IGatesConfigReader
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="store" /> is <see langword="null" />.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
-    /// <exception cref="InvalidKitFileException"><c>gates.json</c>, or <c>config.json</c> when it is read for the setting, is invalid.</exception>
+    /// <exception cref="InvalidKitFileException">
+    /// <c>gates.json</c>, or <c>config.json</c> when it is read for the setting, is invalid.
+    /// </exception>
     /// <exception cref="FormatTooNewException">
     /// <c>gates.json</c>, or <c>config.json</c> when it is read for the setting, uses a format version newer than the
     /// engine supports.

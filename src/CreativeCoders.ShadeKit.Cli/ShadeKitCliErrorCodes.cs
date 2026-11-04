@@ -45,6 +45,11 @@ public static class ShadeKitCliErrorCodes
     public const string GitUnavailable = "git-unavailable";
 
     /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.KitFileWriteFailed" />.
+    /// </summary>
+    public const string KitFileWriteFailed = "kit-file-write-failed";
+
+    /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.FormatTooNew" />.
     /// </summary>
     public const string FormatTooNew = "format-too-new";
@@ -179,6 +184,7 @@ public static class ShadeKitCliErrorCodes
             ShadeKitCliExitCodes.PathNotAFile => PathNotAFile,
             ShadeKitCliExitCodes.KitRootNotADirectory => KitRootNotADirectory,
             ShadeKitCliExitCodes.GitUnavailable => GitUnavailable,
+            ShadeKitCliExitCodes.KitFileWriteFailed => KitFileWriteFailed,
             ShadeKitCliExitCodes.FormatTooNew => FormatTooNew,
             ShadeKitCliExitCodes.UpgradeNeeded => UpgradeNeeded,
             ShadeKitCliExitCodes.InvalidFile => InvalidFile,

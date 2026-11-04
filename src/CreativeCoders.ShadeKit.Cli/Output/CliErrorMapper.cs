@@ -95,6 +95,15 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 $"'{e.Path}' is a directory, but shade-kit needs a file at this path. Move or remove the " +
                 "directory, then run the command again."),
 
+            KitFileWriteFailedException e => CliError.Create(ShadeKitCliExitCodes.KitFileWriteFailed,
+                $"'{e.FilePath}' cannot be written. Cause: {CreateCauseSentence(e.InnerException)} Make sure that no " +
+                "file is in the place of one of its directories and that you may write to it, then run the command " +
+                "again."),
+
+            FileAlreadyExistsException e => CliError.Create(ShadeKitCliExitCodes.KitFileWriteFailed,
+                $"'{e.Path}' already exists, so it was not written and is unchanged. Move or remove the file, then " +
+                "run the command again."),
+
             GitUnavailableException e => CliError.Create(ShadeKitCliExitCodes.GitUnavailable,
                 $"'{e.CommandText}' failed. Make sure git is installed, on the PATH, and works in this repository, " +
                 $"then run the command again. Details: {e.Reason}"),
@@ -512,8 +521,8 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         return isFileMissing
             ? $"'{gatesPath}' does not exist, so the built-in gate defaults apply. Add the file with a 'profiles' " +
               "field to configure the gates."
-            : $"'{gatesPath}' has no 'profiles' field, so the built-in gate defaults apply. Add a 'profiles' field " +
-              "to configure the gates.";
+            : $"'{gatesPath}' has no 'profiles' field, so the built-in gate defaults apply. Copy the 'profiles' " +
+              "field that 'shade-kit init' writes into the file to configure the gates and to stop this warning.";
     }
 
     private static string CreateGateEntryIgnoredMessage(string profileName, string? phaseName,
@@ -531,6 +540,11 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             GateEntryIgnoredReason.FirstPhase =>
                 $"'{gatesPath}' configures the gate '{phaseName}' of the profile '{profileName}', but '{phaseName}' " +
                 "is the first phase of the profile and no transition leads into it; the gate is ignored.",
+            GateEntryIgnoredReason.SharedChecklist =>
+                $"'{gatesPath}' configures the gate '{phaseName}' of the profile '{profileName}' with the same " +
+                "checklist as the gate into an earlier phase of the profile; the checklist of this gate is ignored, " +
+                $"so the transition into '{phaseName}' has no checklist, but its approval still applies. Give the " +
+                "gate a checklist file of its own.",
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "The reason is not supported.")
         };
     }

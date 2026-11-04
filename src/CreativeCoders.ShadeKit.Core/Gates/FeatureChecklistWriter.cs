@@ -1,8 +1,10 @@
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Gates.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Gates;
 
@@ -46,8 +48,7 @@ public sealed class FeatureChecklistWriter : IFeatureChecklistWriter
 
         if (store.DirectoryExists(copyPath))
         {
-            // The same full path that the store puts into the exception when it reads a directory.
-            throw new PathNotAFileException(Path.GetFullPath(Path.Combine(store.RootPath, copyPath)));
+            throw new PathNotAFileException(store.GetFullPath(copyPath));
         }
 
         if (store.FileExists(copyPath))
@@ -61,8 +62,29 @@ public sealed class FeatureChecklistWriter : IFeatureChecklistWriter
 
         var copy = template.ReplaceInLines(FeatureIdPlaceholder, featureId);
 
-        var warnings = await store.WriteFileAsync(copyPath, copy, cancellationToken).ConfigureAwait(false);
+        return await WriteCopyAsync(store, copyPath, copy, cancellationToken).ConfigureAwait(false);
+    }
 
-        return new FeatureChecklistCopyResult(Created: true, warnings);
+    // The copy is created only if it does not exist, so of two concurrent starts only one creates it and the other
+    // finds it. Every other I/O failure, for example a file in the place of a directory of the copy path, is reported
+    // as a store write failure; other exceptions, cancellation included, pass unchanged.
+    private static async Task<FeatureChecklistCopyResult> WriteCopyAsync(IKitStore store, string copyPath,
+        TextFileContent copy, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var warnings = await store.WriteFileAsync(copyPath, copy, FileWriteMode.CreateNew, cancellationToken)
+                .ConfigureAwait(false);
+
+            return new FeatureChecklistCopyResult(Created: true, warnings);
+        }
+        catch (FileAlreadyExistsException)
+        {
+            return new FeatureChecklistCopyResult(Created: false, Warnings: []);
+        }
+        catch (IOException exception)
+        {
+            throw new KitFileWriteFailedException(KitStorePaths.GetRepositoryPath(copyPath), exception);
+        }
     }
 }

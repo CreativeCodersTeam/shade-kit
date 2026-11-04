@@ -23,8 +23,9 @@ public sealed class GatesConfigTransitionGateProvider(IGatesConfigReader gatesCo
     /// <inheritdoc />
     /// <returns>
     /// A task that represents the asynchronous read operation. The task result contains the configured gate of the
-    /// transition into <paramref name="targetPhase" />, with its checklist path unchanged, or
-    /// <see cref="TransitionGate.Default" /> if <c>gates.json</c> has no entry for the profile or the phase.
+    /// transition into <paramref name="targetPhase" />, with its checklist path unchanged unless the reader ignores the
+    /// checklist, or <see cref="TransitionGate.Default" /> if <c>gates.json</c> has no entry for the profile or the
+    /// phase.
     /// </returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
     /// <remarks>
@@ -40,17 +41,9 @@ public sealed class GatesConfigTransitionGateProvider(IGatesConfigReader gatesCo
 
         var readResult = await _gatesConfigReader.ReadAsync(store, cancellationToken).ConfigureAwait(false);
 
-        // The reader replaces missing profiles with the defaults, so the profiles are never null; the null check only
-        // keeps a contract break of a reader from failing with a NullReferenceException.
-        var profiles = readResult.Config.Profiles;
-
-        if (profiles is not null
-            && profiles.TryGetValue(profile.Name, out var gates)
-            && gates.TryGetValue(targetPhase, out var gate))
-        {
-            return new TransitionGate(gate.Approval, gate.Checklist);
-        }
-
-        return TransitionGate.Default;
+        return readResult.Profiles.TryGetValue(profile.Name, out var gates)
+               && gates.TryGetValue(targetPhase, out var gate)
+            ? gate
+            : TransitionGate.Default;
     }
 }

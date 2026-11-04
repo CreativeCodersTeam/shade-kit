@@ -855,6 +855,56 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task PhaseStart_FileAtChecksDirectoryOfFeature_Returns17AndLeavesFeatureFileUnchanged()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateFeatureAsync("feature");
+        await RunAllOkAsync(StartAndApproveRefineAndMap);
+        await File.WriteAllTextAsync(GetFeaturePath("checks"), "stray\n", TestContext.Current.CancellationToken);
+        var featureBytes = await ReadFeatureFileBytesAsync();
+
+        // Act
+        var startPlan = await RunJsonAsync("phase", "start", "plan", "--json");
+
+        // Assert
+        AssertError(startPlan, 17, "kit-file-write-failed");
+
+        startPlan.Root.GetProperty("error").GetProperty("message").GetString()
+            .Should().StartWith($"'.shadekit/features/{FeatureId}/checks/definition-of-ready.md' cannot be written.");
+
+        (await ReadFeatureFileBytesAsync())
+            .Should().Equal(featureBytes);
+
+        (await File.ReadAllTextAsync(GetFeaturePath("checks"), TestContext.Current.CancellationToken))
+            .Should().Be("stray\n");
+    }
+
+    [Fact]
+    public async Task PhaseStart_TwoGatesShareChecklist_WarnsAndStartsLaterGateWithoutChecklist()
+    {
+        // Arrange
+        await InitAsync();
+        await WriteGatesAsync(
+            """{ "feature": { "refine": { "checklist": "checks/definition-of-ready.md" }, "map": { "checklist": "checks/definition-of-ready.md" } } }""");
+        await CreateFeatureAsync("feature");
+        await RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"]);
+
+        // Act
+        var startMap = await RunJsonAsync("phase", "start", "map", "--json");
+
+        // Assert
+        startMap.ExitCode
+            .Should().Be(0);
+
+        GetWarningCodes(startMap.Root)
+            .Should().Contain("gate-entry-ignored");
+
+        startMap.Root.GetProperty("data").GetProperty("gate").GetProperty("checklist").ValueKind
+            .Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
     public async Task PhaseStartAndNext_GatesFileWithoutProfiles_WarnDefaultsUsedAndCopyDefinitionOfReady()
     {
         // Arrange

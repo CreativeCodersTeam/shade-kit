@@ -1,7 +1,9 @@
+using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Gates.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 
 namespace CreativeCoders.ShadeKit.Core.Gates;
 
@@ -19,7 +21,8 @@ public interface IFeatureChecklistWriter
     /// <para>
     /// The copy lies at <see cref="KitStorePaths.GetFeatureChecklistPath" />, the template at
     /// <see cref="KitStorePaths.GetTemplatePath" /> of <paramref name="checklist" />. An existing copy is neither read
-    /// nor changed, so a reopened phase keeps the filled checklist.
+    /// nor changed, so a reopened phase keeps the filled checklist. The copy is created with
+    /// <see cref="FileWriteMode.CreateNew" />, so a copy that another call creates at the same time is kept as well.
     /// </para>
     /// <para>
     /// A new copy has the lines of the template with every <c>{{feature-id}}</c> replaced by
@@ -50,6 +53,10 @@ public interface IFeatureChecklistWriter
     /// The copy does not exist and neither does the template; nothing is written.
     /// </exception>
     /// <exception cref="InvalidKitFileException">The template is not UTF-8 text; nothing is written.</exception>
+    /// <exception cref="KitFileWriteFailedException">
+    /// The copy cannot be written because of an <see cref="IOException" />, for example because a file exists in the
+    /// place of one of its directories.
+    /// </exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
     Task<FeatureChecklistCopyResult> EnsureCopyAsync(IKitStore store, string featureId, string checklist,
         CancellationToken cancellationToken = default);

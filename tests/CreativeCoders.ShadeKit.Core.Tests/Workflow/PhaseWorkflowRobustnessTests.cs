@@ -253,28 +253,39 @@ public sealed class PhaseWorkflowRobustnessTests : IDisposable
         _context.VerifyIdentityNotRead();
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task GetNextAsync_GateProviderOrGatesConfigReaderFails_ThrowsItsExceptionAndWritesNothing(
-        bool providerFails)
+    [Fact]
+    public async Task GetNextAsync_GateProviderFails_ThrowsItsExceptionAndWritesNothing()
     {
         // Arrange
         _context.WriteFeature(QuickInProgress, WorkflowProfileNames.Quick);
         var failure = new InvalidKitFileException(".shadekit/gates.json", "Broken.");
+        A.CallTo(() => _context.GateProvider.GetGateAsync(A<IKitStore>._, A<WorkflowProfile>._, A<string>._,
+                A<CancellationToken>._))
+            .ThrowsAsync(failure);
+        var snapshot = _context.Repository.TakeSnapshot();
 
-        if (providerFails)
-        {
-            A.CallTo(() => _context.GateProvider.GetGateAsync(A<IKitStore>._, A<WorkflowProfile>._, A<string>._,
-                    A<CancellationToken>._))
-                .ThrowsAsync(failure);
-        }
-        else
-        {
-            A.CallTo(() => _context.GatesConfigReader.ReadAsync(A<IKitStore>._, A<CancellationToken>._))
-                .ThrowsAsync(failure);
-        }
+        // Act
+        var act = () => _context.CreateWorkflow().GetNextAsync(_context.CreateStore(),
+            TestContext.Current.CancellationToken);
 
+        // Assert
+        (await act.Should().ThrowAsync<InvalidKitFileException>()).Which
+            .Should().BeSameAs(failure);
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+
+        _context.VerifyChecklistNotCopied();
+    }
+
+    [Fact]
+    public async Task GetNextAsync_GatesConfigReaderFails_ThrowsItsExceptionAndWritesNothing()
+    {
+        // Arrange
+        _context.WriteFeature(QuickInProgress, WorkflowProfileNames.Quick);
+        var failure = new InvalidKitFileException(".shadekit/gates.json", "Broken.");
+        A.CallTo(() => _context.GatesConfigReader.ReadAsync(A<IKitStore>._, A<CancellationToken>._))
+            .ThrowsAsync(failure);
         var snapshot = _context.Repository.TakeSnapshot();
 
         // Act

@@ -80,7 +80,8 @@ The concept's example is keyed by phase only. Because the `quick` profile needs 
 Shape of an entry. `approval` optional with default `true`, `checklist` optional or `null`, and the validation of a `checklist` value: **Decided** on 2026-11-01 (implementation clarification). The other rules (the type of `approval`, an explicit `null` for `profiles`, for a profile, or for a gate, duplicate keys, case-sensitive field names) were chosen in the implementation and are **Proposed**. All **Implemented** (`GatesConfig`, `GateConfig`, `GatesConfigTests`).
 
 - `approval` is a boolean; a missing field means `true`. `null` or another type makes the file invalid (exit code 22, `invalid-file`).
-- `checklist` is missing or `null` for no checklist (`null` is not written back). A value must be a relative path with `/` separators that starts with `checks/`, ends with `.md` after a file name, and has no `\` and no empty, `.`, or `..` segment, for example `checks/definition-of-ready.md` or `checks/team/security.md`; any other value makes the file invalid (exit code 22). The message names the profile and the gate.
+- `checklist` is missing or `null` for no checklist (`null` is not written back). A value must be a relative path with `/` separators that starts with `checks/`, ends with `.md` after a file name, and has no `\`, no `:`, no control character, and no empty, `.`, or `..` segment, for example `checks/definition-of-ready.md` or `checks/team/security.md`; any other value makes the file invalid (exit code 22). The message names the profile and the gate and shows a control character of the value as `\uXXXX`. Rejecting `:` (on Windows an alternate data stream, for example `checks/x.md:hidden.md`) and control characters: **Decided** on 2026-11-04 (review R05-03), **Implemented** (`GatesConfig.IsValidChecklistPath`, `GatesConfigTests`, `FeatureChecklistWriterTests`).
+- A profile or phase name (a key of `profiles` or of a profile) with a control character makes the file invalid (exit code 22), also for an unknown profile or phase; the message shows the character as `\uXXXX`, so no control character reaches the terminal or the agent. **Decided** on 2026-11-04 (review R05-04), **Implemented** (`GatesConfig.OnDeserialized`, `GatesConfigTests`).
 - An explicit `"profiles": null`, a `null` profile, or a `null` gate makes the file invalid, and so does a duplicate key. A missing `profiles` field stays apart from an empty one (`{}`) (see [Reading](#reading-gatesjson)).
 - Field names are case-sensitive: `"Approval"` is kept as an unknown field, and the gate keeps the default `true`. Unknown fields are kept at every level, and so are entries of unknown profiles and phases (package 01).
 
@@ -90,9 +91,11 @@ Shape of an entry. `approval` optional with default `true`, `checklist` optional
 
 - The reader reads the file once per store instance, that is once per command run, and caches the result in a `ConditionalWeakTable`; calls during a read share it. Only a successful read is cached, so a failed or canceled read is tried again by the next call.
 - The file is read with read access (`FormatAccess.Read`), also in `phase start`: an older format version follows `outdatedFormatOnRead` (package 01), and only `stop` ends with exit code 21. Exit codes 20 and 22 as in package 01.
-- A missing file or a missing `profiles` field gives the built-in defaults (`GatesConfig.CreateDefault()`) and the warning `gates-defaults-used`; the other fields of an existing file are kept. **Decided** on 2026-11-01 (implementation clarification).
+- A missing file or a missing `profiles` field gives the built-in defaults (`GatesConfig.CreateDefault()`) and the warning `gates-defaults-used`. **Decided** on 2026-11-01 (implementation clarification). For a missing `profiles` field, the warning names the remedy: copy the `profiles` field that `shade-kit init` writes into the file. **Decided** on 2026-11-04 (review R05-07), **Implemented** (`CliErrorMapper`).
 - An explicit `"profiles": {}` is taken literally: no defaults and no warning, so every transition uses the default for a missing entry. **Decided** on 2026-11-01 (implementation clarification).
 - An entry that names an unknown profile (one warning per profile entry), a phase its profile does not have, or the first phase of its profile (no transition leads into it) gives the warning `gate-entry-ignored`, for the whole file, also for other profiles than the feature's. The entry stays in the file and is not used. **Decided** on 2026-11-01 (implementation clarification).
+- Two or more gates of one profile that name the same `checklist` (compared ordinally) would share one copy in the feature folder, so the later gate would overwrite the filled record of the earlier one. Only the gates that apply count (a known profile, a phase after the first one). The gate into the earliest phase of the profile keeps the checklist; every later one gets the warning `gate-entry-ignored` (reason `SharedChecklist`), after the other warnings of its profile and in phase order, and its checklist is ignored: the transition has no checklist, no copy is made, and its `approval` still applies. The file stays valid. **Decided** on 2026-11-04 (review R05-01: a warning in the reader; which gate keeps the checklist and that the later ones lose it were chosen in the implementation and are **Proposed**). **Implemented** (`GatesConfigReader`, `GateEntryIgnoredReason.SharedChecklist`, `CliErrorMapper`; `GatesConfigReaderTests`, `CliErrorMapperTests`, `PhaseCommandsEndToEndTests`).
+- The reader returns a read-only view of the profiles (`GatesConfigReadResult.Profiles`, the gates as `TransitionGate`), not the cached document, so no caller can change the cached configuration. **Decided** on 2026-11-04 (review R05-08), **Implemented**.
 - The provider returns the gate of the feature's profile and the target phase; without an entry it returns approval required and no checklist. Profile and phase names are matched ordinally, so `Feature` is an unknown profile.
 - The warnings of the reader are part of the result of `phase start` and `phase next`, the two commands that read the gates.
 
@@ -118,10 +121,11 @@ Exit code 47 is new. **Decided** on 2026-11-01 (implementation clarification). *
 |---|---|---|
 | 47 | `checklist-template-not-found` | The copy does not exist and neither does the template the gate names. The message names the template and `gates.json` and asks to restore the template or change the `checklist` of the gate. |
 | 14 | `path-not-a-file` | A directory exists at the path of the template or of the copy (code of package 02). |
+| 17 | `kit-file-write-failed` | The copy cannot be written because of an I/O error, for example because a file exists in the place of a directory of the copy path (`features/<id>/checks`, or a directory of a nested checklist). The message names the copy, the cause, and the fix. Added on 2026-11-04 (review R05-02); **Implemented** (`KitFileWriteFailedException` in `Store/Exceptions/`, `FeatureChecklistWriter`, `CliErrorMapper`; `FeatureChecklistWriterTests`, `CliErrorMapperTests`, `PhaseCommandsEndToEndTests`). |
 | 22 | `invalid-file` | `gates.json` is invalid ([`gates.json`](#gatesjson)), or the template is not UTF-8 text (code of package 01). |
 | 20, 21 | `format-too-new`, `upgrade-needed` | `gates.json` has a newer format version, or an older one with `outdatedFormatOnRead: stop` (package 01). |
 
-Check order (package 04): reading `gates.json` (20–22) comes after the phase state check (46) and before the engine rules (44, 41, 42); the copy (47, 14, 22) comes after the git identity (36) and before the write of `feature.json`.
+Check order (package 04): reading `gates.json` (20–22) comes after the phase state check (46) and before the engine rules (44, 41, 42); the copy (47, 14, 22, 17) comes after the git identity (36) and before the write of `feature.json`.
 
 ### Checklist format
 
@@ -176,7 +180,7 @@ The gate part of the result (`gate`, package 04) contains: target phase, `approv
   | Warning code | When |
   |---|---|
   | `gates-defaults-used` | `gates.json` does not exist, or has no `profiles` field; the built-in defaults apply. |
-  | `gate-entry-ignored` | An entry names an unknown profile, a phase its profile does not have, or the first phase of its profile; the entry is ignored. |
+  | `gate-entry-ignored` | An entry names an unknown profile, a phase its profile does not have, or the first phase of its profile; the entry is ignored. Or a gate names the same checklist as the gate into an earlier phase of its profile; only its checklist is ignored. |
 
 ## Acceptance criteria
 
@@ -195,13 +199,13 @@ Every criterion is **Implemented**. The tests that prove it carry `[Trait("Requi
 ## Open points
 
 - The value of the coverage threshold. DOD-02 checks `coverageThreshold` from `config.json` only when it is set (packages 02 and 14).
-- Follow-ups found in the implementation on 2026-11-01, all **Open**:
-  - A `checklist` value with control characters or a `:` (on Windows an alternate data stream, for example `checks/x.md:hidden.md`) is not rejected.
-  - The `gate-entry-ignored` warnings follow the enumeration order of `Dictionary`, which is the file order in practice, but .NET does not guarantee it.
-  - The cached `GatesConfig` is one shared mutable object; callers of the reader must not change it, and nothing enforces that.
-  - A file at `features/<id>/checks` makes the copy fail with an `IOException` that `CliErrorMapper` does not map: exit code 255 (`host-error`) with a stack trace on standard error; `feature.json` stays unchanged. Checked with the built CLI on macOS on 2026-11-01.
-  - Two concurrent `phase start` calls could race between the existence check of the copy and its write.
-  - Repositories initialised before 2026-11-01 have a `gates.json` without `profiles`, so they get the built-in defaults with the warning `gates-defaults-used` on every `phase start` and `phase next` until an upgrade (package 18) writes `profiles`.
+- Follow-ups found in the implementation on 2026-11-01:
+  - **Resolved** on 2026-11-04 (review R05-03): a `checklist` value with control characters or a `:` (on Windows an alternate data stream, for example `checks/x.md:hidden.md`) is rejected ([`gates.json`](#gatesjson)).
+  - **Open**: the `gate-entry-ignored` warnings follow the enumeration order of `Dictionary`, which is the file order in practice, but .NET does not guarantee it. The read-only view of R05-08 keeps that order.
+  - **Resolved** on 2026-11-04 (review R05-08): the reader returns a read-only view instead of the shared mutable `GatesConfig`.
+  - **Resolved** on 2026-11-04 (review R05-02): a file at `features/<id>/checks`, or at a directory of a nested checklist path, gives exit code 17 (`kit-file-write-failed`) with a failure envelope instead of exit code 255 with a stack trace; `feature.json` stays unchanged ([Errors](#errors)).
+  - **Resolved** on 2026-11-04 (review R05-06): the copy is created with `FileWriteMode.CreateNew` (`ITextFileWriter`, `IKitStore.WriteFileAsync`), so of two concurrent `phase start` calls only one creates it; the other finds it ("already exists" counts as an existing copy, without warnings) and keeps it.
+  - **Open** until an upgrade (package 18) writes `profiles`: repositories initialised before 2026-11-01 have a `gates.json` without `profiles`, so they get the built-in defaults with the warning `gates-defaults-used` on every `phase start` and `phase next`. Since 2026-11-04 (review R05-07) the warning names the remedy: copy the `profiles` field that `shade-kit init` writes into the file to configure the gates and stop the warning.
 - Skill skeletons not aligned with this package (the skills were not changed; package 06 owns them), **Open**:
   - The entry protocol of the phase skills and `shade-kit-next-phase` does not say to show the `warnings` of `phase start` and `phase next`, so the human may never see `gates-defaults-used` or `gate-entry-ignored`.
-  - The refusal table of the next-steps message (package 06) has no row for exit code 47 (restore the template or change the `checklist` of the gate) and none for 14 from the copy.
+  - The refusal table of the next-steps message (package 06) has no row for exit code 47 (restore the template or change the `checklist` of the gate), none for 14 from the copy, and none for 17 (`kit-file-write-failed`, move or remove the file in the place of a directory of the copy).

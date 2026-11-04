@@ -803,6 +803,43 @@ public class CliErrorMapperTests
     }
 
     [Fact]
+    public void Map_KitFileWriteFailed_ReturnsExitCode17NamingFileCauseAndFix()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new KitFileWriteFailedException(
+            ".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md",
+            new IOException("The file '/repo/.shadekit/features/gh-142-login-sso/checks' already exists.")));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.KitFileWriteFailed,
+                ShadeKitCliErrorCodes.KitFileWriteFailed,
+                "'.shadekit/features/gh-142-login-sso/checks/definition-of-ready.md' cannot be written. Cause: The " +
+                "file '/repo/.shadekit/features/gh-142-login-sso/checks' already exists. Make sure that no file is " +
+                "in the place of one of its directories and that you may write to it, then run the command again."));
+    }
+
+    [Fact]
+    public void Map_FileAlreadyExists_ReturnsExitCode17NamingFileAndFix()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new FileAlreadyExistsException("/repo/.shadekit/templates/spec.md", null));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.KitFileWriteFailed,
+                ShadeKitCliErrorCodes.KitFileWriteFailed,
+                "'/repo/.shadekit/templates/spec.md' already exists, so it was not written and is unchanged. Move " +
+                "or remove the file, then run the command again."));
+    }
+
+    [Fact]
     public void Map_UnexpectedException_ReturnsNull()
     {
         // Arrange
@@ -1235,7 +1272,7 @@ public class CliErrorMapperTests
     }
 
     [Fact]
-    public void MapWarning_GatesDefaultsUsedWithMissingField_ReturnsDefaultsWarningWithAddFieldHint()
+    public void MapWarning_GatesDefaultsUsedWithMissingField_ReturnsDefaultsWarningWithCopyFieldRemedy()
     {
         // Act
         var warning = CliErrorMapper.MapWarning(new GatesDefaultsUsedWarning(IsFileMissing: false));
@@ -1245,8 +1282,9 @@ public class CliErrorMapperTests
             .Should().Be(ShadeKitCliWarningCodes.GatesDefaultsUsed);
 
         warning.Message
-            .Should().Be("'.shadekit/gates.json' has no 'profiles' field, so the built-in gate defaults apply. Add " +
-                         "a 'profiles' field to configure the gates.");
+            .Should().Be("'.shadekit/gates.json' has no 'profiles' field, so the built-in gate defaults apply. " +
+                         "Copy the 'profiles' field that 'shade-kit init' writes into the file to configure the " +
+                         "gates and to stop this warning.");
     }
 
     [Fact]
@@ -1279,6 +1317,24 @@ public class CliErrorMapperTests
         warning.Message
             .Should().Be("'.shadekit/gates.json' configures the gate 'plan' of the profile 'quick', which has no " +
                          "phase 'plan'; the gate is ignored.");
+    }
+
+    [Fact]
+    public void MapWarning_GateEntryIgnoredForSharedChecklist_ReturnsWarningThatOnlyChecklistOfGateIsIgnored()
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(
+            new GateEntryIgnoredWarning("feature", "finish", GateEntryIgnoredReason.SharedChecklist));
+
+        // Assert
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.GateEntryIgnored);
+
+        warning.Message
+            .Should().Be("'.shadekit/gates.json' configures the gate 'finish' of the profile 'feature' with the " +
+                         "same checklist as the gate into an earlier phase of the profile; the checklist of this " +
+                         "gate is ignored, so the transition into 'finish' has no checklist, but its approval still " +
+                         "applies. Give the gate a checklist file of its own.");
     }
 
     [Fact]

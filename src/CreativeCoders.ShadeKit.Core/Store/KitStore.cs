@@ -107,7 +107,7 @@ public class KitStore : IKitStore
                 $"{nameof(FormatAccess.Upgrade)} access.");
         }
 
-        var result = await ReadVersionedFileAsync<T>(GetFullPath(relativePath), formatId,
+        var result = await ReadVersionedFileAsync<T>(ResolveFullPath(relativePath), formatId,
             access != FormatAccess.Write, cancellationToken).ConfigureAwait(false);
 
         if (result is null || result.Warnings.Count == 0 || access == FormatAccess.Upgrade)
@@ -143,16 +143,16 @@ public class KitStore : IKitStore
 
     /// <inheritdoc />
     public Task<IReadOnlyList<KitWarning>> WriteFileAsync(string relativePath, TextFileContent content,
-        CancellationToken cancellationToken = default)
+        FileWriteMode mode = FileWriteMode.Overwrite, CancellationToken cancellationToken = default)
     {
-        return WriteFileAsync(relativePath, content, lineEndingPath: null, cancellationToken);
+        return WriteFileAsync(relativePath, content, lineEndingPath: null, mode, cancellationToken);
     }
 
     /// <inheritdoc />
     public IKitDirectoryWriter CreateDirectoryWriter(string writePath, string targetPath)
     {
-        GetFullPath(writePath);
-        GetFullPath(targetPath);
+        ResolveFullPath(writePath);
+        ResolveFullPath(targetPath);
 
         return new DirectoryWriter(this, writePath, targetPath);
     }
@@ -204,35 +204,37 @@ public class KitStore : IKitStore
         var json = _serializer.Serialize(document, formatId);
 
         // The serializer ends the JSON with a line ending, so the file does as well.
-        return await WriteFileAsync(file, TextFileContent.FromText(json), lineEndingFile, cancellationToken)
+        return await WriteFileAsync(file, TextFileContent.FromText(json), lineEndingFile, FileWriteMode.Overwrite,
+                cancellationToken)
             .ConfigureAwait(false);
     }
 
     // Writes a text file and determines its line ending for lineEndingPath, or for relativePath if it is null.
     private Task<IReadOnlyList<KitWarning>> WriteFileAsync(string relativePath, TextFileContent content,
-        string? lineEndingPath, CancellationToken cancellationToken)
+        string? lineEndingPath, FileWriteMode mode, CancellationToken cancellationToken)
     {
         Ensure.NotNull(content);
 
         var file = ResolveFile(relativePath);
         var lineEndingFile = lineEndingPath is null ? null : ResolveFile(lineEndingPath);
 
-        return WriteFileAsync(file, content, lineEndingFile, cancellationToken);
+        return WriteFileAsync(file, content, lineEndingFile, mode, cancellationToken);
     }
 
-    // Writes a text file whose paths are already resolved; the writer creates the missing directories.
+    // Writes a text file whose paths are already resolved; the writer creates the missing directories and checks the
+    // mode.
     private Task<IReadOnlyList<KitWarning>> WriteFileAsync(RepositoryFile file, TextFileContent content,
-        RepositoryFile? lineEndingFile, CancellationToken cancellationToken)
+        RepositoryFile? lineEndingFile, FileWriteMode mode, CancellationToken cancellationToken)
     {
         DiscardOutdatedFormatPolicy();
 
-        return _textFileWriter.WriteAsync(file, content, lineEndingFile, cancellationToken);
+        return _textFileWriter.WriteAsync(file, content, lineEndingFile, mode, cancellationToken);
     }
 
     /// <inheritdoc />
     public void CreateDirectory(string relativePath)
     {
-        var fullPath = GetFullPath(relativePath);
+        var fullPath = ResolveFullPath(relativePath);
 
         DiscardOutdatedFormatPolicy();
 
@@ -243,7 +245,7 @@ public class KitStore : IKitStore
     public async Task<TextFileContent?> ReadFileAsync(string relativePath,
         CancellationToken cancellationToken = default)
     {
-        var fullPath = GetFullPath(relativePath);
+        var fullPath = ResolveFullPath(relativePath);
 
         // Every file of the store is a kit file, so content that is not UTF-8 text makes it an invalid kit file
         // rather than a file with an unsupported encoding. A directory at the path throws PathNotAFileException.
@@ -257,21 +259,27 @@ public class KitStore : IKitStore
     }
 
     /// <inheritdoc />
+    public string GetFullPath(string relativePath)
+    {
+        return ResolveFullPath(relativePath);
+    }
+
+    /// <inheritdoc />
     public bool FileExists(string relativePath)
     {
-        return File.Exists(GetFullPath(relativePath));
+        return File.Exists(ResolveFullPath(relativePath));
     }
 
     /// <inheritdoc />
     public bool DirectoryExists(string relativePath)
     {
-        return Directory.Exists(GetFullPath(relativePath));
+        return Directory.Exists(ResolveFullPath(relativePath));
     }
 
     /// <inheritdoc />
     public IReadOnlyList<string> GetFiles(string relativePath)
     {
-        var fullPath = GetFullPath(relativePath);
+        var fullPath = ResolveFullPath(relativePath);
 
         if (!Directory.Exists(fullPath))
         {
@@ -298,7 +306,7 @@ public class KitStore : IKitStore
     /// <inheritdoc />
     public void DeleteFile(string relativePath)
     {
-        var fullPath = GetFullPath(relativePath);
+        var fullPath = ResolveFullPath(relativePath);
 
         DiscardOutdatedFormatPolicy();
 
@@ -311,7 +319,7 @@ public class KitStore : IKitStore
     /// <inheritdoc />
     public void DeleteDirectory(string relativePath)
     {
-        var fullPath = GetFullPath(relativePath);
+        var fullPath = ResolveFullPath(relativePath);
 
         DiscardOutdatedFormatPolicy();
 
@@ -324,8 +332,8 @@ public class KitStore : IKitStore
     /// <inheritdoc />
     public void MoveDirectory(string sourceRelativePath, string destinationRelativePath)
     {
-        var sourceFullPath = GetFullPath(sourceRelativePath);
-        var destinationFullPath = GetFullPath(destinationRelativePath);
+        var sourceFullPath = ResolveFullPath(sourceRelativePath);
+        var destinationFullPath = ResolveFullPath(destinationRelativePath);
 
         // Directory.Move also moves files, so a file at the source counts as a missing directory.
         if (!Directory.Exists(sourceFullPath))
@@ -343,7 +351,7 @@ public class KitStore : IKitStore
 
         DiscardOutdatedFormatPolicy();
 
-        // GetFullPath only returns paths below RootPath, so the destination always has a parent directory.
+        // ResolveFullPath only returns paths below RootPath, so the destination always has a parent directory.
         Directory.CreateDirectory(Path.GetDirectoryName(destinationFullPath)!);
 
         Directory.Move(sourceFullPath, destinationFullPath);
@@ -406,7 +414,7 @@ public class KitStore : IKitStore
 
     private async Task<OutdatedFormatPolicy> ReadOutdatedFormatPolicyAsync(CancellationToken cancellationToken)
     {
-        var config = await ReadVersionedFileAsync<KitConfig>(GetFullPath(KitStorePaths.ConfigFileName),
+        var config = await ReadVersionedFileAsync<KitConfig>(ResolveFullPath(KitStorePaths.ConfigFileName),
             FormatIds.Config, true, cancellationToken).ConfigureAwait(false);
 
         if (config is null)
@@ -431,7 +439,7 @@ public class KitStore : IKitStore
 
     // An invalid path throws an ArgumentException whose ParamName is the caller's parameter that holds the path
     // (relativePath, lineEndingPath, sourceRelativePath, ...), filled in by the compiler.
-    private string GetFullPath(string relativePath,
+    private string ResolveFullPath(string relativePath,
         [CallerArgumentExpression(nameof(relativePath))] string paramName = "")
     {
         return RepositoryFilePath.GetFullPathBelowRoot(RootPath, relativePath, "the SHADE kit root", paramName);
@@ -446,12 +454,12 @@ public class KitStore : IKitStore
     private RepositoryFile ResolveFile(string relativePath,
         [CallerArgumentExpression(nameof(relativePath))] string paramName = "")
     {
-        return RepositoryFile.FromCheckedFullPath(RepositoryRootPath, GetFullPath(relativePath, paramName));
+        return RepositoryFile.FromCheckedFullPath(RepositoryRootPath, ResolveFullPath(relativePath, paramName));
     }
 
     private string GetDisplayPath(string relativePath)
     {
-        return GetDisplayPathOfFullPath(GetFullPath(relativePath));
+        return GetDisplayPathOfFullPath(ResolveFullPath(relativePath));
     }
 
     // The full path is normalized, so the path relative to the root has no "." and ".." segments; KitStorePaths
@@ -485,13 +493,13 @@ public class KitStore : IKitStore
             EnsureBelowDirectory(relativePath);
 
             return store.WriteFileAsync($"{writePath}/{relativePath}", content, $"{targetPath}/{relativePath}",
-                cancellationToken);
+                FileWriteMode.Overwrite, cancellationToken);
         }
 
         private void EnsureBelowDirectory(string relativePath,
             [CallerArgumentExpression(nameof(relativePath))] string paramName = "")
         {
-            RepositoryFilePath.GetFullPathBelowRoot(store.GetFullPath(writePath), relativePath, "the directory",
+            RepositoryFilePath.GetFullPathBelowRoot(store.ResolveFullPath(writePath), relativePath, "the directory",
                 paramName);
         }
     }

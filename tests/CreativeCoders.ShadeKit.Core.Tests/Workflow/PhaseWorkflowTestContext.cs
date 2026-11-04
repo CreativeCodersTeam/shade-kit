@@ -45,6 +45,10 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
     private static readonly TimeZoneInfo UtcPlusTwo =
         TimeZoneInfo.CreateCustomTimeZone("Test UTC+02", TimeSpan.FromHours(2), "Test UTC+02", "Test UTC+02");
 
+    // PhaseWorkflow takes the gates from the faked provider and only the warnings from the faked reader.
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, TransitionGate>>
+        EmptyGatesProfiles = new Dictionary<string, IReadOnlyDictionary<string, TransitionGate>>();
+
     public PhaseWorkflowTestContext()
     {
         RepositoryRootPath = Repository.CreateGitRoot();
@@ -57,7 +61,7 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
                 A<CancellationToken>._))
             .Returns(TransitionGate.Default);
         A.CallTo(() => GatesConfigReader.ReadAsync(A<IKitStore>._, A<CancellationToken>._))
-            .Returns(new GatesConfigReadResult(GatesConfig.CreateDefault(), []));
+            .Returns(new GatesConfigReadResult(EmptyGatesProfiles, []));
         A.CallTo(() => ChecklistWriter.EnsureCopyAsync(A<IKitStore>._, A<string>._, A<string>._,
                 A<CancellationToken>._))
             .Returns(new FeatureChecklistCopyResult(Created: true, Warnings: []));
@@ -234,7 +238,7 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
     public void SetGatesConfigWarnings(params KitWarning[] warnings)
     {
         A.CallTo(() => GatesConfigReader.ReadAsync(A<IKitStore>._, A<CancellationToken>._))
-            .Returns(new GatesConfigReadResult(GatesConfig.CreateDefault(), warnings));
+            .Returns(new GatesConfigReadResult(EmptyGatesProfiles, warnings));
     }
 
     public void VerifyChecklistNotCopied()

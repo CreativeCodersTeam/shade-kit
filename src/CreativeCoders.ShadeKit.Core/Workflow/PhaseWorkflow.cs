@@ -67,29 +67,22 @@ public sealed class PhaseWorkflow(
 
         var decision = _phaseEngine.Start(feature.State, phase, gates.Gates);
 
-        IReadOnlyList<KitWarning> copyWarnings;
-        IReadOnlyList<KitWarning> writeWarnings = [];
+        // A pending transition changes nothing, so no identity is read for it. The identity is read before the
+        // checklist copy, so a missing identity leaves no copy behind.
+        GitIdentity? identity = decision.HasChanges
+            ? await GetIdentityAsync(store, cancellationToken).ConfigureAwait(false)
+            : null;
 
-        if (decision.HasChanges)
-        {
-            // The identity is read before the checklist copy, so a missing identity leaves no copy behind.
-            var identity = await GetIdentityAsync(store, cancellationToken).ConfigureAwait(false);
+        var copyWarnings = await EnsureChecklistCopyAsync(store, feature.FeatureId, decision, cancellationToken)
+            .ConfigureAwait(false);
 
-            copyWarnings = await EnsureChecklistCopyAsync(store, feature.FeatureId, decision, cancellationToken)
-                .ConfigureAwait(false);
-
-            // The copy is made before feature.json is written, so a failing copy leaves feature.json unchanged. If
-            // writing feature.json fails after the copy was created, the copy stays; the next start of the phase finds
-            // it and keeps it as it is.
-            writeWarnings = await WriteChangeAsync(store, feature, decision.Change, identity, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            // A pending transition changes nothing, so no identity is read; its checklist copy is still made sure of.
-            copyWarnings = await EnsureChecklistCopyAsync(store, feature.FeatureId, decision, cancellationToken)
-                .ConfigureAwait(false);
-        }
+        // The copy is made before feature.json is written, so a failing copy leaves feature.json unchanged. If writing
+        // feature.json fails after the copy was created, the copy stays; the next start of the phase finds it and
+        // keeps it as it is.
+        IReadOnlyList<KitWarning> writeWarnings = decision.HasChanges && identity is not null
+            ? await WriteChangeAsync(store, feature, decision.Change, identity, cancellationToken)
+                .ConfigureAwait(false)
+            : [];
 
         var gate = decision is { Gate: { } transitionGate, Transition: { } transition }
             ? new PhaseGate(transition.To, transitionGate)
