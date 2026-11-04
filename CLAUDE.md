@@ -98,6 +98,6 @@ Without `--runtime`, the host OS decides the runtimes: Linux → `linux-x64`, `l
 - **Commits:** Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`).
 - **CI:** GitHub Actions (`.github/workflows/`), each build job runs the Cake build on Ubuntu, Windows, and macOS:
   - `pull-request`: pack (build, test, coverage) and smoke test on every pull request to `main`.
-  - `integration` (`feature/**`) and `main`: additionally the dist archives; Ubuntu pushes the tool package to GitHub Packages.
+  - `integration` (`feature/**`) and `main`: additionally the dist archives; Ubuntu pushes the tool package to GitHub Packages. Both can also be started by hand (`workflow_dispatch`, on any branch).
   - `release` (tag `v<SemVer>`): a `verify-tag` job rejects tags that are not `v<SemVer>` or not on `main`. After all platforms succeed, a `nuget-push` job pushes the tool package built on Ubuntu to nuget.org (secret `NUGET_ORG_TOKEN`, only in that job), then a final job creates the GitHub release with the five binary archives and the tool package.
   - `dependabot-auto-merge` / `dependabot-manual` with `.github/dependabot.yml` (NuGet for `/` and `/build`, GitHub Actions).
