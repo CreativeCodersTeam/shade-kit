@@ -52,7 +52,7 @@ Before step 1, the skill checks for an active feature: `shade-kit feature curren
 6. Offer to create and switch to the branch `feature/<id>` (suggested by package 03) so the current feature follows the branch. The agent runs the git command only after a yes. **Proposed.**
 7. Report the id, the next phase of the profile (`refine`, `diagnose`, or `quick`), and the skill the human calls to start it (`/shade-kit-refine`, `/shade-kit-diagnose`, or `/shade-kit-quick`). The skill ends there; the transition goes through the entry protocol of that phase skill once the human calls it (package 06).
 
-A refused `feature new` (for example exit code 10 in a repository without `.shadekit/`, or exit code 40 for an unknown profile) ends the skill with the reason and the human's options (package 06, [Next-steps message](06-skill-foundation.md#next-steps-message)).
+A refused `feature new` (for example exit code 10 in a repository without `.shadekit/`, or exit code 40 for an unknown profile) ends the skill with the reason and the human's options (package 06-3, [Next-steps message](06-3-next-steps-skill.md)).
 
 ### Templates
 
