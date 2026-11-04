@@ -64,7 +64,9 @@ public sealed class FeatureChecklistWriterTests : IDisposable
         "checks//definition-of-ready.md",
         "checks/.md",
         "checks/definition-of-ready.md:hidden.md",
-        "checks/definition\u001b-of-ready.md"
+        "checks/definition\u001b-of-ready.md",
+        "checks/team./definition-of-ready.md",
+        "checks/team /definition-of-ready.md"
     };
 
     public void Dispose()
@@ -616,7 +618,7 @@ public sealed class FeatureChecklistWriterTests : IDisposable
     public async Task EnsureCopyAsync_WriteFailsBecauseCopyExists_ReturnsNotCreatedWithoutWarnings()
     {
         // Arrange
-        var store = CreateFakeStoreWhoseWriteThrows(new FileAlreadyExistsException("/repo/copy.md", null));
+        var store = CreateFakeStoreWhoseWriteThrows(new FileAlreadyExistsException(".shadekit/copy.md", null));
         var writer = new FeatureChecklistWriter();
 
         // Act
@@ -628,7 +630,7 @@ public sealed class FeatureChecklistWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureCopyAsync_WriteFailsWithUnauthorizedAccess_PropagatesExceptionUnchanged()
+    public async Task EnsureCopyAsync_WriteFailsWithUnauthorizedAccess_ThrowsKitFileWriteFailedExceptionNamingCopy()
     {
         // Arrange
         var failure = new UnauthorizedAccessException("access denied");
@@ -639,8 +641,13 @@ public sealed class FeatureChecklistWriterTests : IDisposable
         var act = () => writer.EnsureCopyAsync(store, FeatureId, Checklist, TestContext.Current.CancellationToken);
 
         // Assert
-        (await act.Should().ThrowAsync<UnauthorizedAccessException>())
-            .Which.Should().BeSameAs(failure);
+        var exception = (await act.Should().ThrowAsync<KitFileWriteFailedException>()).Which;
+
+        exception.FilePath
+            .Should().Be(".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md");
+
+        exception.InnerException
+            .Should().BeSameAs(failure);
     }
 
     [Fact]

@@ -1,8 +1,10 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Gates;
+using CreativeCoders.ShadeKit.Core.Gates.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
+using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
 using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using CreativeCoders.ShadeKit.Tests.Shared;
@@ -35,7 +37,7 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task GetGateAsync_GateWithApprovalAndChecklist_ReturnsGateWithChecklistUnchanged()
+    public async Task GetGatesAsync_GateWithApprovalAndChecklist_ReturnsGateWithChecklistUnchanged()
     {
         // Arrange
         SetUpReader(CreateConfig(WorkflowProfileNames.Feature, WorkflowPhaseNames.Plan,
@@ -43,16 +45,16 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var gate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Feature, WorkflowPhaseNames.Plan,
+        var result = await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature,
             TestContext.Current.CancellationToken);
 
         // Assert
-        gate
+        result.Gates[WorkflowPhaseNames.Plan]
             .Should().Be(new TransitionGate(true, "checks/team/ready.md"));
     }
 
     [Fact]
-    public async Task GetGateAsync_GateWithoutApproval_ReturnsGateWithoutApproval()
+    public async Task GetGatesAsync_GateWithoutApproval_ReturnsGateWithoutApproval()
     {
         // Arrange
         SetUpReader(CreateConfig(WorkflowProfileNames.Feature, WorkflowPhaseNames.Map,
@@ -60,17 +62,36 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var gate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Feature, WorkflowPhaseNames.Map,
+        var result = await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature,
             TestContext.Current.CancellationToken);
 
         // Assert
-        gate
+        result.Gates[WorkflowPhaseNames.Map]
             .Should().Be(new TransitionGate(false, null));
     }
 
+    [Theory]
+    [InlineData(WorkflowProfileNames.Feature)]
+    [InlineData(WorkflowProfileNames.Bugfix)]
+    [InlineData(WorkflowProfileNames.Quick)]
+    public async Task GetGatesAsync_AnyProfile_ReturnsGateOfEveryPhaseOfProfileInProfileOrder(string profileName)
+    {
+        // Arrange
+        SetUpReader(GatesConfig.CreateDefault());
+        var profile = new BuiltInWorkflowProfileCatalog().GetProfile(profileName);
+        var provider = new GatesConfigTransitionGateProvider(_reader);
+
+        // Act
+        var result = await provider.GetGatesAsync(_store, profile, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Gates.Keys
+            .Should().Equal(profile.Phases.Select(phase => phase.Name));
+    }
+
     [Fact]
     [Trait("Requirement", "FP05-AC6")]
-    public async Task GetGateAsync_PhaseWithoutEntry_ReturnsDefaultGate()
+    public async Task GetGatesAsync_PhaseWithoutEntry_ReturnsDefaultGate()
     {
         // Arrange
         SetUpReader(CreateConfig(WorkflowProfileNames.Feature, WorkflowPhaseNames.Plan,
@@ -78,17 +99,17 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var gate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Feature, WorkflowPhaseNames.Refine,
+        var result = await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature,
             TestContext.Current.CancellationToken);
 
         // Assert
-        gate
+        result.Gates[WorkflowPhaseNames.Refine]
             .Should().BeSameAs(TransitionGate.Default);
     }
 
     [Fact]
     [Trait("Requirement", "FP05-AC6")]
-    public async Task GetGateAsync_ProfileWithoutEntry_ReturnsDefaultGate()
+    public async Task GetGatesAsync_ProfileWithoutEntry_ReturnsDefaultGateForEveryPhase()
     {
         // Arrange
         SetUpReader(CreateConfig(WorkflowProfileNames.Feature, WorkflowPhaseNames.Plan,
@@ -96,17 +117,17 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var gate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Bugfix, WorkflowPhaseNames.Plan,
+        var result = await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Bugfix,
             TestContext.Current.CancellationToken);
 
         // Assert
-        gate
-            .Should().BeSameAs(TransitionGate.Default);
+        result.Gates.Values
+            .Should().AllSatisfy(gate => gate.Should().BeSameAs(TransitionGate.Default));
     }
 
     [Fact]
     [Trait("Requirement", "FP05-AC6")]
-    public async Task GetGateAsync_ProfileWithoutGates_ReturnsDefaultGate()
+    public async Task GetGatesAsync_ProfileWithoutGates_ReturnsDefaultGateForEveryPhase()
     {
         // Arrange
         SetUpReader(new GatesConfig
@@ -119,77 +140,52 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var gate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Feature, WorkflowPhaseNames.Plan,
+        var result = await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature,
             TestContext.Current.CancellationToken);
 
         // Assert
-        gate
-            .Should().BeSameAs(TransitionGate.Default);
+        result.Gates.Values
+            .Should().AllSatisfy(gate => gate.Should().BeSameAs(TransitionGate.Default));
     }
 
     [Fact]
-    public async Task GetGateAsync_SeveralCalls_ReturnsGateOfEachTransition()
-    {
-        // Arrange
-        SetUpReader(GatesConfig.CreateDefault());
-        var provider = new GatesConfigTransitionGateProvider(_reader);
-        var cancellationToken = TestContext.Current.CancellationToken;
-
-        // Act
-        var planGate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Bugfix, WorkflowPhaseNames.Plan,
-            cancellationToken);
-        var quickGate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Quick, WorkflowPhaseNames.Quick,
-            cancellationToken);
-
-        // Assert
-        planGate
-            .Should().Be(new TransitionGate(true, GatesConfig.DefinitionOfReadyChecklist));
-
-        quickGate
-            .Should().Be(new TransitionGate(false, null));
-
-        A.CallTo(() => _reader.ReadAsync(_store, cancellationToken))
-            .MustHaveHappenedTwiceExactly();
-    }
-
-    [Fact]
-    public async Task GetGateAsync_EmptyProfiles_ReturnsDefaultGate()
+    public async Task GetGatesAsync_EmptyProfiles_ReturnsDefaultGateForEveryPhase()
     {
         // Arrange
         SetUpReader(new GatesConfig { Profiles = [] });
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var gate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Feature, WorkflowPhaseNames.Plan,
+        var result = await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature,
             TestContext.Current.CancellationToken);
 
         // Assert
-        gate
-            .Should().BeSameAs(TransitionGate.Default);
+        result.Gates.Values
+            .Should().AllSatisfy(gate => gate.Should().BeSameAs(TransitionGate.Default));
     }
 
     [Theory]
     [InlineData("Feature", WorkflowPhaseNames.Plan)]
     [InlineData(WorkflowProfileNames.Feature, "Plan")]
-    public async Task GetGateAsync_NamesDifferOnlyInCase_ReturnsDefaultGate(string profileName, string phaseName)
+    public async Task GetGatesAsync_NamesDifferOnlyInCase_ReturnsDefaultGate(string profileName, string phaseName)
     {
         // Arrange
         SetUpReader(CreateConfig(profileName, phaseName, new GateConfig { Approval = false }));
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var gate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Feature, WorkflowPhaseNames.Plan,
+        var result = await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature,
             TestContext.Current.CancellationToken);
 
         // Assert
-        gate
+        result.Gates[WorkflowPhaseNames.Plan]
             .Should().BeSameAs(TransitionGate.Default);
     }
 
     [Theory]
     [InlineData(WorkflowPhaseNames.Quick, false, null)]
     [InlineData(WorkflowPhaseNames.Finish, true, GatesConfig.DefinitionOfDoneChecklist)]
-    public async Task GetGateAsync_DefaultConfigQuickProfile_ReturnsDefaultGatesOfQuickProfile(string targetPhase,
+    public async Task GetGatesAsync_DefaultConfigQuickProfile_ReturnsDefaultGatesOfQuickProfile(string targetPhase,
         bool expectedApproval, string? expectedChecklist)
     {
         // Arrange
@@ -197,16 +193,37 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var gate = await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Quick, targetPhase,
+        var result = await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Quick,
             TestContext.Current.CancellationToken);
 
         // Assert
-        gate
+        result.Gates[targetPhase]
             .Should().Be(new TransitionGate(expectedApproval, expectedChecklist));
     }
 
     [Fact]
-    public async Task GetGateAsync_AnyPhase_ReadsConfigOfGivenStoreWithGivenToken()
+    public async Task GetGatesAsync_ReaderReturnsWarnings_ReturnsWarningsUnchangedInOrder()
+    {
+        // Arrange
+        KitWarning[] warnings =
+        [
+            new GatesDefaultsUsedWarning(IsFileMissing: false),
+            new GateEntryIgnoredWarning("release", null, GateEntryIgnoredReason.UnknownProfile)
+        ];
+        SetUpReader(GatesConfig.CreateDefault(), warnings);
+        var provider = new GatesConfigTransitionGateProvider(_reader);
+
+        // Act
+        var result = await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(warnings);
+    }
+
+    [Fact]
+    public async Task GetGatesAsync_AnyProfile_ReadsConfigOfGivenStoreOnceWithGivenToken()
     {
         // Arrange
         using var cancellationTokenSource = new CancellationTokenSource();
@@ -215,22 +232,24 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        await provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Feature, WorkflowPhaseNames.Plan,
-            cancellationToken);
+        await provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature, cancellationToken);
 
         // Assert
         A.CallTo(() => _reader.ReadAsync(_store, cancellationToken))
             .MustHaveHappenedOnceExactly();
+
+        A.CallTo(_reader)
+            .MustHaveHappenedOnceExactly();
     }
 
     [Fact]
-    public async Task GetGateAsync_NullStore_ThrowsArgumentNullException()
+    public async Task GetGatesAsync_NullStore_ThrowsArgumentNullException()
     {
         // Arrange
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var act = () => provider.GetGateAsync(null!, BuiltInWorkflowProfiles.Quick, WorkflowPhaseNames.Quick,
+        var act = () => provider.GetGatesAsync(null!, BuiltInWorkflowProfiles.Quick,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -242,14 +261,13 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task GetGateAsync_NullProfile_ThrowsArgumentNullException()
+    public async Task GetGatesAsync_NullProfile_ThrowsArgumentNullException()
     {
         // Arrange
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var act = () => provider.GetGateAsync(_store, null!, WorkflowPhaseNames.Quick,
-            TestContext.Current.CancellationToken);
+        var act = () => provider.GetGatesAsync(_store, null!, TestContext.Current.CancellationToken);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentNullException>()
@@ -260,25 +278,7 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task GetGateAsync_NullTargetPhase_ThrowsArgumentNullException()
-    {
-        // Arrange
-        var provider = new GatesConfigTransitionGateProvider(_reader);
-
-        // Act
-        var act = () => provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Quick, null!,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        await act.Should().ThrowAsync<ArgumentNullException>()
-            .WithParameterName("targetPhase");
-
-        A.CallTo(_reader)
-            .MustNotHaveHappened();
-    }
-
-    [Fact]
-    public async Task GetGateAsync_ReaderCanceled_ThrowsOperationCanceledException()
+    public async Task GetGatesAsync_ReaderCanceled_ThrowsOperationCanceledException()
     {
         // Arrange
         using var cancellationTokenSource = new CancellationTokenSource();
@@ -288,7 +288,7 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var act = () => provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Feature, WorkflowPhaseNames.Plan,
+        var act = () => provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature,
             cancellationTokenSource.Token);
 
         // Assert
@@ -296,7 +296,7 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task GetGateAsync_ReaderThrows_PropagatesException()
+    public async Task GetGatesAsync_ReaderThrows_PropagatesException()
     {
         // Arrange
         var exception = new InvalidKitFileException(".shadekit/gates.json", "The file is invalid.");
@@ -305,7 +305,7 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
         var provider = new GatesConfigTransitionGateProvider(_reader);
 
         // Act
-        var act = () => provider.GetGateAsync(_store, BuiltInWorkflowProfiles.Feature, WorkflowPhaseNames.Plan,
+        var act = () => provider.GetGatesAsync(_store, BuiltInWorkflowProfiles.Feature,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -314,7 +314,7 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task GetGateAsync_RealReaderWithGatesFile_ReturnsGatesFromFile()
+    public async Task GetGatesAsync_RealReaderWithGatesFile_ReturnsGatesFromFile()
     {
         // Arrange
         _repository.CreateGitRoot();
@@ -334,25 +334,23 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
             KitStorePaths.RootPath, KitStorePaths.GatesFileName);
         var store = TestKitStores.Create(kitStorePath);
         var provider = new GatesConfigTransitionGateProvider(new GatesConfigReader(new BuiltInWorkflowProfileCatalog()));
-        var cancellationToken = TestContext.Current.CancellationToken;
 
         // Act
-        var diagnoseGate = await provider.GetGateAsync(store, BuiltInWorkflowProfiles.Bugfix,
-            WorkflowPhaseNames.Diagnose, cancellationToken);
-        var planGate = await provider.GetGateAsync(store, BuiltInWorkflowProfiles.Bugfix, WorkflowPhaseNames.Plan,
-            cancellationToken);
-        var finishGate = await provider.GetGateAsync(store, BuiltInWorkflowProfiles.Bugfix,
-            WorkflowPhaseNames.Finish, cancellationToken);
+        var result = await provider.GetGatesAsync(store, BuiltInWorkflowProfiles.Bugfix,
+            TestContext.Current.CancellationToken);
 
         // Assert
-        diagnoseGate
+        result.Gates[WorkflowPhaseNames.Diagnose]
             .Should().Be(new TransitionGate(false, null));
 
-        planGate
+        result.Gates[WorkflowPhaseNames.Plan]
             .Should().Be(new TransitionGate(true, "checks/team-ready.md"));
 
-        finishGate
+        result.Gates[WorkflowPhaseNames.Finish]
             .Should().BeSameAs(TransitionGate.Default);
+
+        result.Warnings
+            .Should().BeEmpty();
     }
 
     private static GatesConfig CreateConfig(string profileName, string phaseName, GateConfig gate)
@@ -367,7 +365,7 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
     }
 
     // The reader returns a read-only view; the view of the configuration is built here as the reader builds it.
-    private void SetUpReader(GatesConfig config)
+    private void SetUpReader(GatesConfig config, IReadOnlyList<KitWarning>? warnings = null)
     {
         var profiles = config.Profiles!.ToDictionary(
             profile => profile.Key,
@@ -375,6 +373,6 @@ public sealed class GatesConfigTransitionGateProviderTests : IDisposable
                 gate => new TransitionGate(gate.Value.Approval, gate.Value.Checklist)));
 
         A.CallTo(() => _reader.ReadAsync(_store, A<CancellationToken>._))
-            .Returns(new GatesConfigReadResult(profiles, []));
+            .Returns(new GatesConfigReadResult(profiles, warnings ?? []));
     }
 }

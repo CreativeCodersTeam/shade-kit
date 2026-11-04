@@ -45,7 +45,7 @@ public sealed class TextFileWriter(ILineEndingResolver lineEndingResolver) : ITe
 
         if (mode == FileWriteMode.CreateNew)
         {
-            await WriteNewFileAsync(file.FullPath, bytes, cancellationToken).ConfigureAwait(false);
+            await WriteNewFileAsync(file, bytes, cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -62,19 +62,20 @@ public sealed class TextFileWriter(ILineEndingResolver lineEndingResolver) : ITe
     }
 
     // FileMode.CreateNew checks and creates the file in one operation of the file system. The file system reports an
-    // existing file with a plain IOException, so the failure counts as "exists" only if a file exists afterwards.
-    private static async Task WriteNewFileAsync(string fullPath, byte[] bytes, CancellationToken cancellationToken)
+    // existing file with a plain IOException, so the failure counts as "exists" only if a file exists afterwards. The
+    // exception names the file relative to the repository root, as the messages of the store do.
+    private static async Task WriteNewFileAsync(RepositoryFile file, byte[] bytes, CancellationToken cancellationToken)
     {
         FileStream stream;
 
         try
         {
-            stream = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 1,
+            stream = new FileStream(file.FullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 1,
                 FileOptions.Asynchronous);
         }
-        catch (IOException exception) when (File.Exists(fullPath))
+        catch (IOException exception) when (File.Exists(file.FullPath))
         {
-            throw new FileAlreadyExistsException(fullPath, exception);
+            throw new FileAlreadyExistsException(file.GitPath, exception);
         }
 
         await using (stream.ConfigureAwait(false))

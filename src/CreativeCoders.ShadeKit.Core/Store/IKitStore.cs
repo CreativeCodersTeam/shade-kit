@@ -173,7 +173,8 @@ public interface IKitStore
     /// </exception>
     /// <exception cref="FileAlreadyExistsException">
     /// <paramref name="mode" /> is <see cref="FileWriteMode.CreateNew" /> and a file exists at
-    /// <paramref name="relativePath" />; the file is not changed.
+    /// <paramref name="relativePath" />; the file is not changed. The exception names the file by its path relative
+    /// to the repository root, for example <c>.shadekit/templates/spec.md</c>.
     /// </exception>
     /// <exception cref="IOException">
     /// An I/O error occurred while the file was written, for example because a file exists in the place of one of its

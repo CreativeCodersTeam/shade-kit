@@ -157,11 +157,11 @@ public class TextFileWriterTests
     }
 
     [Fact]
-    public async Task WriteAsync_CreateNewAndFileExists_ThrowsFileAlreadyExistsExceptionAndKeepsFile()
+    public async Task WriteAsync_CreateNewAndFileExists_ThrowsFileAlreadyExistsExceptionNamingRelativePathAndKeepsFile()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        var filePath = tempDirectory.WriteFile("old content that is longer\n", FileName);
+        tempDirectory.WriteFile("old content that is longer\n", FileName);
         var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
 
         // Act
@@ -172,13 +172,31 @@ public class TextFileWriterTests
         var exception = (await act.Should().ThrowAsync<FileAlreadyExistsException>()).Which;
 
         exception.Path
-            .Should().Be(filePath);
+            .Should().Be(FileName);
 
         exception
             .Should().BeAssignableTo<IOException>();
 
         tempDirectory.ReadFileText(FileName)
             .Should().Be("old content that is longer\n");
+    }
+
+    [Fact]
+    public async Task WriteAsync_CreateNewAndNestedFileExists_ThrowsFileAlreadyExistsExceptionWithForwardSlashPath()
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.WriteFile("old\n", "docs", "team", FileName);
+        var writer = FixedLineEnding.CreateWriter(LineEnding.Lf);
+
+        // Act
+        var act = () => writer.WriteAsync(FileIn(tempDirectory, Path.Combine("docs", "team", FileName)),
+            TextFileContent.FromText("new\n"), mode: FileWriteMode.CreateNew,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<FileAlreadyExistsException>())
+            .Which.Path.Should().Be($"docs/team/{FileName}");
     }
 
     [Fact]

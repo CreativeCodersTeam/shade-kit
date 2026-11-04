@@ -829,13 +829,13 @@ public class CliErrorMapperTests
         var mapper = CreateMapper();
 
         // Act
-        var error = mapper.Map(new FileAlreadyExistsException("/repo/.shadekit/templates/spec.md", null));
+        var error = mapper.Map(new FileAlreadyExistsException(".shadekit/templates/spec.md", null));
 
         // Assert
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.KitFileWriteFailed,
                 ShadeKitCliErrorCodes.KitFileWriteFailed,
-                "'/repo/.shadekit/templates/spec.md' already exists, so it was not written and is unchanged. Move " +
+                "'.shadekit/templates/spec.md' already exists, so it was not written and is unchanged. Move " +
                 "or remove the file, then run the command again."));
     }
 

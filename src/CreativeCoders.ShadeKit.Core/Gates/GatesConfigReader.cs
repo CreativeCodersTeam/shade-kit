@@ -37,12 +37,13 @@ public sealed class GatesConfigReader(IWorkflowProfileCatalog workflowProfileCat
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return GetOrStartRead(store, cancellationToken).WaitAsync(cancellationToken);
+        return GetOrStartRead(store).WaitAsync(cancellationToken);
     }
 
-    // The table only holds the lazy read; the read itself starts outside the lock. A read that failed or was canceled
-    // is replaced, so only calls that join it while it is in progress share its failure.
-    private Task<GatesConfigReadResult> GetOrStartRead(IKitStore store, CancellationToken cancellationToken)
+    // The table only holds the lazy read; the read itself starts outside the lock. The shared read takes no caller's
+    // token, so a caller that is canceled stops only its own wait and every other caller still gets the result. A read
+    // that failed is replaced, so only calls that join it while it is in progress share its failure.
+    private Task<GatesConfigReadResult> GetOrStartRead(IKitStore store)
     {
         Lazy<Task<GatesConfigReadResult>> read;
 
@@ -54,7 +55,7 @@ public sealed class GatesConfigReader(IWorkflowProfileCatalog workflowProfileCat
             }
             else
             {
-                read = new Lazy<Task<GatesConfigReadResult>>(() => ReadCoreAsync(store, cancellationToken));
+                read = new Lazy<Task<GatesConfigReadResult>>(() => ReadCoreAsync(store));
                 _reads.AddOrUpdate(store, read);
             }
         }
@@ -67,11 +68,11 @@ public sealed class GatesConfigReader(IWorkflowProfileCatalog workflowProfileCat
         return read is { IsValueCreated: true, Value: { IsFaulted: true } or { IsCanceled: true } };
     }
 
-    private async Task<GatesConfigReadResult> ReadCoreAsync(IKitStore store, CancellationToken cancellationToken)
+    private async Task<GatesConfigReadResult> ReadCoreAsync(IKitStore store)
     {
         var readResult = await store
             .ReadJsonAsync<GatesConfig>(KitStorePaths.GatesFileName, FormatIds.Gates, FormatAccess.Read,
-                cancellationToken)
+                CancellationToken.None)
             .ConfigureAwait(false);
 
         if (readResult is null)
@@ -143,10 +144,13 @@ public sealed class GatesConfigReader(IWorkflowProfileCatalog workflowProfileCat
 
     // Only the gates that apply, those into a phase after the first one, count. Of the gates that name the same
     // checklist, the gate into the earliest phase of the profile keeps it; the later ones are returned in phase order.
+    // The paths are compared without regard to case on every operating system: on a file system that ignores case,
+    // such as the default ones of macOS and Windows, checks/dor.md and checks/DoR.md are one file, and a gates.json
+    // must give the same gates on every client.
     private static IReadOnlyList<string> FindSharedChecklistPhases(WorkflowProfile profile,
         Dictionary<string, GateConfig> gates)
     {
-        var namedChecklists = new HashSet<string>(StringComparer.Ordinal);
+        var namedChecklists = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         return
         [

@@ -21,8 +21,9 @@ public enum GateEntryIgnoredReason
     FirstPhase,
 
     /// <summary>
-    /// The entry names the same checklist as the gate into an earlier phase of the workflow profile; only the
-    /// checklist of the entry is ignored, so the transition has no checklist, and its approval still applies.
+    /// The entry names the same checklist, compared without regard to case, as the gate into an earlier phase of the
+    /// workflow profile; only the checklist of the entry is ignored, so the transition has no checklist, and its
+    /// approval still applies.
     /// </summary>
     SharedChecklist
 }

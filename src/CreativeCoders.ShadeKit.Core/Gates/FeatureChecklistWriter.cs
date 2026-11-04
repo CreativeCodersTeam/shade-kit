@@ -66,8 +66,9 @@ public sealed class FeatureChecklistWriter : IFeatureChecklistWriter
     }
 
     // The copy is created only if it does not exist, so of two concurrent starts only one creates it and the other
-    // finds it. Every other I/O failure, for example a file in the place of a directory of the copy path, is reported
-    // as a store write failure; other exceptions, cancellation included, pass unchanged.
+    // finds it; the existing copy is caught first, because its exception is an I/O exception too. Every other I/O
+    // failure, for example a file in the place of a directory of the copy path, and missing permissions are reported as
+    // a store write failure; other exceptions, cancellation included, pass unchanged.
     private static async Task<FeatureChecklistCopyResult> WriteCopyAsync(IKitStore store, string copyPath,
         TextFileContent copy, CancellationToken cancellationToken)
     {
@@ -82,7 +83,7 @@ public sealed class FeatureChecklistWriter : IFeatureChecklistWriter
         {
             return new FeatureChecklistCopyResult(Created: false, Warnings: []);
         }
-        catch (IOException exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             throw new KitFileWriteFailedException(KitStorePaths.GetRepositoryPath(copyPath), exception);
         }

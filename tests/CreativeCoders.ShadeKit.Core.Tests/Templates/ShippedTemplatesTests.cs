@@ -1,4 +1,6 @@
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Core.Gates;
+using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Templates;
@@ -117,6 +119,29 @@ public class ShippedTemplatesTests
         // Assert
         repositoryPaths
             .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void All_EveryChecklistOfDefaultGates_HasShippedTemplateAtItsTemplatePath()
+    {
+        // Arrange
+        var checklists = GatesConfig.CreateDefault().Profiles!.Values
+            .SelectMany(gates => gates.Values)
+            .Select(gate => gate.Checklist)
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        // Act
+        var kitPaths = ShippedTemplates.All.Select(template => template.KitPath).ToList();
+
+        // Assert
+        checklists
+            .Should().NotBeEmpty();
+
+        checklists
+            .Should().AllSatisfy(checklist => kitPaths
+                .Should().Contain(KitStorePaths.GetTemplatePath(checklist)));
     }
 
     [Fact]

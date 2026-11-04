@@ -45,7 +45,7 @@ public interface ITextFileWriter
     /// </exception>
     /// <exception cref="FileAlreadyExistsException">
     /// <paramref name="mode" /> is <see cref="FileWriteMode.CreateNew" /> and <paramref name="file" /> exists; the
-    /// file is not changed.
+    /// file is not changed. The exception names the file by its path relative to the repository root.
     /// </exception>
     /// <exception cref="IOException">
     /// An I/O error occurred while the file was written, for example because a file exists in the place of one of its

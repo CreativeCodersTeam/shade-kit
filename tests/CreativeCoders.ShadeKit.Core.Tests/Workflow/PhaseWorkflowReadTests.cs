@@ -236,8 +236,8 @@ public sealed class PhaseWorkflowReadTests : IDisposable
         result.Warnings
             .Should().Equal(gatesFormatWarning, mismatchWarning, defaultsWarning);
 
-        A.CallTo(() => _context.GatesConfigReader.ReadAsync(store, A<CancellationToken>._))
-            .MustHaveHappened();
+        A.CallTo(() => _context.GateProvider.GetGatesAsync(store, A<WorkflowProfile>._, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
 
         _context.VerifyChecklistNotCopied();
 

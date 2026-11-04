@@ -233,7 +233,7 @@ public sealed class PhaseWorkflowStartTests : IDisposable
     }
 
     [Fact]
-    public async Task StartAsync_AnyRequest_AsksGateProviderForEveryPhaseOfProfile()
+    public async Task StartAsync_AnyRequest_AsksGateProviderOnceForProfileOfFeature()
     {
         // Arrange
         _context.WriteFeature(RefineInProgress);
@@ -244,13 +244,13 @@ public sealed class PhaseWorkflowStartTests : IDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        foreach (var phase in Feature.Phases)
-        {
-            A.CallTo(() => _context.GateProvider.GetGateAsync(store,
-                    A<WorkflowProfile>.That.Matches(x => x.Name == WorkflowProfileNames.Feature), phase.Name,
-                    A<CancellationToken>._))
-                .MustHaveHappenedOnceExactly();
-        }
+        A.CallTo(() => _context.GateProvider.GetGatesAsync(store,
+                A<WorkflowProfile>.That.Matches(x => x.Name == WorkflowProfileNames.Feature),
+                A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+
+        A.CallTo(_context.GateProvider)
+            .MustHaveHappenedOnceExactly();
     }
 
     [Fact]
@@ -689,7 +689,8 @@ public sealed class PhaseWorkflowStartTests : IDisposable
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task StartAsync_TransitionWithChecklist_PassesStoreAndTokenToReaderWriterAndIdentity(bool approval)
+    public async Task StartAsync_TransitionWithChecklist_PassesStoreAndTokenToGateProviderWriterAndIdentity(
+        bool approval)
     {
         // Arrange
         _context.WriteFeature(RefineInProgress);
@@ -702,7 +703,7 @@ public sealed class PhaseWorkflowStartTests : IDisposable
         await _context.CreateWorkflow().StartAsync(store, WorkflowPhaseNames.Map, token);
 
         // Assert
-        A.CallTo(() => _context.GatesConfigReader.ReadAsync(store, token))
+        A.CallTo(() => _context.GateProvider.GetGatesAsync(store, A<WorkflowProfile>._, token))
             .MustHaveHappenedOnceExactly();
 
         A.CallTo(() => _context.ChecklistWriter.EnsureCopyAsync(store, FeatureId, DefinitionOfReady, token))
@@ -710,25 +711,6 @@ public sealed class PhaseWorkflowStartTests : IDisposable
 
         A.CallTo(() => _context.GitRepositoryInfo.GetIdentityAsync(_context.RepositoryRootPath, token))
             .MustHaveHappenedOnceExactly();
-    }
-
-    [Fact]
-    public async Task StartAsync_AnyRequest_AsksGatesConfigReaderAfterEveryGateOfProvider()
-    {
-        // Arrange
-        _context.WriteFeature(RefineInProgress);
-        var store = _context.CreateStore();
-
-        // Act
-        await _context.CreateWorkflow().StartAsync(store, WorkflowPhaseNames.Refine,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        A.CallTo(() => _context.GateProvider.GetGateAsync(store, A<WorkflowProfile>._, WorkflowPhaseNames.Finish,
-                A<CancellationToken>._))
-            .MustHaveHappenedOnceExactly()
-            .Then(A.CallTo(() => _context.GatesConfigReader.ReadAsync(store, A<CancellationToken>._))
-                .MustHaveHappenedOnceExactly());
     }
 
     [Fact]

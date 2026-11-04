@@ -1,3 +1,4 @@
+using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Store;
 
 namespace CreativeCoders.ShadeKit.Core.Templates;
@@ -28,7 +29,9 @@ public static class ShippedTemplates
         new ShippedTemplate("playbook.template.md", TemplatesDir + "playbook.md"),
         new ShippedTemplate("report.template.md", TemplatesDir + "report.md"),
         new ShippedTemplate("diagnosis.template.md", TemplatesDir + "diagnosis.md"),
-        new ShippedTemplate("checks/definition-of-ready.template.md", TemplatesDir + "checks/definition-of-ready.md"),
-        new ShippedTemplate("checks/definition-of-done.template.md", TemplatesDir + "checks/definition-of-done.md")
+        new ShippedTemplate("checks/definition-of-ready.template.md",
+            KitStorePaths.GetTemplatePath(GatesConfig.DefinitionOfReadyChecklist)),
+        new ShippedTemplate("checks/definition-of-done.template.md",
+            KitStorePaths.GetTemplatePath(GatesConfig.DefinitionOfDoneChecklist))
     ];
 }

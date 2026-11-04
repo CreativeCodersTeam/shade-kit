@@ -21,8 +21,7 @@ namespace CreativeCoders.ShadeKit.Core.Tests.Workflow;
 /// <summary>
 /// Provides a temporary git repository with a <c>.shadekit</c> directory, a real <see cref="KitStore" />, and a
 /// <see cref="PhaseWorkflow" /> with the real engine and the built-in profiles; the resolver of the current feature,
-/// the git information, the gate provider, the gate configuration reader, and the checklist writer are faked, so no
-/// test starts <c>git</c>.
+/// the git information, the gate provider, and the checklist writer are faked, so no test starts <c>git</c>.
 /// </summary>
 internal sealed class PhaseWorkflowTestContext : IDisposable
 {
@@ -45,9 +44,12 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
     private static readonly TimeZoneInfo UtcPlusTwo =
         TimeZoneInfo.CreateCustomTimeZone("Test UTC+02", TimeSpan.FromHours(2), "Test UTC+02", "Test UTC+02");
 
-    // PhaseWorkflow takes the gates from the faked provider and only the warnings from the faked reader.
-    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, TransitionGate>>
-        EmptyGatesProfiles = new Dictionary<string, IReadOnlyDictionary<string, TransitionGate>>();
+    // The gates that SetGate configured by target phase; every other phase of a profile gets the default gate.
+    private readonly Dictionary<string, TransitionGate> _gates = new Dictionary<string, TransitionGate>(
+        StringComparer.Ordinal);
+
+    // The warnings of reading the gate configuration that the faked provider returns.
+    private KitWarning[] _gatesConfigWarnings = [];
 
     public PhaseWorkflowTestContext()
     {
@@ -57,11 +59,8 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
         SelectFeature(FeatureId);
         A.CallTo(() => GitRepositoryInfo.GetIdentityAsync(A<string>._, A<CancellationToken>._))
             .Returns(new GitIdentity(UserName, UserEmail));
-        A.CallTo(() => GateProvider.GetGateAsync(A<IKitStore>._, A<WorkflowProfile>._, A<string>._,
-                A<CancellationToken>._))
-            .Returns(TransitionGate.Default);
-        A.CallTo(() => GatesConfigReader.ReadAsync(A<IKitStore>._, A<CancellationToken>._))
-            .Returns(new GatesConfigReadResult(EmptyGatesProfiles, []));
+        A.CallTo(() => GateProvider.GetGatesAsync(A<IKitStore>._, A<WorkflowProfile>._, A<CancellationToken>._))
+            .ReturnsLazily((IKitStore _, WorkflowProfile profile, CancellationToken _) => CreateProfileGates(profile));
         A.CallTo(() => ChecklistWriter.EnsureCopyAsync(A<IKitStore>._, A<string>._, A<string>._,
                 A<CancellationToken>._))
             .Returns(new FeatureChecklistCopyResult(Created: true, Warnings: []));
@@ -78,8 +77,6 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
     public IGitRepositoryInfo GitRepositoryInfo { get; } = A.Fake<IGitRepositoryInfo>();
 
     public ITransitionGateProvider GateProvider { get; } = A.Fake<ITransitionGateProvider>();
-
-    public IGatesConfigReader GatesConfigReader { get; } = A.Fake<IGatesConfigReader>();
 
     /// <summary>
     /// Gets or sets the checklist writer of the workflows that <see cref="CreateWorkflow" /> creates; by default a
@@ -142,7 +139,7 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
     public PhaseWorkflow CreateWorkflow()
     {
         return new PhaseWorkflow(CurrentFeatureResolver, new BuiltInWorkflowProfileCatalog(), new PhaseEngine(),
-            GateProvider, GatesConfigReader, ChecklistWriter, GitRepositoryInfo, TimeProvider);
+            GateProvider, ChecklistWriter, GitRepositoryInfo, TimeProvider);
     }
 
     /// <summary>
@@ -156,11 +153,12 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
                 warnings));
     }
 
+    /// <summary>
+    /// Makes the faked gate provider return the specified gate for the transition into the specified phase.
+    /// </summary>
     public void SetGate(string targetPhase, TransitionGate gate)
     {
-        A.CallTo(() => GateProvider.GetGateAsync(A<IKitStore>._, A<WorkflowProfile>._, targetPhase,
-                A<CancellationToken>._))
-            .Returns(gate);
+        _gates[targetPhase] = gate;
     }
 
     /// <summary>
@@ -235,10 +233,12 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
         return [.. document.RootElement.GetProperty("phases").EnumerateObject().Select(x => x.Name)];
     }
 
+    /// <summary>
+    /// Makes the faked gate provider return the specified warnings of reading the gate configuration.
+    /// </summary>
     public void SetGatesConfigWarnings(params KitWarning[] warnings)
     {
-        A.CallTo(() => GatesConfigReader.ReadAsync(A<IKitStore>._, A<CancellationToken>._))
-            .Returns(new GatesConfigReadResult(EmptyGatesProfiles, warnings));
+        _gatesConfigWarnings = warnings;
     }
 
     public void VerifyChecklistNotCopied()
@@ -252,6 +252,14 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
     {
         A.CallTo(() => GitRepositoryInfo.GetIdentityAsync(A<string>._, A<CancellationToken>._))
             .MustNotHaveHappened();
+    }
+
+    private WorkflowProfileGates CreateProfileGates(WorkflowProfile profile)
+    {
+        var gates = profile.Phases.ToDictionary(phase => phase.Name,
+            phase => _gates.GetValueOrDefault(phase.Name, TransitionGate.Default), StringComparer.Ordinal);
+
+        return new WorkflowProfileGates(gates, _gatesConfigWarnings);
     }
 
     public void SetIdentityMissing()

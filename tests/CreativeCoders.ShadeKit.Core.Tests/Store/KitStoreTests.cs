@@ -766,12 +766,13 @@ public class KitStoreTests
     }
 
     [Fact]
-    public async Task WriteFileAsync_CreateNewAndFileExists_ThrowsFileAlreadyExistsExceptionAndKeepsFile()
+    public async Task WriteFileAsync_CreateNewAndFileExists_ThrowsFileAlreadyExistsExceptionNamingRepositoryPath()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
-        tempDirectory.WriteFile("# Filled\n", "features", "login", "checks", "ready.md");
-        var kitStore = CreateStore(tempDirectory.RootPath);
+        var kitStorePath = tempDirectory.CreateDirectory(".shadekit");
+        tempDirectory.WriteFile("# Filled\n", ".shadekit", "features", "login", "checks", "ready.md");
+        var kitStore = CreateStore(kitStorePath);
 
         // Act
         var act = () => kitStore.WriteFileAsync("features/login/checks/ready.md", TextFileContent.FromText("new\n"),
@@ -779,9 +780,9 @@ public class KitStoreTests
 
         // Assert
         (await act.Should().ThrowAsync<FileAlreadyExistsException>())
-            .Which.Path.Should().Be(kitStore.GetFullPath("features/login/checks/ready.md"));
+            .Which.Path.Should().Be(".shadekit/features/login/checks/ready.md");
 
-        tempDirectory.ReadFileText("features", "login", "checks", "ready.md")
+        tempDirectory.ReadFileText(".shadekit", "features", "login", "checks", "ready.md")
             .Should().Be("# Filled\n");
     }
 

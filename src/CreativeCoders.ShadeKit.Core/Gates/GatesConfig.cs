@@ -159,8 +159,8 @@ public sealed class GatesConfig : VersionedDocument, IJsonOnDeserializing, IJson
             throw new JsonException(
                 $"The checklist '{ToPrintable(checklist)}' of the gate '{phaseName}' of the profile '{profileName}' " +
                 $"must be a relative path with '/' separators that starts with '{ChecklistDirectory}' and ends with " +
-                $"'{ChecklistExtension}' after a file name, without '\\', ':', control characters, and empty, '.', " +
-                "or '..' segments.");
+                $"'{ChecklistExtension}' after a file name, without '\\', ':', control characters, empty segments, " +
+                "and segments that end with '.' or a space, such as '.' or '..'.");
         }
     }
 
@@ -171,11 +171,14 @@ public sealed class GatesConfig : VersionedDocument, IJsonOnDeserializing, IJson
     /// <returns>
     /// <see langword="true" /> if <paramref name="checklist" /> is a relative path with <c>/</c> separators that
     /// starts with <c>checks/</c>, ends with <c>.md</c> after a file name, and has no <c>\</c>, no <c>:</c>, no
-    /// control characters, and no empty, <c>.</c>, or <c>..</c> segments; otherwise, <see langword="false" />.
+    /// control characters, no empty segments, and no segments that end with <c>.</c> or a space, such as <c>.</c> or
+    /// <c>..</c>; otherwise, <see langword="false" />.
     /// </returns>
     /// <remarks>
     /// A <c>:</c> would name an alternate data stream on Windows, for example <c>checks/x.md:hidden.md</c>; a control
-    /// character could reach the terminal through the output of the commands.
+    /// character could reach the terminal through the output of the commands. Windows drops a trailing <c>.</c> or
+    /// space of a segment, so <c>checks/a./x.md</c> and <c>checks/a/x.md</c> would name the same file there; the rule
+    /// applies on every operating system, so a <c>gates.json</c> is valid or invalid on every client alike.
     /// </remarks>
     internal static bool IsValidChecklistPath(string checklist)
     {
@@ -190,8 +193,9 @@ public sealed class GatesConfig : VersionedDocument, IJsonOnDeserializing, IJson
 
         var segments = checklist.Split('/');
 
-        // The file name needs a name in front of the extension; ".md" alone names no checklist.
-        return segments.All(segment => segment is not ("" or "." or ".."))
+        // A segment that ends with '.' or a space covers "." and ".."; the file name needs a name in front of the
+        // extension, because ".md" alone names no checklist.
+        return segments.All(segment => segment.Length > 0 && !segment.EndsWith('.') && !segment.EndsWith(' '))
                && segments[^1] != ChecklistExtension;
     }
 

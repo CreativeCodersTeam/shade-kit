@@ -323,6 +323,39 @@ public sealed class GatesConfigReaderTests : IDisposable
             .Should().Be(new TransitionGate(Approval: false, Checklist: null));
     }
 
+    [Theory]
+    [InlineData("checks/security.md", "checks/Security.md")]
+    [InlineData("checks/team/dor.md", "checks/TEAM/DoR.md")]
+    public async Task ReadAsync_TwoGatesNameChecklistInOtherCase_WarnsLaterGateAsSharedChecklist(
+        string earlierChecklist, string laterChecklist)
+    {
+        // Arrange
+        WriteGatesWithProfiles(
+            $$"""
+            {
+              "feature": {
+                "implement": { "checklist": "{{earlierChecklist}}" },
+                "finish": { "checklist": "{{laterChecklist}}" }
+              }
+            }
+            """);
+        var reader = CreateReader();
+
+        // Act
+        var result = await reader.ReadAsync(CreateStore(), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(new GateEntryIgnoredWarning(WorkflowProfileNames.Feature, WorkflowPhaseNames.Finish,
+                GateEntryIgnoredReason.SharedChecklist));
+
+        result.Profiles[WorkflowProfileNames.Feature][WorkflowPhaseNames.Implement]
+            .Should().Be(new TransitionGate(Approval: true, Checklist: earlierChecklist));
+
+        result.Profiles[WorkflowProfileNames.Feature][WorkflowPhaseNames.Finish]
+            .Should().Be(new TransitionGate(Approval: true, Checklist: null));
+    }
+
     [Fact]
     public async Task ReadAsync_SharedChecklistInOtherFileOrder_GateIntoEarliestPhaseKeepsChecklist()
     {
@@ -390,7 +423,6 @@ public sealed class GatesConfigReaderTests : IDisposable
     }
 
     [Theory]
-    [InlineData("""{ "feature": { "plan": { "checklist": "checks/a.md" }, "finish": { "checklist": "checks/A.md" } } }""")]
     [InlineData("""{ "feature": { "plan": { "checklist": "checks/a.md" } }, "bugfix": { "plan": { "checklist": "checks/a.md" } } }""")]
     [InlineData("""{ "feature": { "plan": { "checklist": "checks/a.md" }, "finish": { "checklist": "checks/team/a.md" } } }""")]
     public async Task ReadAsync_ChecklistsDifferOrBelongToOtherProfiles_ReturnsNoSharedChecklistWarning(
@@ -507,8 +539,9 @@ public sealed class GatesConfigReaderTests : IDisposable
         second.Warnings
             .Should().Equal(new GateEntryIgnoredWarning("release", null, GateEntryIgnoredReason.UnknownProfile));
 
+        // The shared read is not tied to the token of the call that starts it.
         A.CallTo(() => store.ReadJsonAsync<GatesConfig>(KitStorePaths.GatesFileName, FormatIds.Gates,
-                FormatAccess.Read, cancellationToken))
+                FormatAccess.Read, CancellationToken.None))
             .MustHaveHappenedOnceExactly();
 
         A.CallTo(store)
@@ -748,6 +781,42 @@ public sealed class GatesConfigReaderTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadAsync_StartingCallCanceled_ThrowsForThatCallAndJoiningCallGetsResult()
+    {
+        // Arrange
+        var store = A.Fake<IKitStore>();
+        var pendingRead = new TaskCompletionSource<VersionedReadResult<GatesConfig>?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        A.CallTo(() => store.ReadJsonAsync<GatesConfig>(A<string>._, A<string>._, A<FormatAccess>._,
+                A<CancellationToken>._))
+            .Returns(pendingRead.Task);
+        var reader = CreateReader();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var startCancellation = new CancellationTokenSource();
+
+        // Act
+        var startingRead = reader.ReadAsync(store, startCancellation.Token);
+        var joiningRead = reader.ReadAsync(store, cancellationToken);
+        await startCancellation.CancelAsync();
+        var startingAct = () => startingRead;
+        await startingAct.Should().ThrowAsync<OperationCanceledException>();
+        pendingRead.SetResult(null);
+        var joined = await joiningRead;
+        var later = await reader.ReadAsync(store, cancellationToken);
+
+        // Assert
+        joined.Warnings
+            .Should().Equal(new GatesDefaultsUsedWarning(IsFileMissing: true));
+
+        later
+            .Should().BeSameAs(joined);
+
+        A.CallTo(() => store.ReadJsonAsync<GatesConfig>(KitStorePaths.GatesFileName, FormatIds.Gates,
+                FormatAccess.Read, CancellationToken.None))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
     public async Task ReadAsync_CachedResultWithCanceledToken_ThrowsOperationCanceledException()
     {
         // Arrange
@@ -881,38 +950,6 @@ public sealed class GatesConfigReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task ReadAsync_StartingCallCanceledWhileOtherWaits_CancelsBothAndNextCallReadsAgain()
-    {
-        // Arrange
-        var store = A.Fake<IKitStore>();
-        A.CallTo(() => store.ReadJsonAsync<GatesConfig>(A<string>._, A<string>._, A<FormatAccess>._,
-                A<CancellationToken>._))
-            .ReturnsLazily(call => WaitForCancellationAsync(call.GetArgument<CancellationToken>(3))).Once()
-            .Then.Returns(Task.FromResult<VersionedReadResult<GatesConfig>?>(null));
-        var reader = CreateReader();
-        var cancellationToken = TestContext.Current.CancellationToken;
-        using var startingCancellation = new CancellationTokenSource();
-
-        // Act
-        var startingRead = reader.ReadAsync(store, startingCancellation.Token);
-        var waitingRead = reader.ReadAsync(store, cancellationToken);
-        await startingCancellation.CancelAsync();
-        var startingAct = () => startingRead;
-        var waitingAct = () => waitingRead;
-        await startingAct.Should().ThrowAsync<OperationCanceledException>();
-        await waitingAct.Should().ThrowAsync<OperationCanceledException>();
-        var later = await reader.ReadAsync(store, cancellationToken);
-
-        // Assert
-        later.Warnings
-            .Should().Equal(new GatesDefaultsUsedWarning(IsFileMissing: true));
-
-        A.CallTo(store)
-            .Where(call => call.Method.Name == nameof(IKitStore.ReadJsonAsync))
-            .MustHaveHappenedTwiceExactly();
-    }
-
-    [Fact]
     public async Task ReadAsync_StartingCallCanceledButReadCompletes_LaterCallReturnsCompletedResult()
     {
         // Arrange
@@ -954,14 +991,6 @@ public sealed class GatesConfigReaderTests : IDisposable
     private static GatesConfigReader CreateReader()
     {
         return new GatesConfigReader(new BuiltInWorkflowProfileCatalog());
-    }
-
-    private static async Task<VersionedReadResult<GatesConfig>?> WaitForCancellationAsync(
-        CancellationToken cancellationToken)
-    {
-        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-
-        return null;
     }
 
     // Bounded on its own, so a read that never starts fails the test instead of hanging until the test token is

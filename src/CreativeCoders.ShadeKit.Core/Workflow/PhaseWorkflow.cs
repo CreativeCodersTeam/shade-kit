@@ -17,10 +17,9 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 /// <param name="currentFeatureResolver">The resolver of the current feature.</param>
 /// <param name="workflowProfileCatalog">The catalog that the workflow profile of the feature must be known to.</param>
 /// <param name="phaseEngine">The engine that decides the transitions.</param>
-/// <param name="transitionGateProvider">The provider of the gates of the transitions.</param>
-/// <param name="gatesConfigReader">
-/// The reader of the gate configuration, whose warnings the results of <see cref="StartAsync" /> and
-/// <see cref="GetNextAsync" /> report.
+/// <param name="transitionGateProvider">
+/// The provider of the gates of the transitions and of the warnings of reading the gate configuration, which the
+/// results of <see cref="StartAsync" /> and <see cref="GetNextAsync" /> report.
 /// </param>
 /// <param name="featureChecklistWriter">
 /// The writer that copies the checklist of a gate into the feature folder when <see cref="StartAsync" /> requests,
@@ -33,7 +32,6 @@ public sealed class PhaseWorkflow(
     IWorkflowProfileCatalog workflowProfileCatalog,
     IPhaseEngine phaseEngine,
     ITransitionGateProvider transitionGateProvider,
-    IGatesConfigReader gatesConfigReader,
     IFeatureChecklistWriter featureChecklistWriter,
     IGitRepositoryInfo gitRepositoryInfo,
     TimeProvider timeProvider)
@@ -46,8 +44,6 @@ public sealed class PhaseWorkflow(
     private readonly IPhaseEngine _phaseEngine = Ensure.NotNull(phaseEngine);
 
     private readonly ITransitionGateProvider _transitionGateProvider = Ensure.NotNull(transitionGateProvider);
-
-    private readonly IGatesConfigReader _gatesConfigReader = Ensure.NotNull(gatesConfigReader);
 
     private readonly IFeatureChecklistWriter _featureChecklistWriter = Ensure.NotNull(featureChecklistWriter);
 
@@ -63,7 +59,8 @@ public sealed class PhaseWorkflow(
         Ensure.NotNull(phase);
 
         var feature = await LoadAsync(store, FormatAccess.Write, cancellationToken).ConfigureAwait(false);
-        var gates = await GetGatesAsync(store, feature.State.Profile, cancellationToken).ConfigureAwait(false);
+        var gates = await _transitionGateProvider.GetGatesAsync(store, feature.State.Profile, cancellationToken)
+            .ConfigureAwait(false);
 
         var decision = _phaseEngine.Start(feature.State, phase, gates.Gates);
 
@@ -180,7 +177,8 @@ public sealed class PhaseWorkflow(
         Ensure.NotNull(store);
 
         var feature = await LoadAsync(store, FormatAccess.Read, cancellationToken).ConfigureAwait(false);
-        var gates = await GetGatesAsync(store, feature.State.Profile, cancellationToken).ConfigureAwait(false);
+        var gates = await _transitionGateProvider.GetGatesAsync(store, feature.State.Profile, cancellationToken)
+            .ConfigureAwait(false);
 
         var next = _phaseEngine.GetNext(feature.State, gates.Gates);
 
@@ -216,25 +214,6 @@ public sealed class PhaseWorkflow(
             .. resolution.Warnings, .. readResult.Warnings,
             .. KitStoreFeatureExtensions.CheckFeatureId(featureId, document)
         ]);
-    }
-
-    // Gets the gate of every phase of the profile and the warnings of reading the gate configuration. The reader caches
-    // its result per store, so asking it after the provider reads gates.json no second time.
-    private async Task<ProfileGates> GetGatesAsync(IKitStore store, WorkflowProfile profile,
-        CancellationToken cancellationToken)
-    {
-        var gates = new Dictionary<string, TransitionGate>(StringComparer.Ordinal);
-
-        foreach (var phaseName in profile.Phases.Select(x => x.Name))
-        {
-            gates[phaseName] = await _transitionGateProvider
-                .GetGateAsync(store, profile, phaseName, cancellationToken)
-                .ConfigureAwait(false);
-        }
-
-        var readResult = await _gatesConfigReader.ReadAsync(store, cancellationToken).ConfigureAwait(false);
-
-        return new ProfileGates(gates, readResult.Warnings);
     }
 
     // Makes sure that the feature folder contains the copy of the checklist of the decided gate. Only a requested,
@@ -299,8 +278,4 @@ public sealed class PhaseWorkflow(
             return KitWarningOrder.Arrange([.. Warnings, .. writeWarnings]);
         }
     }
-
-    // The gates of the phases of a profile by target phase, and the warnings of reading the gate configuration.
-    private sealed record ProfileGates(IReadOnlyDictionary<string, TransitionGate> Gates,
-        IReadOnlyList<KitWarning> Warnings);
 }

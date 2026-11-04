@@ -108,7 +108,13 @@ public class GatesConfigTests
         "checks/x\t.md",
         "checks/x\n.md",
         "checks/x\u007f.md",
-        "checks/x\u0085.md"
+        "checks/x\u0085.md",
+        "checks/a./x.md",
+        "checks/a /x.md",
+        "checks/team.../x.md",
+        "checks/team/sub /x.md",
+        "checks/x.md.",
+        "checks/x.md "
     };
 
     [Fact]
@@ -388,6 +394,10 @@ public class GatesConfigTests
     [InlineData("checks/verify.md")]
     [InlineData("checks/team/security.md")]
     [InlineData("checks/x.md")]
+    [InlineData("checks/team.v2/security.md")]
+    [InlineData("checks/my team/security.md")]
+    [InlineData("checks/.team/security.md")]
+    [InlineData("checks/x .md")]
     public void Deserialize_ValidChecklist_KeepsChecklist(string checklist)
     {
         // Act
@@ -428,6 +438,25 @@ public class GatesConfigTests
             .Should().Contain(@"'checks/x\u001b]0;t\u0007.md'")
             .And.NotContain("\u001b")
             .And.NotContain("\u0007");
+    }
+
+    [Theory]
+    [InlineData("checks/team./x.md")]
+    [InlineData("checks/team /x.md")]
+    public void Deserialize_ChecklistSegmentEndsWithDotOrSpace_ThrowsInvalidKitFileExceptionNamingRule(
+        string checklist)
+    {
+        // Arrange
+        var profiles = $$"""{ "feature": { "plan": { "checklist": {{JsonSerializer.Serialize(checklist)}} } } }""";
+
+        // Act
+        var act = () => Deserialize(profiles);
+
+        // Assert
+        act.Should().Throw<InvalidKitFileException>()
+            .Which.Message
+            .Should().Contain($"'{checklist}'")
+            .And.Contain("segments that end with '.' or a space");
     }
 
     [Theory]

@@ -23,7 +23,8 @@ public interface IGatesConfigReader
     /// </para>
     /// <para>
     /// Of the gates into the phases after the first one of a known profile that name the same checklist (compared
-    /// ordinally), the gate into the earliest phase of the profile keeps it. Every later one gets a
+    /// without regard to case on every operating system, because a file system that ignores case stores both
+    /// spellings as one file), the gate into the earliest phase of the profile keeps it. Every later one gets a
     /// <see cref="GateEntryIgnoredWarning" /> with <see cref="GateEntryIgnoredReason.SharedChecklist" />, after the
     /// other warnings of its profile and in phase order, and has no checklist in the result; its approval still
     /// applies. So two gates never share one filled copy in a feature folder. The file stays valid.
@@ -32,8 +33,9 @@ public interface IGatesConfigReader
     /// The result is cached per store instance: a later call with the same store returns the same result, warnings
     /// included, without reading the file again, and a call with another store instance reads the file again. The
     /// result is a read-only view, so no caller can change the cached configuration. Calls that run while a read of
-    /// the same store is in progress share that read and its outcome; the read runs with the cancellation token of
-    /// the call that started it. A failed or canceled read is not cached, so a call after it reads the file again.
+    /// the same store is in progress share that read and its outcome. The shared read is not tied to the cancellation
+    /// token of any call: a canceled call stops only its own wait, and the other calls still get the result. A failed
+    /// read is not cached, so a call after it reads the file again.
     /// </para>
     /// </remarks>
     /// <param name="store">The store whose <c>gates.json</c> is read.</param>

@@ -5,8 +5,8 @@ using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 namespace CreativeCoders.ShadeKit.Core.Workflow;
 
 /// <summary>
-/// Provides the gate of a transition into a target phase: whether a human must approve the transition and which
-/// checklist the agent checks before it asks.
+/// Provides the gates of the transitions into the phases of a workflow profile: whether a human must approve a
+/// transition and which checklist the agent checks before it asks.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -22,20 +22,20 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 public interface ITransitionGateProvider
 {
     /// <summary>
-    /// Gets the gate of the transition into the specified phase of a workflow profile.
+    /// Gets the gates of the transitions into every phase of a workflow profile and the warnings of reading the gate
+    /// configuration.
     /// </summary>
     /// <param name="store">The SHADE kit store whose gate configuration applies.</param>
     /// <param name="profile">The workflow profile of the feature.</param>
-    /// <param name="targetPhase">The name of the phase the transition leads into.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous read operation. The task result contains the gate of the transition
-    /// into <paramref name="targetPhase" />.
+    /// into each phase of <paramref name="profile" />, keyed by the name of the target phase, and the warnings of
+    /// reading the gate configuration.
     /// </returns>
     /// <exception cref="ArgumentNullException">
-    /// <paramref name="store" />, <paramref name="profile" />, or <paramref name="targetPhase" /> is
-    /// <see langword="null" />.
+    /// <paramref name="store" /> or <paramref name="profile" /> is <see langword="null" />.
     /// </exception>
-    Task<TransitionGate> GetGateAsync(IKitStore store, WorkflowProfile profile, string targetPhase,
+    Task<WorkflowProfileGates> GetGatesAsync(IKitStore store, WorkflowProfile profile,
         CancellationToken cancellationToken = default);
 }
