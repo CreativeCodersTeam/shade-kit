@@ -824,8 +824,12 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         startRefine.Root.GetProperty("data").GetProperty("gate").ShouldBeJson(
             """{ "phase": "refine", "approval": true, "checklist": "checks/refine.md" }""");
 
+        // The copy is written with the resolved line ending; with the git fake and no .editorconfig in the
+        // repository that is the line ending of the operating system.
+        var newLine = Environment.NewLine;
+
         (await File.ReadAllTextAsync(GetFeaturePath("checks", "refine.md"), TestContext.Current.CancellationToken))
-            .Should().Be($"# Refine check: {FeatureId}\n\n- [ ] Request understood\n");
+            .Should().Be($"# Refine check: {FeatureId}{newLine}{newLine}- [ ] Request understood{newLine}");
     }
 
     [Fact]
