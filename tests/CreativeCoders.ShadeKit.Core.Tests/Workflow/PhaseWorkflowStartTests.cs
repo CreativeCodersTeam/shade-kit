@@ -53,7 +53,7 @@ public sealed class PhaseWorkflowStartTests : IDisposable
                 PhaseStartOutcome.TransitionRequested,
                 new PhaseTransition(PhaseTransitionKind.Forward, WorkflowPhaseNames.Refine, WorkflowPhaseNames.Map),
                 new PhaseSnapshot(WorkflowPhaseNames.Refine, PhaseState.AwaitingApproval),
-                new PhaseGate(WorkflowPhaseNames.Map, TransitionGate.Default),
+                new PhaseGate(WorkflowPhaseNames.Map, TransitionGate.Default), null,
                 new PhaseSkills("shade-kit-map", ["shade-kit-research"]), []));
     }
 
@@ -412,9 +412,34 @@ public sealed class PhaseWorkflowStartTests : IDisposable
         result.Gate
             .Should().Be(new PhaseGate(WorkflowPhaseNames.Map, new TransitionGate(true, DefinitionOfReady)));
 
+        result.ChecklistCreated
+            .Should().BeTrue();
+
         A.CallTo(() => _context.ChecklistWriter.EnsureCopyAsync(store, FeatureId, DefinitionOfReady,
                 A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task StartAsync_TransitionRequestedWithExistingChecklistCopy_ReturnsChecklistNotCreated()
+    {
+        // Arrange
+        _context.WriteFeature(RefineInProgress);
+        _context.SetGate(WorkflowPhaseNames.Map, new TransitionGate(true, DefinitionOfReady));
+        A.CallTo(() => _context.ChecklistWriter.EnsureCopyAsync(A<IKitStore>._, A<string>._, A<string>._,
+                A<CancellationToken>._))
+            .Returns(new FeatureChecklistCopyResult(Created: false, Warnings: []));
+
+        // Act
+        var result = await _context.CreateWorkflow().StartAsync(_context.CreateStore(), WorkflowPhaseNames.Map,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Outcome
+            .Should().Be(PhaseStartOutcome.TransitionRequested);
+
+        result.ChecklistCreated
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -469,6 +494,9 @@ public sealed class PhaseWorkflowStartTests : IDisposable
         result.Outcome
             .Should().Be(PhaseStartOutcome.TransitionPending);
 
+        result.ChecklistCreated
+            .Should().BeTrue();
+
         A.CallTo(() => _context.ChecklistWriter.EnsureCopyAsync(A<IKitStore>._, FeatureId, DefinitionOfReady,
                 A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
@@ -497,6 +525,9 @@ public sealed class PhaseWorkflowStartTests : IDisposable
         result.Gate
             .Should().Be(new PhaseGate(WorkflowPhaseNames.Map, new TransitionGate(approval, null)));
 
+        result.ChecklistCreated
+            .Should().BeNull();
+
         _context.VerifyChecklistNotCopied();
     }
 
@@ -515,6 +546,9 @@ public sealed class PhaseWorkflowStartTests : IDisposable
         // Assert
         result.Transition!.Kind
             .Should().Be(PhaseTransitionKind.Reopen);
+
+        result.ChecklistCreated
+            .Should().BeNull();
 
         _context.VerifyChecklistNotCopied();
     }
@@ -537,6 +571,9 @@ public sealed class PhaseWorkflowStartTests : IDisposable
 
         result.Gate
             .Should().Be(new PhaseGate(WorkflowPhaseNames.Map, TransitionGate.Default));
+
+        result.ChecklistCreated
+            .Should().BeNull();
 
         _context.VerifyChecklistNotCopied();
     }
@@ -561,6 +598,9 @@ public sealed class PhaseWorkflowStartTests : IDisposable
         // Assert
         result.Outcome
             .Should().Be(expectedOutcome);
+
+        result.ChecklistCreated
+            .Should().BeNull();
 
         _context.VerifyChecklistNotCopied();
     }

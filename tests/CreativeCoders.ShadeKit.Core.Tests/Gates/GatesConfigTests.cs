@@ -5,6 +5,7 @@ using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Templates;
+using CreativeCoders.ShadeKit.Tests.Shared;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Gates;
 
@@ -589,8 +590,7 @@ public class GatesConfigTests
 
     private static GatesConfig Deserialize(string profiles)
     {
-        return Serializer.Deserialize<GatesConfig>(
-            $$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "profiles": {{profiles}} }""", FormatIds.Gates,
-            FilePath, false).Document;
+        return Serializer.Deserialize<GatesConfig>(TestGatesJson.WithProfiles(profiles), FormatIds.Gates, FilePath,
+            false).Document;
     }
 }

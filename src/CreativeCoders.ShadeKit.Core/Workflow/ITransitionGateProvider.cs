@@ -22,16 +22,17 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 public interface ITransitionGateProvider
 {
     /// <summary>
-    /// Gets the gates of the transitions into every phase of a workflow profile and the warnings of reading the gate
-    /// configuration.
+    /// Gets the configured gates of the transitions into the phases of a workflow profile and the warnings of reading
+    /// the gate configuration.
     /// </summary>
     /// <param name="store">The SHADE kit store whose gate configuration applies.</param>
     /// <param name="profile">The workflow profile of the feature.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
-    /// A task that represents the asynchronous read operation. The task result contains the gate of the transition
-    /// into each phase of <paramref name="profile" />, keyed by the name of the target phase, and the warnings of
-    /// reading the gate configuration.
+    /// A task that represents the asynchronous read operation. The task result contains the configured gates of the
+    /// transitions into the phases of <paramref name="profile" />, keyed by the name of the target phase, and the
+    /// warnings of reading the gate configuration. A phase without an entry gets <see cref="TransitionGate.Default" />
+    /// from the <see cref="IPhaseEngine" />.
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="store" /> or <paramref name="profile" /> is <see langword="null" />.

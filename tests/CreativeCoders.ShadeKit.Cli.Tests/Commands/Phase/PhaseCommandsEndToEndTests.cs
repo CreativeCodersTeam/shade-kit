@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using CreativeCoders.ShadeKit.Cli.Tests.Commands.Feature;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Trackers;
@@ -98,7 +99,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
               "featureId": "gh-142-login-sso", "profile": "quick", "outcome": "transition-performed",
               "transition": { "kind": "forward", "from": "new", "to": "quick" },
               "currentPhase": { "name": "quick", "state": "in-progress" },
-              "gate": { "phase": "quick", "approval": false, "checklist": null },
+              "gate": { "phase": "quick", "approval": false, "checklist": null, "checklistCreated": null },
               "skills": { "phaseSkill": "shade-kit-quick", "generalSkills": ["shade-kit-interview", "shade-kit-review"] }
             }
             """);
@@ -109,7 +110,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
               "featureId": "gh-142-login-sso", "profile": "quick", "outcome": "transition-requested",
               "transition": { "kind": "forward", "from": "quick", "to": "finish" },
               "currentPhase": { "name": "quick", "state": "awaiting-approval" },
-              "gate": { "phase": "finish", "approval": true, "checklist": "checks/definition-of-done.md" },
+              "gate": { "phase": "finish", "approval": true, "checklist": "checks/definition-of-done.md",
+                        "checklistCreated": true },
               "skills": { "phaseSkill": "shade-kit-finish", "generalSkills": ["shade-kit-report"] }
             }
             """);
@@ -270,7 +272,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
               "featureId": "gh-142-login-sso", "profile": "feature", "outcome": "transition-requested",
               "transition": { "kind": "reopen", "from": "map", "to": "refine" },
               "currentPhase": { "name": "map", "state": "awaiting-approval" },
-              "gate": { "phase": "refine", "approval": true, "checklist": null },
+              "gate": { "phase": "refine", "approval": true, "checklist": null, "checklistCreated": null },
               "skills": { "phaseSkill": "shade-kit-refine",
                           "generalSkills": ["shade-kit-interview", "shade-kit-research"] }
             }
@@ -666,7 +668,9 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
             .Should().Be(0);
 
         startPlan.Root.GetProperty("data").GetProperty("gate").ShouldBeJson(
-            """{ "phase": "plan", "approval": true, "checklist": "checks/definition-of-ready.md" }""");
+            """
+            { "phase": "plan", "approval": true, "checklist": "checks/definition-of-ready.md", "checklistCreated": true }
+            """);
 
         var template = await File.ReadAllTextAsync(GetKitPath("templates", "checks", "definition-of-ready.md"),
             TestContext.Current.CancellationToken);
@@ -677,6 +681,36 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
             .Should().StartWith($"# Definition of Ready: {FeatureId}")
             .And.NotContain("{{feature-id}}")
             .And.Be(template.Replace("{{feature-id}}", FeatureId, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlainMode_StartPlanTwice_WritesChecklistCopyCreatedThenAlreadyExistsAfterGateLine()
+    {
+        // Arrange
+        await InitAsync();
+        await CreateFeatureAsync("feature");
+        await RunAllOkAsync(StartAndApproveRefineAndMap);
+
+        // Act
+        var first = await RunAsync("phase", "start", "plan");
+        var second = await RunAsync("phase", "start", "plan");
+
+        // Assert
+        new[] { first.ExitCode, second.ExitCode }
+            .Should().AllBeEquivalentTo(0);
+
+        GetLines(first.Output)
+            .Should().ContainInConsecutiveOrder(
+                "Gate: plan (approval: required, checklist: checks/definition-of-ready.md)",
+                "Checklist copy: created");
+
+        GetLines(second.Output)
+            .Should().ContainInConsecutiveOrder(
+                "Outcome: transition-pending",
+                "Transition: map -> plan (forward)",
+                "Current phase: map (awaiting-approval)",
+                "Gate: plan (approval: required, checklist: checks/definition-of-ready.md)",
+                "Checklist copy: already exists");
     }
 
     [Fact]
@@ -708,8 +742,14 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         startPlanAgain.Root.GetProperty("data").GetProperty("gate").GetProperty("checklist").GetString()
             .Should().Be("checks/definition-of-ready.md");
 
+        startPlanAgain.Root.GetProperty("data").GetProperty("gate").GetProperty("checklistCreated").GetBoolean()
+            .Should().BeFalse("the filled copy already exists");
+
         startPlanRepeated.Root.GetProperty("data").GetProperty("outcome").GetString()
             .Should().Be("transition-pending");
+
+        startPlanRepeated.Root.GetProperty("data").GetProperty("gate").GetProperty("checklistCreated").GetBoolean()
+            .Should().BeFalse("the filled copy already exists");
 
         (await File.ReadAllBytesAsync(copyPath, TestContext.Current.CancellationToken))
             .Should().Equal(filledBytes);
@@ -738,7 +778,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
 
         data.GetProperty("currentPhase").ShouldBeJson("""{ "name": "refine", "state": "in-progress" }""");
 
-        data.GetProperty("gate").ShouldBeJson("""{ "phase": "refine", "approval": false, "checklist": null }""");
+        data.GetProperty("gate").ShouldBeJson(
+            """{ "phase": "refine", "approval": false, "checklist": null, "checklistCreated": null }""");
 
         using var featureFile = await ReadFeatureFileAsync();
 
@@ -768,7 +809,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
             .Should().Be(0);
 
         startMap.Root.GetProperty("data").GetProperty("gate").ShouldBeJson(
-            """{ "phase": "map", "approval": true, "checklist": null }""");
+            """{ "phase": "map", "approval": true, "checklist": null, "checklistCreated": null }""");
 
         var checksPath = GetFeaturePath("checks");
 
@@ -799,7 +840,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
 
         data.GetProperty("currentPhase").ShouldBeJson("""{ "name": "new", "state": "awaiting-approval" }""");
 
-        data.GetProperty("gate").ShouldBeJson("""{ "phase": "refine", "approval": true, "checklist": null }""");
+        data.GetProperty("gate").ShouldBeJson(
+            """{ "phase": "refine", "approval": true, "checklist": null, "checklistCreated": null }""");
     }
 
     [Fact]
@@ -822,7 +864,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
             .Should().Be(0);
 
         startRefine.Root.GetProperty("data").GetProperty("gate").ShouldBeJson(
-            """{ "phase": "refine", "approval": true, "checklist": "checks/refine.md" }""");
+            """{ "phase": "refine", "approval": true, "checklist": "checks/refine.md", "checklistCreated": true }""");
 
         // The copy is written with the resolved line ending; with the git fake and no .editorconfig in the
         // repository that is the line ending of the operating system.
@@ -901,7 +943,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         startMap.ExitCode
             .Should().Be(0);
 
-        GetWarningCodes(startMap.Root)
+        FeatureCommandTestHelper.GetWarningCodes(startMap.Root)
             .Should().Contain("gate-entry-ignored");
 
         startMap.Root.GetProperty("data").GetProperty("gate").GetProperty("checklist").ValueKind
@@ -913,8 +955,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     {
         // Arrange
         await InitAsync();
-        await File.WriteAllTextAsync(GetKitPath("gates.json"),
-            """{ "schemaVersion": 1, "minEngineVersion": "0.1.0" }""", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(GetKitPath("gates.json"), TestGatesJson.HeaderOnly,
+            TestContext.Current.CancellationToken);
         await CreateFeatureAsync("feature");
         await RunAllOkAsync(StartAndApproveRefineAndMap);
 
@@ -928,10 +970,10 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
 
         // The fake git fails `git check-attr`, so the two writes (the copy and feature.json) report the attributes
         // warning, once, after the warning of reading gates.json.
-        GetWarningCodes(startPlan.Root)
+        FeatureCommandTestHelper.GetWarningCodes(startPlan.Root)
             .Should().Equal("gates-defaults-used", "git-attributes-unavailable");
 
-        GetWarningCodes(next.Root)
+        FeatureCommandTestHelper.GetWarningCodes(next.Root)
             .Should().Equal("gates-defaults-used");
 
         startPlan.Root.GetProperty("data").GetProperty("gate").GetProperty("checklist").GetString()
@@ -953,19 +995,13 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         ["phase", "start", "map"], ["phase", "approve", "map"]
     ];
 
-    private static string[] GetWarningCodes(JsonElement root)
-    {
-        return [.. root.GetProperty("warnings").EnumerateArray().Select(x => x.GetProperty("code").GetString()!)];
-    }
-
     /// <summary>
     /// Replaces <c>.shadekit/gates.json</c> with a file of format version 1 whose <c>profiles</c> field is the
     /// specified JSON object.
     /// </summary>
     private Task WriteGatesAsync(string profiles)
     {
-        return File.WriteAllTextAsync(GetKitPath("gates.json"),
-            $$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", "profiles": {{profiles}} }""",
+        return File.WriteAllTextAsync(GetKitPath("gates.json"), TestGatesJson.WithProfiles(profiles),
             TestContext.Current.CancellationToken);
     }
 

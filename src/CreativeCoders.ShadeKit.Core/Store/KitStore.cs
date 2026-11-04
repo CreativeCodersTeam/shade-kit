@@ -4,9 +4,11 @@ using System.Runtime.CompilerServices;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Files;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
@@ -222,13 +224,27 @@ public class KitStore : IKitStore
     }
 
     // Writes a text file whose paths are already resolved; the writer creates the missing directories and checks the
-    // mode.
-    private Task<IReadOnlyList<KitWarning>> WriteFileAsync(RepositoryFile file, TextFileContent content,
+    // mode. Every write of the store passes here, so a write that the file system refuses is reported here, once: an
+    // I/O failure, for example a file in the place of one of the directories, or missing permissions. The exception
+    // names the file at its final path, which for a directory writer is lineEndingFile, not the file in the hidden
+    // staging directory that is deleted after the failure. An existing file of FileWriteMode.CreateNew is an
+    // IOException as well and passes unchanged, as do cancellation and every other exception.
+    private async Task<IReadOnlyList<KitWarning>> WriteFileAsync(RepositoryFile file, TextFileContent content,
         RepositoryFile? lineEndingFile, FileWriteMode mode, CancellationToken cancellationToken)
     {
         DiscardOutdatedFormatPolicy();
 
-        return _textFileWriter.WriteAsync(file, content, lineEndingFile, mode, cancellationToken);
+        try
+        {
+            return await _textFileWriter.WriteAsync(file, content, lineEndingFile, mode, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is IOException and not FileAlreadyExistsException
+                                              or UnauthorizedAccessException)
+        {
+            throw new KitFileWriteFailedException(GetDisplayPathOfFullPath((lineEndingFile ?? file).FullPath),
+                exception);
+        }
     }
 
     /// <inheritdoc />

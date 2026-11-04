@@ -4,6 +4,7 @@ using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
@@ -137,6 +138,12 @@ public interface IKitStore
     /// The existing file uses an older format version and <paramref name="access" /> is
     /// <see cref="FormatAccess.Write" />.
     /// </exception>
+    /// <exception cref="KitFileWriteFailedException">
+    /// The file system refused the write with an <see cref="IOException" />, for example because a file exists in the
+    /// place of one of the parent directories, or with an <see cref="UnauthorizedAccessException" /> (missing
+    /// permissions). The exception names the file by its path relative to the repository root, for example
+    /// <c>.shadekit/config.json</c>.
+    /// </exception>
     Task<IReadOnlyList<KitWarning>> WriteJsonAsync<T>(string relativePath, string formatId, T document,
         FormatAccess access, CancellationToken cancellationToken = default)
         where T : VersionedDocument;
@@ -176,9 +183,11 @@ public interface IKitStore
     /// <paramref name="relativePath" />; the file is not changed. The exception names the file by its path relative
     /// to the repository root, for example <c>.shadekit/templates/spec.md</c>.
     /// </exception>
-    /// <exception cref="IOException">
-    /// An I/O error occurred while the file was written, for example because a file exists in the place of one of its
-    /// parent directories.
+    /// <exception cref="KitFileWriteFailedException">
+    /// The file system refused the write with an <see cref="IOException" /> other than the one of an existing file of
+    /// <see cref="FileWriteMode.CreateNew" />, for example because a file exists in the place of one of the parent
+    /// directories, or with an <see cref="UnauthorizedAccessException" /> (missing permissions). The exception names
+    /// the file by its path relative to the repository root, for example <c>.shadekit/templates/spec.md</c>.
     /// </exception>
     Task<IReadOnlyList<KitWarning>> WriteFileAsync(string relativePath, TextFileContent content,
         FileWriteMode mode = FileWriteMode.Overwrite, CancellationToken cancellationToken = default);
@@ -189,7 +198,8 @@ public interface IKitStore
     /// </summary>
     /// <remarks>
     /// Files are written below <paramref name="writePath" />, but their line endings are determined for the same path
-    /// below <paramref name="targetPath" />. Nothing is created until the first write.
+    /// below <paramref name="targetPath" />, and a <see cref="KitFileWriteFailedException" /> of a write names the file
+    /// by that path below <paramref name="targetPath" />. Nothing is created until the first write.
     /// </remarks>
     /// <param name="writePath">
     /// The path of the directory relative to <see cref="RootPath" /> into which the files are written, for example

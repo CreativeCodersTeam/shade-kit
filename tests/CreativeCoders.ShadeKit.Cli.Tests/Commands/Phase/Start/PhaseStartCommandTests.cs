@@ -40,7 +40,7 @@ public class PhaseStartCommandTests
               "featureId": "gh-142-login-sso", "profile": "feature", "outcome": "transition-requested",
               "transition": { "kind": "forward", "from": "refine", "to": "map" },
               "currentPhase": { "name": "refine", "state": "awaiting-approval" },
-              "gate": { "phase": "map", "approval": true, "checklist": null },
+              "gate": { "phase": "map", "approval": true, "checklist": null, "checklistCreated": null },
               "skills": { "phaseSkill": "shade-kit-map", "generalSkills": ["shade-kit-research"] }
             }
             """);
@@ -53,7 +53,7 @@ public class PhaseStartCommandTests
         // Arrange
         using var jsonOutput = new StringWriter();
         var startResult = new PhaseStartResult(Id, "feature", PhaseStartOutcome.AlreadyInProgress, null,
-            new PhaseSnapshot("refine", PhaseState.InProgress), null,
+            new PhaseSnapshot("refine", PhaseState.InProgress), null, null,
             new PhaseSkills("shade-kit-refine", ["shade-kit-interview", "shade-kit-research"]), []);
         var command = CreateCommand(new TestConsole(), CreateWorkflow(startResult), jsonOutput);
 
@@ -82,7 +82,7 @@ public class PhaseStartCommandTests
         var startResult = new PhaseStartResult(Id, "feature", PhaseStartOutcome.TransitionPerformed,
             new PhaseTransition(PhaseTransitionKind.Reopen, "map", "refine"),
             new PhaseSnapshot("refine", PhaseState.InProgress),
-            new PhaseGate("refine", new TransitionGate(false, ".shadekit/checks/dor.md")),
+            new PhaseGate("refine", new TransitionGate(false, ".shadekit/checks/dor.md")), false,
             new PhaseSkills("shade-kit-refine", []), []);
         var command = CreateCommand(new TestConsole(), CreateWorkflow(startResult), jsonOutput);
 
@@ -96,7 +96,8 @@ public class PhaseStartCommandTests
               "featureId": "gh-142-login-sso", "profile": "feature", "outcome": "transition-performed",
               "transition": { "kind": "reopen", "from": "map", "to": "refine" },
               "currentPhase": { "name": "refine", "state": "in-progress" },
-              "gate": { "phase": "refine", "approval": false, "checklist": ".shadekit/checks/dor.md" },
+              "gate": { "phase": "refine", "approval": false, "checklist": ".shadekit/checks/dor.md",
+                        "checklistCreated": false },
               "skills": { "phaseSkill": "shade-kit-refine", "generalSkills": [] }
             }
             """);
@@ -131,7 +132,8 @@ public class PhaseStartCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var startResult = new PhaseStartResult(Id, "quick", PhaseStartOutcome.AlreadyInProgress, null,
-            new PhaseSnapshot("finish", PhaseState.InProgress), null, new PhaseSkills("shade-kit-finish", []), []);
+            new PhaseSnapshot("finish", PhaseState.InProgress), null, null, new PhaseSkills("shade-kit-finish", []),
+            []);
         var command = CreateCommand(console, CreateWorkflow(startResult));
 
         // Act
@@ -155,7 +157,7 @@ public class PhaseStartCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var startResult = new PhaseStartResult(Id, "feature", PhaseStartOutcome.ResumePending, RefineToMap,
-            new PhaseSnapshot("refine", PhaseState.AwaitingApproval), null,
+            new PhaseSnapshot("refine", PhaseState.AwaitingApproval), null, null,
             new PhaseSkills("shade-kit-refine", ["shade-kit-interview", "shade-kit-research"]), []);
         var command = CreateCommand(console, CreateWorkflow(startResult));
 
@@ -183,7 +185,7 @@ public class PhaseStartCommandTests
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var startResult = new PhaseStartResult(Id, "feature", PhaseStartOutcome.TransitionPending, RefineToMap,
             new PhaseSnapshot("refine", PhaseState.AwaitingApproval), new PhaseGate("map", TransitionGate.Default),
-            MapSkills, []);
+            null, MapSkills, []);
         var command = CreateCommand(console, CreateWorkflow(startResult));
 
         // Act
@@ -210,7 +212,7 @@ public class PhaseStartCommandTests
         var startResult = new PhaseStartResult(Id, "feature", PhaseStartOutcome.TransitionRequested,
             new PhaseTransition(PhaseTransitionKind.Reopen, "map", "refine"),
             new PhaseSnapshot("map", PhaseState.AwaitingApproval), new PhaseGate("refine", TransitionGate.Default),
-            new PhaseSkills("shade-kit-refine", []), []);
+            null, new PhaseSkills("shade-kit-refine", []), []);
         var command = CreateCommand(console, CreateWorkflow(startResult));
 
         // Act
@@ -231,7 +233,7 @@ public class PhaseStartCommandTests
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var startResult = new PhaseStartResult(Id, "feature", PhaseStartOutcome.TransitionPerformed, RefineToMap,
             new PhaseSnapshot("map", PhaseState.InProgress),
-            new PhaseGate("map", new TransitionGate(false, "checks/dor.md")), MapSkills, []);
+            new PhaseGate("map", new TransitionGate(false, "checks/dor.md")), true, MapSkills, []);
         var command = CreateCommand(console, CreateWorkflow(startResult));
 
         // Act
@@ -242,6 +244,61 @@ public class PhaseStartCommandTests
             .Should().Contain("Gate: map (approval: not required, checklist: checks/dor.md)")
             .And.Contain("Current phase: map (in-progress)")
             .And.NotContain(x => x.StartsWith("Approve with", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(true, "created")]
+    [InlineData(false, "already exists")]
+    public async Task ExecuteAsync_PlainModeGateWithChecklist_WritesChecklistCopyLineAfterGateLine(
+        bool checklistCreated, string expectedCopy)
+    {
+        // Arrange
+        var console = FeatureCommandTestHelper.CreateWideConsole();
+        var startResult = new PhaseStartResult(Id, "feature", PhaseStartOutcome.TransitionRequested, RefineToMap,
+            new PhaseSnapshot("refine", PhaseState.AwaitingApproval),
+            new PhaseGate("map", new TransitionGate(true, "checks/[dor].md")), checklistCreated, MapSkills, []);
+        var command = CreateCommand(console, CreateWorkflow(startResult));
+
+        // Act
+        await command.ExecuteAsync(new PhaseStartCommandOptions { Phase = "map" });
+
+        // Assert
+        console.Lines
+            .Should().Equal(
+                $"Feature: {Id} (feature)",
+                "Outcome: transition-requested",
+                "Transition: refine -> map (forward)",
+                "Current phase: refine (awaiting-approval)",
+                "Gate: map (approval: required, checklist: checks/[dor].md)",
+                $"Checklist copy: {expectedCopy}",
+                "Phase skill: shade-kit-map",
+                "General skills: shade-kit-research",
+                "Approve with 'shade-kit phase approve map' or reject with 'shade-kit phase reject map'.");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExecuteAsync_JsonModeGateWithChecklist_WritesChecklistCreated(bool checklistCreated)
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var startResult = new PhaseStartResult(Id, "feature", PhaseStartOutcome.TransitionRequested, RefineToMap,
+            new PhaseSnapshot("refine", PhaseState.AwaitingApproval),
+            new PhaseGate("map", new TransitionGate(true, "checks/dor.md")), checklistCreated, MapSkills, []);
+        var command = CreateCommand(new TestConsole(), CreateWorkflow(startResult), jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(new PhaseStartCommandOptions { Phase = "map", Json = true });
+
+        // Assert
+        var gate = PhaseCommandTestHelper.GetData(jsonOutput).GetProperty("gate");
+
+        gate.GetProperty("checklist").GetString()
+            .Should().Be("checks/dor.md");
+
+        gate.GetProperty("checklistCreated").GetBoolean()
+            .Should().Be(checklistCreated);
     }
 
     [Fact]
@@ -304,7 +361,7 @@ public class PhaseStartCommandTests
     {
         return new PhaseStartResult(Id, "feature", PhaseStartOutcome.TransitionRequested, RefineToMap,
             new PhaseSnapshot("refine", PhaseState.AwaitingApproval), new PhaseGate("map", TransitionGate.Default),
-            MapSkills, warnings ?? []);
+            null, MapSkills, warnings ?? []);
     }
 
     private static IPhaseWorkflow CreateWorkflow(PhaseStartResult result)

@@ -594,24 +594,20 @@ public sealed class FeatureChecklistWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureCopyAsync_WriteFailsWithIOException_ThrowsKitFileWriteFailedExceptionNamingCopy()
+    public async Task EnsureCopyAsync_StoreWriteFails_ThrowsKitFileWriteFailedExceptionOfStoreUnchanged()
     {
         // Arrange
-        var store = CreateFakeStoreWhoseWriteThrows(new IOException("disk full"));
+        var failure = new KitFileWriteFailedException(
+            ".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md", new IOException("disk full"));
+        var store = CreateFakeStoreWhoseWriteThrows(failure);
         var writer = new FeatureChecklistWriter();
 
         // Act
         var act = () => writer.EnsureCopyAsync(store, FeatureId, Checklist, TestContext.Current.CancellationToken);
 
         // Assert
-        var exception = (await act.Should().ThrowAsync<KitFileWriteFailedException>()).Which;
-
-        exception.FilePath
-            .Should().Be(".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md");
-
-        exception.InnerException
-            .Should().BeOfType<IOException>()
-            .Which.Message.Should().Be("disk full");
+        (await act.Should().ThrowAsync<KitFileWriteFailedException>())
+            .Which.Should().BeSameAs(failure);
     }
 
     [Fact]
@@ -627,27 +623,6 @@ public sealed class FeatureChecklistWriterTests : IDisposable
         // Assert
         result
             .Should().BeEquivalentTo(new FeatureChecklistCopyResult(Created: false, Warnings: []));
-    }
-
-    [Fact]
-    public async Task EnsureCopyAsync_WriteFailsWithUnauthorizedAccess_ThrowsKitFileWriteFailedExceptionNamingCopy()
-    {
-        // Arrange
-        var failure = new UnauthorizedAccessException("access denied");
-        var store = CreateFakeStoreWhoseWriteThrows(failure);
-        var writer = new FeatureChecklistWriter();
-
-        // Act
-        var act = () => writer.EnsureCopyAsync(store, FeatureId, Checklist, TestContext.Current.CancellationToken);
-
-        // Assert
-        var exception = (await act.Should().ThrowAsync<KitFileWriteFailedException>()).Which;
-
-        exception.FilePath
-            .Should().Be(".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md");
-
-        exception.InnerException
-            .Should().BeSameAs(failure);
     }
 
     [Fact]

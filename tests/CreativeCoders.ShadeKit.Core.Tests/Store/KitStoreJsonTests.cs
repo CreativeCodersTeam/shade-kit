@@ -8,6 +8,7 @@ using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Formats;
 using CreativeCoders.ShadeKit.Tests.Shared;
@@ -1601,8 +1602,12 @@ public class KitStoreJsonTests
             FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        (await act.Should().ThrowAsync<Exception>())
-            .Which
+        var exception = (await act.Should().ThrowAsync<KitFileWriteFailedException>()).Which;
+
+        exception.FilePath
+            .Should().Be($".shadekit/{SampleFileName}");
+
+        exception.InnerException
             .Should().Match<Exception>(x => x is IOException || x is UnauthorizedAccessException);
 
         Directory.Exists(directoryPath)
@@ -1683,7 +1688,7 @@ public class KitStoreJsonTests
 
     [Fact]
     [UnsupportedOSPlatform("windows")]
-    public async Task WriteJsonAsync_ReplaceAccessAndReadOnlyCurrentFile_ThrowsUnauthorizedAccessExceptionAndKeepsFile()
+    public async Task WriteJsonAsync_ReplaceAccessAndReadOnlyCurrentFile_ThrowsKitFileWriteFailedExceptionAndKeepsFile()
     {
         // Arrange
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes are needed to make a file read-only.");
@@ -1702,8 +1707,9 @@ public class KitStoreJsonTests
                 FormatAccess.Replace, cancellationToken: TestContext.Current.CancellationToken);
 
             // Assert
-            await act.Should().ThrowAsync<UnauthorizedAccessException>(
-                "a usable file is overwritten in place, not deleted");
+            (await act.Should().ThrowAsync<KitFileWriteFailedException>(
+                    "a usable file is overwritten in place, not deleted")).Which.InnerException
+                .Should().BeOfType<UnauthorizedAccessException>();
         }
         finally
         {

@@ -20,6 +20,11 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 /// <see langword="null" />. Its <see cref="TransitionGate.Checklist" /> is the value from <c>gates.json</c>, which is
 /// also the path of the feature's copy of the checklist relative to the feature folder.
 /// </param>
+/// <param name="ChecklistCreated">
+/// <see langword="true" /> if this request created the feature's copy of the checklist of <paramref name="Gate" />;
+/// <see langword="false" /> if the copy already existed, also when a concurrent request created it, and was left
+/// unchanged; <see langword="null" /> if no copy was ensured, because there is no gate or the gate has no checklist.
+/// </param>
 /// <param name="Skills">
 /// The skills of the requested phase; for <see cref="PhaseStartOutcome.AlreadyInProgress" /> and
 /// <see cref="PhaseStartOutcome.ResumePending" /> those of the current phase.
@@ -32,5 +37,6 @@ public sealed record PhaseStartResult(
     PhaseTransition? Transition,
     PhaseSnapshot CurrentPhase,
     PhaseGate? Gate,
+    bool? ChecklistCreated,
     PhaseSkills Skills,
     IReadOnlyList<KitWarning> Warnings);

@@ -68,7 +68,6 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowProfileCatalog, BuiltInWorkflowProfileCatalog>();
         services.TryAddSingleton<IFeatureStore, FeatureStore>();
         services.TryAddSingleton<IPhaseEngine, PhaseEngine>();
-        services.TryAddSingleton<IGatesConfigReader, GatesConfigReader>();
         services.TryAddSingleton<ITransitionGateProvider, GatesConfigTransitionGateProvider>();
         services.TryAddSingleton<IFeatureChecklistWriter, FeatureChecklistWriter>();
         services.TryAddSingleton<IPhaseWorkflow, PhaseWorkflow>();

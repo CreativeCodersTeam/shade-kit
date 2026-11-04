@@ -70,8 +70,9 @@ public sealed class PhaseWorkflow(
             ? await GetIdentityAsync(store, cancellationToken).ConfigureAwait(false)
             : null;
 
-        var copyWarnings = await EnsureChecklistCopyAsync(store, feature.FeatureId, decision, cancellationToken)
+        var copyResult = await EnsureChecklistCopyAsync(store, feature.FeatureId, decision, cancellationToken)
             .ConfigureAwait(false);
+        IReadOnlyList<KitWarning> copyWarnings = copyResult?.Warnings ?? [];
 
         // The copy is made before feature.json is written, so a failing copy leaves feature.json unchanged. If writing
         // feature.json fails after the copy was created, the copy stays; the next start of the phase finds it and
@@ -86,7 +87,7 @@ public sealed class PhaseWorkflow(
             : null;
 
         return new PhaseStartResult(feature.FeatureId, feature.State.Profile.Name, decision.Outcome,
-            decision.Transition, CreateSnapshot(decision.State), gate, decision.Skills,
+            decision.Transition, CreateSnapshot(decision.State), gate, copyResult?.Created, decision.Skills,
             feature.ArrangeWarnings([.. gates.Warnings, .. copyWarnings, .. writeWarnings]));
     }
 
@@ -216,27 +217,20 @@ public sealed class PhaseWorkflow(
         ]);
     }
 
-    // Makes sure that the feature folder contains the copy of the checklist of the decided gate. Only a requested,
-    // performed, or pending transition into a phase whose gate has a checklist copies it; a reopen has none.
-    private async Task<IReadOnlyList<KitWarning>> EnsureChecklistCopyAsync(IKitStore store, string featureId,
+    // Makes sure that the feature folder contains the copy of the checklist of the decided gate. The engine decides
+    // a gate only for a requested, performed, or pending transition, and a reopen always has the default gate without
+    // a checklist, so the checklist of the gate alone decides whether a copy is made. Returns null if no copy is made.
+    private async Task<FeatureChecklistCopyResult?> EnsureChecklistCopyAsync(IKitStore store, string featureId,
         PhaseStartDecision decision, CancellationToken cancellationToken)
     {
-        if (decision is not
-            {
-                Outcome: PhaseStartOutcome.TransitionRequested or PhaseStartOutcome.TransitionPerformed
-                or PhaseStartOutcome.TransitionPending,
-                Transition.Kind: not PhaseTransitionKind.Reopen,
-                Gate.Checklist: { } checklist
-            })
+        if (decision.Gate?.Checklist is not { } checklist)
         {
-            return [];
+            return null;
         }
 
-        var copyResult = await _featureChecklistWriter
+        return await _featureChecklistWriter
             .EnsureCopyAsync(store, featureId, checklist, cancellationToken)
             .ConfigureAwait(false);
-
-        return copyResult.Warnings;
     }
 
     // The git identity is read only now, when a write follows, so a missing identity never stops a no-op.

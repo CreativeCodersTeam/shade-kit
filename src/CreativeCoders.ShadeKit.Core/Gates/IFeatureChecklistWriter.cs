@@ -54,9 +54,9 @@ public interface IFeatureChecklistWriter
     /// </exception>
     /// <exception cref="InvalidKitFileException">The template is not UTF-8 text; nothing is written.</exception>
     /// <exception cref="KitFileWriteFailedException">
-    /// The copy cannot be written because of an <see cref="IOException" />, for example because a file exists in the
-    /// place of one of its directories, or because of an <see cref="UnauthorizedAccessException" /> (missing
-    /// permissions).
+    /// The store cannot write the copy (<see cref="IKitStore.WriteFileAsync" />) because of an
+    /// <see cref="IOException" />, for example because a file exists in the place of one of its directories, or
+    /// because of an <see cref="UnauthorizedAccessException" /> (missing permissions).
     /// </exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken" /> was canceled.</exception>
     Task<FeatureChecklistCopyResult> EnsureCopyAsync(IKitStore store, string featureId, string checklist,

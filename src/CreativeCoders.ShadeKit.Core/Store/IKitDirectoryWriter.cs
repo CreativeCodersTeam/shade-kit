@@ -40,6 +40,10 @@ public interface IKitDirectoryWriter
     /// <summary>
     /// Writes a text file of the directory as <see cref="IKitStore.WriteFileAsync" /> does.
     /// </summary>
+    /// <remarks>
+    /// Besides the exceptions listed here, the write throws those of <see cref="IKitStore.WriteFileAsync" /> for
+    /// <see cref="FileWriteMode.Overwrite" />.
+    /// </remarks>
     /// <param name="relativePath">The path of the file relative to the directory, for example <c>request.md</c>.</param>
     /// <param name="content">The content of the file.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>

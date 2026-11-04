@@ -1628,7 +1628,8 @@ public class RepositoryInitializerTests
                 TestContext.Current.CancellationToken);
 
             // Assert
-            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            (await act.Should().ThrowAsync<KitFileWriteFailedException>()).Which.InnerException
+                .Should().BeOfType<UnauthorizedAccessException>();
 
             Directory.Exists(kitRootPath)
                 .Should().BeTrue();
