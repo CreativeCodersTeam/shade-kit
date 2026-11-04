@@ -354,7 +354,7 @@ public class PhaseCommandsTests
 
         A.CallTo(() => workflow.StartAsync(A<IKitStore>._, A<string>._, A<CancellationToken>._))
             .Returns(new PhaseStartResult(Id, "feature", PhaseStartOutcome.TransitionRequested, transition, snapshot,
-                new PhaseGate("map", TransitionGate.Default), skills, []));
+                new PhaseGate("map", TransitionGate.Default), null, skills, []));
         A.CallTo(() => workflow.ApproveAsync(A<IKitStore>._, A<string>._, A<CancellationToken>._))
             .Returns(new PhaseApproveResult(Id, transition, new PhaseSnapshot("map", PhaseState.InProgress), []));
         A.CallTo(() => workflow.RejectAsync(A<IKitStore>._, A<string>._, A<string?>._, A<CancellationToken>._))

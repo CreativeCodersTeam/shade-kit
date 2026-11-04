@@ -844,6 +844,180 @@ public class TextFileContentTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void ReplaceInLines_SeveralOccurrencesInSeveralLines_ReplacesEveryOccurrenceOrdinally()
+    {
+        // Arrange
+        var content = TextFileContent.FromText("# {{id}}\n\nA {{id}}{{id}} B\n{{ID}} stays\n");
+
+        // Act
+        var result = content.ReplaceInLines("{{id}}", "gh-1");
+
+        // Assert
+        result.Lines
+            .Should().Equal("# gh-1", "", "A gh-1gh-1 B", "{{ID}} stays");
+
+        result.HasFinalLineEnding
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ReplaceInLines_BomAndFinalLineEnding_KeepsBothFlags(bool hasUtf8Bom, bool hasFinalLineEnding)
+    {
+        // Arrange
+        var text = "a {{id}}\nb" + (hasFinalLineEnding ? "\n" : string.Empty);
+        var content = await ReadAsync([.. hasUtf8Bom ? TestText.Utf8Bom : [], .. Encoding.UTF8.GetBytes(text)]);
+
+        // Act
+        var result = content.ReplaceInLines("{{id}}", "x");
+
+        // Assert
+        result.Lines
+            .Should().Equal("a x", "b");
+
+        result.HasUtf8Bom
+            .Should().Be(hasUtf8Bom);
+
+        result.HasFinalLineEnding
+            .Should().Be(hasFinalLineEnding);
+    }
+
+    [Fact]
+    public void ReplaceInLines_NoOccurrence_ReturnsSameLines()
+    {
+        // Arrange
+        var content = TextFileContent.FromText("a\nb\n");
+
+        // Act
+        var result = content.ReplaceInLines("{{id}}", "x");
+
+        // Assert
+        result.HasSameContent(content)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReplaceInLines_Replacement_LeavesOriginalContentUnchanged()
+    {
+        // Arrange
+        var content = TextFileContent.FromText("a {{id}}\n");
+
+        // Act
+        content.ReplaceInLines("{{id}}", "x");
+
+        // Assert
+        content.Lines
+            .Should().Equal("a {{id}}");
+    }
+
+    [Fact]
+    public void ReplaceInLines_EmptyContent_ReturnsEmptyContent()
+    {
+        // Arrange
+        var content = TextFileContent.FromText(string.Empty);
+
+        // Act
+        var result = content.ReplaceInLines("{{id}}", "x");
+
+        // Assert
+        result.Lines
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ReplaceInLines_EmptyNewValue_RemovesOccurrencesAndKeepsLines()
+    {
+        // Arrange
+        var content = TextFileContent.FromText("{{id}}\na {{id}}\n");
+
+        // Act
+        var result = content.ReplaceInLines("{{id}}", string.Empty);
+
+        // Assert
+        result.Lines
+            .Should().Equal("", "a ");
+    }
+
+    [Theory]
+    [InlineData("a", "aa", "a b a", "aa b aa")]
+    [InlineData("aa", "x", "aaa", "xa")]
+    public void ReplaceInLines_OverlappingOrSelfContainingValues_ReplacesOnceFromLeftToRight(string oldValue,
+        string newValue, string line, string expectedLine)
+    {
+        // Arrange
+        var content = TextFileContent.FromText(line);
+
+        // Act
+        var result = content.ReplaceInLines(oldValue, newValue);
+
+        // Assert
+        result.Lines
+            .Should().Equal(expectedLine);
+    }
+
+    [Fact]
+    public void ReplaceInLines_NullOldValue_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var content = TextFileContent.FromText("a\n");
+
+        // Act
+        var act = () => content.ReplaceInLines(null!, "x");
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("oldValue");
+    }
+
+    [Fact]
+    public void ReplaceInLines_NullNewValue_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var content = TextFileContent.FromText("a\n");
+
+        // Act
+        var act = () => content.ReplaceInLines("a", null!);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("newValue");
+    }
+
+    [Fact]
+    public void ReplaceInLines_EmptyOldValue_ThrowsArgumentException()
+    {
+        // Arrange
+        var content = TextFileContent.FromText("a\n");
+
+        // Act
+        var act = () => content.ReplaceInLines(string.Empty, "x");
+
+        // Assert
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName("oldValue");
+    }
+
+    [Theory]
+    [InlineData("x\ny")]
+    [InlineData("x\ry")]
+    [InlineData("x\r\n")]
+    public void ReplaceInLines_NewValueWithLineEnding_ThrowsArgumentException(string newValue)
+    {
+        // Arrange
+        var content = TextFileContent.FromText("a\n");
+
+        // Act
+        var act = () => content.ReplaceInLines("a", newValue);
+
+        // Assert
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName(nameof(newValue));
+    }
+
     /// <summary>
     /// Renders the lines of the content with <c>\n</c> as line ending, as a writer with <see cref="LineEnding.Lf" />
     /// does, without the byte order mark.

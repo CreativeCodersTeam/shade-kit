@@ -3,6 +3,7 @@ using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
@@ -67,7 +68,8 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowProfileCatalog, BuiltInWorkflowProfileCatalog>();
         services.TryAddSingleton<IFeatureStore, FeatureStore>();
         services.TryAddSingleton<IPhaseEngine, PhaseEngine>();
-        services.TryAddSingleton<ITransitionGateProvider, DefaultTransitionGateProvider>();
+        services.TryAddSingleton<ITransitionGateProvider, GatesConfigTransitionGateProvider>();
+        services.TryAddSingleton<IFeatureChecklistWriter, FeatureChecklistWriter>();
         services.TryAddSingleton<IPhaseWorkflow, PhaseWorkflow>();
 
         services.AddHttpClient(HttpUrlContentReader.HttpClientName)

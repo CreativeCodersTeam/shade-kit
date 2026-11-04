@@ -4,6 +4,7 @@ using CreativeCoders.ShadeKit.Core.Files.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Store;
@@ -137,6 +138,12 @@ public interface IKitStore
     /// The existing file uses an older format version and <paramref name="access" /> is
     /// <see cref="FormatAccess.Write" />.
     /// </exception>
+    /// <exception cref="KitFileWriteFailedException">
+    /// The file system refused the write with an <see cref="IOException" />, for example because a file exists in the
+    /// place of one of the parent directories, or with an <see cref="UnauthorizedAccessException" /> (missing
+    /// permissions). The exception names the file by its path relative to the repository root, for example
+    /// <c>.shadekit/config.json</c>.
+    /// </exception>
     Task<IReadOnlyList<KitWarning>> WriteJsonAsync<T>(string relativePath, string formatId, T document,
         FormatAccess access, CancellationToken cancellationToken = default)
         where T : VersionedDocument;
@@ -146,13 +153,18 @@ public interface IKitStore
     /// </summary>
     /// <remarks>
     /// Written through an <see cref="ITextFileWriter" /> with the line ending of the repository, directly and not
-    /// atomically; missing directories are created. A file in a directory that is moved into place later is written
-    /// through <see cref="CreateDirectoryWriter" />.
+    /// atomically; missing directories are created. An existing file is overwritten with
+    /// <see cref="FileWriteMode.Overwrite" /> and kept with <see cref="FileWriteMode.CreateNew" />. A file in a
+    /// directory that is moved into place later is written through <see cref="CreateDirectoryWriter" />.
     /// </remarks>
     /// <param name="relativePath">
     /// The path of the file relative to <see cref="RootPath" />, for example <c>templates/spec.md</c>.
     /// </param>
     /// <param name="content">The content of the file.</param>
+    /// <param name="mode">
+    /// One of the enumeration values that specifies whether an existing file is overwritten or makes the write fail.
+    /// The default is <see cref="FileWriteMode.Overwrite" />.
+    /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous write operation. The task result contains the warnings that occurred
@@ -163,8 +175,22 @@ public interface IKitStore
     /// <exception cref="ArgumentException">
     /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
     /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="mode" /> is not a <see cref="FileWriteMode" /> value.
+    /// </exception>
+    /// <exception cref="FileAlreadyExistsException">
+    /// <paramref name="mode" /> is <see cref="FileWriteMode.CreateNew" /> and a file exists at
+    /// <paramref name="relativePath" />; the file is not changed. The exception names the file by its path relative
+    /// to the repository root, for example <c>.shadekit/templates/spec.md</c>.
+    /// </exception>
+    /// <exception cref="KitFileWriteFailedException">
+    /// The file system refused the write with an <see cref="IOException" /> other than the one of an existing file of
+    /// <see cref="FileWriteMode.CreateNew" />, for example because a file exists in the place of one of the parent
+    /// directories, or with an <see cref="UnauthorizedAccessException" /> (missing permissions). The exception names
+    /// the file by its path relative to the repository root, for example <c>.shadekit/templates/spec.md</c>.
+    /// </exception>
     Task<IReadOnlyList<KitWarning>> WriteFileAsync(string relativePath, TextFileContent content,
-        CancellationToken cancellationToken = default);
+        FileWriteMode mode = FileWriteMode.Overwrite, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a writer for the files of a directory that is written at one path and moved to another path later,
@@ -172,7 +198,8 @@ public interface IKitStore
     /// </summary>
     /// <remarks>
     /// Files are written below <paramref name="writePath" />, but their line endings are determined for the same path
-    /// below <paramref name="targetPath" />. Nothing is created until the first write.
+    /// below <paramref name="targetPath" />, and a <see cref="KitFileWriteFailedException" /> of a write names the file
+    /// by that path below <paramref name="targetPath" />. Nothing is created until the first write.
     /// </remarks>
     /// <param name="writePath">
     /// The path of the directory relative to <see cref="RootPath" /> into which the files are written, for example
@@ -247,6 +274,22 @@ public interface IKitStore
     /// <c>.shadekit/templates/spec.md</c>.
     /// </exception>
     Task<TextFileContent?> ReadFileAsync(string relativePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the full path of a file or directory of the store.
+    /// </summary>
+    /// <remarks>
+    /// The path is the one that the store puts into its exceptions, for example into a
+    /// <see cref="PathNotAFileException" />; nothing is read or created.
+    /// </remarks>
+    /// <param name="relativePath">
+    /// The path relative to <see cref="RootPath" />, for example <c>features/login/feature.json</c>.
+    /// </param>
+    /// <returns>The normalized full path of <paramref name="relativePath" /> below <see cref="RootPath" />.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="relativePath" /> is empty, rooted, or points outside <see cref="RootPath" />.
+    /// </exception>
+    string GetFullPath(string relativePath);
 
     /// <summary>
     /// Determines whether a file of the store exists.

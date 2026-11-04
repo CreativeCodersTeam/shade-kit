@@ -49,7 +49,7 @@ public sealed record PhaseStartCommandData(
         return new PhaseStartCommandData(result.FeatureId, result.Profile, result.Outcome,
             result.Transition is null ? null : PhaseTransitionData.FromTransition(result.Transition),
             PhaseSnapshotData.FromSnapshot(result.CurrentPhase),
-            result.Gate is null ? null : PhaseStartCommandGateData.FromGate(result.Gate),
+            result.Gate is null ? null : PhaseStartCommandGateData.FromGate(result.Gate, result.ChecklistCreated),
             PhaseStartCommandSkillsData.FromSkills(result.Skills));
     }
 }

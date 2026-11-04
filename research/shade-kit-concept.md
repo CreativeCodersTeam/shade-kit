@@ -1,6 +1,6 @@
 # SHADE kit concept
 
-Status: draft, 2026-10-13, updated 2026-10-17 (template interview), 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over), 2026-10-21 (feature commands implemented, package 03), 2026-10-24 (documentation check against the code), 2026-10-25 (rework of `feature new`), 2026-10-27 (documentation check after package 04: phase commands and phase states implemented, phase state diagram completed), and 2026-10-30 (phases start only when the user calls the phase skill; [shade-kit-phase-start-analysis.md](shade-kit-phase-start-analysis.md)). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-13, updated 2026-10-17 (template interview), 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over), 2026-10-21 (feature commands implemented, package 03), 2026-10-24 (documentation check against the code), 2026-10-25 (rework of `feature new`), 2026-10-27 (documentation check after package 04: phase commands and phase states implemented, phase state diagram completed), 2026-10-30 (phases start only when the user calls the phase skill; [shade-kit-phase-start-analysis.md](shade-kit-phase-start-analysis.md)), and 2026-11-01 (package 05 implemented: gates from `gates.json`, checklist copies). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
 
 Labels used in this document:
 
@@ -82,7 +82,7 @@ Agents call the same binary with `--json`. Every agent can run a shell command, 
 | `shade-kit feature set <id>` | Writes the local override (`current-feature.json`). **Implemented** (`FeatureSetCommand`). |
 | `shade-kit feature new --source <text\|url\|file> [--profile <p>] [--title <t>]` | Creates the feature folder and `request.md` with the request content: the text, the file content, the issue of a tracker URL read with `gh`, or the content of any other URL read with an HTTP GET (package 03). **Implemented** (`FeatureNewCommand`). |
 | `shade-kit feature drop <id> [--yes]` | Deletes the feature folder. Without `--yes` it only shows what it would delete, or asks in an interactive terminal. **Implemented** (`FeatureDropCommand`). |
-| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate; the skill tells the human and asks whether to continue the phase or to end. If a transition away from the phase is pending, it changes nothing and reports the pending transition; the skill offers to discard it and continue, to keep it, or to end. The same command reopens an earlier phase. It is the CLI check of every phase skill: a refusal changes nothing, and the skill ends with the human's options (**Decided** on 2026-10-30). **Implemented** (`PhaseStartCommand`; gates from `gates.json` come with package 05). |
+| `shade-kit phase start <phase> --json` | Checks that the transition is allowed by the profile. Returns the entry gate (checklist path and whether it is on) and the skills to load. If the phase is already in progress, it changes nothing and returns no gate; the skill tells the human and asks whether to continue the phase or to end. If a transition away from the phase is pending, it changes nothing and reports the pending transition; the skill offers to discard it and continue, to keep it, or to end. The same command reopens an earlier phase. It is the CLI check of every phase skill: a refusal changes nothing, and the skill ends with the human's options (**Decided** on 2026-10-30). **Implemented** (`PhaseStartCommand`; the gates come from `gates.json`, and a gate's checklist is copied into the feature folder, package 05). |
 | `shade-kit phase approve <phase>` | Records the human approval in `feature.json` (who, when). **Implemented** (`PhaseApproveCommand`). |
 | `shade-kit phase reject <phase> [--note <text>]` | Cancels the pending transition after a "no"; the previous phase is in progress again. Recorded in the history with the note. **Implemented** (`PhaseRejectCommand`). |
 | `shade-kit phase complete` | Ends the last phase (`finish`); the feature status becomes `done`, and the local override is cleared if it selects this feature. **Implemented** (`PhaseCompleteCommand`). |
@@ -127,7 +127,7 @@ The kit root is `.shadekit/` (decided; **Implemented** in `KitStorePaths`).
 ```
 .shadekit/
 ├── config.json                 # schemaVersion; user owns values, engine owns schema
-├── gates.json                  # gate per profile and target phase
+├── gates.json                  # gate per profile and target phase (package 05, implemented)
 ├── discussions/                # discuss notes without a current feature
 ├── templates/                  # artifact templates, editable by the team (section 4.5)
 │   └── checks/                 # checklist templates: definition-of-ready.md, definition-of-done.md
@@ -158,8 +158,8 @@ The kit root is `.shadekit/` (decided; **Implemented** in `KitStorePaths`).
         ├── playbook.md         # manual test playbook from verify, or from quick when a criterion is manual
         ├── report.md           # optional report from finish
         └── checks/
-            ├── definition-of-ready.md  # filled copy of the Definition of Ready (entry gate of plan)
-            └── definition-of-done.md   # filled copy of the Definition of Done (entry gate of finish)
+            ├── definition-of-ready.md  # filled copy of the Definition of Ready (entry gate of plan), copied from the template when plan starts (package 05, implemented)
+            └── definition-of-done.md   # filled copy of the Definition of Done (entry gate of finish), copied when finish starts
 ```
 
 ### 4.2 Feature ids
@@ -236,9 +236,9 @@ Decided for v1:
 
 - A gate is checked **when the next phase starts**. The agent checks the entry conditions and reports the result.
 - The human **always** approves the transition explicitly, also when the check passes.
-- Each gate can be switched off in `gates.json`: its approval and its checklist are separate switches. With approval off and a checklist on, the checklist is still checked but a failed item only warns. **Decided** on 2026-10-18.
+- Each gate can be switched off in `gates.json`: its approval and its checklist are separate switches. With approval off and a checklist on, the checklist is still checked but a failed item only warns. **Decided** on 2026-10-18. The switches are **Implemented** (package 05, 2026-11-01); the warning is the agent's part (package 06).
 - DoR is the entry gate of `plan`, checked against `spec.md`. DoD is the entry gate of `finish`.
-- All other transitions are plain approvals without a checklist. Extension point: a `checks/<phase>.md` file can add a checklist to any transition later.
+- All other transitions are plain approvals without a checklist. Extension point: a `checks/<phase>.md` file can add a checklist to any transition. **Implemented** (package 05): a gate can name any template under `checks/`.
 
 Content and format of the checklists, decided in the template interview on 2026-10-17. The defaults come from templates and can be edited per repository; the full item lists are in [package 05](../docs/feature-packages/05-gates-and-checklists.md).
 
@@ -246,7 +246,7 @@ Content and format of the checklists, decided in the template interview on 2026-
 - **DoR (entry of `plan`), ten items:** every requirement has an ID, a priority, and at least one testable acceptance criterion; no open questions and no template leftovers in `spec.md`; out of scope is stated; assumptions are confirmed or marked as risks; every edge case has a criterion or is out of scope; security considerations are filled in; affected areas are known (`map` done, skipped on purpose, or `diagnosis.md` lists the affected code).
 - **DoD (entry of `finish`), nine items:** build, test, and lint pass; coverage is measured and reaches `coverageThreshold` if set; every acceptance criterion is covered by a passing test or a playbook item; every task is done or has an accepted reason; `review.md` has no open blockers; the quality bar was not lowered; plan deviations and rollout steps are recorded; documentation is updated; every item in `playbook.md` is checked off by a human.
 
-`gates.json` is keyed by profile, then by target phase, because the `quick` profile needs other defaults than `feature`. By default every transition needs an approval; the only exception is the transition into the `quick` phase of the `quick` profile ("one approval at the end"). A transition without an entry needs an approval. **Decided** on 2026-10-18. Shape and defaults: [package 05](../docs/feature-packages/05-gates-and-checklists.md).
+`gates.json` is keyed by profile, then by target phase, because the `quick` profile needs other defaults than `feature`. By default every transition needs an approval; the only exception is the transition into the `quick` phase of the `quick` profile ("one approval at the end"). A transition without an entry needs an approval. **Decided** on 2026-10-18. **Implemented** (package 05, 2026-11-01): `init` writes the defaults; a missing `gates.json` or `profiles` field gives the built-in defaults with a warning. Shape and defaults: [package 05](../docs/feature-packages/05-gates-and-checklists.md).
 
 ### 5.3 Phase state
 

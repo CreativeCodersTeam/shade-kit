@@ -63,6 +63,12 @@ public static class KitStorePaths
     public const string TemplatesDirName = "templates";
 
     /// <summary>
+    /// Represents the name of the directory that contains the checklist templates in the
+    /// <see cref="TemplatesDirName" /> directory and the filled checklists in a feature directory.
+    /// </summary>
+    public const string ChecksDirName = "checks";
+
+    /// <summary>
     /// Represents the name of the file in the SHADE kit root directory that records the kit version and hash of every
     /// template written by SHADE kit.
     /// </summary>
@@ -151,5 +157,47 @@ public static class KitStorePaths
     public static string GetRepositoryFeatureDirPath(string featureName)
     {
         return $"{GetRepositoryPath(GetFeatureDirPath(featureName))}/";
+    }
+
+    /// <summary>
+    /// Gets the path of a template relative to the SHADE kit root directory.
+    /// </summary>
+    /// <remarks>
+    /// The path is not checked; callers pass a path that is already checked, for example the checklist of a gate.
+    /// </remarks>
+    /// <param name="templateRelativePath">
+    /// The path of the template relative to the <see cref="TemplatesDirName" /> directory, with <c>/</c> as separator,
+    /// for example <c>checks/definition-of-ready.md</c>.
+    /// </param>
+    /// <returns>
+    /// The path <c>templates/&lt;path&gt;</c> with <c>/</c> as separator, for example
+    /// <c>templates/checks/definition-of-ready.md</c>.
+    /// </returns>
+    public static string GetTemplatePath(string templateRelativePath)
+    {
+        return $"{TemplatesDirName}/{templateRelativePath}";
+    }
+
+    /// <summary>
+    /// Gets the path of the filled copy of a checklist in the folder of a feature relative to the SHADE kit root
+    /// directory.
+    /// </summary>
+    /// <remarks>
+    /// The checklist path is mirrored below the feature folder, so <c>checks/definition-of-ready.md</c> becomes
+    /// <c>features/&lt;id&gt;/checks/definition-of-ready.md</c>. Neither argument is checked, as with
+    /// <see cref="GetFeatureDirPath" />.
+    /// </remarks>
+    /// <param name="featureId">The id of the feature, which is the name of its feature folder.</param>
+    /// <param name="checklist">
+    /// The path of the checklist relative to the feature folder, with <c>/</c> as separator, for example
+    /// <c>checks/definition-of-ready.md</c>.
+    /// </param>
+    /// <returns>
+    /// The path <c>features/&lt;id&gt;/&lt;checklist&gt;</c> with <c>/</c> as separator, for example
+    /// <c>features/gh-142-login-sso/checks/definition-of-ready.md</c>.
+    /// </returns>
+    public static string GetFeatureChecklistPath(string featureId, string checklist)
+    {
+        return $"{GetFeatureDirPath(featureId)}/{checklist}";
     }
 }

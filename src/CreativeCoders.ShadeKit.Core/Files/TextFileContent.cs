@@ -235,6 +235,41 @@ public sealed class TextFileContent
     }
 
     /// <summary>
+    /// Creates the content of the file with every occurrence of a text in every line replaced by another text.
+    /// </summary>
+    /// <remarks>
+    /// The comparison is ordinal. The number of lines, the byte order mark, and the final line ending are kept.
+    /// </remarks>
+    /// <param name="oldValue">The text to replace.</param>
+    /// <param name="newValue">The text that replaces every occurrence of <paramref name="oldValue" />.</param>
+    /// <returns>The content with <paramref name="oldValue" /> replaced by <paramref name="newValue" />.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="oldValue" /> or <paramref name="newValue" /> is <see langword="null" />.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="oldValue" /> is empty, or <paramref name="newValue" /> contains <c>\r</c> or <c>\n</c>, which
+    /// would end a line.
+    /// </exception>
+    internal TextFileContent ReplaceInLines(string oldValue, string newValue)
+    {
+        Ensure.NotNull(oldValue);
+        Ensure.NotNull(newValue);
+
+        if (oldValue.Length == 0)
+        {
+            throw new ArgumentException("The text to replace must not be empty.", nameof(oldValue));
+        }
+
+        if (newValue.AsSpan().IndexOfAny('\r', '\n') >= 0)
+        {
+            throw new ArgumentException("The replacement must not contain a line ending.", nameof(newValue));
+        }
+
+        return new TextFileContent(Lines.Select(x => x.Replace(oldValue, newValue, StringComparison.Ordinal)),
+            HasUtf8Bom, HasFinalLineEnding);
+    }
+
+    /// <summary>
     /// Determines whether the specified content has the same lines, byte order mark, and final line ending as this
     /// content.
     /// </summary>

@@ -9,7 +9,9 @@ namespace CreativeCoders.ShadeKit.Core.Workflow.Engine;
 /// performed at once.
 /// </param>
 /// <param name="Checklist">
-/// The repository-relative path of the checklist of the gate, or <see langword="null" /> if the gate has none.
+/// The path of the checklist of the gate as configured in <c>gates.json</c>, or <see langword="null" /> if the gate
+/// has none. The path is relative to <c>.shadekit/templates/</c> and equals the path of the feature's copy relative
+/// to the feature folder, for example <c>checks/definition-of-ready.md</c>.
 /// </param>
 public sealed record TransitionGate(bool Approval, string? Checklist)
 {

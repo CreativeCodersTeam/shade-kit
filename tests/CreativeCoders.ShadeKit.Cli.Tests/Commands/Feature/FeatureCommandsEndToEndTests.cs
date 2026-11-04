@@ -239,6 +239,34 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
 
 
     [Fact]
+    public async Task FeatureNew_OverrideCannotBeWritten_Returns17NamingOverrideAndChangesNothing()
+    {
+        // Arrange
+        await InitAsync();
+        _tempDirectory.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName,
+            KitStorePaths.CurrentFeatureFileName);
+
+        var snapshot = _tempDirectory.TakeSnapshot();
+
+        // Act
+        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
+            "--json");
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.KitFileWriteFailed);
+
+        root.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.KitFileWriteFailed);
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().StartWith("'.shadekit/features/current-feature.json' cannot be written.");
+
+        _tempDirectory.TakeSnapshot()
+            .Should().Equal(snapshot);
+    }
+
+    [Fact]
     public async Task FeatureNew_JsonIssueCannotBeRead_Returns33WithGhSignInHintAndChangesNothing()
     {
         // Arrange

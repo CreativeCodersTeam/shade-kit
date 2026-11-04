@@ -1,6 +1,8 @@
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
+using CreativeCoders.ShadeKit.Core.Gates.Exceptions;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
@@ -17,20 +19,24 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 /// <para>
 /// The current feature is resolved like <c>shade-kit feature current</c>: from the branch, then from the local
 /// override. Every call checks in this order: the current feature is resolved, its <c>feature.json</c> can be read,
-/// its workflow profile is known, its phase state is valid, the feature is not done (only for changing calls), the
+/// its workflow profile is known, its phase state is valid, <c>gates.json</c> can be read (only for
+/// <see cref="StartAsync" /> and <see cref="GetNextAsync" />), the feature is not done (only for changing calls), the
 /// phase is in the profile, and the transition is allowed. Only then, and only if the state changes, the git
-/// identity is read and <c>feature.json</c> is written.
+/// identity is read and <c>feature.json</c> is written; <see cref="StartAsync" /> copies the checklist of the gate
+/// between the two.
 /// </para>
 /// <para>
-/// A call that changes nothing, also a repeated <c>phase start</c>, writes nothing, so <c>feature.json</c> stays
-/// unchanged byte for byte. <see cref="GetSkillsAsync" /> and <see cref="GetNextAsync" /> never write and never read
-/// the git identity. A feature without phase fields, created before the phase engine, counts as being in the initial
-/// state of its profile; the first change writes all phase fields.
+/// A call that changes nothing, also a repeated <c>phase start</c>, leaves <c>feature.json</c> unchanged byte for
+/// byte; a repeated <c>phase start</c> of a pending transition only creates a missing checklist copy.
+/// <see cref="GetSkillsAsync" /> and <see cref="GetNextAsync" /> never write and never read the git identity. A
+/// feature without phase fields, created before the phase engine, counts as being in the initial state of its
+/// profile; the first change writes all phase fields.
 /// </para>
 /// <para>
 /// The warnings of every result are the warnings of resolving the current feature, the format warnings of the read
-/// files, a <c>FeatureIdMismatchWarning</c> if <c>feature.json</c> records another id than its folder name, and the
-/// warnings of the written files; format warnings come first, and every warning is reported once.
+/// files, a <c>FeatureIdMismatchWarning</c> if <c>feature.json</c> records another id than its folder name, the
+/// warnings of reading <c>gates.json</c> (only <see cref="StartAsync" /> and <see cref="GetNextAsync" />, which read
+/// the gates), and the warnings of the written files; format warnings come first, and every warning is reported once.
 /// </para>
 /// </remarks>
 public interface IPhaseWorkflow
@@ -40,6 +46,29 @@ public interface IPhaseWorkflow
     /// an earlier phase, performs a transition whose gate needs no approval, or reports a pending transition or the
     /// current phase without a change.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The gates are read from <c>gates.json</c> before the engine checks the request. If the request is refused,
+    /// nothing is written.
+    /// </para>
+    /// <para>
+    /// If the transition is requested, performed, or already pending, and its gate has a checklist, the feature folder
+    /// gets a copy of the checklist template at the path of the checklist relative to the feature folder, for example
+    /// <c>checks/definition-of-ready.md</c>; an existing copy is left unchanged, so a filled checklist survives a
+    /// reopen and a repeated start. A reopen has no checklist and copies nothing; an
+    /// <see cref="PhaseStartOutcome.AlreadyInProgress" /> or <see cref="PhaseStartOutcome.ResumePending" /> outcome
+    /// copies nothing either.
+    /// </para>
+    /// <para>
+    /// If the state changes, the git identity is read first, then the checklist is copied, then <c>feature.json</c>
+    /// is written; so a missing identity leaves no copy, and a failing copy leaves <c>feature.json</c> unchanged. If
+    /// writing <c>feature.json</c> fails after the copy was created, the copy stays and the next start keeps it. A
+    /// pending transition only gets its copy made sure of; it reads no identity and writes no <c>feature.json</c>.
+    /// </para>
+    /// <para>
+    /// The warnings of the result also contain the warnings of reading <c>gates.json</c> and of writing the copy.
+    /// </para>
+    /// </remarks>
     /// <param name="store">The SHADE kit store of the current feature.</param>
     /// <param name="phase">The name of the requested phase.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
@@ -69,7 +98,15 @@ public interface IPhaseWorkflow
     /// <exception cref="PhaseNotInProfileException"><paramref name="phase" /> is not a phase of the profile.</exception>
     /// <exception cref="PhaseTransitionNotAllowedException">The profile does not allow the transition.</exception>
     /// <exception cref="GitIdentityNotConfiguredException">
-    /// The state changes, but the git identity that the <c>history</c> entry records is not configured.
+    /// The state changes, but the git identity that the <c>history</c> entry records is not configured; nothing is
+    /// written.
+    /// </exception>
+    /// <exception cref="ChecklistTemplateNotFoundException">
+    /// The checklist of the gate has to be copied, but neither the copy nor its template exists; nothing is written.
+    /// </exception>
+    /// <exception cref="PathNotAFileException">
+    /// The checklist of the gate has to be copied, but a directory exists at the path of the copy or of the template;
+    /// nothing is written.
     /// </exception>
     Task<PhaseStartResult> StartAsync(IKitStore store, string phase, CancellationToken cancellationToken = default);
 
@@ -243,6 +280,10 @@ public interface IPhaseWorkflow
     /// <summary>
     /// Gets the current phase of the current feature and its possible next steps; allowed on a done feature.
     /// </summary>
+    /// <remarks>
+    /// The gates are read from <c>gates.json</c>; the warnings of reading it are part of the result. No checklist is
+    /// copied.
+    /// </remarks>
     /// <param name="store">The SHADE kit store of the current feature.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>

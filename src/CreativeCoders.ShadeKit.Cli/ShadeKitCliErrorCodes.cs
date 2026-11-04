@@ -45,6 +45,11 @@ public static class ShadeKitCliErrorCodes
     public const string GitUnavailable = "git-unavailable";
 
     /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.KitFileWriteFailed" />.
+    /// </summary>
+    public const string KitFileWriteFailed = "kit-file-write-failed";
+
+    /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.FormatTooNew" />.
     /// </summary>
     public const string FormatTooNew = "format-too-new";
@@ -146,6 +151,11 @@ public static class ShadeKitCliErrorCodes
     public const string PhaseStateInvalid = "phase-state-invalid";
 
     /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.ChecklistTemplateNotFound" />.
+    /// </summary>
+    public const string ChecklistTemplateNotFound = "checklist-template-not-found";
+
+    /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.Canceled" />.
     /// </summary>
     public const string Canceled = "canceled";
@@ -174,6 +184,7 @@ public static class ShadeKitCliErrorCodes
             ShadeKitCliExitCodes.PathNotAFile => PathNotAFile,
             ShadeKitCliExitCodes.KitRootNotADirectory => KitRootNotADirectory,
             ShadeKitCliExitCodes.GitUnavailable => GitUnavailable,
+            ShadeKitCliExitCodes.KitFileWriteFailed => KitFileWriteFailed,
             ShadeKitCliExitCodes.FormatTooNew => FormatTooNew,
             ShadeKitCliExitCodes.UpgradeNeeded => UpgradeNeeded,
             ShadeKitCliExitCodes.InvalidFile => InvalidFile,
@@ -194,6 +205,7 @@ public static class ShadeKitCliErrorCodes
             ShadeKitCliExitCodes.FeatureDone => FeatureDone,
             ShadeKitCliExitCodes.CompleteNotAllowed => CompleteNotAllowed,
             ShadeKitCliExitCodes.PhaseStateInvalid => PhaseStateInvalid,
+            ShadeKitCliExitCodes.ChecklistTemplateNotFound => ChecklistTemplateNotFound,
             ShadeKitCliExitCodes.Canceled => Canceled,
             ShadeKitCliExitCodes.HostError => HostError,
             _ => throw new ArgumentOutOfRangeException(nameof(exitCode), exitCode, "The exit code is not defined.")

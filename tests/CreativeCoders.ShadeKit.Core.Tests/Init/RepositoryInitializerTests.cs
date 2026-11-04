@@ -15,6 +15,7 @@ using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
+using CreativeCoders.ShadeKit.Core.Tests.Gates;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
 using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Tests.Shared;
@@ -201,7 +202,7 @@ public class RepositoryInitializerTests
         foreach (var fileName in new[] { GitIgnore, ClaudeMd, AgentsMd })
         {
             A.CallTo(() => textFileWriter.WriteAsync(RepositoryFile.Resolve(tempDirectory.RootPath, fileName),
-                    A<TextFileContent>._, A<RepositoryFile?>._, A<CancellationToken>._))
+                    A<TextFileContent>._, A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._))
                 .MustHaveHappenedOnceExactly();
         }
     }
@@ -351,7 +352,7 @@ public class RepositoryInitializerTests
         var textFileWriter = A.Fake<ITextFileWriter>();
         CallToWrite(textFileWriter)
             .ReturnsLazily((RepositoryFile file, TextFileContent content, RepositoryFile? lineEndingFile,
-                CancellationToken token) => realWriter.WriteAsync(file, content, lineEndingFile, token));
+                FileWriteMode mode, CancellationToken token) => realWriter.WriteAsync(file, content, lineEndingFile, mode, token));
         CallToWrite(textFileWriter, failingFileName)
             .ThrowsAsync(new IOException("disk full"));
 
@@ -410,7 +411,7 @@ public class RepositoryInitializerTests
 
         // Assert
         A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
-                A<RepositoryFile?>._, cancellationTokenSource.Token))
+                A<RepositoryFile?>._, A<FileWriteMode>._, cancellationTokenSource.Token))
             .MustHaveHappened(3, Times.Exactly);
     }
 
@@ -425,7 +426,8 @@ public class RepositoryInitializerTests
         var writtenContents = new Dictionary<string, TextFileContent>();
         var textFileWriter = A.Fake<ITextFileWriter>();
         CallToWrite(textFileWriter)
-            .Invokes((RepositoryFile file, TextFileContent content, RepositoryFile? _, CancellationToken _) =>
+            .Invokes((RepositoryFile file, TextFileContent content, RepositoryFile? _, FileWriteMode _,
+                CancellationToken _) =>
                 writtenContents[file.GitPath] = content)
             .Returns(Warnings());
 
@@ -470,7 +472,7 @@ public class RepositoryInitializerTests
             .MustHaveHappenedOnceExactly();
 
         A.CallTo(() => textFileWriter.WriteAsync(RepositoryFile.Resolve(tempDirectory.RootPath, AgentsMd),
-                A<TextFileContent>._, A<RepositoryFile?>._, A<CancellationToken>._))
+                A<TextFileContent>._, A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
 
         result.Warnings
@@ -570,7 +572,8 @@ public class RepositoryInitializerTests
     }
 
     [Fact]
-    public async Task InitializeAsync_GitRepositoryWithoutKitRoot_WritesGatesWithVersionFieldsOnly()
+    [Trait("Requirement", "FP05-AC1")]
+    public async Task InitializeAsync_GitRepositoryWithoutKitRoot_WritesDefaultGates()
     {
         // Arrange
         using var tempDirectory = new TempKitDirectory();
@@ -582,10 +585,32 @@ public class RepositoryInitializerTests
         // Assert
         tempDirectory.ReadFileBytes(KitRoot, "gates.json")
             .Should().Equal(Encoding.UTF8.GetBytes(
-                "{\n" +
-                "  \"schemaVersion\": 1,\n" +
-                $"  \"minEngineVersion\": \"{GetMinEngineVersion(FormatIds.Gates)}\"\n" +
-                "}\n"));
+                ("{\n" +
+                 "  \"schemaVersion\": 1,\n" +
+                 $"  \"minEngineVersion\": \"{GetMinEngineVersion(FormatIds.Gates)}\",\n" +
+                 GatesConfigTests.DefaultGatesJsonBody).ReplaceLineEndings("\n")));
+    }
+
+    [Theory]
+    [Trait("Requirement", "FP05-AC1")]
+    [InlineData(GatesConfig.DefinitionOfReadyChecklist, "| DOR-01 |")]
+    [InlineData(GatesConfig.DefinitionOfDoneChecklist, "| DOD-01 |")]
+    public async Task InitializeAsync_GitRepositoryWithoutKitRoot_WritesShippedChecklistTemplate(string checklist,
+        string firstItem)
+    {
+        // Arrange
+        using var tempDirectory = new TempKitDirectory();
+        tempDirectory.CreateGitRoot();
+        var repositoryPath = ".shadekit/templates/" + checklist;
+        var shippedTemplate = ShippedTemplates.All.Single(x => x.RepositoryPath == repositoryPath);
+
+        // Act
+        await CreateInitializer().InitializeAsync(tempDirectory.RootPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        tempDirectory.ReadFileText(repositoryPath.Split('/'))
+            .Should().Be(new ShippedTemplateReader().ReadContent(shippedTemplate))
+            .And.Contain(firstItem);
     }
 
     [Fact]
@@ -1361,6 +1386,10 @@ public class RepositoryInitializerTests
         gates.Warnings
             .Should().BeEmpty();
 
+        gates.Document.Profiles
+            .Should().BeEquivalentTo(GatesConfig.CreateDefault().Profiles,
+                options => options.WithStrictOrdering());
+
         templatesLock
             .Should().NotBeNull();
 
@@ -1599,7 +1628,8 @@ public class RepositoryInitializerTests
                 TestContext.Current.CancellationToken);
 
             // Assert
-            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            (await act.Should().ThrowAsync<KitFileWriteFailedException>()).Which.InnerException
+                .Should().BeOfType<UnauthorizedAccessException>();
 
             Directory.Exists(kitRootPath)
                 .Should().BeTrue();
@@ -1747,9 +1777,9 @@ public class RepositoryInitializerTests
     {
         return fileName is null
             ? A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._,
-                A<RepositoryFile?>._, A<CancellationToken>._))
+                A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._))
             : A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>.That.Matches(file => file.GitPath == fileName),
-                A<TextFileContent>._, A<RepositoryFile?>._, A<CancellationToken>._));
+                A<TextFileContent>._, A<RepositoryFile?>._, A<FileWriteMode>._, A<CancellationToken>._));
     }
 
     private static Task<IReadOnlyList<KitWarning>> Warnings(params KitWarning[] warnings)

@@ -5,12 +5,14 @@ using CreativeCoders.ShadeKit.Core.Features.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Gates.Warnings;
 using CreativeCoders.ShadeKit.Core.Tests.Features;
 using CreativeCoders.ShadeKit.Core.Workflow;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
 using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
+using FakeItEasy;
 using static CreativeCoders.ShadeKit.Core.Tests.Workflow.PhaseWorkflowTestContext;
 
 namespace CreativeCoders.ShadeKit.Core.Tests.Workflow;
@@ -211,6 +213,36 @@ public sealed class PhaseWorkflowReadTests : IDisposable
         result.Warnings
             .Should().Equal(new FormatWarning(FormatWarningKind.UpgradeNeeded, FeatureFilePath, 1, 2),
                 mismatchWarning);
+    }
+
+    [Fact]
+    public async Task GetNextAsync_WarningsOfGatesRead_ReturnsThemWithFormatWarningsFirstAndWritesNothing()
+    {
+        // Arrange
+        var mismatchWarning = new CurrentFeatureMismatchWarning("gh-7-checkout", FeatureId);
+        var gatesFormatWarning = new FormatWarning(FormatWarningKind.UpgradeNeeded, ".shadekit/gates.json", 1, 2);
+        var defaultsWarning = new GatesDefaultsUsedWarning(IsFileMissing: false);
+        _context.SelectFeature(FeatureId, mismatchWarning);
+        _context.SetGatesConfigWarnings(defaultsWarning, gatesFormatWarning);
+        _context.WriteFeature(PhaseFields(Feature, "refine", null,
+            ["approved", "in-progress", "pending", "pending", "pending", "pending", "pending"]));
+        var store = _context.CreateStore();
+        var snapshot = _context.Repository.TakeSnapshot();
+
+        // Act
+        var result = await _context.CreateWorkflow().GetNextAsync(store, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Warnings
+            .Should().Equal(gatesFormatWarning, mismatchWarning, defaultsWarning);
+
+        A.CallTo(() => _context.GateProvider.GetGatesAsync(store, A<WorkflowProfile>._, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+
+        _context.VerifyChecklistNotCopied();
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
     }
 
     [Fact]

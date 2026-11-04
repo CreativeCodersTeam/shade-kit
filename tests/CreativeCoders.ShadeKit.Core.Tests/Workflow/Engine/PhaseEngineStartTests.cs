@@ -10,6 +10,7 @@ public class PhaseEngineStartTests
 {
     [Theory]
     [Trait("Requirement", "FP04-AC2")]
+    [Trait("Requirement", "FP05-AC6")]
     [MemberData(nameof(BuiltInProfilePhasesWithNext), MemberType = typeof(PhaseEngineTestData))]
     public void Start_NextPhaseWhileCurrentInProgress_RequestsTransitionAndReturnsSkillsOfNextPhase(
         string profileName, int currentIndex)

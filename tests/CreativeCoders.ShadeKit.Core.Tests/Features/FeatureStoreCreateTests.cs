@@ -14,6 +14,7 @@ using CreativeCoders.ShadeKit.Core.Formats.Warnings;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
+using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Tests.Files;
 using CreativeCoders.ShadeKit.Core.Tests.Store;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
@@ -1257,12 +1258,46 @@ public sealed class FeatureStoreCreateTests : IDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        (await act.Should().ThrowAsync<Exception>())
-            .Which
+        var exception = (await act.Should().ThrowAsync<KitFileWriteFailedException>()).Which;
+
+        exception.FilePath
+            .Should().Be(".shadekit/features/current-feature.json");
+
+        exception.InnerException
             .Should().Match<Exception>(x => x is IOException || x is UnauthorizedAccessException);
 
         _context.Repository.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task CreateAsync_FeatureFileWriteFails_RemovesStagingFolderAndThrowsKitFileWriteFailedException()
+    {
+        // Arrange
+        var failure = new IOException("The disk is full.");
+        var textFileWriter = A.Fake<ITextFileWriter>();
+        A.CallTo(() => textFileWriter.WriteAsync(A<RepositoryFile>._, A<TextFileContent>._, A<RepositoryFile?>._,
+                A<FileWriteMode>._, A<CancellationToken>._))
+            .ThrowsAsync(failure);
+        var featureStore = _context.CreateFeatureStore();
+
+        // Act
+        var act = () => featureStore.CreateAsync(
+            TestKitStores.Create(Path.Combine(_context.RepositoryRootPath, ".shadekit"), textFileWriter),
+            _context.CreateRequest(IssueUrl, "Login SSO"), TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<KitFileWriteFailedException>()).Which;
+
+        exception.FilePath
+            .Should().Be($".shadekit/features/{IssueFeatureId}/feature.json");
+
+        exception.InnerException
+            .Should().BeSameAs(failure);
+
+        Directory.EnumerateFileSystemEntries(
+                Path.Combine(_context.RepositoryRootPath, KitStorePaths.RootPath, KitStorePaths.FeaturesDirName))
+            .Should().BeEmpty("the staging folder is removed and no feature folder is moved into place");
     }
 
     [Fact]

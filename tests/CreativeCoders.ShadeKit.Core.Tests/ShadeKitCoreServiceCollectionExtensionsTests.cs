@@ -4,6 +4,7 @@ using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Files;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Init;
@@ -83,7 +84,8 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IWorkflowProfileCatalog), typeof(BuiltInWorkflowProfileCatalog))]
     [InlineData(typeof(IFeatureStore), typeof(FeatureStore))]
     [InlineData(typeof(IPhaseEngine), typeof(PhaseEngine))]
-    [InlineData(typeof(ITransitionGateProvider), typeof(DefaultTransitionGateProvider))]
+    [InlineData(typeof(ITransitionGateProvider), typeof(GatesConfigTransitionGateProvider))]
+    [InlineData(typeof(IFeatureChecklistWriter), typeof(FeatureChecklistWriter))]
     [InlineData(typeof(IPhaseWorkflow), typeof(PhaseWorkflow))]
     [InlineData(typeof(IUrlContentReader), typeof(HttpUrlContentReader))]
     [InlineData(typeof(IGhExecutableLocator), typeof(GhExecutableLocator))]
@@ -187,6 +189,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFeatureStore))]
     [InlineData(typeof(IPhaseEngine))]
     [InlineData(typeof(ITransitionGateProvider))]
+    [InlineData(typeof(IFeatureChecklistWriter))]
     [InlineData(typeof(IPhaseWorkflow))]
     [InlineData(typeof(IUrlContentReader))]
     [InlineData(typeof(IGhExecutableLocator))]
@@ -234,6 +237,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFeatureStore))]
     [InlineData(typeof(IPhaseEngine))]
     [InlineData(typeof(ITransitionGateProvider))]
+    [InlineData(typeof(IFeatureChecklistWriter))]
     [InlineData(typeof(IPhaseWorkflow))]
     [InlineData(typeof(IUrlContentReader))]
     [InlineData(typeof(IGhExecutableLocator))]

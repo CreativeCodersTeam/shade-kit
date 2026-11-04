@@ -38,6 +38,7 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.InvalidManagedSection)]
     [InlineData(ShadeKitCliExitCodes.UnsupportedFileEncoding)]
     [InlineData(ShadeKitCliExitCodes.GitUnavailable)]
+    [InlineData(ShadeKitCliExitCodes.KitFileWriteFailed)]
     [InlineData(ShadeKitCliExitCodes.GitIdentityMissing)]
     [InlineData(ShadeKitCliExitCodes.NoCurrentFeature)]
     [InlineData(ShadeKitCliExitCodes.FeatureAlreadyExists)]
@@ -53,6 +54,7 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.FeatureDone)]
     [InlineData(ShadeKitCliExitCodes.CompleteNotAllowed)]
     [InlineData(ShadeKitCliExitCodes.PhaseStateInvalid)]
+    [InlineData(ShadeKitCliExitCodes.ChecklistTemplateNotFound)]
     [InlineData(ShadeKitCliExitCodes.Canceled)]
     [InlineData(ShadeKitCliExitCodes.HostError)]
     public void ToProcessExitCode_NonNegativeExitCode_ReturnsExitCodeUnchanged(int exitCode)
@@ -94,6 +96,7 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.FeatureDone, 44)]
     [InlineData(ShadeKitCliExitCodes.CompleteNotAllowed, 45)]
     [InlineData(ShadeKitCliExitCodes.PhaseStateInvalid, 46)]
+    [InlineData(ShadeKitCliExitCodes.ChecklistTemplateNotFound, 47)]
     [InlineData(ShadeKitCliExitCodes.Canceled, 130)]
     [InlineData(ShadeKitCliExitCodes.HostError, 255)]
     public void ExitCodes_Contract_HaveStableValues(int exitCode, int expectedExitCode)

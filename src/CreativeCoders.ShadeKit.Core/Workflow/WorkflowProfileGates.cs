@@ -1,0 +1,18 @@
+using CreativeCoders.ShadeKit.Core.Warnings;
+using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+
+namespace CreativeCoders.ShadeKit.Core.Workflow;
+
+/// <summary>
+/// Represents the configured gates of the transitions into the phases of a workflow profile, together with the
+/// warnings of reading the gate configuration.
+/// </summary>
+/// <param name="Gates">
+/// The configured gate of the transition into a phase of the profile, keyed by the name of the target phase (compared
+/// ordinally). A phase without an entry gets <see cref="TransitionGate.Default" /> from the
+/// <see cref="IPhaseEngine" />.
+/// </param>
+/// <param name="Warnings">The warnings of reading the gate configuration, in the order the provider reports them.</param>
+public sealed record WorkflowProfileGates(
+    IReadOnlyDictionary<string, TransitionGate> Gates,
+    IReadOnlyList<KitWarning> Warnings);

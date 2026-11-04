@@ -1,8 +1,11 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Warnings;
+using CreativeCoders.ShadeKit.Core.Gates;
+using CreativeCoders.ShadeKit.Core.Gates.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Tests.Features;
 using CreativeCoders.ShadeKit.Core.Workflow;
@@ -30,6 +33,11 @@ public sealed class PhaseWorkflowRobustnessTests : IDisposable
 
     private static string FinishInProgress => PhaseFields(Quick, "finish", null,
         ["approved", "approved", "in-progress"]);
+
+    private const string DefinitionOfDone = GatesConfig.DefinitionOfDoneChecklist;
+
+    private static string QuickInProgress => PhaseFields(Quick, "quick", null,
+        ["approved", "in-progress", "pending"]);
 
     private static string QuickAwaitingFinish => PhaseFields(Quick, "quick", "finish",
         ["approved", "awaiting-approval", "pending"]);
@@ -157,7 +165,7 @@ public sealed class PhaseWorkflowRobustnessTests : IDisposable
         _context.WriteFeature(PhaseFields(Quick, "quick", null, ["approved", "in-progress", "pending"]),
             WorkflowProfileNames.Quick);
         var failure = new InvalidKitFileException(".shadekit/gates.json", "Broken.");
-        A.CallTo(() => _context.GateProvider.GetGateAsync(A<IKitStore>._, A<WorkflowProfile>._, A<string>._,
+        A.CallTo(() => _context.GateProvider.GetGatesAsync(A<IKitStore>._, A<WorkflowProfile>._,
                 A<CancellationToken>._))
             .ThrowsAsync(failure);
         var snapshot = _context.Repository.TakeSnapshot();
@@ -174,6 +182,153 @@ public sealed class PhaseWorkflowRobustnessTests : IDisposable
             .Should().BeEquivalentTo(snapshot);
 
         _context.VerifyIdentityNotRead();
+    }
+
+    [Fact]
+    public async Task StartAsync_GateProviderFailsOnDoneFeature_ThrowsProviderExceptionBeforeFeatureDone()
+    {
+        // Arrange
+        _context.WriteFeature(PhaseFields(Quick, "finish", null, ["approved", "approved", "approved"]),
+            WorkflowProfileNames.Quick, "done");
+        var failure = new InvalidKitFileException(".shadekit/gates.json", "Broken.");
+        A.CallTo(() => _context.GateProvider.GetGatesAsync(A<IKitStore>._, A<WorkflowProfile>._,
+                A<CancellationToken>._))
+            .ThrowsAsync(failure);
+        var snapshot = _context.Repository.TakeSnapshot();
+
+        // Act
+        var act = () => _context.CreateWorkflow().StartAsync(_context.CreateStore(), WorkflowPhaseNames.Finish,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidKitFileException>()).Which
+            .Should().BeSameAs(failure);
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+
+        _context.VerifyChecklistNotCopied();
+        _context.VerifyIdentityNotRead();
+    }
+
+    [Fact]
+    public async Task StartAsync_ChecklistTemplateMissing_ThrowsTemplateNotFoundAndLeavesFeatureFileUnchanged()
+    {
+        // Arrange
+        _context.ChecklistWriter = new FeatureChecklistWriter();
+        _context.WriteFeature(QuickInProgress, WorkflowProfileNames.Quick);
+        _context.SetGate(WorkflowPhaseNames.Finish, new TransitionGate(true, DefinitionOfDone));
+        var snapshot = _context.Repository.TakeSnapshot();
+
+        // Act
+        var act = () => _context.CreateWorkflow().StartAsync(_context.CreateStore(), WorkflowPhaseNames.Finish,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<ChecklistTemplateNotFoundException>()).Which.TemplatePath
+            .Should().Be(".shadekit/templates/checks/definition-of-done.md");
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task StartAsync_TransitionPendingAndChecklistTemplateMissing_ThrowsTemplateNotFoundAndReadsNoIdentity()
+    {
+        // Arrange
+        _context.ChecklistWriter = new FeatureChecklistWriter();
+        _context.WriteFeature(QuickAwaitingFinish, WorkflowProfileNames.Quick);
+        _context.SetGate(WorkflowPhaseNames.Finish, new TransitionGate(true, DefinitionOfDone));
+        var snapshot = _context.Repository.TakeSnapshot();
+
+        // Act
+        var act = () => _context.CreateWorkflow().StartAsync(_context.CreateStore(), WorkflowPhaseNames.Finish,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowAsync<ChecklistTemplateNotFoundException>();
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+
+        _context.VerifyIdentityNotRead();
+    }
+
+    [Fact]
+    public async Task GetNextAsync_GateProviderFails_ThrowsItsExceptionAndWritesNothing()
+    {
+        // Arrange
+        _context.WriteFeature(QuickInProgress, WorkflowProfileNames.Quick);
+        var failure = new InvalidKitFileException(".shadekit/gates.json", "Broken.");
+        A.CallTo(() => _context.GateProvider.GetGatesAsync(A<IKitStore>._, A<WorkflowProfile>._,
+                A<CancellationToken>._))
+            .ThrowsAsync(failure);
+        var snapshot = _context.Repository.TakeSnapshot();
+
+        // Act
+        var act = () => _context.CreateWorkflow().GetNextAsync(_context.CreateStore(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidKitFileException>()).Which
+            .Should().BeSameAs(failure);
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+
+        _context.VerifyChecklistNotCopied();
+    }
+
+    [Fact]
+    public async Task StartAsync_DirectoryAtChecklistCopyPath_ThrowsPathNotAFileAndLeavesFeatureFileUnchanged()
+    {
+        // Arrange
+        _context.ChecklistWriter = new FeatureChecklistWriter();
+        _context.WriteFeature(QuickInProgress, WorkflowProfileNames.Quick);
+        _context.SetGate(WorkflowPhaseNames.Finish, new TransitionGate(true, DefinitionOfDone));
+        _context.WriteKitFile("# DoD", KitStorePaths.TemplatesDirName, KitStorePaths.ChecksDirName,
+            "definition-of-done.md");
+        _context.Repository.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName, FeatureId,
+            KitStorePaths.ChecksDirName, "definition-of-done.md");
+        var snapshot = _context.Repository.TakeSnapshot();
+
+        // Act
+        var act = () => _context.CreateWorkflow().StartAsync(_context.CreateStore(), WorkflowPhaseNames.Finish,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await act.Should().ThrowAsync<PathNotAFileException>();
+
+        _context.Repository.TakeSnapshot()
+            .Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
+    public async Task StartAsync_FeatureFileWriteFailsAfterChecklistCopy_ThrowsAndKeepsCopy()
+    {
+        // Arrange
+        _context.ChecklistWriter = new FeatureChecklistWriter();
+        _context.WriteFeature(QuickInProgress, WorkflowProfileNames.Quick);
+        var featureTextBefore = _context.ReadFeatureText();
+        _context.SetGate(WorkflowPhaseNames.Finish, new TransitionGate(true, DefinitionOfDone));
+        _context.WriteKitFile("# DoD of {{feature-id}}\n", KitStorePaths.TemplatesDirName,
+            KitStorePaths.ChecksDirName, "definition-of-done.md");
+        var failure = new IOException("Disk full.");
+
+        // Act
+        var act = () => _context.CreateWorkflow().StartAsync(_context.CreateStoreFailingFeatureWrite(failure),
+            WorkflowPhaseNames.Finish, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await act.Should().ThrowAsync<IOException>()).Which
+            .Should().BeSameAs(failure);
+
+        _context.ReadFeatureText()
+            .Should().Be(featureTextBefore);
+
+        _context.Repository.ReadFileText(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName, FeatureId,
+                KitStorePaths.ChecksDirName, "definition-of-done.md")
+            .Should().Be($"# DoD of {FeatureId}\n");
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Files.Exceptions;
 using CreativeCoders.ShadeKit.Core.Warnings;
 
 namespace CreativeCoders.ShadeKit.Core.Files;
@@ -18,10 +19,17 @@ public sealed class TextFileWriter(ILineEndingResolver lineEndingResolver) : ITe
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<KitWarning>> WriteAsync(RepositoryFile file, TextFileContent content,
-        RepositoryFile? lineEndingFile = null, CancellationToken cancellationToken = default)
+        RepositoryFile? lineEndingFile = null, FileWriteMode mode = FileWriteMode.Overwrite,
+        CancellationToken cancellationToken = default)
     {
         Ensure.NotNull(file);
         Ensure.NotNull(content);
+
+        if (!Enum.IsDefined(mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "The write mode is not supported.");
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
         var resolution = await _lineEndingResolver.GetLineEndingAsync(lineEndingFile ?? file, cancellationToken)
@@ -35,7 +43,14 @@ public sealed class TextFileWriter(ILineEndingResolver lineEndingResolver) : ITe
         // The file lies below the repository root, so it always has a parent directory.
         Directory.CreateDirectory(Path.GetDirectoryName(file.FullPath)!);
 
-        await File.WriteAllBytesAsync(file.FullPath, bytes, cancellationToken).ConfigureAwait(false);
+        if (mode == FileWriteMode.CreateNew)
+        {
+            await WriteNewFileAsync(file, bytes, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await File.WriteAllBytesAsync(file.FullPath, bytes, cancellationToken).ConfigureAwait(false);
+        }
 
         return resolution.Warnings;
     }
@@ -44,6 +59,29 @@ public sealed class TextFileWriter(ILineEndingResolver lineEndingResolver) : ITe
     public Task PrepareAsync(IReadOnlyCollection<RepositoryFile> files, CancellationToken cancellationToken = default)
     {
         return _lineEndingResolver.PrepareAsync(files, cancellationToken);
+    }
+
+    // FileMode.CreateNew checks and creates the file in one operation of the file system. The file system reports an
+    // existing file with a plain IOException, so the failure counts as "exists" only if a file exists afterwards. The
+    // exception names the file relative to the repository root, as the messages of the store do.
+    private static async Task WriteNewFileAsync(RepositoryFile file, byte[] bytes, CancellationToken cancellationToken)
+    {
+        FileStream stream;
+
+        try
+        {
+            stream = new FileStream(file.FullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 1,
+                FileOptions.Asynchronous);
+        }
+        catch (IOException exception) when (File.Exists(file.FullPath))
+        {
+            throw new FileAlreadyExistsException(file.GitPath, exception);
+        }
+
+        await using (stream.ConfigureAwait(false))
+        {
+            await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

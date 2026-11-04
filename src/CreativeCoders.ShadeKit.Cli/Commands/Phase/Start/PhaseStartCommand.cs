@@ -84,6 +84,14 @@ public class PhaseStartCommand(
         _context.Console.MarkupLine($"Transition: {transition}");
         _context.Console.MarkupLine($"Current phase: {PhaseTextFormat.FormatPhase(data.CurrentPhase)}");
         _context.Console.MarkupLine($"Gate: {gate}");
+
+        if (data.Gate is { Checklist: not null, ChecklistCreated: { } checklistCreated })
+        {
+            var copy = checklistCreated ? "created".ToSuccessMarkup() : "already exists".ToMutedMarkup();
+
+            _context.Console.MarkupLine($"Checklist copy: {copy}");
+        }
+
         _context.Console.MarkupLine($"Phase skill: {data.Skills.PhaseSkill.ToEscapedMarkup()}");
         _context.Console.MarkupLine($"General skills: {PhaseTextFormat.FormatSkills(data.Skills.GeneralSkills)}");
 
