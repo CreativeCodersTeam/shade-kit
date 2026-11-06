@@ -156,6 +156,11 @@ public static class ShadeKitCliErrorCodes
     public const string ChecklistTemplateNotFound = "checklist-template-not-found";
 
     /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.VersionMismatch" />.
+    /// </summary>
+    public const string VersionMismatch = "version-mismatch";
+
+    /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.Canceled" />.
     /// </summary>
     public const string Canceled = "canceled";
@@ -206,6 +211,7 @@ public static class ShadeKitCliErrorCodes
             ShadeKitCliExitCodes.CompleteNotAllowed => CompleteNotAllowed,
             ShadeKitCliExitCodes.PhaseStateInvalid => PhaseStateInvalid,
             ShadeKitCliExitCodes.ChecklistTemplateNotFound => ChecklistTemplateNotFound,
+            ShadeKitCliExitCodes.VersionMismatch => VersionMismatch,
             ShadeKitCliExitCodes.Canceled => Canceled,
             ShadeKitCliExitCodes.HostError => HostError,
             _ => throw new ArgumentOutOfRangeException(nameof(exitCode), exitCode, "The exit code is not defined.")

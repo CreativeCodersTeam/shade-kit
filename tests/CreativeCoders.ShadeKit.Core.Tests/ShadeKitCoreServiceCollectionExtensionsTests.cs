@@ -13,6 +13,7 @@ using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Trackers;
+using CreativeCoders.ShadeKit.Core.Versions;
 using CreativeCoders.ShadeKit.Core.Web;
 using CreativeCoders.ShadeKit.Core.Workflow;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
@@ -67,6 +68,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFormatRegistry), typeof(FormatRegistry))]
     [InlineData(typeof(IVersionedJsonSerializer), typeof(VersionedJsonSerializer))]
     [InlineData(typeof(IEngineVersionProvider), typeof(EngineVersionProvider))]
+    [InlineData(typeof(IEngineVersionChecker), typeof(EngineVersionChecker))]
     [InlineData(typeof(IRepositoryInitializer), typeof(RepositoryInitializer))]
     [InlineData(typeof(IShippedTemplateReader), typeof(ShippedTemplateReader))]
     [InlineData(typeof(IGitIgnorePlanner), typeof(GitIgnorePlanner))]
@@ -171,6 +173,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IGitRepositoryLocator))]
     [InlineData(typeof(IVersionedJsonSerializer))]
     [InlineData(typeof(IEngineVersionProvider))]
+    [InlineData(typeof(IEngineVersionChecker))]
     [InlineData(typeof(IRepositoryInitializer))]
     [InlineData(typeof(IShippedTemplateReader))]
     [InlineData(typeof(IGitIgnorePlanner))]
@@ -219,6 +222,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFormatRegistry))]
     [InlineData(typeof(IVersionedJsonSerializer))]
     [InlineData(typeof(IEngineVersionProvider))]
+    [InlineData(typeof(IEngineVersionChecker))]
     [InlineData(typeof(IRepositoryInitializer))]
     [InlineData(typeof(IShippedTemplateReader))]
     [InlineData(typeof(IGitIgnorePlanner))]

@@ -74,4 +74,10 @@ public static class ShadeKitCliWarningCodes
     /// its profile does not have, or the first phase of its profile, and is ignored.
     /// </summary>
     public const string GateEntryIgnored = "gate-entry-ignored";
+
+    /// <summary>
+    /// Represents the warning code reported when the major or minor version of a prerelease engine differs from that
+    /// of the version passed with <c>shade-kit version --expect</c>; the engine is used anyway.
+    /// </summary>
+    public const string EnginePrereleaseVersionMismatch = "engine-prerelease-version-mismatch";
 }

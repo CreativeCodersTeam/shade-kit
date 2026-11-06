@@ -55,6 +55,7 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.CompleteNotAllowed)]
     [InlineData(ShadeKitCliExitCodes.PhaseStateInvalid)]
     [InlineData(ShadeKitCliExitCodes.ChecklistTemplateNotFound)]
+    [InlineData(ShadeKitCliExitCodes.VersionMismatch)]
     [InlineData(ShadeKitCliExitCodes.Canceled)]
     [InlineData(ShadeKitCliExitCodes.HostError)]
     public void ToProcessExitCode_NonNegativeExitCode_ReturnsExitCodeUnchanged(int exitCode)
@@ -97,6 +98,7 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.CompleteNotAllowed, 45)]
     [InlineData(ShadeKitCliExitCodes.PhaseStateInvalid, 46)]
     [InlineData(ShadeKitCliExitCodes.ChecklistTemplateNotFound, 47)]
+    [InlineData(ShadeKitCliExitCodes.VersionMismatch, 50)]
     [InlineData(ShadeKitCliExitCodes.Canceled, 130)]
     [InlineData(ShadeKitCliExitCodes.HostError, 255)]
     public void ExitCodes_Contract_HaveStableValues(int exitCode, int expectedExitCode)
@@ -116,7 +118,7 @@ public class ShadeKitCliExitCodesTests
         exitCodes
             .Should().OnlyHaveUniqueItems()
             .And.AllSatisfy(code =>
-                (code is 2 or >= 10 and <= 49 or 130 or 255).Should().BeTrue($"{code} is outside the ranges"));
+                (code is 2 or >= 10 and <= 59 or 130 or 255).Should().BeTrue($"{code} is outside the ranges"));
     }
 
     [Fact]

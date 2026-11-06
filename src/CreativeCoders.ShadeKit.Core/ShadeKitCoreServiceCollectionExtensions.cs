@@ -9,6 +9,7 @@ using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Trackers;
+using CreativeCoders.ShadeKit.Core.Versions;
 using CreativeCoders.ShadeKit.Core.Web;
 using CreativeCoders.ShadeKit.Core.Workflow;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
@@ -50,6 +51,7 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IFormatRegistry>(_ => FormatRegistry.CreateDefault());
         services.TryAddSingleton<IVersionedJsonSerializer, VersionedJsonSerializer>();
         services.TryAddSingleton<IEngineVersionProvider, EngineVersionProvider>();
+        services.TryAddSingleton<IEngineVersionChecker, EngineVersionChecker>();
         services.TryAddSingleton<IRepositoryInitializer, RepositoryInitializer>();
         services.TryAddSingleton<IShippedTemplateReader, ShippedTemplateReader>();
         services.TryAddSingleton<IGitIgnorePlanner, GitIgnorePlanner>();
