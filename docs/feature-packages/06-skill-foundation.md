@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill, `shade-kit-next-phase` is advisory, next-steps message, active phase asks the human), and 2026-11-04 (split into the sub-features 06-1 to 06-9; version in the skill frontmatter, checked by the engine; `shade-kit-report` moved to package 15) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill, `shade-kit-next-phase` is advisory, next-steps message, active phase asks the human), 2026-11-04 (split into the sub-features 06-1 to 06-9; version in the skill frontmatter, checked by the engine; `shade-kit-report` moved to package 15), and 2026-11-06 (06-2: Claude Code does not show the frontmatter to the model) |
 | Source | Concept §3.2, §3.3, §3.4, §11.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 01, 03, 04, 05 |
 | Enables | 07, 08, and every phase package (09–17) |
@@ -51,7 +51,7 @@ Package 06 is built in sub-features. Each one has its own functional description
 
 - The kit version of a skill is hardcoded in its frontmatter as `metadata.version` and committed, because the skills must be installable as a plugin with their version included. Every skill carries it, all with the same value (06-2).
 - The engine compares: `shade-kit version --json --expect <version>`. Major and minor must be equal, patch may differ; a prerelease engine only warns on a mismatch (06-1). New exit code range 50–59 with `50 version-mismatch`.
-- The handshake runs in `shade-kit-phase-entry` for the phase skills, and in `shade-kit-next-phase`, `new`, `discuss`, and `drop` with their own call. General skills that are only loaded by another skill do not check. FP06-AC1 ("every kit skill stops") therefore holds for every skill the human calls.
+- The handshake runs in `shade-kit-phase-entry` for the phase skills, and in `shade-kit-next-phase`, `new`, `discuss`, and `drop` with their own call. General skills that are only loaded by another skill do not check (wording of 2026-11-04; clarified on 2026-11-06, 06-2: except `shade-kit-phase-entry`, which checks for the phase skills). FP06-AC1 ("every kit skill stops") therefore holds for every skill the human calls.
 - The entry protocol and the next-steps message are general skills of their own (`shade-kit-phase-entry`, `shade-kit-next-steps`).
 - `shade-kit-research` runs one general subagent per focus with the instructions of the calling skill; no research agent definitions.
 - The skill texts are checked by a review by hand; no automated tests of the skill texts.
@@ -99,7 +99,7 @@ The acceptance criteria are in the sub-features. The former criteria of this pac
 ## Open points
 
 - **Alignment of the skill version with GitVersion skipped for now** (06-2).
-- **Unverified:** whether Claude Code shows the frontmatter to the model (06-2); Copilot and Codex in package 08.
+- Frontmatter visibility: Claude Code 2.1.318 does not show the frontmatter to the model (checked on 2026-11-06 in 06-2, on project-level skills), so the handshake step states the version in its text. **Unverified** for Copilot and Codex (package 08).
 - Until package 07 builds `integrations update`, the mismatch message of 06-1 names updating the skills by hand.
 - Exact skill names (concept open question 6).
 - Phase skills are restricted to user invocation only by convention (06-2); a technical restriction is a possible later addition.

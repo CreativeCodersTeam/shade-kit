@@ -26,7 +26,7 @@ When the developer does not know where a feature stands, `shade-kit-next-phase` 
 
 Shows the human where a feature stands and which skill to call next. It is advisory: it starts no phase skill, never runs a gate check, and never calls `phase start`, `phase approve`, or `phase reject`. **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)), replacing "starts the phase skill the human chooses" from the skills interview on 2026-10-17.
 
-1. Version handshake: `shade-kit version --json --expect <version>` with the version from its own frontmatter (06-1, 06-2). **Decided** on 2026-11-04. On a mismatch, or if `shade-kit` is not found, end with the next-steps message (06-3).
+1. Version handshake: `shade-kit version --json --expect <version>` with the version stated in the text of the step, as 06-2 sets out; the frontmatter is the source, but the model does not see it (06-1, 06-2). **Decided** on 2026-11-04, the version in the text on 2026-11-06. On a mismatch, or if `shade-kit` is not found, end with the next-steps message (06-3).
 2. `shade-kit feature current --json`. If not resolved: list the features (`feature list --json`) and ask which one to use; after the human picks one, the skill may call `feature set <id>`, which starts no phase. Otherwise name `/shade-kit-new` and end.
 3. `shade-kit phase next --json` (package 04). The skill does not derive the steps from the profile.
 

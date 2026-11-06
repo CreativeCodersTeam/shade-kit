@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-11-04 (split from package 06) |
+| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-06 (implementation: visibility check in Claude Code, `metadata.version` `0.7.0` in every skill, the SemVer rule, who checks, the wording of the handshake step, the quoted `shade-kit-report` description, the skill conventions in `CLAUDE.md`). AC1 and AC2 implemented; AC3: rule and wording set, applied by 06-5, 06-6, and 06-9. |
 | Source | [06 Skill foundation](06-skill-foundation.md) (skill conventions, version handshake), Concept §3.2, §3.3 |
 | Kind | Cross-cutting (all skills) |
 | Depends on | 06-1 |
@@ -22,7 +22,7 @@ Every kit skill follows the same rules and carries its kit version. A team can i
 
 ### Out of scope
 
-- Which skills call the version check, and how (06-5, 06-6, 06-9).
+- Writing the version check into the skills (06-5, 06-6, 06-9); this package sets who checks and the wording.
 - Copilot and Codex (package 08).
 - The automated alignment of the skill version with GitVersion (see open points).
 
@@ -40,35 +40,57 @@ Every kit skill follows the same rules and carries its kit version. A team can i
 
 ### Kit version in the frontmatter
 
-- Every skill under `skills/` carries its kit version in the frontmatter, hardcoded and committed, because the skills must be installable as a plugin with their version included. **Decided** on 2026-11-04.
+- Every skill under `skills/` carries its kit version in the frontmatter, hardcoded and committed, because the skills must be installable as a plugin with their version included. **Decided** on 2026-11-04. **Implemented** (all 17 skills under `skills/`, `0.7.0`).
 
   ```yaml
   ---
   name: shade-kit-next-phase
   description: ...
   metadata:
-    version: 0.8.0
+    version: 0.7.0
   ---
   ```
 
-- All skills carry the same version. **Decided** on 2026-11-04.
-- The version is a SemVer version without a prerelease label. **Proposed.**
-- The skills that the human calls pass this version to `shade-kit version --json --expect <version>` (06-1). Skills that are only loaded by another skill do not check (06-5, 06-6, 06-9). **Decided** on 2026-11-04.
+- All skills carry the same version. **Decided** on 2026-11-04. **Implemented** (`0.7.0`).
+- The version is a SemVer version without a prerelease label. **Decided** on 2026-11-06 (was **Proposed**).
+- The value is written unquoted (`version: 0.7.0`). A `description` that YAML would not read unchanged as a plain scalar is written in double quotes: unquoted, a `: ` makes the frontmatter invalid YAML (Claude Code then loads the skill with empty metadata), and a ` #` silently cuts the description at the comment. **Decided** on 2026-11-06 (implementation).
+- **Implemented** (found in the implementation on 2026-11-06): the unquoted description of `shade-kit-report` contained `: `, so its frontmatter was invalid YAML. The description is now in double quotes, with the same text.
+- Who checks the version. **Decided** on 2026-11-04, clarified on 2026-11-06 (implementation clarification): the earlier wording said that the skills the human calls check and that skills only loaded by another skill do not, but `shade-kit-phase-entry`, which only the phase skills load, checks for them (06-5).
+  - `shade-kit-phase-entry` checks for the phase skills, which do not check themselves (06-5).
+  - The other skills the human calls (`new`, `discuss`, `drop`, `shade-kit-next-phase`) check in their own first step (06-6, 06-9).
+  - Every other skill that only another skill loads does not check.
+
+  Each check passes this version to `shade-kit version --json --expect <version>` (06-1).
 
 ### Frontmatter visibility
 
-- **Unverified:** whether Claude Code shows the frontmatter, and `metadata.version` in it, to the model when it loads a skill. This sub-feature checks it first. **Decided** on 2026-11-04. Copilot and Codex are checked in package 08.
-- If the model does not see the frontmatter, every skill that checks the version also states the version in the text of its handshake step. The frontmatter stays the source; both places hold the same value. **Decided** on 2026-11-04.
+- This sub-feature checks first whether Claude Code shows the frontmatter, and `metadata.version` in it, to the model when it loads a skill. **Decided** on 2026-11-04. Copilot and Codex are checked in package 08.
+- Result: Claude Code does not show the frontmatter to the model. Checked on 2026-11-06 with Claude Code 2.1.318 and the model `claude-opus-5-5`.
+  - How it was checked: a canary skill `shade-kit-canary` in the project-level `.claude/skills/`, with `metadata.version: 9.8.7` in its frontmatter and a marker line in its body that names no version. Two headless `claude -p` runs with the built-in file and shell tools blocked (`--disallowedTools "Read,Bash,Grep,Glob,Edit,Write,NotebookEdit,WebFetch,WebSearch,Agent"`): one loaded the skill through the Skill tool, the other through the slash command `/shade-kit-canary`. The saved session transcripts were searched. The model called no tool except `Skill`; MCP tools that can read files were not blocked, but none was used. An independent verifier repeated the Skill tool run and got the same result.
+  - What the model gets, on both paths: `Base directory for this skill: <dir>`, followed by the body after the closing `---`. The frontmatter is removed completely: no `---`, no `name:`, no `metadata`, no `9.8.7`. The body marker is there. `name` and `description` reach the model only through the skill listing (`- <name>: <description>`), not as YAML.
+  - Two further skills loaded in the implementing session gave the same result: `implement-direct`, called by the user as a slash command, and `skill-creator`, loaded through the Skill tool.
+  - The documentation agrees. The [Claude Code skills documentation](https://code.claude.com/docs/en/skills) says of `metadata`: "Free-form YAML map for your own key-value data, … read by your own tooling from `SKILL.md`. Claude Code doesn't act on its contents". It also says that "the rendered `SKILL.md` content enters the conversation as a single message", and that malformed frontmatter "loads the skill body with empty metadata". The Agent Skills overview (platform.claude.com) puts `name` and `description` from the YAML frontmatter at level 1 and the `SKILL.md` body at level 2.
+  - Limits: one run per path; project-level skills only (plugin and user-level skills were not run). Copilot and Codex are checked in package 08.
+- The model does not see the frontmatter, so the fallback applies: every skill that calls `version --expect` also states the version in the text of its handshake step. The frontmatter stays the source; both places hold the same value. **Decided** on 2026-11-04; applies since the check on 2026-11-06. This sub-feature sets the rule and the wording; 06-5, 06-6, and 06-9 write them into the handshake steps. **Decided** on 2026-11-06.
+- The handshake step has this wording in every skill that calls `version --expect`. **Decided** on 2026-11-06.
+
+  ```text
+  Version handshake: run `shade-kit version --json --expect 0.7.0`; 0.7.0 is the kit version of this skill (`metadata.version` in its frontmatter).
+  ```
+
+- When the version is raised, the frontmatter of every skill and every handshake text change together: search the skills for the old value. **Decided** on 2026-11-06.
 
 ## Acceptance criteria
 
-- **FP06-2-AC1** Every skill under `skills/` has `metadata.version` in its frontmatter, and all skills have the same SemVer value.
-- **FP06-2-AC2** The result of the visibility check for Claude Code is recorded in this package with the date and how it was checked.
-- **FP06-2-AC3** If the check finds that the model does not see the frontmatter, every skill that calls `version --expect` states the same version in the text of its handshake step.
+Status as of 2026-11-06. There are no automated tests of the skill texts (skill conventions above), so each criterion names how it is proven.
+
+- **FP06-2-AC1** Every skill under `skills/` has `metadata.version` in its frontmatter, and all skills have the same SemVer value. **Implemented**: all 17 skills carry `metadata.version: 0.7.0`. Proven by a one-off check that all values are equal, are strings, and are a plain `x.y.z`; no automated test, by the rule of this package. Skill-creator's `quick_validate.py` (17 of 17 valid) shows that the frontmatter stays valid; it does not read `metadata`.
+- **FP06-2-AC2** The result of the visibility check for Claude Code is recorded in this package with the date and how it was checked. **Implemented**: recorded under Frontmatter visibility (2026-11-06, Claude Code 2.1.318).
+- **FP06-2-AC3** If the check finds that the model does not see the frontmatter, every skill that calls `version --expect` states the same version in the text of its handshake step. Rule and wording **Decided** on 2026-11-06 (Frontmatter visibility). No skill calls `version --expect` yet: the skeletons call `shade-kit version --json` without it. 06-5, 06-6, and 06-9 apply the rule when they write the handshake steps.
 
 ## Open points
 
 - **Alignment with GitVersion skipped for now** (2026-11-04): the skill version is maintained by hand, and nothing checks it against the release tag. This breaks the rule in `GitVersion.yml` that no version is maintained by hand. Possible later solutions: a test that all skills carry the same version, a check in the `verify-tag` job of the release workflow, or a Cake task that writes the version (package 19).
-- Initial value of `metadata.version`: the version of the first release that ships the skills, for example `0.8.0`. **Open.**
+- Initial value of `metadata.version`: answered, `0.7.0`. **Decided** on 2026-11-06. The value is raised by hand for every release whose major or minor differs: before a `v0.8.0` tag, for example, every skill must carry `0.8.0`, or a release engine fails every handshake with exit code 50 (06-1).
 - Exact skill names (concept open question 6).
 - Phase skills are restricted to user invocation only by convention; a technical restriction (Claude Code `disable-model-invocation`, and whatever Copilot and Codex offer) is a possible later addition.

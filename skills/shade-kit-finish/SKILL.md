@@ -1,6 +1,8 @@
 ---
 name: shade-kit-finish
 description: SHADE kit phase skill for `finish` (every profile). Checks the Definition of Done at the entry gate, optionally writes the feature report (requirements, tests, checks, approvals) with shade-kit-report, and sets the feature to done. Use when the user wants to finish, close, or complete the current SHADE kit feature. Runs only when the user calls it by name (`/shade-kit-finish`); never load it on your own or from another skill.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-finish

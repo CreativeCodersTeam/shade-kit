@@ -1,6 +1,8 @@
 ---
 name: shade-kit-next-phase
 description: SHADE kit status and next steps. Finds the current feature and its phase and shows the possible next steps, each with the SHADE kit phase skill the user calls for it. Starts no skill. Use when the user says "continue", "next phase", "what's next", or asks where a SHADE kit feature stands.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-next-phase

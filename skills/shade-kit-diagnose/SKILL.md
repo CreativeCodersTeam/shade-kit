@@ -1,6 +1,8 @@
 ---
 name: shade-kit-diagnose
 description: SHADE kit phase skill for `diagnose` (bugfix profile). Reproduces the reported bug, finds and proves its root cause, and writes diagnosis.md plus a spec.md with the expected behaviour. Use when the user wants to diagnose, reproduce, or find the root cause of the bug of the current SHADE kit feature. Runs only when the user calls it by name (`/shade-kit-diagnose`); never load it on your own or from another skill.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-diagnose

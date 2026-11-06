@@ -36,7 +36,7 @@ Every skill the human calls is gated and ends the same way before its phase is w
 
 ### `new`, `discuss`, `drop`
 
-- Step 1 is the version handshake with the version from the skill's own frontmatter: `shade-kit version --json --expect <version>` (06-1, 06-2). **Decided** on 2026-11-04.
+- Step 1 is the version handshake with the version stated in the text of the step, as 06-2 sets out (the frontmatter is the source, but the model does not see it): `shade-kit version --json --expect <version>` (06-1, 06-2). **Decided** on 2026-11-04, the version in the text on 2026-11-06.
 - The last step loads `shade-kit-next-steps` (06-3).
 
 ### Clean-up
@@ -62,4 +62,4 @@ All skill texts under `skills/` are reviewed by hand against the conventions of 
 
 ## Open points
 
-None.
+- Until 06-5, 06-6, and 06-9 are built, the handshake step of the skeletons cannot detect a mismatch: it calls `version --json` without `--expect`, and the model does not see `metadata.version` (06-2).

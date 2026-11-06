@@ -33,7 +33,7 @@ A developer starts every phase by calling its skill (for example `/shade-kit-pla
 
 ### Version handshake
 
-- The skill calls `shade-kit version --json --expect <version>` with the version from its own frontmatter (06-1, 06-2). **Decided** on 2026-11-04.
+- The skill calls `shade-kit version --json --expect <version>` with the version stated in the text of its handshake step, as 06-2 sets out; the frontmatter is the source, but the model does not see it (06-1, 06-2). **Decided** on 2026-11-04, the version in the text on 2026-11-06.
 - The phase skills do not check the version themselves; this check covers them, because all kit skills carry the same version (06-2). **Decided** on 2026-11-04.
 - On a mismatch, or if `shade-kit` is not found, the skill stops before any phase work and ends with the next-steps message (06-3), which names what to update and how. A warning `engine-prerelease-version-mismatch` is shown, and the skill continues.
 

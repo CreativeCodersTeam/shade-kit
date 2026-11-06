@@ -1,6 +1,8 @@
 ---
 name: shade-kit-discuss
 description: SHADE kit free brainstorming on any topic (an idea, a design question, a problem), with or without a current feature. Writes discussion notes that can feed a new feature or a refine round. Use when the user wants to discuss, brainstorm, or think something through in a SHADE kit repository.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-discuss

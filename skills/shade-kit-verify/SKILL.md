@@ -1,6 +1,8 @@
 ---
 name: shade-kit-verify
 description: SHADE kit phase skill for `verify` (feature and bugfix profiles). Runs the quality checks, confirms that every acceptance criterion is covered by a passing test, and writes verification.md and a playbook.md for manual tests. Use when the user wants to verify or test the implementation of the current SHADE kit feature. Runs only when the user calls it by name (`/shade-kit-verify`); never load it on your own or from another skill.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-verify
