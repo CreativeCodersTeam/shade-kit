@@ -135,7 +135,7 @@ Check order (package 04): reading `gates.json` (20–22) comes after the phase s
 - Item IDs are `DOR-nn` and `DOD-nn`. Teams may add, change, or remove items; existing IDs stay stable.
 - `Result` is `pending` in the template and becomes `pass`, `fail`, or `n/a` (see "Items that do not apply"). A table is used instead of checkboxes because a checkbox cannot express "not applicable".
 - `Evidence` names what was checked, with IDs, paths, or command results; for `fail`, what is missing.
-- On every run the agent overwrites `Result` and `Evidence` and adds one line to the "Check runs" section: date and time, `pass` or `fail`, and the failed item IDs.
+- On every run the agent overwrites `Result` and `Evidence` and adds one line to the "Check runs" section: date, time with its UTC offset, `pass` or `fail`, and the failed item IDs, for example `- 2026-11-08 14:05 +01:00 – fail (DOR-04, DOR-07)`. The UTC offset: **Decided** on 2026-11-08 (06-4 implementation clarification); the templates show it in their guidance comment.
 
 ### Default content
 
@@ -165,6 +165,8 @@ Check order (package 04): reading `gates.json` (20–22) comes after the phase s
 | DOD-07 | Every deviation from the plan is recorded in `plan.md` with a reason, and every migration or rollout step is done or handed over. |
 | DOD-08 | The documentation matches the change (for example README, changelog, API docs), or Evidence states why no update is needed. |
 | DOD-09 | Every item in `playbook.md` is checked off by a human. |
+
+The checklist check gets the `coverageThreshold` of DOD-02 from `shade-kit gate info`, not from `config.json` ([06-4](06-4-gate-check-skill.md)). **Decided** on 2026-11-08 (06-4 implementation clarification).
 
 ### Items that do not apply
 

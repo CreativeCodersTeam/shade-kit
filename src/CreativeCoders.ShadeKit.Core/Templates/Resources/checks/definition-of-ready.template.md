@@ -27,7 +27,7 @@ Feature: `{{feature-id}}` · Spec: [spec.md](../spec.md)
 ## Check runs
 
 <!--
-One line per run: date and time, result (pass | fail), and the IDs of the failed items.
+One line per run: date, time with its UTC offset, result (pass | fail), and the IDs of the failed items.
 Example:
-- 2026-10-17 14:05 – fail (DOR-04, DOR-07)
+- 2026-10-17 14:05 +02:00 – fail (DOR-04, DOR-07)
 -->

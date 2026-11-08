@@ -72,6 +72,7 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IPhaseEngine, PhaseEngine>();
         services.TryAddSingleton<ITransitionGateProvider, GatesConfigTransitionGateProvider>();
         services.TryAddSingleton<IFeatureChecklistWriter, FeatureChecklistWriter>();
+        services.TryAddSingleton<IGateInfoReader, GateInfoReader>();
         services.TryAddSingleton<IPhaseWorkflow, PhaseWorkflow>();
 
         services.AddHttpClient(HttpUrlContentReader.HttpClientName)
