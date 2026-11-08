@@ -25,6 +25,6 @@ public class GateInfoCommandOptions : JsonCommandOptions
     /// current feature, resolved as <c>shade-kit feature current</c> resolves it. The default is
     /// <see langword="null" />.
     /// </value>
-    [OptionParameter('f', "feature", HelpText = "The id of the feature (default: the current feature)")]
+    [OptionParameter("feature", HelpText = "The id of the feature (default: the current feature)")]
     public string? FeatureId { get; set; }
 }

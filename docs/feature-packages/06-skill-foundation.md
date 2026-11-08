@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill, `shade-kit-next-phase` is advisory, next-steps message, active phase asks the human), 2026-11-04 (split into the sub-features 06-1 to 06-9; version in the skill frontmatter, checked by the engine; `shade-kit-report` moved to package 15), 2026-11-06 (06-2: Claude Code does not show the frontmatter to the model), and 2026-11-08 (06-3: `shade-kit-next-steps` implemented) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill, `shade-kit-next-phase` is advisory, next-steps message, active phase asks the human), 2026-11-04 (split into the sub-features 06-1 to 06-9; version in the skill frontmatter, checked by the engine; `shade-kit-report` moved to package 15), 2026-11-06 (06-2: Claude Code does not show the frontmatter to the model), and 2026-11-08 (06-3: `shade-kit-next-steps` implemented; 06-4: `shade-kit-gate-check` and `shade-kit gate info` implemented) |
 | Source | Concept §3.2, §3.3, §3.4, §11.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 01, 03, 04, 05 |
 | Enables | 07, 08, and every phase package (09–17) |
@@ -20,7 +20,7 @@ Package 06 is built in sub-features. Each one has its own functional description
 | 06-1 | [Engine version check (`version --expect`)](06-1-engine-version-check.md) | .NET | 01 |
 | 06-2 | [Skill conventions and version metadata](06-2-skill-conventions-and-version.md) | Cross-cutting | 06-1 |
 | 06-3 | [Next-steps message (`shade-kit-next-steps`)](06-3-next-steps-skill.md) | Skill (new) | 06-2 |
-| 06-4 | [Checklist check (`shade-kit-gate-check`)](06-4-gate-check-skill.md) | Skill | 06-2 |
+| 06-4 | [Checklist check (`shade-kit-gate-check`)](06-4-gate-check-skill.md) | Skill and CLI command (`gate info`) | 05, 06-2 |
 | 06-5 | [Entry protocol (`shade-kit-phase-entry`)](06-5-phase-entry-skill.md) | Skill (new) | 06-1, 06-3, 06-4 |
 | 06-6 | [`shade-kit-next-phase`](06-6-next-phase-skill.md) | Skill | 06-1, 06-3 |
 | 06-7 | [Interview (`shade-kit-interview`)](06-7-interview-skill.md) | Skill | 06-2 |

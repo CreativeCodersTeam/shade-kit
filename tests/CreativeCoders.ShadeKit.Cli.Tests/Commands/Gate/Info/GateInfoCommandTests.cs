@@ -279,50 +279,41 @@ public class GateInfoCommandTests
 
     [Theory]
     [Trait("Requirement", "FP06-4-AC5")]
-    [Trait("Requirement", "FP06-4-AC6")]
-    [MemberData(nameof(MappedReadFailures))]
-    public async Task ExecuteAsync_JsonMappedFailure_WritesErrorEnvelopeWithMappedCode(Exception exception,
-        int exitCode, string errorCode)
+    [MemberData(nameof(FeatureResolutionFailures))]
+    public async Task ExecuteAsync_JsonFeatureResolutionFailure_WritesErrorEnvelopeWithMappedCode(
+        Exception exception, int exitCode, string errorCode)
     {
-        // Arrange
-        using var jsonOutput = new StringWriter();
-        var reader = A.Fake<IGateInfoReader>();
-        A.CallTo(() => reader.ReadAsync(A<IKitStore>._, A<string>._, A<string?>._, A<CancellationToken>._))
-            .ThrowsAsync(exception);
-
-        var command = CreateCommand(new TestConsole(), reader, jsonOutput);
-
-        // Act
-        var act = () => command.ExecuteAsync(new GateInfoCommandOptions { Phase = "plan", Json = true });
-
-        // Assert
-        var abort = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
-
-        abort.ExitCode
-            .Should().Be(exitCode);
-
-        abort.PrintMessage
-            .Should().BeFalse();
-
-        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
-
-        document.RootElement.GetProperty("ok").GetBoolean()
-            .Should().BeFalse();
-
-        document.RootElement.GetProperty("error").GetProperty("code").GetString()
-            .Should().Be(errorCode);
+        await RunWithReaderFailureAndAssertEnvelopeAsync(exception, "plan", exitCode, errorCode);
     }
 
-    public static TheoryData<Exception, int, string> MappedReadFailures() =>
+    public static TheoryData<Exception, int, string> FeatureResolutionFailures() =>
         new TheoryData<Exception, int, string>
         {
             { new FeatureNotFoundException(Id), ShadeKitCliExitCodes.FeatureNotFound, ShadeKitCliErrorCodes.FeatureNotFound },
             { new InvalidFeatureIdException("Bad"), ShadeKitCliExitCodes.InvalidFeatureId, ShadeKitCliErrorCodes.InvalidFeatureId },
-            { new NoCurrentFeatureException(), ShadeKitCliExitCodes.NoCurrentFeature, ShadeKitCliErrorCodes.NoCurrentFeature },
-            {
-                new PhaseNotInProfileException("nope", "feature", ["new", "refine", "map", "plan"]),
-                ShadeKitCliExitCodes.PhaseNotInProfile, ShadeKitCliErrorCodes.PhaseNotInProfile
-            },
+            { new NoCurrentFeatureException(), ShadeKitCliExitCodes.NoCurrentFeature, ShadeKitCliErrorCodes.NoCurrentFeature }
+        };
+
+    [Fact]
+    [Trait("Requirement", "FP06-4-AC6")]
+    public async Task ExecuteAsync_JsonPhaseNotInProfile_WritesErrorEnvelopeWithPhaseNotInProfile()
+    {
+        await RunWithReaderFailureAndAssertEnvelopeAsync(
+            new PhaseNotInProfileException("nope", "feature", ["new", "refine", "map", "plan"]), "nope",
+            ShadeKitCliExitCodes.PhaseNotInProfile, ShadeKitCliErrorCodes.PhaseNotInProfile);
+    }
+
+    [Theory]
+    [MemberData(nameof(OtherReadFailures))]
+    public async Task ExecuteAsync_JsonOtherReadFailure_WritesErrorEnvelopeWithMappedCode(Exception exception,
+        int exitCode, string errorCode)
+    {
+        await RunWithReaderFailureAndAssertEnvelopeAsync(exception, "plan", exitCode, errorCode);
+    }
+
+    public static TheoryData<Exception, int, string> OtherReadFailures() =>
+        new TheoryData<Exception, int, string>
+        {
             {
                 new GitUnavailableException(["symbolic-ref", "--short", "-q", "HEAD"], "git not found"),
                 ShadeKitCliExitCodes.GitUnavailable, ShadeKitCliErrorCodes.GitUnavailable
@@ -550,8 +541,43 @@ public class GateInfoCommandTests
         feature.LongName
             .Should().Be("feature");
 
+        feature.ShortName
+            .Should().BeNull();
+
         feature.IsRequired
             .Should().BeFalse();
+    }
+
+    private static async Task RunWithReaderFailureAndAssertEnvelopeAsync(Exception exception, string phase,
+        int exitCode, string errorCode)
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var reader = A.Fake<IGateInfoReader>();
+        A.CallTo(() => reader.ReadAsync(A<IKitStore>._, A<string>._, A<string?>._, A<CancellationToken>._))
+            .ThrowsAsync(exception);
+
+        var command = CreateCommand(new TestConsole(), reader, jsonOutput);
+
+        // Act
+        var act = () => command.ExecuteAsync(new GateInfoCommandOptions { Phase = phase, Json = true });
+
+        // Assert
+        var abort = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
+
+        abort.ExitCode
+            .Should().Be(exitCode);
+
+        abort.PrintMessage
+            .Should().BeFalse();
+
+        using var document = FeatureCommandTestHelper.ParseOutput(jsonOutput);
+
+        document.RootElement.GetProperty("ok").GetBoolean()
+            .Should().BeFalse();
+
+        document.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(errorCode);
     }
 
     private static GateInfoResult CreateResult(GateInfoGate? gate, double? coverageThreshold,

@@ -1,4 +1,5 @@
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Cli.Commands.Phase;
 using CreativeCoders.ShadeKit.Core.Gates;
 
 namespace CreativeCoders.ShadeKit.Cli.Commands.Gate.Info;
@@ -29,7 +30,7 @@ public sealed record GateInfoCommandData(
     string FeatureId,
     string Profile,
     string FeatureDir,
-    IReadOnlyList<GateInfoCommandPhaseData> Phases,
+    IReadOnlyList<PhaseSnapshotData> Phases,
     GateInfoCommandGateData? Gate,
     double? CoverageThreshold)
 {
@@ -46,7 +47,7 @@ public sealed record GateInfoCommandData(
         Ensure.NotNull(result);
 
         return new GateInfoCommandData(result.FeatureId, result.Profile, result.Paths.FeatureDir,
-            [.. result.Phases.Select(GateInfoCommandPhaseData.FromSnapshot)],
+            [.. result.Phases.Select(PhaseSnapshotData.FromSnapshot)],
             result.Gate is null ? null : GateInfoCommandGateData.FromGate(result.Gate),
             result.CoverageThreshold);
     }
