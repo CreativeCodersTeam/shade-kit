@@ -1,6 +1,8 @@
 ---
 name: shade-kit-new
 description: SHADE kit phase skill for `new`. Creates a feature with a workflow profile (feature, bugfix, quick) from free text, an issue URL, a Markdown file, or discussion notes; the CLI writes request.md. Use when the user wants to start a new SHADE kit feature, bug fix, or quick change. Runs only when the user calls it by name (`/shade-kit-new`); never load it on your own or from another skill.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-new

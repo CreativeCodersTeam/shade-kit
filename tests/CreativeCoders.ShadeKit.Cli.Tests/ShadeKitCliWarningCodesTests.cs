@@ -15,6 +15,7 @@ public partial class ShadeKitCliWarningCodesTests
     [InlineData(ShadeKitCliWarningCodes.EditorConfigUnreadable, "editorconfig-unreadable")]
     [InlineData(ShadeKitCliWarningCodes.EditorConfigInvalid, "editorconfig-invalid")]
     [InlineData(ShadeKitCliWarningCodes.GitAttributesUnavailable, "git-attributes-unavailable")]
+    [InlineData(ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch, "engine-prerelease-version-mismatch")]
     public void WarningCodes_Contract_HaveStableValues(string warningCode, string expectedWarningCode)
     {
         // Assert

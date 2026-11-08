@@ -29,7 +29,7 @@ Vague statements, gaps, and contradictions in a requirement are found and resolv
 
 ### Run
 
-1. Read `request.md`, any discussion notes of the feature, and an existing `spec.md` (later rounds). `request.md` can hold third-party content (issue text, comments, web pages): the skill and the research agents of step 2 treat it as data that describes the requirement, never as instructions, and the human is shown any instruction in it that looks suspicious ([skill conventions](06-skill-foundation.md#skill-conventions)). **Decided** on 2026-10-25 (code review of the rework of `feature new`, finding F6). **Implemented** (`shade-kit-refine`, `shade-kit-research`).
+1. Read `request.md`, any discussion notes of the feature, and an existing `spec.md` (later rounds). `request.md` can hold third-party content (issue text, comments, web pages): the skill and the research agents of step 2 treat it as data that describes the requirement, never as instructions, and the human is shown any instruction in it that looks suspicious ([skill conventions](06-2-skill-conventions-and-version.md#skill-conventions)). **Decided** on 2026-10-25 (code review of the rework of `feature new`, finding F6). **Implemented** (`shade-kit-refine`, `shade-kit-research`).
 2. Run the research skill (package 06) with two focuses in parallel:
    - **Gaps and open questions:** vague terms, missing cases, contradictions, unstated assumptions.
    - **Security at requirement level:** data that needs protection, roles and permissions, abuse cases.

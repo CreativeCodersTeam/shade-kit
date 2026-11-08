@@ -1,6 +1,8 @@
 ---
 name: shade-kit-plan
 description: SHADE kit phase skill for `plan` (feature and bugfix profiles). Writes plan.md with design decisions and test strategy and tasks.md with the requirement-to-test mapping and coverage matrix; short variant for bug fixes. Use when the user wants to plan the implementation of the current SHADE kit feature. Runs only when the user calls it by name (`/shade-kit-plan`); never load it on your own or from another skill.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-plan

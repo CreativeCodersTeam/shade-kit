@@ -7,8 +7,9 @@ namespace CreativeCoders.ShadeKit.Cli;
 /// </summary>
 /// <remarks>
 /// <c>0</c> means success, also with warnings. Ranges per area: 10–19 store, 20–29 format, 30–39 features, 40–49
-/// phases and gates, 255 host. <see cref="InvalidArguments" /> (<c>2</c>) and <see cref="Canceled" /> (<c>130</c>)
-/// belong to no area. Every exit code has an error code in <see cref="ShadeKitCliErrorCodes" />.
+/// phases and gates, 50–59 versions and integrations, 255 host. <see cref="InvalidArguments" /> (<c>2</c>) and
+/// <see cref="Canceled" /> (<c>130</c>) belong to no area. Every exit code has an error code in
+/// <see cref="ShadeKitCliErrorCodes" />.
 /// </remarks>
 public static class ShadeKitCliExitCodes
 {
@@ -208,6 +209,13 @@ public static class ShadeKitCliExitCodes
     /// error code is <see cref="ShadeKitCliErrorCodes.ChecklistTemplateNotFound" />.
     /// </summary>
     public const int ChecklistTemplateNotFound = 47;
+
+    /// <summary>
+    /// Represents the exit code returned when <c>shade-kit version --expect</c> names a version whose major or minor
+    /// version differs from that of the running release engine. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.VersionMismatch" />.
+    /// </summary>
+    public const int VersionMismatch = 50;
 
     /// <summary>
     /// Represents the exit code returned when the user cancels a running command, for example by pressing Ctrl+C. The

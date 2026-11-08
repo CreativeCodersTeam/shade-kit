@@ -1,6 +1,8 @@
 ---
 name: shade-kit-refine
 description: SHADE kit phase skill for `refine` (feature profile). Clarifies the requirement of the current feature through research and a structured interview and writes spec.md with requirement IDs, acceptance criteria, and out of scope. Can run several times. Use when the user wants to refine, clarify, or specify the current SHADE kit feature. Runs only when the user calls it by name (`/shade-kit-refine`); never load it on your own or from another skill.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-refine

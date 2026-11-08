@@ -1,6 +1,8 @@
 ---
 name: shade-kit-drop
 description: SHADE kit skill to drop a feature from any phase. Deletes the feature after explicit confirmation and clears the local override only if it points to the dropped feature. Use when the user wants to drop, cancel, abandon, or delete a SHADE kit feature.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-drop

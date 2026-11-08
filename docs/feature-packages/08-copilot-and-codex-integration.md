@@ -72,3 +72,4 @@ From this package on, every phase package (09–17) counts as done only when its
 ## Open points
 
 - Concept open question 5 is the content of step 1.
+- Frontmatter visibility (06-2, 2026-11-06): this package checks whether Copilot and Codex show the skill frontmatter, and `metadata.version` in it, to the model, and how their parsers read the unquoted `version: 0.7.0` (as a string, as 06-2 expects). **Unverified.**

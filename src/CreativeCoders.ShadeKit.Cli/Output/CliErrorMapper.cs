@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Reflection;
 using CreativeCoders.Cli.Core;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Cli.Commands.Version;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
@@ -19,6 +21,9 @@ using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Versions;
+using CreativeCoders.ShadeKit.Core.Versions.Exceptions;
+using CreativeCoders.ShadeKit.Core.Versions.Warnings;
 using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
@@ -47,9 +52,14 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     /// <param name="exception">The exception to map.</param>
     /// <returns>
     /// The CLI error for <paramref name="exception" />, or <see langword="null" /> if it is not an expected failure
-    /// of the SHADE kit core.
+    /// of the SHADE kit core. An <see cref="InvalidSemanticVersionException" /> gets the exit code
+    /// <see cref="ShadeKitCliExitCodes.InvalidArguments" />, because the version it rejects comes from the arguments;
+    /// its message names neither an option nor a command, so that it fits every argument that is checked with it.
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="exception" /> is <see langword="null" />.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The direction of an <see cref="EngineVersionMismatchException" /> is not supported.
+    /// </exception>
     public CliError? Map(Exception exception)
     {
         Ensure.NotNull(exception);
@@ -178,6 +188,13 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 "changed. Restore the template, for example from git, or change the 'checklist' of the gate, then " +
                 "run the command again."),
 
+            EngineVersionMismatchException e => CliError.Create(ShadeKitCliExitCodes.VersionMismatch,
+                CreateEngineVersionMismatchMessage(e.EngineVersion, e.ExpectedVersion, e.Direction)),
+
+            InvalidSemanticVersionException e => CliError.Create(ShadeKitCliExitCodes.InvalidArguments,
+                $"Invalid arguments: '{e.Value}' is not a SemVer version such as 1.2.3 or 1.2.3-beta.1. Run " +
+                "'shade-kit --help' for usage."),
+
             _ => null
         };
     }
@@ -190,7 +207,8 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     /// <see langword="static" />, because the failure happens in the CLI host before any service of the run exists.
     /// Exceptions wrapped in <see cref="TargetInvocationException" /> are unwrapped. An
     /// <see cref="CreativeCoders.SysConsole.Cli.Parsing.Exceptions.OptionCreationFailedException" /> is not mapped: it
-    /// is a defect of the CLI, not of the arguments.
+    /// is a defect of the CLI, not of the arguments. An <see cref="ExpectedVersionMissingException" /> (<c>--expect</c>
+    /// without a value) gets a text that names <c>--expect</c>.
     /// </remarks>
     /// <param name="exception">The exception that ended the run.</param>
     /// <param name="args">The command-line arguments of the run.</param>
@@ -210,6 +228,8 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         {
             RequiredArgumentMissingException e => CreateRequiredArgumentMissingText(e),
             NotAllArgumentsMatchException e => CreateNotMatchedArgumentsText(e),
+            ExpectedVersionMissingException =>
+                "--expect needs a SemVer version such as 1.2.3 or 1.2.3-beta.1, but got none",
             OptionParserException => "the arguments could not be read",
             _ => null
         };
@@ -311,6 +331,11 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
 
             GateEntryIgnoredWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.GateEntryIgnored,
                 CreateGateEntryIgnoredMessage(w.ProfileName, w.PhaseName, w.Reason)),
+
+            EnginePrereleaseVersionMismatchWarning w => new CliJsonMessage(
+                ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch,
+                $"The prerelease engine {w.EngineVersion} does not fit the kit skills {w.ExpectedVersion} (the major " +
+                "and minor versions differ); it is used anyway because it is a prerelease."),
 
             _ => throw new ArgumentOutOfRangeException(nameof(warning), warning,
                 "The warning is not supported.")
@@ -547,6 +572,30 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 "gate a checklist file of its own.",
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "The reason is not supported.")
         };
+    }
+
+    private static string CreateEngineVersionMismatchMessage(string engineVersion, string expectedVersion,
+        EngineVersionMismatchDirection direction)
+    {
+        var remedy = direction switch
+        {
+            EngineVersionMismatchDirection.EngineOlder =>
+                $"Update the engine to {FormatMajorMinor(expectedVersion)}",
+            EngineVersionMismatchDirection.EngineNewer =>
+                $"Update the SHADE kit skills to {FormatMajorMinor(engineVersion)} by hand",
+            _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, "The direction is not supported.")
+        };
+
+        return $"The SHADE kit engine {engineVersion} does not fit the kit skills {expectedVersion}: the major and " +
+               $"minor versions must be equal. {remedy}, then run the skill again.";
+    }
+
+    // The checker throws the exception only for valid versions; any other text is named as a whole.
+    private static string FormatMajorMinor(string version)
+    {
+        return SemanticVersion.TryParse(version, out var semanticVersion)
+            ? string.Create(CultureInfo.InvariantCulture, $"{semanticVersion.Major}.{semanticVersion.Minor}")
+            : version;
     }
 
     private static string CreateVersionMismatchText(string filePath, int fileVersion, int currentVersion)

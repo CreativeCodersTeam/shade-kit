@@ -1,6 +1,8 @@
 ---
 name: shade-kit-interview
 description: SHADE kit general skill for a structured clarification interview, one topic at a time with an own proposal per question. Loaded by the SHADE kit skills discuss, refine, diagnose, plan, and quick; not meant to be called directly.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-interview

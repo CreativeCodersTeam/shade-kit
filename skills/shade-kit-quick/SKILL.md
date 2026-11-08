@@ -1,6 +1,8 @@
 ---
 name: shade-kit-quick
 description: SHADE kit phase skill for the `quick` phase (quick profile). Runs short clarification, a compact spec, implementation with tests, simplify and review, and a self-check in one go, with a single approval at the end. Use when the current SHADE kit feature has the quick profile and the user wants to implement it. Runs only when the user calls it by name (`/shade-kit-quick`); never load it on your own or from another skill.
+metadata:
+  version: 0.7.0
 ---
 
 # shade-kit-quick

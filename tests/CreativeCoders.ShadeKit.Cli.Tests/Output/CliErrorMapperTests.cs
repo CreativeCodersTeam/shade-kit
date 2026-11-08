@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.New;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
+using CreativeCoders.ShadeKit.Cli.Commands.Version;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
@@ -18,6 +19,9 @@ using CreativeCoders.ShadeKit.Core.Git.Warnings;
 using CreativeCoders.ShadeKit.Core.Init.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
+using CreativeCoders.ShadeKit.Core.Versions;
+using CreativeCoders.ShadeKit.Core.Versions.Exceptions;
+using CreativeCoders.ShadeKit.Core.Versions.Warnings;
 using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
@@ -803,6 +807,137 @@ public class CliErrorMapperTests
     }
 
     [Fact]
+    [Trait("Requirement", "FP06-1-AC1")]
+    [Trait("Requirement", "FP06-1-AC2")]
+    public void Map_EngineVersionMismatchWithOlderEngine_ReturnsExitCode50NamingVersionsAndEngineUpdate()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new EngineVersionMismatchException("1.2.0", "1.3.1-beta.1+build.7",
+            EngineVersionMismatchDirection.EngineOlder));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.VersionMismatch, ShadeKitCliErrorCodes.VersionMismatch,
+                "The SHADE kit engine 1.2.0 does not fit the kit skills 1.3.1-beta.1+build.7: the major and minor " +
+                "versions must be equal. Update the engine to 1.3, then run the skill again."));
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC1")]
+    [Trait("Requirement", "FP06-1-AC2")]
+    public void Map_EngineVersionMismatchWithNewerEngine_ReturnsExitCode50NamingVersionsAndSkillsUpdate()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new EngineVersionMismatchException("2.1.4", "1.9.0+build.2",
+            EngineVersionMismatchDirection.EngineNewer));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.VersionMismatch, ShadeKitCliErrorCodes.VersionMismatch,
+                "The SHADE kit engine 2.1.4 does not fit the kit skills 1.9.0+build.2: the major and minor versions " +
+                "must be equal. Update the SHADE kit skills to 2.1 by hand, then run the skill again."));
+    }
+
+    [Theory]
+    [InlineData(EngineVersionMismatchDirection.EngineOlder, "Update the engine to 1.x, then")]
+    [InlineData(EngineVersionMismatchDirection.EngineNewer, "Update the SHADE kit skills to engine by hand, then")]
+    public void Map_EngineVersionMismatchWithVersionsThatAreNotSemVer_NamesVersionsWhole(
+        EngineVersionMismatchDirection direction, string expectedRemedy)
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new EngineVersionMismatchException("engine", "1.x", direction));
+
+        // Assert
+        error
+            .Should().NotBeNull();
+
+        error.Message
+            .Should().StartWith("The SHADE kit engine engine does not fit the kit skills 1.x:")
+            .And.Contain(expectedRemedy);
+    }
+
+    [Fact]
+    public void Map_EngineVersionMismatchWithUndefinedDirection_ThrowsArgumentOutOfRangeException()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var act = () => mapper.Map(new EngineVersionMismatchException("1.2.0", "1.3.0",
+            (EngineVersionMismatchDirection)99));
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .WithParameterName("direction");
+    }
+
+    [Theory]
+    [Trait("Requirement", "FP06-1-AC5")]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Map_InvalidSemanticVersionEmptyOrWhitespace_NamesValueVerbatim(string value)
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidSemanticVersionException(value));
+
+        // Assert
+        error
+            .Should().NotBeNull();
+
+        error.Message
+            .Should().Contain($"'{value}' is not a SemVer version");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC5")]
+    public void Map_InvalidSemanticVersion_ReturnsInvalidArgumentsNamingValueAndGeneralHelp()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidSemanticVersionException("v1.2"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
+                "Invalid arguments: 'v1.2' is not a SemVer version such as 1.2.3 or 1.2.3-beta.1. Run " +
+                "'shade-kit --help' for usage."));
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC5")]
+    public void Map_InvalidSemanticVersion_NamesNeitherExpectOptionNorVersionCommand()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidSemanticVersionException("abc"));
+
+        // Assert
+        error
+            .Should().NotBeNull();
+
+        // The Core exception is generic: a second caller must not get a message about --expect.
+        error.Message
+            .Should().NotContain("--expect")
+            .And.NotContain("version --help");
+    }
+
+    [Fact]
     public void Map_KitFileWriteFailed_ReturnsExitCode17NamingFileCauseAndFix()
     {
         // Arrange
@@ -1365,6 +1500,24 @@ public class CliErrorMapperTests
             .WithParameterName("reason");
     }
 
+    [Theory]
+    [Trait("Requirement", "FP06-1-AC4")]
+    [InlineData(EngineVersionMismatchDirection.EngineOlder)]
+    [InlineData(EngineVersionMismatchDirection.EngineNewer)]
+    public void MapWarning_EnginePrereleaseVersionMismatch_ReturnsPrereleaseWarningNamingVersions(
+        EngineVersionMismatchDirection direction)
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(
+            new EnginePrereleaseVersionMismatchWarning("1.3.0-beta.1", "1.2.0", direction));
+
+        // Assert
+        warning
+            .Should().Be(new CliJsonMessage(ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch,
+                "The prerelease engine 1.3.0-beta.1 does not fit the kit skills 1.2.0 (the major and minor versions " +
+                "differ); it is used anyway because it is a prerelease."));
+    }
+
     [Fact]
     public void MapWarning_EveryConcreteCoreWarning_ReturnsCodeAndEveryWarningCodeOnce()
     {
@@ -1619,6 +1772,23 @@ public class CliErrorMapperTests
         error!.Message
             .Should().Be("Invalid arguments: the arguments '--bogus 1', '-x', 'extra' match no option. Run " +
                          "'shade-kit version --help' for usage.");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC5")]
+    public void MapArgumentError_ExpectedVersionMissing_ReturnsInvalidArgumentsWithGotNoneAndVersionHelp()
+    {
+        // Arrange
+        var exception = new ExpectedVersionMissingException();
+
+        // Act
+        var error = CliErrorMapper.MapArgumentError(exception, ["version", "--json", "--expect"]);
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
+                "Invalid arguments: --expect needs a SemVer version such as 1.2.3 or 1.2.3-beta.1, but got none. " +
+                "Run 'shade-kit version --help' for usage."));
     }
 
     [Fact]

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`) and 2026-11-04 (split of package 06: FP07-AC7 taken over from FP06-AC13) |
 | Source | Concept §2 (Lifecycle), §3.1 (`integrations install/update`), §3.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 01, 06 |
 | Enables | 08 (same mechanism for more agents); end-to-end use of all phase packages in Claude Code |
@@ -59,7 +59,9 @@ A developer installs the kit's skills and agents for Claude Code with one comman
 - **FP07-AC4** `shade-kit version --json` lists the installed Claude Code integration with its kit version.
 - **FP07-AC5** No file in the current repository is created or changed by `integrations install` or `integrations update`.
 - **FP07-AC6** `integrations update` with no installed integration reports that nothing is installed and exits without error.
+- **FP07-AC7** No skill in the integration content references a path under `research/` or `docs/` of the kit repository. Taken over from FP06-AC13 on 2026-11-04, because the rule only applies to shipped skills ([06-2 skill conventions](06-2-skill-conventions-and-version.md#skill-conventions)).
 
 ## Open points
 
 - **Unverified:** supported way to install a Claude Code plugin at user level from a script (see above).
+- Since 2026-11-04 every skill carries its kit version hardcoded in its frontmatter (`metadata.version`, 06-2), and its alignment with the engine version is skipped for now. FP07-AC2 ("same kit version as the engine that installed them") then only holds if the version in the skills was raised by hand for the release.

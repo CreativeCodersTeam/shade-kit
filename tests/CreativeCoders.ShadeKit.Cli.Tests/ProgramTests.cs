@@ -25,6 +25,10 @@ public sealed class ProgramTests : IDisposable
 
     private const string StackTraceLinePrefix = "   at ";
 
+    private const string ExpectWithoutValueMessage =
+        "Invalid arguments: --expect needs a SemVer version such as 1.2.3 or 1.2.3-beta.1, but got none. Run " +
+        "'shade-kit version --help' for usage.";
+
     private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
 
     private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-program-tests-");
@@ -73,6 +77,213 @@ public sealed class ProgramTests : IDisposable
 
         output.ToString()
             .Should().StartWith("shade-kit ");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC1")]
+    [Trait("Requirement", "FP06-1-AC2")]
+    public async Task RunAsync_VersionJsonExpectMismatchWithReleaseEngine_WritesOnlyVersionMismatchEnvelopeAndReturns50()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--json", "--expect", "1.3.0"], output, error,
+            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.VersionMismatch);
+
+        var text = output.ToString();
+
+        text.Should().StartWith("{").And.EndWith("}" + JsonLineEnd).And.NotEndWith(JsonLineEnd + JsonLineEnd);
+
+        // JsonDocument.Parse rejects a second top-level value, so this also proves that only one envelope was written.
+        using var document = JsonDocument.Parse(text);
+        var root = document.RootElement;
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeFalse();
+
+        root.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.VersionMismatch);
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().Be("The SHADE kit engine 1.2.3 does not fit the kit skills 1.3.0: the major and minor versions " +
+                         "must be equal. Update the engine to 1.3, then run the skill again.");
+
+        error.ToString()
+            .Should().BeNullOrWhiteSpace("the host writes only its empty footer line to standard error");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC1")]
+    [Trait("Requirement", "FP06-1-AC2")]
+    public async Task RunAsync_VersionPlainExpectMismatchWithReleaseEngine_WritesOnlyMessageAndReturns50()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--expect", "1.1.0"], output, error,
+            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.VersionMismatch);
+
+        // In plain mode the host prints the abort message to the console of the run, which writes to standard output
+        // and wraps long lines; removing the line ends joins the wrapped lines again.
+        output.ToString().ReplaceLineEndings(string.Empty)
+            .Should().Be("The SHADE kit engine 1.2.3 does not fit the kit skills 1.1.0: the major and minor versions " +
+                         "must be equal. Update the SHADE kit skills to 1.2 by hand, then run the skill again.");
+
+        output.ToString()
+            .Should().NotContain("shade-kit 1.2.3");
+
+        error.ToString()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC4")]
+    public async Task RunAsync_VersionJsonExpectMismatchWithPrereleaseEngine_WritesSuccessEnvelopeWithWarning()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--json", "--expect", "99.0.0"], output, error,
+            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3-beta.1")));
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        using var document = JsonDocument.Parse(output.ToString());
+        var root = document.RootElement;
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeTrue();
+
+        root.GetProperty("data").GetProperty("expectedVersion").GetString()
+            .Should().Be("99.0.0");
+
+        root.GetProperty("warnings").EnumerateArray().Select(x => x.GetProperty("code").GetString())
+            .Should().Equal(ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch);
+    }
+
+    [Theory]
+    [Trait("Requirement", "FP06-1-AC5")]
+    [InlineData("abc")]
+    [InlineData("")]
+    public async Task RunAsync_VersionJsonExpectNotSemVer_WritesOnlyInvalidArgumentsEnvelopeAndReturns2(string expect)
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--json", "--expect", expect], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        AssertOnlyInvalidArgumentsEnvelope(output.ToString(), $"'{expect}' is not a SemVer version such as 1.2.3 or " +
+            "1.2.3-beta.1.", "shade-kit --help");
+
+        error.ToString()
+            .Should().BeNullOrWhiteSpace("the host writes only its empty footer line to standard error");
+    }
+
+    [Theory]
+    [Trait("Requirement", "FP06-1-AC5")]
+    [InlineData("version", "--json", "--expect")]
+    [InlineData("version", "--expect", "--json")]
+    public async Task RunAsync_VersionJsonExpectWithoutValue_WritesOnlyInvalidArgumentsEnvelopeAndReturns2(
+        params string[] args)
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(args, output, error,
+            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        AssertOnlyInvalidArgumentsEnvelope(output.ToString(), "--expect", "shade-kit version --help");
+
+        using var document = JsonDocument.Parse(output.ToString());
+
+        document.RootElement.GetProperty("error").GetProperty("message").GetString()
+            .Should().Be(ExpectWithoutValueMessage);
+
+        error.ToString()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC5")]
+    public async Task RunAsync_VersionPlainExpectWithoutValue_WritesMessageToStandardErrorAndReturns2()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--expect"], output, error,
+            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        error.ToString()
+            .Should().Be(ExpectWithoutValueMessage + Environment.NewLine);
+
+        output.ToString()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC3")]
+    public async Task RunAsync_VersionJsonExpectMatchingVersion_WritesSuccessEnvelopeWithExpectedVersion()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await Program.RunAsync(["version", "--json", "--expect", "1.2.0"], output, error,
+            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        using var document = JsonDocument.Parse(output.ToString());
+        var root = document.RootElement;
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeTrue();
+
+        root.GetProperty("data").GetProperty("engineVersion").GetString()
+            .Should().Be("1.2.3");
+
+        root.GetProperty("data").GetProperty("expectedVersion").GetString()
+            .Should().Be("1.2.0");
+
+        root.GetProperty("warnings").GetArrayLength()
+            .Should().Be(0);
     }
 
     [Fact]
@@ -1156,6 +1367,14 @@ public sealed class ProgramTests : IDisposable
     {
         _currentDirectory.Dispose();
         _tempDirectory.Dispose();
+    }
+
+    private static IEngineVersionProvider CreateEngineVersionProvider(string version)
+    {
+        var engineVersionProvider = A.Fake<IEngineVersionProvider>();
+        A.CallTo(() => engineVersionProvider.Version).Returns(version);
+
+        return engineVersionProvider;
     }
 
     private static void AssertOnlyInvalidArgumentsEnvelope(string output, string argumentText, string helpCommand)
