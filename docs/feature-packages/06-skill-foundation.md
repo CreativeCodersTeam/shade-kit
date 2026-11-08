@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill, `shade-kit-next-phase` is advisory, next-steps message, active phase asks the human), 2026-11-04 (split into the sub-features 06-1 to 06-9; version in the skill frontmatter, checked by the engine; `shade-kit-report` moved to package 15), and 2026-11-06 (06-2: Claude Code does not show the frontmatter to the model) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill, `shade-kit-next-phase` is advisory, next-steps message, active phase asks the human), 2026-11-04 (split into the sub-features 06-1 to 06-9; version in the skill frontmatter, checked by the engine; `shade-kit-report` moved to package 15), 2026-11-06 (06-2: Claude Code does not show the frontmatter to the model), and 2026-11-08 (06-3: `shade-kit-next-steps` implemented) |
 | Source | Concept §3.2, §3.3, §3.4, §11.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 01, 03, 04, 05 |
 | Enables | 07, 08, and every phase package (09–17) |
@@ -63,7 +63,7 @@ Package 06 is built in sub-features. Each one has its own functional description
 
 | Skill | Purpose | Used by | Owner |
 |---|---|---|---|
-| Next steps (`shade-kit-next-steps`) | Ends a skill with the steps the human can take and the skill to call for each. | Every kit skill that ends | 06-3 |
+| Next steps (`shade-kit-next-steps`) | Ends a skill with the steps the human can take and the skill to call for each. **Implemented** (`skills/shade-kit-next-steps/SKILL.md`, 06-3). | Every kit skill that ends | 06-3 |
 | Checklist check (`shade-kit-gate-check`) | Checks every item of a feature checklist against the artifacts and logs the run. | Entry protocol (every gate with a checklist) | 06-4 |
 | Entry protocol (`shade-kit-phase-entry`) | Version handshake, `phase start`, gate check, and approval. | Every phase skill | 06-5 |
 | Interview (`shade-kit-interview`) | Asks open questions one topic at a time, offers its own proposals, records answers in the target artifact. | `discuss`, `refine`, `diagnose`, `plan`, `quick` | 06-7 |
