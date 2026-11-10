@@ -63,9 +63,9 @@ public interface IPhaseEngine
     /// <param name="phase">The name of the requested phase.</param>
     /// <param name="gates">
     /// The gates of the transitions into the phases of the profile, by target phase; a phase without an entry has
-    /// <see cref="TransitionGate.Default" />. A gate without approval performs a forward transition at once. A reopen
-    /// always has <see cref="TransitionGate.Default" />. The gate of a pending forward transition always requires an
-    /// approval, because the transition waits for one.
+    /// <see cref="TransitionGate.Default" /> (see <see cref="TransitionGate.ForPhase" />). A gate without approval
+    /// performs a forward transition at once. A reopen always has <see cref="TransitionGate.Default" />. The gate of a
+    /// pending forward transition always requires an approval, because the transition waits for one.
     /// </param>
     /// <returns>The decision with the outcome, and the change to persist if the request changed the state.</returns>
     /// <exception cref="ArgumentNullException">
@@ -143,6 +143,25 @@ public interface IPhaseEngine
     /// </exception>
     /// <exception cref="PhaseNotInProfileException"><paramref name="phase" /> is not a phase of the profile.</exception>
     PhaseSkills GetSkills(WorkflowProfile profile, string phase);
+
+    /// <summary>
+    /// Gets whether a forward transition leads into the specified phase of a workflow profile, so that the phase has a
+    /// gate.
+    /// </summary>
+    /// <remarks>
+    /// Every phase but the first has a gate; its configured gate is <see cref="TransitionGate.ForPhase" />.
+    /// </remarks>
+    /// <param name="profile">The workflow profile of the feature.</param>
+    /// <param name="phase">The name of the phase.</param>
+    /// <returns>
+    /// <see langword="true" /> if <paramref name="phase" /> has a gate; <see langword="false" /> if it is the first
+    /// phase of <paramref name="profile" />.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="profile" /> or <paramref name="phase" /> is <see langword="null" />.
+    /// </exception>
+    /// <exception cref="PhaseNotInProfileException"><paramref name="phase" /> is not a phase of the profile.</exception>
+    bool HasGate(WorkflowProfile profile, string phase);
 
     /// <summary>
     /// Gets the possible next steps of a feature without changing anything; allowed on a done feature.

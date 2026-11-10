@@ -15,7 +15,7 @@ Feature: `{{feature-id}}` · Spec: [spec.md](../spec.md) · Tasks: [tasks.md](..
 | ID | Criterion | Result | Evidence |
 |---|---|---|---|
 | DOD-01 | Build, test, and lint pass with the quality commands recorded in `review.md`, as recorded in `verification.md`. | pending | |
-| DOD-02 | Coverage was measured and recorded in `verification.md`. If `config.json` sets `coverageThreshold`, the value reaches it. | pending | |
+| DOD-02 | Coverage was measured and recorded in `verification.md`. If a coverage threshold is set (`coverageThreshold`, shown by `shade-kit gate info`), the value reaches it. | pending | |
 | DOD-03 | Every acceptance criterion is covered by a passing test, or is marked manual and has an item in `playbook.md`. | pending | |
 | DOD-04 | Every task in `tasks.md` is done, or has a "Not done" reason that the human accepted. | pending | |
 | DOD-05 | `review.md` has no open blocker. | pending | |
@@ -27,7 +27,7 @@ Feature: `{{feature-id}}` · Spec: [spec.md](../spec.md) · Tasks: [tasks.md](..
 ## Check runs
 
 <!--
-One line per run: date and time, result (pass | fail), and the IDs of the failed items.
+One line per run: date, time with its UTC offset, result (pass | fail), and the IDs of the failed items.
 Example:
-- 2026-10-24 09:30 – fail (DOD-05, DOD-09)
+- 2026-10-24 09:30 +02:00 – fail (DOD-05, DOD-09)
 -->

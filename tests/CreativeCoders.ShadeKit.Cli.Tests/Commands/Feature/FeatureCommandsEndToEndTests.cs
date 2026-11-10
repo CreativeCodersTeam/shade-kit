@@ -6,30 +6,26 @@ using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Git;
-using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Web;
 using CreativeCoders.ShadeKit.Core.Web.Exceptions;
-using CreativeCoders.ShadeKit.Tests.Shared;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
+using static CreativeCoders.ShadeKit.Cli.Tests.Commands.CliEndToEndHarness;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Feature;
 
 /// <summary>
-/// Runs the <c>shade-kit feature</c> commands through <see cref="Program.RunAsync(string[], TextWriter, TextWriter, Action{IServiceCollection})" />
-/// against a real temporary repository; git is answered by a fake <see cref="IGitCommandRunner" />, and the readers of
+/// Runs the <c>shade-kit feature</c> commands through the <see cref="CliEndToEndHarness" /> against a real temporary
+/// repository; git is answered by a fake <see cref="IGitCommandRunner" />, and the readers of
 /// URL sources are fakes, so no test starts <c>gh</c> or sends a request.
 /// </summary>
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed partial class FeatureCommandsEndToEndTests : IDisposable
 {
-    private const string IssueUrl = "https://github.com/acme/shop/issues/142";
-
-    private const string IssueFeatureId = "gh-142-login-sso";
-
     private const string WebUrl = "https://example.com/requests/login-sso";
 
     private const string GhAuthFailureReason =
@@ -51,45 +47,38 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         "Check the URL and run the command again, or save the content to a file and pass the path of the file with " +
         "--source.";
 
-    private const string UserName = "Jane Doe";
-
-    private const string UserEmail = "jane@example.com";
-
-    private static readonly string[] CurrentBranchArguments = ["symbolic-ref", "--short", "-q", "HEAD"];
-
     private readonly IConsoleConfirmation _confirmation = A.Fake<IConsoleConfirmation>();
-
-    private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
-
-    private readonly IGitCommandRunner _gitCommandRunner = A.Fake<IGitCommandRunner>();
-
-    private readonly ITrackerIssueReader _trackerIssueReader = A.Fake<ITrackerIssueReader>();
 
     private readonly IUrlContentReader _urlContentReader = A.Fake<IUrlContentReader>();
 
-    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-feature-tests-");
-
-    private string? _branch = "main";
+    private readonly CliEndToEndHarness _harness = new CliEndToEndHarness("shade-kit-feature-tests-");
 
     private ICliCancellation? _cancellation;
 
     private IFeatureStore? _featureStore;
 
-    private Action<IReadOnlyList<string>>? _onGitCall;
-
     public FeatureCommandsEndToEndTests()
     {
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
-            .ReturnsLazily((string _, IReadOnlyList<string> arguments, CancellationToken _) =>
-                Task.FromResult(AnswerGit(arguments)));
-
         A.CallTo(() => _confirmation.CanAsk).Returns(false);
-
-        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
-            .Returns(new TrackerIssue("Login with SSO", "Users sign in with the company account.", []));
 
         A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
             .Returns("Login SSO\n");
+
+        _harness.ConfigureServices = x =>
+        {
+            x.AddSingleton(_confirmation)
+                .AddSingleton(_urlContentReader);
+
+            if (_cancellation is not null)
+            {
+                x.AddSingleton(_cancellation);
+            }
+
+            if (_featureStore is not null)
+            {
+                x.AddSingleton(_featureStore);
+            }
+        };
     }
 
     [Fact]
@@ -97,10 +86,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_GitHubIssueUrlWithTitle_CreatesIssueBasedFeature()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
             "--json");
 
         // Assert
@@ -124,11 +113,11 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         data.GetProperty("paths").GetProperty("featureFile").GetString()
             .Should().Be($".shadekit/features/{IssueFeatureId}/feature.json");
 
-        File.Exists(GetFeaturePath(IssueFeatureId, "feature.json"))
+        File.Exists(_harness.GetFeaturePath(IssueFeatureId, "feature.json"))
             .Should().BeTrue();
 
         // The line ending depends on the operating system, because the fake git answers no attribute query.
-        (await File.ReadAllTextAsync(GetFeaturePath(IssueFeatureId, "request.md"),
+        (await File.ReadAllTextAsync(_harness.GetFeaturePath(IssueFeatureId, "request.md"),
                 TestContext.Current.CancellationToken)).ReplaceLineEndings("\n")
             .Should().Be("# Login with SSO\n\nUsers sign in with the company account.\n");
     }
@@ -138,10 +127,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_PlainTextSource_CreatesTimeBasedFeature()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", "Login SSO via Azure", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", "Login SSO via Azure", "--json");
 
         // Assert
         exitCode
@@ -163,13 +152,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
 
         var featureId = data.GetProperty("id").GetString()!;
 
-        (await File.ReadAllTextAsync(GetFeaturePath(featureId, "request.md"), TestContext.Current.CancellationToken))
+        (await File.ReadAllTextAsync(_harness.GetFeaturePath(featureId, "request.md"), TestContext.Current.CancellationToken))
             .Should().Be("Login SSO via Azure");
 
-        File.Exists(Path.Combine(_tempDirectory.RootPath, ".shadekit", "templates", "request.md"))
+        File.Exists(Path.Combine(_harness.TempDirectory.RootPath, ".shadekit", "templates", "request.md"))
             .Should().BeFalse();
 
-        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+        A.CallTo(_harness.TrackerIssueReader).MustNotHaveHappened();
         A.CallTo(_urlContentReader).MustNotHaveHappened();
     }
 
@@ -177,12 +166,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_FileSource_WritesFileContentAsRequest()
     {
         // Arrange
-        await InitAsync();
-        await File.WriteAllTextAsync(Path.Combine(_tempDirectory.RootPath, "login.md"),
+        await _harness.InitAsync();
+        await File.WriteAllTextAsync(Path.Combine(_harness.TempDirectory.RootPath, "login.md"),
             "# Login SSO\n\nUsers sign in with the company account.\n", TestContext.Current.CancellationToken);
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", "login.md", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", "login.md", "--json");
 
         // Assert
         exitCode
@@ -201,11 +190,11 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().Be("login.md");
 
         // The line ending depends on the operating system, because the fake git answers no attribute query.
-        (await File.ReadAllTextAsync(GetFeaturePath(featureId, "request.md"), TestContext.Current.CancellationToken))
+        (await File.ReadAllTextAsync(_harness.GetFeaturePath(featureId, "request.md"), TestContext.Current.CancellationToken))
             .ReplaceLineEndings("\n")
             .Should().Be("# Login SSO\n\nUsers sign in with the company account.\n");
 
-        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+        A.CallTo(_harness.TrackerIssueReader).MustNotHaveHappened();
         A.CallTo(_urlContentReader).MustNotHaveHappened();
     }
 
@@ -214,13 +203,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_IdExistsAlready_Returns30AndChangesNothing()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
             "--json");
 
         // Assert
@@ -233,7 +222,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         root.GetProperty("error").GetProperty("code").GetString()
             .Should().Be(ShadeKitCliErrorCodes.FeatureAlreadyExists);
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -242,14 +231,14 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_OverrideCannotBeWritten_Returns17NamingOverrideAndChangesNothing()
     {
         // Arrange
-        await InitAsync();
-        _tempDirectory.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName,
+        await _harness.InitAsync();
+        _harness.TempDirectory.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName,
             KitStorePaths.CurrentFeatureFileName);
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
             "--json");
 
         // Assert
@@ -262,7 +251,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         root.GetProperty("error").GetProperty("message").GetString()
             .Should().StartWith("'.shadekit/features/current-feature.json' cannot be written.");
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -270,13 +259,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_JsonIssueCannotBeRead_Returns33WithGhSignInHintAndChangesNothing()
     {
         // Arrange
-        await InitAsync();
-        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+        await _harness.InitAsync();
+        A.CallTo(() => _harness.TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
             .Throws(new TrackerIssueReadFailedException(new Uri(IssueUrl), GhAuthFailureReason));
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", IssueUrl, "--json");
 
         // Assert
         exitCode
@@ -292,7 +281,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().Be($"The source '{IssueUrl}' cannot be used: The issue cannot be read: {GhAuthFailureReason} " +
                          GhSignInHint);
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -300,12 +289,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_PlainIssueCannotBeRead_Returns33WithGhSignInHint()
     {
         // Arrange
-        await InitAsync();
-        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+        await _harness.InitAsync();
+        A.CallTo(() => _harness.TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
             .Throws(new TrackerIssueReadFailedException(new Uri(IssueUrl), GhAuthFailureReason));
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "new", "--source", IssueUrl);
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "new", "--source", IssueUrl);
 
         // Assert
         exitCode
@@ -314,7 +303,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         GetPlainText(output)
             .Should().Contain($"The issue cannot be read: {GhAuthFailureReason} {GhSignInHint}");
 
-        Directory.Exists(GetFeaturePath(IssueFeatureId))
+        Directory.Exists(_harness.GetFeaturePath(IssueFeatureId))
             .Should().BeFalse();
     }
 
@@ -322,13 +311,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_JsonGhNotFound_Returns33WithGhAvailabilityHint()
     {
         // Arrange
-        await InitAsync();
-        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
+        await _harness.InitAsync();
+        A.CallTo(() => _harness.TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
             .Throws(new GhNotFoundException(["issue", "view", IssueUrl, "--json", "title,body,comments"],
                 GhNotFoundReason));
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", IssueUrl, "--json");
 
         // Assert
         exitCode
@@ -341,7 +330,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().Be($"The source '{IssueUrl}' cannot be used: The issue cannot be read: {GhNotFoundReason} " +
                          GhAvailabilityHint);
 
-        Directory.Exists(GetFeaturePath(IssueFeatureId))
+        Directory.Exists(_harness.GetFeaturePath(IssueFeatureId))
             .Should().BeFalse();
     }
 
@@ -349,13 +338,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_JsonUrlContentCannotBeRead_Returns33WithUrlHintAndChangesNothing()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
         A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
             .Throws(new UrlContentReadFailedException(new Uri(WebUrl), UrlFailureReason));
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO",
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO",
             "--json");
 
         // Assert
@@ -372,7 +361,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().Be($"The source '{WebUrl}' cannot be used: The content of the URL cannot be read: " +
                          $"{UrlFailureReason} {UrlHint}");
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -380,12 +369,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_PlainUrlContentCannotBeRead_Returns33WithUrlHint()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
         A.CallTo(() => _urlContentReader.ReadAsync(A<Uri>._, A<int>._, A<CancellationToken>._))
             .Throws(new UrlContentReadFailedException(new Uri(WebUrl), UrlFailureReason));
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO");
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO");
 
         // Assert
         exitCode
@@ -399,10 +388,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_JsonWebUrlWithTitle_CreatesFeatureWithUrlContentAsRequest()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO",
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO",
             "--json");
 
         // Assert
@@ -422,24 +411,24 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().Be(WebUrl);
 
         // The line ending depends on the operating system, because the fake git answers no attribute query.
-        (await File.ReadAllTextAsync(GetFeaturePath(featureId, "request.md"), TestContext.Current.CancellationToken))
+        (await File.ReadAllTextAsync(_harness.GetFeaturePath(featureId, "request.md"), TestContext.Current.CancellationToken))
             .ReplaceLineEndings("\n")
             .Should().Be("Login SSO\n");
 
         A.CallTo(() => _urlContentReader.ReadAsync(new Uri(WebUrl), A<int>._, A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
 
-        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+        A.CallTo(_harness.TrackerIssueReader).MustNotHaveHappened();
     }
 
     [Fact]
     public async Task FeatureNew_PlainWebUrlWithTitle_CreatesFeature()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO");
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "new", "--source", WebUrl, "--title", "Login SSO");
 
         // Assert
         exitCode
@@ -454,11 +443,11 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_JsonWebUrlWithoutTitle_Returns34AndReadsNoUrl()
     {
         // Arrange
-        await InitAsync();
-        var snapshot = _tempDirectory.TakeSnapshot();
+        await _harness.InitAsync();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", WebUrl, "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", WebUrl, "--json");
 
         // Assert
         exitCode
@@ -474,9 +463,9 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().Contain("Pass the title with --title.");
 
         A.CallTo(_urlContentReader).MustNotHaveHappened();
-        A.CallTo(_trackerIssueReader).MustNotHaveHappened();
+        A.CallTo(_harness.TrackerIssueReader).MustNotHaveHappened();
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -484,10 +473,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_PlainWebUrlWithoutTitle_Returns34AndReadsNoUrl()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "new", "--source", WebUrl);
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "new", "--source", WebUrl);
 
         // Assert
         exitCode
@@ -503,12 +492,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureCurrent_AfterNewOnUnrelatedBranch_ReturnsNewFeatureFromOverride()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
-        _branch = "main";
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
+        _harness.Branch = "main";
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "current", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // Assert
         exitCode
@@ -534,18 +523,18 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureCurrent_BranchAndOverrideSelectDifferentFeatures_ReturnsBranchFeatureWithWarning()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
         // The second feature is created last, so the local override selects it.
-        (await RunJsonAsync("feature", "new", "--source", "https://github.com/acme/shop/issues/7", "--title",
+        (await _harness.RunJsonAsync("feature", "new", "--source", "https://github.com/acme/shop/issues/7", "--title",
                 "Billing", "--json"))
             .ExitCode.Should().Be(0);
 
-        _branch = $"feature/{IssueFeatureId}";
+        _harness.Branch = $"feature/{IssueFeatureId}";
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "current", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // Assert
         exitCode
@@ -570,11 +559,11 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureCurrent_NoMatchingBranchAndNoOverride_ReturnsNotResolvedWithExitCode0(string? branch)
     {
         // Arrange
-        await InitAsync();
-        _branch = branch;
+        await _harness.InitAsync();
+        _harness.Branch = branch;
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "current", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // Assert
         exitCode
@@ -600,10 +589,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureSet_UnknownId_Returns31()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "set", "unknown-id", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "set", "unknown-id", "--json");
 
         // Assert
         exitCode
@@ -612,7 +601,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         root.GetProperty("error").GetProperty("code").GetString()
             .Should().Be(ShadeKitCliErrorCodes.FeatureNotFound);
 
-        File.Exists(GetCurrentFeatureFilePath())
+        File.Exists(_harness.GetCurrentFeatureFilePath())
             .Should().BeFalse();
     }
 
@@ -621,10 +610,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureSet_PlainUnknownId_Returns31WithMessage()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "set", "unknown-id");
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "set", "unknown-id");
 
         // Assert
         exitCode
@@ -638,12 +627,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureSet_ExistingIdAsPositionalArgument_WritesOverride()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
-        File.Delete(GetCurrentFeatureFilePath());
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
+        File.Delete(_harness.GetCurrentFeatureFilePath());
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "set", IssueFeatureId, "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "set", IssueFeatureId, "--json");
 
         // Assert
         exitCode
@@ -652,7 +641,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         root.GetProperty("data").GetProperty("id").GetString()
             .Should().Be(IssueFeatureId);
 
-        (await File.ReadAllTextAsync(GetCurrentFeatureFilePath(), TestContext.Current.CancellationToken))
+        (await File.ReadAllTextAsync(_harness.GetCurrentFeatureFilePath(), TestContext.Current.CancellationToken))
             .Should().Contain($"\"{IssueFeatureId}\"");
     }
 
@@ -661,13 +650,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_JsonWithoutYes_DeletesNothingAndListsFiles()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "drop", IssueFeatureId, "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "drop", IssueFeatureId, "--json");
 
         // Assert
         exitCode
@@ -689,7 +678,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
                 $".shadekit/features/{IssueFeatureId}/feature.json",
                 $".shadekit/features/{IssueFeatureId}/request.md");
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
 
         A.CallTo(() => _confirmation.ConfirmAsync(A<string>._, A<CancellationToken>._))
@@ -701,11 +690,11 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_JsonWithYes_DeletesFolderAndClearsOverride()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "drop", IssueFeatureId, "--yes", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "drop", IssueFeatureId, "--yes", "--json");
 
         // Assert
         exitCode
@@ -725,10 +714,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         data.GetProperty("files").GetArrayLength()
             .Should().Be(2);
 
-        Directory.Exists(GetFeaturePath(IssueFeatureId))
+        Directory.Exists(_harness.GetFeaturePath(IssueFeatureId))
             .Should().BeFalse();
 
-        File.Exists(GetCurrentFeatureFilePath())
+        File.Exists(_harness.GetCurrentFeatureFilePath())
             .Should().BeFalse();
     }
 
@@ -737,13 +726,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_JsonWithoutYesOverrideSelectsOtherFeature_ReturnsOverrideAffectedFalse()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
-        (await RunJsonAsync("feature", "new", "--source", "Login SSO via Azure", "--json")).ExitCode
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
+        (await _harness.RunJsonAsync("feature", "new", "--source", "Login SSO via Azure", "--json")).ExitCode
             .Should().Be(0);
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "drop", IssueFeatureId, "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "drop", IssueFeatureId, "--json");
 
         // Assert
         exitCode
@@ -763,13 +752,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_JsonWithYesOverrideSelectsOtherFeature_KeepsOverride()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
-        (await RunJsonAsync("feature", "new", "--source", "Login SSO via Azure", "--json")).ExitCode
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
+        (await _harness.RunJsonAsync("feature", "new", "--source", "Login SSO via Azure", "--json")).ExitCode
             .Should().Be(0);
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "drop", IssueFeatureId, "--yes", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "drop", IssueFeatureId, "--yes", "--json");
 
         // Assert
         exitCode
@@ -783,7 +772,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         data.GetProperty("overrideCleared").GetBoolean()
             .Should().BeFalse();
 
-        File.Exists(GetCurrentFeatureFilePath())
+        File.Exists(_harness.GetCurrentFeatureFilePath())
             .Should().BeTrue();
     }
 
@@ -791,13 +780,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_JsonRunCanceled_Returns130WithCanceledEnvelopeAndChangesNothing()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
         _cancellation = TestCliCancellation.Canceled;
 
         // Act
-        var (exitCode, output, error) = await RunAsync("feature", "new", "--source", IssueUrl, "--title",
+        var (exitCode, output, error) = await _harness.RunAsync("feature", "new", "--source", IssueUrl, "--title",
             "Login SSO", "--json");
 
         // Assert
@@ -819,7 +808,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         error
             .Should().BeEmpty();
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -827,13 +816,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_PlainRunCanceled_Returns130WithMessageWithoutStackTrace()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
         _cancellation = TestCliCancellation.Canceled;
 
         // Act
-        var (exitCode, output, error) = await RunAsync("feature", "new", "--source", IssueUrl, "--title",
+        var (exitCode, output, error) = await _harness.RunAsync("feature", "new", "--source", IssueUrl, "--title",
             "Login SSO");
 
         // Assert
@@ -846,7 +835,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         output
             .Should().BeEmpty();
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -854,12 +843,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureNew_CanceledAfterGitIdentity_Returns130AndCreatesNoFeatureFolder()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
         using var cancellationSource = new CancellationTokenSource();
         _cancellation = new TestCliCancellation(cancellationSource.Token);
-        _onGitCall = arguments =>
+        _harness.OnGitCall = arguments =>
         {
             if (arguments.SequenceEqual(["config", "user.email"]))
             {
@@ -868,7 +857,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         };
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
             "--json");
 
         // Assert
@@ -878,7 +867,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         root.GetProperty("error").GetProperty("code").GetString()
             .Should().Be(ShadeKitCliErrorCodes.Canceled);
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -886,14 +875,14 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_JsonWithYesRunCanceled_Returns130AndKeepsFeature()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
         _cancellation = TestCliCancellation.Canceled;
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "drop", IssueFeatureId, "--yes", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "drop", IssueFeatureId, "--yes", "--json");
 
         // Assert
         exitCode
@@ -902,7 +891,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         root.GetProperty("error").GetProperty("code").GetString()
             .Should().Be(ShadeKitCliErrorCodes.Canceled);
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -910,14 +899,14 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_PlainWithYesRunCanceled_Returns130WithMessageAndKeepsFeature()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
         _cancellation = TestCliCancellation.Canceled;
 
         // Act
-        var (exitCode, output, error) = await RunAsync("feature", "drop", IssueFeatureId, "--yes");
+        var (exitCode, output, error) = await _harness.RunAsync("feature", "drop", IssueFeatureId, "--yes");
 
         // Assert
         exitCode
@@ -929,7 +918,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         output
             .Should().BeEmpty();
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -937,12 +926,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureShow_MissingIdWithRunCanceled_ReturnsInvalidArguments()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         _cancellation = TestCliCancellation.Canceled;
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "show", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "show", "--json");
 
         // Assert
         exitCode
@@ -956,7 +945,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureList_OperationCanceledWithoutCanceledToken_ReturnsHostErrorWithDetails()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         var featureStore = A.Fake<IFeatureStore>();
         A.CallTo(() => featureStore.ListAsync(A<IKitStore>._, A<CancellationToken>._))
@@ -964,7 +953,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         _featureStore = featureStore;
 
         // Act
-        var (exitCode, output, error) = await RunAsync("feature", "list", "--json");
+        var (exitCode, output, error) = await _harness.RunAsync("feature", "list", "--json");
 
         // Assert
         exitCode
@@ -984,11 +973,11 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_ShortYesSwitch_DeletesFolder()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "drop", IssueFeatureId, "-y");
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "drop", IssueFeatureId, "-y");
 
         // Assert
         exitCode
@@ -997,7 +986,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         GetLines(output)
             .Should().Contain($"Dropped feature {IssueFeatureId}.");
 
-        Directory.Exists(GetFeaturePath(IssueFeatureId))
+        Directory.Exists(_harness.GetFeaturePath(IssueFeatureId))
             .Should().BeFalse();
     }
 
@@ -1006,11 +995,11 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureShow_AfterNew_ReturnsGitUserAsCreatedBy()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "show", IssueFeatureId, "--json");
 
         // Assert
         exitCode
@@ -1028,7 +1017,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().Be(IssueFeatureId);
 
         using var featureFile = JsonDocument.Parse(await File.ReadAllTextAsync(
-            GetFeaturePath(IssueFeatureId, "feature.json"), TestContext.Current.CancellationToken));
+            _harness.GetFeaturePath(IssueFeatureId, "feature.json"), TestContext.Current.CancellationToken));
 
         featureFile.RootElement.GetProperty("createdBy").GetProperty("name").GetString()
             .Should().Be(UserName);
@@ -1042,14 +1031,14 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_PlainInteractiveConfirmed_DeletesFolder()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
         A.CallTo(() => _confirmation.CanAsk).Returns(true);
         A.CallTo(() => _confirmation.ConfirmAsync(A<string>._, A<CancellationToken>._)).Returns(true);
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "drop", IssueFeatureId);
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "drop", IssueFeatureId);
 
         // Assert
         exitCode
@@ -1061,7 +1050,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         GetLines(output)
             .Should().Contain($"Dropped feature {IssueFeatureId}.");
 
-        Directory.Exists(GetFeaturePath(IssueFeatureId))
+        Directory.Exists(_harness.GetFeaturePath(IssueFeatureId))
             .Should().BeFalse();
     }
 
@@ -1070,16 +1059,16 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_PlainInteractiveDeclined_KeepsFolder()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
         A.CallTo(() => _confirmation.CanAsk).Returns(true);
         A.CallTo(() => _confirmation.ConfirmAsync(A<string>._, A<CancellationToken>._)).Returns(false);
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "drop", IssueFeatureId);
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "drop", IssueFeatureId);
 
         // Assert
         exitCode
@@ -1088,7 +1077,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         GetLines(output)
             .Should().Contain("Nothing was dropped.");
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -1097,15 +1086,15 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureDrop_PlainRedirectedInput_KeepsFolderWithoutAsking()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
         A.CallTo(() => _confirmation.CanAsk).Returns(false);
 
-        var snapshot = _tempDirectory.TakeSnapshot();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "drop", IssueFeatureId);
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "drop", IssueFeatureId);
 
         // Assert
         exitCode
@@ -1118,7 +1107,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             .Should().Contain($"Feature {IssueFeatureId} would be dropped.")
             .And.Contain($"Nothing was dropped. Run 'shade-kit feature drop {IssueFeatureId} --yes' to drop it.");
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().Equal(snapshot);
     }
 
@@ -1127,11 +1116,11 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureCurrent_StatusInFeatureFile_ReturnsActiveAfterNewAndDoneAfterChange()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
 
         // Act
-        var (activeExitCode, activeRoot) = await RunJsonAsync("feature", "current", "--json");
+        var (activeExitCode, activeRoot) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // A done feature needs a consistent end state; 'phase complete' (package 04, task 6) writes the same fields.
         await EditFeatureFileAsync(IssueFeatureId, feature =>
@@ -1145,7 +1134,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
             };
         });
 
-        var (doneExitCode, doneRoot) = await RunJsonAsync("feature", "current", "--json");
+        var (doneExitCode, doneRoot) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // Assert
         activeExitCode
@@ -1171,14 +1160,14 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureList_TwoFeatures_ReturnsThemInOrdinalOrderWithStatus()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
-        (await RunJsonAsync("feature", "new", "--source", "https://github.com/acme/shop/issues/7", "--title",
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
+        (await _harness.RunJsonAsync("feature", "new", "--source", "https://github.com/acme/shop/issues/7", "--title",
                 "Billing", "--profile", "bugfix", "--json"))
             .ExitCode.Should().Be(0);
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "list", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "list", "--json");
 
         // Assert
         exitCode
@@ -1200,17 +1189,17 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task PlainMode_EveryFeatureCommand_WritesExpectedLines()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var newRun = await RunAsync("feature", "new", "-s", IssueUrl, "-t", "Login SSO", "-p", "quick");
-        var listRun = await RunAsync("feature", "list");
-        var currentRun = await RunAsync("feature", "current");
-        var setRun = await RunAsync("feature", "set", IssueFeatureId);
-        var showRun = await RunAsync("feature", "show", IssueFeatureId);
-        var dropRun = await RunAsync("feature", "drop", IssueFeatureId, "--yes");
-        var emptyListRun = await RunAsync("feature", "list");
-        var emptyCurrentRun = await RunAsync("feature", "current");
+        var newRun = await _harness.RunAsync("feature", "new", "-s", IssueUrl, "-t", "Login SSO", "-p", "quick");
+        var listRun = await _harness.RunAsync("feature", "list");
+        var currentRun = await _harness.RunAsync("feature", "current");
+        var setRun = await _harness.RunAsync("feature", "set", IssueFeatureId);
+        var showRun = await _harness.RunAsync("feature", "show", IssueFeatureId);
+        var dropRun = await _harness.RunAsync("feature", "drop", IssueFeatureId, "--yes");
+        var emptyListRun = await _harness.RunAsync("feature", "list");
+        var emptyCurrentRun = await _harness.RunAsync("feature", "current");
 
         // Assert
         new[]
@@ -1262,10 +1251,10 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureShow_PlainUnknownId_Returns31()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var (exitCode, output, _) = await RunAsync("feature", "show", "unknown-id");
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "show", "unknown-id");
 
         // Assert
         exitCode
@@ -1279,13 +1268,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureShowAndList_CopiedFeatureFolder_UseFolderNameAsIdWithIdMismatchWarning()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
-        CopyDirectory(GetFeaturePath(IssueFeatureId), GetFeaturePath("copy-of-login"));
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
+        CopyDirectory(_harness.GetFeaturePath(IssueFeatureId), _harness.GetFeaturePath("copy-of-login"));
 
         // Act
-        var (showExitCode, show) = await RunJsonAsync("feature", "show", "copy-of-login", "--json");
-        var (listExitCode, list) = await RunJsonAsync("feature", "list", "--json");
+        var (showExitCode, show) = await _harness.RunJsonAsync("feature", "show", "copy-of-login", "--json");
+        var (listExitCode, list) = await _harness.RunJsonAsync("feature", "list", "--json");
 
         // Assert
         showExitCode
@@ -1315,13 +1304,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureList_InvalidAndHiddenFolders_SkipsThemWithFolderInvalidWarningOnlyForInvalidName()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
-        CopyDirectory(GetFeaturePath(IssueFeatureId), GetFeaturePath("Draft"));
-        CopyDirectory(GetFeaturePath(IssueFeatureId), GetFeaturePath($".{IssueFeatureId}.1a2b3c4d.dropping"));
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
+        CopyDirectory(_harness.GetFeaturePath(IssueFeatureId), _harness.GetFeaturePath("Draft"));
+        CopyDirectory(_harness.GetFeaturePath(IssueFeatureId), _harness.GetFeaturePath($".{IssueFeatureId}.1a2b3c4d.dropping"));
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "list", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "list", "--json");
 
         // Assert
         exitCode
@@ -1339,13 +1328,13 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureCurrent_BrokenOverrideAndBranchFeature_ReturnsBranchFeatureWithInvalidWarning()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
-        await File.WriteAllTextAsync(GetCurrentFeatureFilePath(), "{", TestContext.Current.CancellationToken);
-        _branch = $"feature/{IssueFeatureId}";
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
+        await File.WriteAllTextAsync(_harness.GetCurrentFeatureFilePath(), "{", TestContext.Current.CancellationToken);
+        _harness.Branch = $"feature/{IssueFeatureId}";
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "current", "--json");
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // Assert
         exitCode
@@ -1362,7 +1351,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
                                 "is ignored: ")
             .And.EndWith("Run 'shade-kit feature set <id>' to replace it.");
 
-        (await File.ReadAllTextAsync(GetCurrentFeatureFilePath(), TestContext.Current.CancellationToken))
+        (await File.ReadAllTextAsync(_harness.GetCurrentFeatureFilePath(), TestContext.Current.CancellationToken))
             .Should().Be("{");
     }
 
@@ -1370,21 +1359,21 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureSetAndNew_TooNewOverride_ReplaceOverride()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
         const string tooNewOverride = """{ "schemaVersion": 99, "minEngineVersion": "99.0.0", "featureId": "x" }""";
-        await File.WriteAllTextAsync(GetCurrentFeatureFilePath(), tooNewOverride,
+        await File.WriteAllTextAsync(_harness.GetCurrentFeatureFilePath(), tooNewOverride,
             TestContext.Current.CancellationToken);
 
         // Act
-        var (setExitCode, _) = await RunJsonAsync("feature", "set", IssueFeatureId, "--json");
-        var (currentAfterSetExitCode, currentAfterSet) = await RunJsonAsync("feature", "current", "--json");
+        var (setExitCode, _) = await _harness.RunJsonAsync("feature", "set", IssueFeatureId, "--json");
+        var (currentAfterSetExitCode, currentAfterSet) = await _harness.RunJsonAsync("feature", "current", "--json");
 
-        await File.WriteAllTextAsync(GetCurrentFeatureFilePath(), tooNewOverride,
+        await File.WriteAllTextAsync(_harness.GetCurrentFeatureFilePath(), tooNewOverride,
             TestContext.Current.CancellationToken);
-        var (newExitCode, _) = await RunJsonAsync("feature", "new", "--source",
+        var (newExitCode, _) = await _harness.RunJsonAsync("feature", "new", "--source",
             "https://github.com/acme/shop/issues/7", "--title", "Billing", "--json");
-        var (currentAfterNewExitCode, currentAfterNew) = await RunJsonAsync("feature", "current", "--json");
+        var (currentAfterNewExitCode, currentAfterNew) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // Assert
         setExitCode
@@ -1418,14 +1407,14 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         string[] phases)
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var (newExitCode, _) = await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
+        var (newExitCode, _) = await _harness.RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO",
             "--profile", profile, "--json");
-        var (showExitCode, show) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
-        var (listExitCode, list) = await RunJsonAsync("feature", "list", "--json");
-        var (currentExitCode, current) = await RunJsonAsync("feature", "current", "--json");
+        var (showExitCode, show) = await _harness.RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var (listExitCode, list) = await _harness.RunJsonAsync("feature", "list", "--json");
+        var (currentExitCode, current) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // Assert
         new[] { newExitCode, showExitCode, listExitCode, currentExitCode }
@@ -1434,7 +1423,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         string[] expectedPhases = [$"{phases[0]}=in-progress", .. phases[1..].Select(x => $"{x}=pending")];
 
         using var featureFile = JsonDocument.Parse(await File.ReadAllTextAsync(
-            GetFeaturePath(IssueFeatureId, "feature.json"), TestContext.Current.CancellationToken));
+            _harness.GetFeaturePath(IssueFeatureId, "feature.json"), TestContext.Current.CancellationToken));
         var stored = featureFile.RootElement;
 
         FeatureCommandTestHelper.GetPropertyNames(stored)
@@ -1458,8 +1447,14 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         shown.GetProperty("pendingTransition").ValueKind
             .Should().Be(JsonValueKind.Null);
 
-        GetPhaseEntries(shown.GetProperty("phases"))
+        GetShownPhaseEntries(shown.GetProperty("phases"))
             .Should().Equal(expectedPhases);
+
+        shown.GetProperty("phases").EnumerateArray()
+            .Select(x => string.Join(", ", x.GetProperty("artifacts").EnumerateArray()
+                .Select(a => a.GetProperty("file").GetString())))
+            .Should().Equal(BuiltInWorkflowProfiles.All.Single(x => x.Name == profile).Phases
+                .Select(x => string.Join(", ", x.Artifacts.Select(a => a.File))));
 
         shown.GetProperty("history").GetArrayLength()
             .Should().Be(0);
@@ -1478,22 +1473,22 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task ReadingFeatureCommands_FeatureWithoutPhaseFields_ReturnInitialStateAndLeaveFileUnchanged()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
         await EditFeatureFileAsync(IssueFeatureId, feature =>
         {
             feature.Remove("currentPhase");
             feature.Remove("phases");
             feature.Remove("history");
         });
-        var featureFilePath = GetFeaturePath(IssueFeatureId, "feature.json");
+        var featureFilePath = _harness.GetFeaturePath(IssueFeatureId, "feature.json");
         var bytesBefore = await File.ReadAllBytesAsync(featureFilePath, TestContext.Current.CancellationToken);
 
         // Act
-        var (showExitCode, show) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
-        var (listExitCode, list) = await RunJsonAsync("feature", "list", "--json");
-        var (currentExitCode, current) = await RunJsonAsync("feature", "current", "--json");
-        var plainShow = await RunAsync("feature", "show", IssueFeatureId);
+        var (showExitCode, show) = await _harness.RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var (listExitCode, list) = await _harness.RunJsonAsync("feature", "list", "--json");
+        var (currentExitCode, current) = await _harness.RunJsonAsync("feature", "current", "--json");
+        var plainShow = await _harness.RunAsync("feature", "show", IssueFeatureId);
 
         // Assert
         new[] { showExitCode, listExitCode, currentExitCode, plainShow.ExitCode }
@@ -1502,7 +1497,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         show.GetProperty("data").GetProperty("currentPhase").GetString()
             .Should().Be("new");
 
-        GetPhaseEntries(show.GetProperty("data").GetProperty("phases"))
+        GetShownPhaseEntries(show.GetProperty("data").GetProperty("phases"))
             .Should().Equal("new=in-progress", "refine=pending", "map=pending", "plan=pending", "implement=pending",
                 "verify=pending", "finish=pending");
 
@@ -1526,8 +1521,8 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task FeatureShow_PendingTransitionAndHistory_ReturnsThemAsStored()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
         await EditFeatureFileAsync(IssueFeatureId, feature =>
         {
             feature["currentPhase"] = "refine";
@@ -1540,12 +1535,12 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
                 CreateHistoryNode("2026-10-21T11:00:00+02:00", "start", "refine", "map", null)
             };
         });
-        var featureFilePath = GetFeaturePath(IssueFeatureId, "feature.json");
+        var featureFilePath = _harness.GetFeaturePath(IssueFeatureId, "feature.json");
         var bytesBefore = await File.ReadAllBytesAsync(featureFilePath, TestContext.Current.CancellationToken);
 
         // Act
-        var (exitCode, root) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
-        var plainShow = await RunAsync("feature", "show", IssueFeatureId);
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var plainShow = await _harness.RunAsync("feature", "show", IssueFeatureId);
 
         // Assert
         exitCode
@@ -1559,7 +1554,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         data.GetProperty("pendingTransition").GetString()
             .Should().Be("map");
 
-        GetPhaseEntries(data.GetProperty("phases"))
+        GetShownPhaseEntries(data.GetProperty("phases"))
             .Should().Equal("new=approved", "refine=awaiting-approval", "map=pending", "plan=pending",
                 "implement=pending", "verify=pending", "finish=pending");
 
@@ -1608,14 +1603,14 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task ReadingFeatureCommands_UnknownProfileInFeatureFile_Return40NamingTheFile()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
         await EditFeatureFileAsync(IssueFeatureId, feature => feature["profile"] = "legacy");
 
         // Act
-        var (listExitCode, list) = await RunJsonAsync("feature", "list", "--json");
-        var (showExitCode, show) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
-        var (currentExitCode, current) = await RunJsonAsync("feature", "current", "--json");
+        var (listExitCode, list) = await _harness.RunJsonAsync("feature", "list", "--json");
+        var (showExitCode, show) = await _harness.RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var (currentExitCode, current) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // Assert
         new[] { listExitCode, showExitCode, currentExitCode }
@@ -1635,16 +1630,16 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     public async Task ReadingFeatureCommands_InvalidPhaseState_Return46AndLeaveFileUnchanged()
     {
         // Arrange
-        await InitAsync();
-        await CreateIssueFeatureAsync();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync();
         await EditFeatureFileAsync(IssueFeatureId, feature => feature["currentPhase"] = "review");
-        var featureFilePath = GetFeaturePath(IssueFeatureId, "feature.json");
+        var featureFilePath = _harness.GetFeaturePath(IssueFeatureId, "feature.json");
         var bytesBefore = await File.ReadAllBytesAsync(featureFilePath, TestContext.Current.CancellationToken);
 
         // Act
-        var (listExitCode, list) = await RunJsonAsync("feature", "list", "--json");
-        var (showExitCode, show) = await RunJsonAsync("feature", "show", IssueFeatureId, "--json");
-        var (currentExitCode, current) = await RunJsonAsync("feature", "current", "--json");
+        var (listExitCode, list) = await _harness.RunJsonAsync("feature", "list", "--json");
+        var (showExitCode, show) = await _harness.RunJsonAsync("feature", "show", IssueFeatureId, "--json");
+        var (currentExitCode, current) = await _harness.RunJsonAsync("feature", "current", "--json");
 
         // Assert
         new[] { listExitCode, showExitCode, currentExitCode }
@@ -1666,82 +1661,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
 
     public void Dispose()
     {
-        _currentDirectory.Dispose();
-        _tempDirectory.Dispose();
-    }
-
-    private ExternalProcessResult AnswerGit(IReadOnlyList<string> arguments)
-    {
-        _onGitCall?.Invoke(arguments);
-
-        if (arguments.SequenceEqual(CurrentBranchArguments))
-        {
-            return _branch is null
-                ? new ExternalProcessResult(1, string.Empty, string.Empty)
-                : new ExternalProcessResult(0, _branch + "\n", string.Empty);
-        }
-
-        return arguments switch
-        {
-            ["config", "user.name"] => new ExternalProcessResult(0, UserName + "\n", string.Empty),
-            ["config", "user.email"] => new ExternalProcessResult(0, UserEmail + "\n", string.Empty),
-            _ => new ExternalProcessResult(128, string.Empty, $"unexpected git call: {string.Join(' ', arguments)}")
-        };
-    }
-
-    private async Task InitAsync()
-    {
-        _tempDirectory.CreateGitRoot();
-        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
-
-        (await RunAsync("init", "--json")).ExitCode
-            .Should().Be(0);
-    }
-
-    private async Task CreateIssueFeatureAsync()
-    {
-        (await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO", "--json")).ExitCode
-            .Should().Be(0);
-    }
-
-    private async Task<(int ExitCode, string Output, string Error)> RunAsync(params string[] args)
-    {
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-
-        var exitCode = await Program.RunAsync(args, output, error, x =>
-        {
-            x.AddSingleton(_gitCommandRunner)
-                .AddSingleton(_confirmation)
-                .AddSingleton(_trackerIssueReader)
-                .AddSingleton(_urlContentReader);
-
-            if (_cancellation is not null)
-            {
-                x.AddSingleton(_cancellation);
-            }
-
-            if (_featureStore is not null)
-            {
-                x.AddSingleton(_featureStore);
-            }
-        });
-
-        return (exitCode, output.ToString(), error.ToString());
-    }
-
-    private async Task<(int ExitCode, JsonElement Root)> RunJsonAsync(params string[] args)
-    {
-        var (exitCode, output, _) = await RunAsync(args);
-
-        using var document = JsonDocument.Parse(output);
-
-        return (exitCode, document.RootElement.Clone());
-    }
-
-    private string GetFeaturePath(string featureId, params string[] parts)
-    {
-        return Path.Combine([_tempDirectory.RootPath, ".shadekit", "features", featureId, .. parts]);
+        _harness.Dispose();
     }
 
     private static void CopyDirectory(string sourcePath, string destinationPath)
@@ -1756,7 +1676,7 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
 
     private async Task EditFeatureFileAsync(string featureId, Action<JsonObject> edit)
     {
-        var path = GetFeaturePath(featureId, "feature.json");
+        var path = _harness.GetFeaturePath(featureId, "feature.json");
         var feature = JsonNode.Parse(await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken))!
             .AsObject();
 
@@ -1789,20 +1709,14 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         return [.. phases.EnumerateObject().Select(x => $"{x.Name}={x.Value.GetString()}")];
     }
 
-    private string GetCurrentFeatureFilePath()
+    // The phases array of feature show: { name, state, artifacts } entries.
+    private static string[] GetShownPhaseEntries(JsonElement phases)
     {
-        return Path.Combine(_tempDirectory.RootPath, ".shadekit", "features", "current-feature.json");
-    }
-
-    private static string[] GetLines(string output)
-    {
-        return [.. output.Split('\n').Select(x => x.TrimEnd('\r'))];
-    }
-
-    private static string FoldWhitespace(string text)
-    {
-        // The console wraps long lines, so line breaks are folded back into single spaces.
-        return WhitespaceRegex().Replace(text, " ");
+        return
+        [
+            .. phases.EnumerateArray()
+                .Select(x => $"{x.GetProperty("name").GetString()}={x.GetProperty("state").GetString()}")
+        ];
     }
 
     private static string GetPlainText(string output)
@@ -1811,9 +1725,6 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
         // are folded.
         return FoldWhitespace(AnsiEscapeSequenceRegex().Replace(output, string.Empty));
     }
-
-    [GeneratedRegex(@"\s+")]
-    private static partial Regex WhitespaceRegex();
 
     [GeneratedRegex(@"\x1B\[[0-9;]*m")]
     private static partial Regex AnsiEscapeSequenceRegex();

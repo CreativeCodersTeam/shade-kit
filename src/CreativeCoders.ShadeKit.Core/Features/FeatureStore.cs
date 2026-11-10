@@ -193,7 +193,7 @@ public sealed class FeatureStore(
         CancellationToken cancellationToken = default)
     {
         Ensure.NotNull(store);
-        EnsureFeatureExists(store, featureId);
+        store.EnsureFeatureExists(featureId);
 
         var result = await store.ReadFeatureAsync(featureId, FormatAccess.Read, cancellationToken)
             .ConfigureAwait(false);
@@ -234,7 +234,7 @@ public sealed class FeatureStore(
         CancellationToken cancellationToken = default)
     {
         Ensure.NotNull(store);
-        EnsureFeatureExists(store, featureId);
+        store.EnsureFeatureExists(featureId);
 
         // The branch is resolved first, so a failing git leaves the override unchanged.
         var branchFeatureId = await _currentFeatureResolver.ResolveBranchFeatureIdAsync(store, cancellationToken)
@@ -257,7 +257,7 @@ public sealed class FeatureStore(
         CancellationToken cancellationToken = default)
     {
         Ensure.NotNull(store);
-        EnsureFeatureExists(store, featureId);
+        store.EnsureFeatureExists(featureId);
 
         var files = GetFeatureFiles(store, featureId);
         var overrideAffected = await CurrentFeatureOverride.SelectsAsync(store, featureId, cancellationToken)
@@ -310,17 +310,6 @@ public sealed class FeatureStore(
     private FeaturePhaseState ReadPhaseState(FeatureDocument document, string featureId)
     {
         return FeaturePhaseFields.ReadState(document, featureId, _workflowProfileCatalog, _phaseEngine);
-    }
-
-    // An invalid id is reported as such, not as a missing feature.
-    private static void EnsureFeatureExists(IKitStore store, string featureId)
-    {
-        FeatureIds.EnsureValid(featureId);
-
-        if (!store.FeatureExists(featureId))
-        {
-            throw new FeatureNotFoundException(featureId);
-        }
     }
 
     private static IReadOnlyList<string> GetFeatureFiles(IKitStore store, string featureId)

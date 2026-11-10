@@ -91,4 +91,79 @@ public class WorkflowPhaseTests
         act.Should().Throw<ArgumentException>()
             .WithParameterName("generalSkills");
     }
+
+    [Fact]
+    public void Constructor_WithoutArtifacts_HasNoArtifacts()
+    {
+        // Act
+        var phase = new WorkflowPhase("alpha", "skill-alpha", []);
+
+        // Assert
+        phase.Artifacts
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Constructor_Artifacts_KeepsCopyInOrder()
+    {
+        // Arrange
+        var artifacts = new List<PhaseArtifact> { new PhaseArtifact("b.md"), new PhaseArtifact("a.md", onDemand: true) };
+
+        // Act
+        var phase = new WorkflowPhase("alpha", "skill-alpha", [], artifacts: artifacts);
+        artifacts.Add(new PhaseArtifact("c.md"));
+
+        // Assert
+        phase.Artifacts
+            .Should().Equal(new PhaseArtifact("b.md"), new PhaseArtifact("a.md", onDemand: true));
+    }
+
+    [Fact]
+    public void Constructor_ArtifactNull_ThrowsArgumentException()
+    {
+        // Act
+        var act = () => new WorkflowPhase("alpha", "skill-alpha", [], artifacts: [new PhaseArtifact("a.md"), null!]);
+
+        // Assert
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName("artifacts");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Constructor_SameArtifactFileTwice_ThrowsArgumentException(bool secondOnDemand)
+    {
+        // Act
+        var act = () => new WorkflowPhase("alpha", "skill-alpha", [],
+            artifacts: [new PhaseArtifact("a.md"), new PhaseArtifact("a.md", secondOnDemand)]);
+
+        // Assert
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName("artifacts");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void PhaseArtifact_FileNullEmptyOrWhitespace_ThrowsArgumentException(string? file)
+    {
+        // Act
+        var act = () => new PhaseArtifact(file!);
+
+        // Assert
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void PhaseArtifact_WithoutOnDemand_IsAlwaysWritten()
+    {
+        // Act
+        var artifact = new PhaseArtifact("spec.md");
+
+        // Assert
+        artifact.OnDemand
+            .Should().BeFalse();
+    }
 }

@@ -94,9 +94,9 @@ public class FeatureShowCommand(
     {
         _context.Console.WriteLine("Phases:");
 
-        foreach (var (phase, state) in data.Phases)
+        foreach (var phase in data.Phases)
         {
-            _context.Console.MarkupLine($"  {phase.ToEscapedMarkup().ToInfoMarkup()}: {state.ToMarkup()}");
+            _context.Console.MarkupLine($"  {phase.Name.ToEscapedMarkup().ToInfoMarkup()}: {phase.State.ToMarkup()}");
         }
     }
 

@@ -1,4 +1,5 @@
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Config;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats;
@@ -19,7 +20,7 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 /// <param name="phaseEngine">The engine that decides the transitions.</param>
 /// <param name="transitionGateProvider">
 /// The provider of the gates of the transitions and of the warnings of reading the gate configuration, which the
-/// results of <see cref="StartAsync" /> and <see cref="GetNextAsync" /> report.
+/// results of <see cref="StartAsync" />, <see cref="GetNextAsync" />, and <see cref="GetGateInfoAsync" /> report.
 /// </param>
 /// <param name="featureChecklistWriter">
 /// The writer that copies the checklist of a gate into the feature folder when <see cref="StartAsync" /> requests,
@@ -58,7 +59,7 @@ public sealed class PhaseWorkflow(
         Ensure.NotNull(store);
         Ensure.NotNull(phase);
 
-        var feature = await LoadAsync(store, FormatAccess.Write, cancellationToken).ConfigureAwait(false);
+        var feature = await LoadAsync(store, null, FormatAccess.Write, cancellationToken).ConfigureAwait(false);
         var gates = await _transitionGateProvider.GetGatesAsync(store, feature.State.Profile, cancellationToken)
             .ConfigureAwait(false);
 
@@ -98,7 +99,7 @@ public sealed class PhaseWorkflow(
         Ensure.NotNull(store);
         Ensure.NotNull(phase);
 
-        var feature = await LoadAsync(store, FormatAccess.Write, cancellationToken).ConfigureAwait(false);
+        var feature = await LoadAsync(store, null, FormatAccess.Write, cancellationToken).ConfigureAwait(false);
 
         var decision = _phaseEngine.Approve(feature.State, phase);
 
@@ -116,7 +117,7 @@ public sealed class PhaseWorkflow(
         Ensure.NotNull(store);
         Ensure.NotNull(phase);
 
-        var feature = await LoadAsync(store, FormatAccess.Write, cancellationToken).ConfigureAwait(false);
+        var feature = await LoadAsync(store, null, FormatAccess.Write, cancellationToken).ConfigureAwait(false);
 
         var decision = _phaseEngine.Reject(feature.State, phase, note);
 
@@ -133,7 +134,7 @@ public sealed class PhaseWorkflow(
     {
         Ensure.NotNull(store);
 
-        var feature = await LoadAsync(store, FormatAccess.Write, cancellationToken).ConfigureAwait(false);
+        var feature = await LoadAsync(store, null, FormatAccess.Write, cancellationToken).ConfigureAwait(false);
 
         var decision = _phaseEngine.Complete(feature.State);
 
@@ -164,7 +165,7 @@ public sealed class PhaseWorkflow(
         Ensure.NotNull(store);
         Ensure.NotNull(phase);
 
-        var feature = await LoadAsync(store, FormatAccess.Read, cancellationToken).ConfigureAwait(false);
+        var feature = await LoadAsync(store, null, FormatAccess.Read, cancellationToken).ConfigureAwait(false);
 
         var skills = _phaseEngine.GetSkills(feature.State.Profile, phase);
 
@@ -177,7 +178,7 @@ public sealed class PhaseWorkflow(
     {
         Ensure.NotNull(store);
 
-        var feature = await LoadAsync(store, FormatAccess.Read, cancellationToken).ConfigureAwait(false);
+        var feature = await LoadAsync(store, null, FormatAccess.Read, cancellationToken).ConfigureAwait(false);
         var gates = await _transitionGateProvider.GetGatesAsync(store, feature.State.Profile, cancellationToken)
             .ConfigureAwait(false);
 
@@ -187,34 +188,91 @@ public sealed class PhaseWorkflow(
             next.Pending, next.Forward, next.Reopen, feature.ArrangeWarnings(gates.Warnings));
     }
 
+    /// <inheritdoc />
+    public async Task<GateInfoResult> GetGateInfoAsync(IKitStore store, string phase, string? featureId,
+        CancellationToken cancellationToken = default)
+    {
+        Ensure.NotNull(store);
+        Ensure.NotNull(phase);
+
+        var feature = await LoadAsync(store, featureId, FormatAccess.Read, cancellationToken).ConfigureAwait(false);
+        var profile = feature.State.Profile;
+
+        // The phase is checked before gates.json and config.json are read, so a wrong phase name is reported as such
+        // even if one of them cannot be read.
+        var hasGate = _phaseEngine.HasGate(profile, phase);
+
+        var gates = await _transitionGateProvider.GetGatesAsync(store, profile, cancellationToken)
+            .ConfigureAwait(false);
+
+        var configResult = await store
+            .ReadJsonAsync<KitConfig>(KitStorePaths.ConfigFileName, FormatIds.Config, FormatAccess.Read,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        var gate = hasGate
+            ? CreateGateInfo(store, feature.FeatureId, new PhaseGate(phase, TransitionGate.ForPhase(gates.Gates, phase)))
+            : null;
+
+        return new GateInfoResult(feature.FeatureId, profile.Name, FeaturePhase.ListOf(feature.State), gate,
+            configResult?.Document.CoverageThreshold,
+            feature.ArrangeWarnings([.. gates.Warnings, .. configResult?.Warnings ?? []]));
+    }
+
+    // The copy path follows the rule of FeatureChecklistWriter: the checklist path mirrored below the feature folder.
+    private static GateInfoGate CreateGateInfo(IKitStore store, string featureId, PhaseGate gate)
+    {
+        if (gate.Gate.Checklist is not { } checklist)
+        {
+            return new GateInfoGate(gate, ChecklistPath: null, ChecklistExists: null);
+        }
+
+        var copyPath = KitStorePaths.GetFeatureChecklistPath(featureId, checklist);
+
+        return new GateInfoGate(gate, KitStorePaths.GetRepositoryPath(copyPath), store.FileExists(copyPath));
+    }
+
     private static PhaseSnapshot CreateSnapshot(FeaturePhaseState state)
     {
         return new PhaseSnapshot(state.CurrentPhase, state.CurrentPhaseState);
     }
 
-    // Resolves the current feature, reads its feature.json, and validates its phase state against its profile.
-    private async Task<LoadedFeature> LoadAsync(IKitStore store, FormatAccess access,
+    // Resolves the feature (the specified one, otherwise the current one), reads its feature.json, and validates its
+    // phase state against its profile. A specified feature must exist; the current feature is resolved like
+    // shade-kit feature current.
+    private async Task<LoadedFeature> LoadAsync(IKitStore store, string? featureId, FormatAccess access,
         CancellationToken cancellationToken)
     {
-        var resolution = await _currentFeatureResolver.ResolveAsync(store, cancellationToken).ConfigureAwait(false);
+        var (resolvedId, resolveWarnings) = await ResolveAsync(store, featureId, cancellationToken)
+            .ConfigureAwait(false);
 
-        if (!resolution.IsResolved)
-        {
-            throw new NoCurrentFeatureException();
-        }
-
-        var featureId = resolution.FeatureId;
-
-        var readResult = await store.ReadFeatureAsync(featureId, access, cancellationToken).ConfigureAwait(false);
+        var readResult = await store.ReadFeatureAsync(resolvedId, access, cancellationToken).ConfigureAwait(false);
         var document = readResult.Document;
 
-        var state = FeaturePhaseFields.ReadState(document, featureId, _workflowProfileCatalog, _phaseEngine);
+        var state = FeaturePhaseFields.ReadState(document, resolvedId, _workflowProfileCatalog, _phaseEngine);
 
-        return new LoadedFeature(featureId, document, state,
+        return new LoadedFeature(resolvedId, document, state,
         [
-            .. resolution.Warnings, .. readResult.Warnings,
-            .. KitStoreFeatureExtensions.CheckFeatureId(featureId, document)
+            .. resolveWarnings, .. readResult.Warnings,
+            .. KitStoreFeatureExtensions.CheckFeatureId(resolvedId, document)
         ]);
+    }
+
+    private async Task<(string FeatureId, IReadOnlyList<KitWarning> Warnings)> ResolveAsync(IKitStore store,
+        string? featureId, CancellationToken cancellationToken)
+    {
+        if (featureId is not null)
+        {
+            store.EnsureFeatureExists(featureId);
+
+            return (featureId, []);
+        }
+
+        var resolution = await _currentFeatureResolver.ResolveAsync(store, cancellationToken).ConfigureAwait(false);
+
+        return resolution.IsResolved
+            ? (resolution.FeatureId, resolution.Warnings)
+            : throw new NoCurrentFeatureException();
     }
 
     // Makes sure that the feature folder contains the copy of the checklist of the decided gate. The engine decides

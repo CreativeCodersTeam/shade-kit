@@ -7,6 +7,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.ShadeKit.Cli.Commands;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
 using CreativeCoders.ShadeKit.Cli.Output;
+using CreativeCoders.ShadeKit.Cli.Tests.Commands.Phase;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
@@ -581,7 +582,8 @@ public class FeatureShowCommandTests
         data.GetProperty("pendingTransition").ValueKind
             .Should().Be(JsonValueKind.Null);
 
-        data.GetProperty("phases").EnumerateObject().Select(x => $"{x.Name}={x.Value.GetString()}")
+        data.GetProperty("phases").EnumerateArray()
+            .Select(x => $"{x.GetProperty("name").GetString()}={x.GetProperty("state").GetString()}")
             .Should().Equal("new=in-progress", "refine=pending", "map=pending", "plan=pending", "implement=pending",
                 "verify=pending", "finish=pending");
 
@@ -610,9 +612,20 @@ public class FeatureShowCommandTests
         data.GetProperty("pendingTransition").GetString()
             .Should().Be("map");
 
-        data.GetProperty("phases").EnumerateObject().Select(x => $"{x.Name}={x.Value.GetString()}")
+        data.GetProperty("phases").EnumerateArray()
+            .Select(x => $"{x.GetProperty("name").GetString()}={x.GetProperty("state").GetString()}")
             .Should().Equal("new=approved", "refine=awaiting-approval", "map=pending", "plan=pending",
                 "implement=pending", "verify=pending", "finish=pending", "review=approved");
+
+        var phases = data.GetProperty("phases");
+
+        phases[1].ShouldBeJson(
+            """
+            { "name": "refine", "state": "awaiting-approval",
+              "artifacts": [ { "file": "spec.md", "onDemand": false }, { "file": "researches.md", "onDemand": false } ] }
+            """);
+
+        phases[7].ShouldBeJson("""{ "name": "review", "state": "approved", "artifacts": [] }""");
 
         var history = data.GetProperty("history").EnumerateArray().ToArray();
 
@@ -669,7 +682,8 @@ public class FeatureShowCommandTests
         data.GetProperty("currentPhase").GetString()
             .Should().Be("finish");
 
-        data.GetProperty("phases").EnumerateObject().Select(x => $"{x.Name}={x.Value.GetString()}")
+        data.GetProperty("phases").EnumerateArray()
+            .Select(x => $"{x.GetProperty("name").GetString()}={x.GetProperty("state").GetString()}")
             .Should().Equal("new=approved", "quick=approved", "finish=approved");
 
         var complete = data.GetProperty("history")[0];

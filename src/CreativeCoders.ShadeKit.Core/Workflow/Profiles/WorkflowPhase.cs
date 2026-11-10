@@ -3,8 +3,8 @@ using CreativeCoders.Core;
 namespace CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 
 /// <summary>
-/// Describes one phase of a <see cref="WorkflowProfile" />: its name, the skills it loads, and whether it can be
-/// reopened.
+/// Describes one phase of a <see cref="WorkflowProfile" />: its name, the skills it loads, whether it can be
+/// reopened, and the artifacts it writes.
 /// </summary>
 public sealed class WorkflowPhase
 {
@@ -24,12 +24,18 @@ public sealed class WorkflowPhase
     /// <see langword="true" /> if the phase can be reopened from a later phase; otherwise, <see langword="false" />.
     /// The default is <see langword="true" />.
     /// </param>
+    /// <param name="artifacts">
+    /// The artifacts the phase writes into the feature folder, for example <see cref="WorkflowArtifactNames.Spec" />;
+    /// <see langword="null" /> or an empty list if it writes none. The default is <see langword="null" />.
+    /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="generalSkills" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="name" /> or <paramref name="phaseSkill" /> is <see langword="null" />, empty, or whitespace, or
-    /// <paramref name="generalSkills" /> contains a name that is <see langword="null" />, empty, or whitespace.
+    /// <paramref name="name" /> or <paramref name="phaseSkill" /> is <see langword="null" />, empty, or whitespace,
+    /// <paramref name="generalSkills" /> contains a name that is <see langword="null" />, empty, or whitespace, or
+    /// <paramref name="artifacts" /> contains <see langword="null" /> or the same file twice.
     /// </exception>
-    public WorkflowPhase(string name, string phaseSkill, IEnumerable<string> generalSkills, bool canReopen = true)
+    public WorkflowPhase(string name, string phaseSkill, IEnumerable<string> generalSkills, bool canReopen = true,
+        IEnumerable<PhaseArtifact>? artifacts = null)
     {
         Name = Ensure.IsNotNullOrWhitespace(name);
         PhaseSkill = Ensure.IsNotNullOrWhitespace(phaseSkill);
@@ -42,6 +48,18 @@ public sealed class WorkflowPhase
         }
 
         CanReopen = canReopen;
+        Artifacts = [.. artifacts ?? []];
+
+        if (Artifacts.Any(x => x is null))
+        {
+            throw new ArgumentException($"The artifacts of the phase '{name}' contain null.", nameof(artifacts));
+        }
+
+        if (Artifacts.DistinctBy(x => x.File, StringComparer.Ordinal).Count() != Artifacts.Count)
+        {
+            throw new ArgumentException($"The artifacts of the phase '{name}' contain a file twice.",
+                nameof(artifacts));
+        }
     }
 
     /// <summary>
@@ -73,4 +91,13 @@ public sealed class WorkflowPhase
     /// <see langword="true" /> if the phase can be reopened; otherwise, <see langword="false" />.
     /// </value>
     public bool CanReopen { get; }
+
+    /// <summary>
+    /// Gets the artifacts the phase writes into the feature folder.
+    /// </summary>
+    /// <value>
+    /// A copy of the artifacts in the order they were passed, for example <see cref="WorkflowArtifactNames.Spec" />;
+    /// an empty list if the phase writes none.
+    /// </value>
+    public IReadOnlyList<PhaseArtifact> Artifacts { get; }
 }

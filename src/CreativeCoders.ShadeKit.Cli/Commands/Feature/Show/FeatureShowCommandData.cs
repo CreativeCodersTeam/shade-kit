@@ -1,6 +1,6 @@
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Features;
-using CreativeCoders.ShadeKit.Core.Workflow.Engine;
+using CreativeCoders.ShadeKit.Core.Workflow;
 
 namespace CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
 
@@ -23,8 +23,9 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
 /// The target phase of the transition that waits for an approval, or <see langword="null" /> if none is pending.
 /// </param>
 /// <param name="Phases">
-/// The state of each phase, written as a JSON object from phase name to state: the phases of the workflow profile in
-/// profile order, followed by the preserved entries of phases the profile no longer has.
+/// The phases of the feature with their state and artifacts, written as a JSON array of
+/// <c>{ name, state, artifacts }</c>: the phases of the workflow profile in profile order, followed by the preserved
+/// entries of phases the profile no longer has.
 /// </param>
 /// <param name="History">
 /// The entries of the phase history as they are stored, oldest first; empty if the feature has none.
@@ -40,7 +41,7 @@ public sealed record FeatureShowCommandData(
     FeaturePaths Paths,
     string CurrentPhase,
     string? PendingTransition,
-    IReadOnlyDictionary<string, PhaseState> Phases,
+    IReadOnlyList<FeaturePhaseData> Phases,
     IReadOnlyList<FeatureShowCommandHistoryEntryData> History)
 {
     /// <summary>
@@ -61,7 +62,7 @@ public sealed record FeatureShowCommandData(
         return new FeatureShowCommandData(result.FeatureId, feature.Title, feature.Profile, feature.Status,
             FeatureSourceData.FromSource(feature.Source), feature.CreatedAt,
             FeatureCreatorData.FromCreator(feature.CreatedBy), result.Paths, phaseState.CurrentPhase,
-            phaseState.PendingTransition, new OrderedDictionary<string, PhaseState>(phaseState.Phases),
+            phaseState.PendingTransition, FeaturePhaseData.FromPhases(FeaturePhase.ListOf(phaseState)),
             [.. (feature.History ?? []).Select(FeatureShowCommandHistoryEntryData.FromEntry)]);
     }
 }
