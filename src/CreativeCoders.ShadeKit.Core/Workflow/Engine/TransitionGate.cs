@@ -1,3 +1,5 @@
+using CreativeCoders.Core;
+
 namespace CreativeCoders.ShadeKit.Core.Workflow.Engine;
 
 /// <summary>
@@ -20,4 +22,27 @@ public sealed record TransitionGate(bool Approval, string? Checklist)
     /// </summary>
     /// <value>A gate that requires an approval and has no checklist.</value>
     public static TransitionGate Default { get; } = new(true, null);
+
+    /// <summary>
+    /// Gets the configured gate of the forward transition into the specified phase.
+    /// </summary>
+    /// <param name="gates">
+    /// The gates of the transitions into the phases of a profile, by target phase, for example the gates of
+    /// <c>gates.json</c>.
+    /// </param>
+    /// <param name="phase">The name of the target phase.</param>
+    /// <returns>
+    /// The gate of <paramref name="gates" /> for <paramref name="phase" />, or <see cref="Default" /> if
+    /// <paramref name="gates" /> has none.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="gates" /> or <paramref name="phase" /> is <see langword="null" />.
+    /// </exception>
+    public static TransitionGate ForPhase(IReadOnlyDictionary<string, TransitionGate> gates, string phase)
+    {
+        Ensure.NotNull(gates);
+        Ensure.NotNull(phase);
+
+        return gates.GetValueOrDefault(phase) ?? Default;
+    }
 }

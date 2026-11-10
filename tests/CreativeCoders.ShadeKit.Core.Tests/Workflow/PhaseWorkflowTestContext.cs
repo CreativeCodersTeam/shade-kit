@@ -136,10 +136,10 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
             FixedLineEnding.CreateWriter(LineEnding.Lf, WriteWarnings));
     }
 
-    public PhaseWorkflow CreateWorkflow()
+    public PhaseWorkflow CreateWorkflow(ITransitionGateProvider? gateProvider = null)
     {
         return new PhaseWorkflow(CurrentFeatureResolver, new BuiltInWorkflowProfileCatalog(), new PhaseEngine(),
-            GateProvider, ChecklistWriter, GitRepositoryInfo, TimeProvider);
+            gateProvider ?? GateProvider, ChecklistWriter, GitRepositoryInfo, TimeProvider);
     }
 
     /// <summary>
@@ -195,6 +195,24 @@ internal sealed class PhaseWorkflowTestContext : IDisposable
     public void WriteOverrideContent(string content)
     {
         WriteKitFile(content, KitStorePaths.FeaturesDirName, KitStorePaths.CurrentFeatureFileName);
+    }
+
+    /// <summary>
+    /// Writes <c>config.json</c> with the format header followed by <paramref name="fields" />, which start with a
+    /// comma.
+    /// </summary>
+    public void WriteConfig(string fields)
+    {
+        WriteKitFile(TestConfigJson.WithFields(fields), KitStorePaths.ConfigFileName);
+    }
+
+    /// <summary>
+    /// Writes <c>gates.json</c> whose <c>profiles</c> field is <paramref name="profiles" />, for the workflows that
+    /// read it with a real <see cref="ITransitionGateProvider" />.
+    /// </summary>
+    public void WriteGates(string profiles)
+    {
+        WriteKitFile(TestGatesJson.WithProfiles(profiles), KitStorePaths.GatesFileName);
     }
 
     public void WriteKitFile(string content, params string[] kitRelativePathParts)

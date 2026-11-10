@@ -163,8 +163,7 @@ internal sealed class FeatureStoreTestContext : IDisposable
 
     public void WriteConfig(string fields)
     {
-        WriteKitFile($$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0"{{fields}} }""",
-            KitStorePaths.ConfigFileName);
+        WriteKitFile(TestConfigJson.WithFields(fields), KitStorePaths.ConfigFileName);
     }
 
     /// <summary>

@@ -13,7 +13,6 @@ using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
-using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
@@ -21,6 +20,7 @@ using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Core.Workflow;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
+using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using FakeItEasy;
@@ -33,8 +33,12 @@ public class GateInfoCommandTests
 {
     private const string Id = PhaseCommandTestHelper.FeatureId;
 
-    private static readonly GateInfoGate DefinitionOfReadyGate = new GateInfoGate("plan", true,
-        "checks/definition-of-ready.md", $".shadekit/features/{Id}/checks/definition-of-ready.md", true);
+    private static readonly GateInfoGate DefinitionOfReadyGate = new GateInfoGate(
+        new PhaseGate("plan", new TransitionGate(true, "checks/definition-of-ready.md")),
+        $".shadekit/features/{Id}/checks/definition-of-ready.md", true);
+
+    private static readonly GateInfoGate RefineGateWithoutChecklist =
+        new GateInfoGate(new PhaseGate("refine", new TransitionGate(false, null)), null, null);
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
@@ -42,7 +46,7 @@ public class GateInfoCommandTests
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), CreateReader(CreateResult(DefinitionOfReadyGate, 80.5)),
+        var command = CreateCommand(new TestConsole(), CreateWorkflow(CreateResult(DefinitionOfReadyGate, 80.5)),
             jsonOutput);
 
         // Act
@@ -63,10 +67,12 @@ public class GateInfoCommandTests
               "featureId": "gh-142-login-sso", "profile": "feature",
               "featureDir": ".shadekit/features/gh-142-login-sso/",
               "phases": [
-                { "name": "new", "state": "approved" }, { "name": "refine", "state": "approved" },
-                { "name": "map", "state": "in-progress" }, { "name": "plan", "state": "pending" },
-                { "name": "implement", "state": "pending" }, { "name": "verify", "state": "pending" },
-                { "name": "finish", "state": "pending" }
+                { "name": "new", "state": "approved", "artifacts": [ { "file": "request.md", "onDemand": false } ] },
+                { "name": "refine", "state": "approved", "artifacts": [ { "file": "spec.md", "onDemand": false } ] },
+                { "name": "map", "state": "in-progress", "artifacts": [] },
+                { "name": "verify", "state": "pending", "artifacts": [
+                    { "file": "verification.md", "onDemand": false }, { "file": "playbook.md", "onDemand": true } ] },
+                { "name": "legacy", "state": "approved", "artifacts": [] }
               ],
               "gate": { "phase": "plan", "approval": true, "checklist": "checks/definition-of-ready.md",
                         "checklistPath": ".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md",
@@ -82,7 +88,7 @@ public class GateInfoCommandTests
     {
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
-        var command = CreateCommand(console, CreateReader(CreateResult(DefinitionOfReadyGate, 80.5)));
+        var command = CreateCommand(console, CreateWorkflow(CreateResult(DefinitionOfReadyGate, 80.5)));
 
         // Act
         var result = await command.ExecuteAsync(new GateInfoCommandOptions { Phase = "plan" });
@@ -99,10 +105,8 @@ public class GateInfoCommandTests
                 "  new: approved",
                 "  refine: approved",
                 "  map: in-progress",
-                "  plan: pending",
-                "  implement: pending",
                 "  verify: pending",
-                "  finish: pending",
+                "  legacy: approved",
                 "Gate: plan (approval: required, checklist: checks/definition-of-ready.md)",
                 $"Checklist copy: .shadekit/features/{Id}/checks/definition-of-ready.md (exists)",
                 "Coverage threshold: 80.5");
@@ -115,7 +119,7 @@ public class GateInfoCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var gate = DefinitionOfReadyGate with { ChecklistExists = false };
-        var command = CreateCommand(console, CreateReader(CreateResult(gate, 80)));
+        var command = CreateCommand(console, CreateWorkflow(CreateResult(gate, 80)));
 
         // Act
         await command.ExecuteAsync(new GateInfoCommandOptions { Phase = "plan" });
@@ -132,8 +136,8 @@ public class GateInfoCommandTests
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var gate = new GateInfoGate("refine", false, null, null, null);
-        var command = CreateCommand(new TestConsole(), CreateReader(CreateResult(gate, null)), jsonOutput);
+        var gate = RefineGateWithoutChecklist;
+        var command = CreateCommand(new TestConsole(), CreateWorkflow(CreateResult(gate, null)), jsonOutput);
 
         // Act
         await command.ExecuteAsync(new GateInfoCommandOptions { Phase = "refine", Json = true });
@@ -156,14 +160,14 @@ public class GateInfoCommandTests
     {
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
-        var gate = new GateInfoGate("refine", false, null, null, null);
-        var command = CreateCommand(console, CreateReader(CreateResult(gate, null)));
+        var gate = RefineGateWithoutChecklist;
+        var command = CreateCommand(console, CreateWorkflow(CreateResult(gate, null)));
 
         // Act
         await command.ExecuteAsync(new GateInfoCommandOptions { Phase = "refine" });
 
         // Assert
-        console.Lines.Skip(10)
+        console.Lines.Skip(8)
             .Should().Equal(
                 "Gate: refine (approval: not required, checklist: none)",
                 "Coverage threshold: not set");
@@ -175,7 +179,7 @@ public class GateInfoCommandTests
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), CreateReader(CreateResult(null, null)), jsonOutput);
+        var command = CreateCommand(new TestConsole(), CreateWorkflow(CreateResult(null, null)), jsonOutput);
 
         // Act
         var result = await command.ExecuteAsync(new GateInfoCommandOptions { Phase = "new", Json = true });
@@ -199,13 +203,13 @@ public class GateInfoCommandTests
     {
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
-        var command = CreateCommand(console, CreateReader(CreateResult(null, null)));
+        var command = CreateCommand(console, CreateWorkflow(CreateResult(null, null)));
 
         // Act
         await command.ExecuteAsync(new GateInfoCommandOptions { Phase = "new" });
 
         // Assert
-        console.Lines.Skip(10)
+        console.Lines.Skip(8)
             .Should().Equal(
                 "Gate: none (first phase of the profile)",
                 "Coverage threshold: not set");
@@ -216,10 +220,10 @@ public class GateInfoCommandTests
     {
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
-        var result = new GateInfoResult("[red]x[/]", "fea[ture]", new FeaturePaths("[dir]/", "[dir]/f", "[dir]/r"),
-            [new PhaseSnapshot("[bold]new[/]", PhaseState.InProgress)],
-            new GateInfoGate("pl[an]", true, "checks/[dor].md", "[dir]/checks/[dor].md", true), null, []);
-        var command = CreateCommand(console, CreateReader(result));
+        var result = new GateInfoResult(Id, "fea[ture]", [new FeaturePhase("[bold]new[/]", PhaseState.InProgress, [])],
+            new GateInfoGate(new PhaseGate("pl[an]", new TransitionGate(true, "checks/[dor].md")),
+                "[dir]/checks/[dor].md", true), null, []);
+        var command = CreateCommand(console, CreateWorkflow(result));
 
         // Act
         await command.ExecuteAsync(new GateInfoCommandOptions { Phase = "plan" });
@@ -227,8 +231,8 @@ public class GateInfoCommandTests
         // Assert
         console.Lines
             .Should().Equal(
-                "Feature: [red]x[/] (profile fea[ture])",
-                "Feature directory: [dir]/",
+                $"Feature: {Id} (profile fea[ture])",
+                $"Feature directory: .shadekit/features/{Id}/",
                 "Phases:",
                 "  [bold]new[/]: in-progress",
                 "Gate: pl[an] (approval: required, checklist: checks/[dor].md)",
@@ -242,7 +246,7 @@ public class GateInfoCommandTests
         // Arrange
         using var jsonOutput = new StringWriter();
         var command = CreateCommand(new TestConsole(),
-            CreateReader(CreateResult(DefinitionOfReadyGate, null, [FeatureCommandTestHelper.UpgradeWarning])),
+            CreateWorkflow(CreateResult(DefinitionOfReadyGate, null, [FeatureCommandTestHelper.UpgradeWarning])),
             jsonOutput);
 
         // Act
@@ -259,21 +263,21 @@ public class GateInfoCommandTests
     [Trait("Requirement", "FP06-4-AC5")]
     [InlineData("gh-7-other-feature")]
     [InlineData(null)]
-    public async Task ExecuteAsync_FeatureOption_PassesFeatureIdToReader(string? featureId)
+    public async Task ExecuteAsync_FeatureOption_PassesFeatureIdToWorkflow(string? featureId)
     {
         // Arrange
         using var cancellationSource = new CancellationTokenSource();
         var kitStore = A.Fake<IKitStore>();
-        var reader = CreateReader(CreateResult(DefinitionOfReadyGate, null));
+        var workflow = CreateWorkflow(CreateResult(DefinitionOfReadyGate, null));
         var context = PhaseCommandTestHelper.CreateContext(new TestConsole(),
             cancellation: new TestCliCancellation(cancellationSource.Token), kitStore: kitStore);
-        var command = new GateInfoCommand(context, reader);
+        var command = new GateInfoCommand(context, workflow);
 
         // Act
         await command.ExecuteAsync(new GateInfoCommandOptions { Phase = "plan", FeatureId = featureId });
 
         // Assert
-        A.CallTo(() => reader.ReadAsync(kitStore, "plan", featureId, cancellationSource.Token))
+        A.CallTo(() => workflow.GetGateInfoAsync(kitStore, "plan", featureId, cancellationSource.Token))
             .MustHaveHappenedOnceExactly();
     }
 
@@ -283,7 +287,7 @@ public class GateInfoCommandTests
     public async Task ExecuteAsync_JsonFeatureResolutionFailure_WritesErrorEnvelopeWithMappedCode(
         Exception exception, int exitCode, string errorCode)
     {
-        await RunWithReaderFailureAndAssertEnvelopeAsync(exception, "plan", exitCode, errorCode);
+        await RunWithWorkflowFailureAndAssertEnvelopeAsync(exception, "plan", exitCode, errorCode);
     }
 
     public static TheoryData<Exception, int, string> FeatureResolutionFailures() =>
@@ -298,7 +302,7 @@ public class GateInfoCommandTests
     [Trait("Requirement", "FP06-4-AC6")]
     public async Task ExecuteAsync_JsonPhaseNotInProfile_WritesErrorEnvelopeWithPhaseNotInProfile()
     {
-        await RunWithReaderFailureAndAssertEnvelopeAsync(
+        await RunWithWorkflowFailureAndAssertEnvelopeAsync(
             new PhaseNotInProfileException("nope", "feature", ["new", "refine", "map", "plan"]), "nope",
             ShadeKitCliExitCodes.PhaseNotInProfile, ShadeKitCliErrorCodes.PhaseNotInProfile);
     }
@@ -308,7 +312,7 @@ public class GateInfoCommandTests
     public async Task ExecuteAsync_JsonOtherReadFailure_WritesErrorEnvelopeWithMappedCode(Exception exception,
         int exitCode, string errorCode)
     {
-        await RunWithReaderFailureAndAssertEnvelopeAsync(exception, "plan", exitCode, errorCode);
+        await RunWithWorkflowFailureAndAssertEnvelopeAsync(exception, "plan", exitCode, errorCode);
     }
 
     public static TheoryData<Exception, int, string> OtherReadFailures() =>
@@ -347,11 +351,11 @@ public class GateInfoCommandTests
     {
         // Arrange
         var console = new TestConsole();
-        var reader = A.Fake<IGateInfoReader>();
-        A.CallTo(() => reader.ReadAsync(A<IKitStore>._, A<string>._, A<string?>._, A<CancellationToken>._))
+        var workflow = A.Fake<IPhaseWorkflow>();
+        A.CallTo(() => workflow.GetGateInfoAsync(A<IKitStore>._, A<string>._, A<string?>._, A<CancellationToken>._))
             .ThrowsAsync(new PhaseNotInProfileException("nope", "feature", ["new", "refine"]));
 
-        var command = CreateCommand(console, reader);
+        var command = CreateCommand(console, workflow);
 
         // Act
         var act = () => command.ExecuteAsync(new GateInfoCommandOptions { Phase = "nope" });
@@ -375,16 +379,16 @@ public class GateInfoCommandTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ExecuteAsync_KitRootNotFound_ThrowsAbortExceptionWithoutCallingReader(bool json)
+    public async Task ExecuteAsync_KitRootNotFound_ThrowsAbortExceptionWithoutCallingWorkflow(bool json)
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var reader = A.Fake<IGateInfoReader>();
+        var workflow = A.Fake<IPhaseWorkflow>();
         var context = TestShadeKitCommandContext.Create(new TestConsole(),
             kitStoreFactory: FeatureCommandTestHelper.CreateThrowingKitStoreFactory(
                 new KitRootPathNotFoundException("/repo/src", "/repo")),
             jsonOutput: jsonOutput);
-        var command = new GateInfoCommand(context, reader);
+        var command = new GateInfoCommand(context, workflow);
 
         // Act
         var act = () => command.ExecuteAsync(new GateInfoCommandOptions { Phase = "plan", Json = json });
@@ -393,7 +397,7 @@ public class GateInfoCommandTests
         (await act.Should().ThrowAsync<CliCommandAbortException>())
             .Which.ExitCode.Should().Be(ShadeKitCliExitCodes.KitRootNotFound);
 
-        A.CallTo(reader)
+        A.CallTo(workflow)
             .MustNotHaveHappened();
 
         if (json)
@@ -411,7 +415,7 @@ public class GateInfoCommandTests
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
         var command = CreateCommand(console,
-            CreateReader(CreateResult(DefinitionOfReadyGate, null, [FeatureCommandTestHelper.UpgradeWarning])));
+            CreateWorkflow(CreateResult(DefinitionOfReadyGate, null, [FeatureCommandTestHelper.UpgradeWarning])));
 
         // Act
         await command.ExecuteAsync(new GateInfoCommandOptions { Phase = "plan" });
@@ -432,7 +436,7 @@ public class GateInfoCommandTests
     {
         // Arrange
         var console = FeatureCommandTestHelper.CreateWideConsole();
-        var command = CreateCommand(console, CreateReader(CreateResult(DefinitionOfReadyGate, threshold)));
+        var command = CreateCommand(console, CreateWorkflow(CreateResult(DefinitionOfReadyGate, threshold)));
 
         var originalCulture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
@@ -456,7 +460,7 @@ public class GateInfoCommandTests
     public async Task ExecuteAsync_NullOptions_ThrowsArgumentNullException()
     {
         // Arrange
-        var command = CreateCommand(new TestConsole(), CreateReader(CreateResult(null, null)));
+        var command = CreateCommand(new TestConsole(), CreateWorkflow(CreateResult(null, null)));
 
         // Act
         var act = () => command.ExecuteAsync(null!);
@@ -468,13 +472,13 @@ public class GateInfoCommandTests
 
     [Theory]
     [InlineData(0, "context")]
-    [InlineData(1, "gateInfoReader")]
+    [InlineData(1, "phaseWorkflow")]
     public void Ctor_NullArgument_ThrowsArgumentNullException(int nullIndex, string parameterName)
     {
         // Act
         var act = () => new GateInfoCommand(
             nullIndex == 0 ? null! : TestShadeKitCommandContext.Create(new TestConsole()),
-            nullIndex == 1 ? null! : A.Fake<IGateInfoReader>());
+            nullIndex == 1 ? null! : A.Fake<IPhaseWorkflow>());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -548,16 +552,16 @@ public class GateInfoCommandTests
             .Should().BeFalse();
     }
 
-    private static async Task RunWithReaderFailureAndAssertEnvelopeAsync(Exception exception, string phase,
+    private static async Task RunWithWorkflowFailureAndAssertEnvelopeAsync(Exception exception, string phase,
         int exitCode, string errorCode)
     {
         // Arrange
         using var jsonOutput = new StringWriter();
-        var reader = A.Fake<IGateInfoReader>();
-        A.CallTo(() => reader.ReadAsync(A<IKitStore>._, A<string>._, A<string?>._, A<CancellationToken>._))
+        var workflow = A.Fake<IPhaseWorkflow>();
+        A.CallTo(() => workflow.GetGateInfoAsync(A<IKitStore>._, A<string>._, A<string?>._, A<CancellationToken>._))
             .ThrowsAsync(exception);
 
-        var command = CreateCommand(new TestConsole(), reader, jsonOutput);
+        var command = CreateCommand(new TestConsole(), workflow, jsonOutput);
 
         // Act
         var act = () => command.ExecuteAsync(new GateInfoCommandOptions { Phase = phase, Json = true });
@@ -583,27 +587,29 @@ public class GateInfoCommandTests
     private static GateInfoResult CreateResult(GateInfoGate? gate, double? coverageThreshold,
         IReadOnlyList<KitWarning>? warnings = null)
     {
-        return new GateInfoResult(Id, "feature", FeaturePaths.For(Id),
+        return new GateInfoResult(Id, "feature",
         [
-            new PhaseSnapshot("new", PhaseState.Approved), new PhaseSnapshot("refine", PhaseState.Approved),
-            new PhaseSnapshot("map", PhaseState.InProgress), new PhaseSnapshot("plan", PhaseState.Pending),
-            new PhaseSnapshot("implement", PhaseState.Pending), new PhaseSnapshot("verify", PhaseState.Pending),
-            new PhaseSnapshot("finish", PhaseState.Pending)
+            new FeaturePhase("new", PhaseState.Approved, [new PhaseArtifact("request.md")]),
+            new FeaturePhase("refine", PhaseState.Approved, [new PhaseArtifact("spec.md")]),
+            new FeaturePhase("map", PhaseState.InProgress, []),
+            new FeaturePhase("verify", PhaseState.Pending,
+                [new PhaseArtifact("verification.md"), new PhaseArtifact("playbook.md", onDemand: true)]),
+            new FeaturePhase("legacy", PhaseState.Approved, [])
         ], gate, coverageThreshold, warnings ?? []);
     }
 
-    private static IGateInfoReader CreateReader(GateInfoResult result)
+    private static IPhaseWorkflow CreateWorkflow(GateInfoResult result)
     {
-        var reader = A.Fake<IGateInfoReader>();
-        A.CallTo(() => reader.ReadAsync(A<IKitStore>._, A<string>._, A<string?>._, A<CancellationToken>._))
+        var workflow = A.Fake<IPhaseWorkflow>();
+        A.CallTo(() => workflow.GetGateInfoAsync(A<IKitStore>._, A<string>._, A<string?>._, A<CancellationToken>._))
             .Returns(result);
 
-        return reader;
+        return workflow;
     }
 
-    private static GateInfoCommand CreateCommand(IAnsiConsole console, IGateInfoReader reader,
+    private static GateInfoCommand CreateCommand(IAnsiConsole console, IPhaseWorkflow workflow,
         TextWriter? jsonOutput = null)
     {
-        return new GateInfoCommand(PhaseCommandTestHelper.CreateContext(console, jsonOutput), reader);
+        return new GateInfoCommand(PhaseCommandTestHelper.CreateContext(console, jsonOutput), workflow);
     }
 }

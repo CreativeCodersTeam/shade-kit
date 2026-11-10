@@ -115,6 +115,7 @@ that this file stands alone.
 | D-40 | git form (part of m1) | `git status --porcelain --branch --untracked-files=all` | user's own (via m1) | Gate 5 r2 |
 | D-41 | round-3 findings | fix all six (r3-m1, r3-s1, r3-s2, r3-n1, r3-n2, r3-n3) | user's own | Gate 5 r3 |
 | D-42 | round 4 | accept; r4-s1 and r4-n1–n3 deferred, named as open points here | recommended accepted | Gate 5 r4 |
+| D-43 | simplify review (2026-11-10) | apply A–L of the four-angle cleanup review: `gate info` moves into `IPhaseWorkflow` with `IPhaseEngine.HasGate` and `TransitionGate.ForPhase`; phases carry their artifacts (`PhaseArtifact`, `onDemand`) from `BuiltInWorkflowProfiles`; one `phases` array for `feature show` and `gate info`; `gate info` keeps the configured approval while a transition is pending; shared E2E harness and test helpers; skill: n/a rule on the artifacts, `git log --oneline`, multi-path diff, one edit per row, every rule once | user's own (each finding chosen) | simplify |
 
 Waivers: none.
 
@@ -275,3 +276,12 @@ RW-5 — r3-m1, r3-s1, r3-s2, r3-n1, r3-n2, r3-n3
   [x] skill-creator:skill-creator — before the first write (implementer report; the round-4 verifier/reviewer loaded it and dotnet-reviewer itself)
 Review rounds 2–4
   [x] cc-ai-dotnet:dotnet-reviewer, [x] skill-creator:skill-creator — loaded by each reviewer sub-agent (D-38)
+
+## 12. Simplify review (2026-11-10, D-43)
+
+A `/simplify` review (reuse, simplification, efficiency, altitude) of the branch against `main` found twelve points; the user chose to apply all of them:
+
+- **Code.** `GateInfoReader`/`IGateInfoReader` are gone; `IPhaseWorkflow.GetGateInfoAsync` loads the feature through the same `LoadAsync` as the phase commands (with an optional feature id; `EnsureFeatureExists` moved to `KitStoreFeatureExtensions`). The engine owns the gate rules: `IPhaseEngine.HasGate` (phase check, no gate into the first phase) and `TransitionGate.ForPhase` (default gate), which `PhaseEngine` uses too. `GateInfoGate` holds a `PhaseGate`; `GateInfoResult.Paths` is derived from the id. `WorkflowPhase.Artifacts` (`PhaseArtifact`, names in `WorkflowArtifactNames`) lists what each phase writes; `FeaturePhase.ListOf` builds the phases with their artifacts, and `feature show` and `gate info` write them as one `phases` array (`FeaturePhaseData`), so `gate info` now also lists stored phases the profile no longer has. While a transition into the phase is pending, `gate info` still reports the configured approval (user decision).
+- **Tests.** `GateInfoReaderTests` became `PhaseWorkflowGateInfoTests` (theories, the checklist constant, `TestConfigJson` in `tests/Shared` shared with `FeatureStoreTestContext`); new `PhaseEngineGateTests` and `FeaturePhaseTests`, and artifact tests in `WorkflowPhaseTests` and `BuiltInWorkflowProfilesTests`. The feature, phase, and gate end-to-end tests share `CliEndToEndHarness`; its `AssertError` also checks `data: null`. Result: Core 3 750 tests (1 skipped on non-Windows), CLI 997 tests, all green.
+- **Skill.** Changed with skill-creator; the old text was kept as a snapshot and run as the baseline. Four scenarios (quick DoD, feature DoD, bugfix DoR, `error`), each in a fresh subagent per text, checked by a script: new text 28 of 28 checks, old text 27 of 28. The scenarios, fixtures, outputs, and the review page stay outside the repository (D-28); the results are in the 06-4 package.
+

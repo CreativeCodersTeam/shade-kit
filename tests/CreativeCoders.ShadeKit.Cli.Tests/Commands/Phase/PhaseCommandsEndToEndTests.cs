@@ -1,64 +1,38 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Tests.Commands.Feature;
 using CreativeCoders.ShadeKit.Core.Git;
-using CreativeCoders.ShadeKit.Core.Processes;
-using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Tests.Shared;
-using FakeItEasy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using static CreativeCoders.ShadeKit.Cli.Tests.Commands.CliEndToEndHarness;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Phase;
 
 /// <summary>
-/// Runs the <c>shade-kit phase</c> commands through
-/// <see cref="Program.RunAsync(string[], TextWriter, TextWriter, Action{IServiceCollection})" /> against a real temporary
+/// Runs the <c>shade-kit phase</c> commands through the <see cref="CliEndToEndHarness" /> against a real temporary
 /// repository; git is answered by a fake <see cref="IGitCommandRunner" />, the tracker issue reader is a fake, so no
 /// test starts <c>git</c> or <c>gh</c>, and the clock is a <see cref="FakeTimeProvider" />, so the history timestamps
 /// are exact.
 /// </summary>
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
-public sealed partial class PhaseCommandsEndToEndTests : IDisposable
+public sealed class PhaseCommandsEndToEndTests : IDisposable
 {
-    private const string IssueUrl = "https://github.com/acme/shop/issues/142";
-
-    private const string FeatureId = "gh-142-login-sso";
-
-    private const string UserName = "Jane Doe";
-
-    private const string UserEmail = "jane@example.com";
-
-    private static readonly string[] CurrentBranchArguments = ["symbolic-ref", "--short", "-q", "HEAD"];
+    private const string FeatureId = IssueFeatureId;
 
     private static readonly DateTimeOffset StartUtc = new(2026, 10, 26, 7, 0, 0, TimeSpan.Zero);
 
     private static readonly TimeZoneInfo UtcPlusTwo =
         TimeZoneInfo.CreateCustomTimeZone("Test UTC+02", TimeSpan.FromHours(2), "Test UTC+02", "Test UTC+02");
 
-    private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
-
-    private readonly IGitCommandRunner _gitCommandRunner = A.Fake<IGitCommandRunner>();
-
-    private readonly ITrackerIssueReader _trackerIssueReader = A.Fake<ITrackerIssueReader>();
-
-    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-phase-tests-");
+    private readonly CliEndToEndHarness _harness = new CliEndToEndHarness("shade-kit-phase-tests-");
 
     private readonly FakeTimeProvider _timeProvider = new FakeTimeProvider(StartUtc);
 
-    private string? _branch = "main";
-
     public PhaseCommandsEndToEndTests()
     {
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
-            .ReturnsLazily((string _, IReadOnlyList<string> arguments, CancellationToken _) =>
-                Task.FromResult(AnswerGit(arguments)));
-
-        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
-            .Returns(new TrackerIssue("Login with SSO", "Users sign in with the company account.", []));
-
         _timeProvider.SetLocalTimeZone(UtcPlusTwo);
+        _harness.ConfigureServices = x => x.AddSingleton<TimeProvider>(_timeProvider);
     }
 
     [Fact]
@@ -72,9 +46,9 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task QuickProfile_FullRun_CompletesFeatureRecordsHistoryAndClearsOverride()
     {
         // Arrange
-        await InitAsync();
-        _branch = $"feature/{FeatureId}";
-        await CreateFeatureAsync("quick");
+        await _harness.InitAsync();
+        _harness.Branch = $"feature/{FeatureId}";
+        await _harness.CreateIssueFeatureAsync("quick");
 
         // Act
         var startQuick = await RunJsonAtAsync(1, "phase", "start", "quick", "--json");
@@ -131,7 +105,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
             }
             """);
 
-        var definitionOfDone = await File.ReadAllTextAsync(GetFeaturePath("checks", "definition-of-done.md"),
+        var definitionOfDone = await File.ReadAllTextAsync(_harness.GetIssueFeaturePath("checks", "definition-of-done.md"),
             TestContext.Current.CancellationToken);
 
         definitionOfDone
@@ -164,7 +138,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         currentFeature.GetProperty("phaseState").GetString()
             .Should().Be("approved");
 
-        File.Exists(GetCurrentFeatureFilePath())
+        File.Exists(_harness.GetCurrentFeatureFilePath())
             .Should().BeFalse("phase complete clears the local override that selects the completed feature");
 
         using var featureFile = await ReadFeatureFileAsync();
@@ -195,10 +169,10 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task QuickProfile_DoneFeature_RefusesMutatingCommandsWith44AndAnswersReadingCommands()
     {
         // Arrange
-        await InitAsync();
-        _branch = $"feature/{FeatureId}";
-        await CreateFeatureAsync("quick");
-        await RunAllOkAsync(["phase", "start", "quick"], ["phase", "start", "finish"], ["phase", "approve", "finish"],
+        await _harness.InitAsync();
+        _harness.Branch = $"feature/{FeatureId}";
+        await _harness.CreateIssueFeatureAsync("quick");
+        await _harness.RunAllOkAsync(["phase", "start", "quick"], ["phase", "start", "finish"], ["phase", "approve", "finish"],
             ["phase", "complete"]);
         var bytesBefore = await ReadFeatureFileBytesAsync();
 
@@ -231,9 +205,9 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task FeatureProfile_RejectApproveAndReopen_RecordsHistoryResetsLaterPhasesAndKeepsArtifacts()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        var requestBytes = await File.ReadAllBytesAsync(GetFeaturePath("request.md"),
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        var requestBytes = await File.ReadAllBytesAsync(_harness.GetIssueFeaturePath("request.md"),
             TestContext.Current.CancellationToken);
 
         // Act
@@ -241,10 +215,10 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         var rejectRefine = await RunJsonAtAsync(2, "phase", "reject", "refine", "--note", "DOR-04 failed", "--json");
         await RunJsonAtAsync(3, "phase", "start", "refine", "--json");
         await RunJsonAtAsync(4, "phase", "approve", "refine", "--json");
-        await File.WriteAllTextAsync(GetFeaturePath("spec.md"), "# Spec\n", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(_harness.GetIssueFeaturePath("spec.md"), "# Spec\n", TestContext.Current.CancellationToken);
         await RunJsonAtAsync(5, "phase", "start", "map", "--json");
         await RunJsonAtAsync(6, "phase", "approve", "map", "--json");
-        await File.WriteAllTextAsync(GetFeaturePath("map.md"), "# Map\n", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(_harness.GetIssueFeaturePath("map.md"), "# Map\n", TestContext.Current.CancellationToken);
         var reopen = await RunJsonAtAsync(7, "phase", "start", "refine", "--json");
         var approveReopen = await RunJsonAtAsync(8, "phase", "approve", "refine", "--json");
         var show = await RunJsonAtAsync(9, "feature", "show", FeatureId, "--json");
@@ -295,11 +269,10 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         shown.GetProperty("pendingTransition").ValueKind
             .Should().Be(JsonValueKind.Null);
 
-        shown.GetProperty("phases").ShouldBeJson(
-            """
-            { "new": "approved", "refine": "in-progress", "map": "pending", "plan": "pending",
-              "implement": "pending", "verify": "pending", "finish": "pending" }
-            """);
+        shown.GetProperty("phases").EnumerateArray()
+            .Select(x => $"{x.GetProperty("name").GetString()}={x.GetProperty("state").GetString()}")
+            .Should().Equal("new=approved", "refine=in-progress", "map=pending", "plan=pending", "implement=pending",
+                "verify=pending", "finish=pending");
 
         shown.GetProperty("history").ShouldBeJson(
             """
@@ -323,13 +296,13 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
             ]
             """);
 
-        (await File.ReadAllTextAsync(GetFeaturePath("spec.md"), TestContext.Current.CancellationToken))
+        (await File.ReadAllTextAsync(_harness.GetIssueFeaturePath("spec.md"), TestContext.Current.CancellationToken))
             .Should().Be("# Spec\n");
 
-        (await File.ReadAllTextAsync(GetFeaturePath("map.md"), TestContext.Current.CancellationToken))
+        (await File.ReadAllTextAsync(_harness.GetIssueFeaturePath("map.md"), TestContext.Current.CancellationToken))
             .Should().Be("# Map\n");
 
-        (await File.ReadAllBytesAsync(GetFeaturePath("request.md"), TestContext.Current.CancellationToken))
+        (await File.ReadAllBytesAsync(_harness.GetIssueFeaturePath("request.md"), TestContext.Current.CancellationToken))
             .Should().Equal(requestBytes);
     }
 
@@ -341,9 +314,9 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task NoOpCommands_RepeatedStartReEntryResumeNextAndSkills_LeaveFeatureFileUnchanged()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"]);
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"]);
         var inProgressBytes = await ReadFeatureFileBytesAsync();
 
         // Act
@@ -439,8 +412,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseStart_SkippedPhase_Returns42AndLeavesFeatureFileUnchanged()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
         var bytesBefore = await ReadFeatureFileBytesAsync();
 
         // Act
@@ -465,8 +438,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         string command)
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
         var bytesBefore = await ReadFeatureFileBytesAsync();
 
         // Act
@@ -484,9 +457,9 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseComplete_OutsideLastPhase_Returns45AndLeavesFeatureFileUnchanged()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("quick");
-        await RunAllOkAsync(["phase", "start", "quick"]);
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("quick");
+        await _harness.RunAllOkAsync(["phase", "start", "quick"]);
         var bytesBefore = await ReadFeatureFileBytesAsync();
 
         // Act
@@ -505,8 +478,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseCommand_PhaseNotInProfile_Returns41ListingProfilePhases(string command)
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
         var bytesBefore = await ReadFeatureFileBytesAsync();
 
         // Act
@@ -529,7 +502,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseCommand_NoCurrentFeature_Returns37(params string[] arguments)
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
         var run = await RunJsonAtAsync(1, ["phase", .. arguments, "--json"]);
@@ -549,8 +522,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseCommand_WithoutPhaseArgument_Returns2WithInvalidArgumentsEnvelope(string command)
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
         var bytesBefore = await ReadFeatureFileBytesAsync();
 
         // Act
@@ -570,9 +543,9 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseReject_EmptyOrWhitespaceNote_RecordsRejectWithoutNote(string note)
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(["phase", "start", "refine"]);
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(["phase", "start", "refine"]);
 
         // Act
         var run = await RunJsonAtAsync(1, "phase", "reject", "refine", "--note", note, "--json");
@@ -597,8 +570,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PlainMode_PhaseCommandsWithShortNoteOption_WriteExpectedLinesAndRecordNote()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("bugfix");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("bugfix");
 
         // Act
         var start = await RunAtAsync(1, "phase", "start", "diagnose");
@@ -656,12 +629,12 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task FeatureProfile_StartPlan_CopiesDefinitionOfReadyWithFeatureIdAndReturnsItsPath()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(StartAndApproveRefineAndMap);
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(StartAndApproveRefineAndMap);
 
         // Act
-        var startPlan = await RunJsonAsync("phase", "start", "plan", "--json");
+        var startPlan = await _harness.RunJsonAsync("phase", "start", "plan", "--json");
 
         // Assert
         startPlan.ExitCode
@@ -672,9 +645,9 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
             { "phase": "plan", "approval": true, "checklist": "checks/definition-of-ready.md", "checklistCreated": true }
             """);
 
-        var template = await File.ReadAllTextAsync(GetKitPath("templates", "checks", "definition-of-ready.md"),
+        var template = await File.ReadAllTextAsync(_harness.GetKitPath("templates", "checks", "definition-of-ready.md"),
             TestContext.Current.CancellationToken);
-        var copy = await File.ReadAllTextAsync(GetFeaturePath("checks", "definition-of-ready.md"),
+        var copy = await File.ReadAllTextAsync(_harness.GetIssueFeaturePath("checks", "definition-of-ready.md"),
             TestContext.Current.CancellationToken);
 
         copy
@@ -687,13 +660,13 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PlainMode_StartPlanTwice_WritesChecklistCopyCreatedThenAlreadyExistsAfterGateLine()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(StartAndApproveRefineAndMap);
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(StartAndApproveRefineAndMap);
 
         // Act
-        var first = await RunAsync("phase", "start", "plan");
-        var second = await RunAsync("phase", "start", "plan");
+        var first = await _harness.RunAsync("phase", "start", "plan");
+        var second = await _harness.RunAsync("phase", "start", "plan");
 
         // Assert
         new[] { first.ExitCode, second.ExitCode }
@@ -718,19 +691,19 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task FeatureProfile_ReopenAndStartPlanAgain_KeepsFilledChecklistCopyByteForByte()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync([.. StartAndApproveRefineAndMap, ["phase", "start", "plan"], ["phase", "approve", "plan"]]);
-        var copyPath = GetFeaturePath("checks", "definition-of-ready.md");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync([.. StartAndApproveRefineAndMap, ["phase", "start", "plan"], ["phase", "approve", "plan"]]);
+        var copyPath = _harness.GetIssueFeaturePath("checks", "definition-of-ready.md");
         await File.AppendAllTextAsync(copyPath, "| DOR-01 | filled by the agent | pass | spec.md |\n",
             TestContext.Current.CancellationToken);
         var filledBytes = await File.ReadAllBytesAsync(copyPath, TestContext.Current.CancellationToken);
 
         // Act
-        var reopen = await RunJsonAsync("phase", "start", "map", "--json");
-        var approveReopen = await RunJsonAsync("phase", "approve", "map", "--json");
-        var startPlanAgain = await RunJsonAsync("phase", "start", "plan", "--json");
-        var startPlanRepeated = await RunJsonAsync("phase", "start", "plan", "--json");
+        var reopen = await _harness.RunJsonAsync("phase", "start", "map", "--json");
+        var approveReopen = await _harness.RunJsonAsync("phase", "approve", "map", "--json");
+        var startPlanAgain = await _harness.RunJsonAsync("phase", "start", "plan", "--json");
+        var startPlanRepeated = await _harness.RunJsonAsync("phase", "start", "plan", "--json");
 
         // Assert
         new[] { reopen.ExitCode, approveReopen.ExitCode, startPlanAgain.ExitCode, startPlanRepeated.ExitCode }
@@ -760,9 +733,9 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task FeatureProfile_TeamGateWithApprovalOff_PerformsTransitionAndRecordsApprovalOff()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
         await WriteGatesAsync("""{ "feature": { "refine": { "approval": false } } }""");
-        await CreateFeatureAsync("feature");
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
         var startRefine = await RunJsonAtAsync(1, "phase", "start", "refine", "--json");
@@ -797,12 +770,12 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task FeatureProfile_TransitionWithoutChecklist_ReturnsNullChecklistAndCopiesNothing()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"]);
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"]);
 
         // Act
-        var startMap = await RunJsonAsync("phase", "start", "map", "--json");
+        var startMap = await _harness.RunJsonAsync("phase", "start", "map", "--json");
 
         // Assert
         startMap.ExitCode
@@ -811,7 +784,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         startMap.Root.GetProperty("data").GetProperty("gate").ShouldBeJson(
             """{ "phase": "map", "approval": true, "checklist": null, "checklistCreated": null }""");
 
-        var checksPath = GetFeaturePath("checks");
+        var checksPath = _harness.GetIssueFeaturePath("checks");
 
         (Directory.Exists(checksPath) ? Directory.EnumerateFileSystemEntries(checksPath) : [])
             .Should().BeEmpty();
@@ -822,12 +795,12 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task FeatureProfile_GatesWithoutEntryForTransition_RequiresApproval()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
         await WriteGatesAsync("""{ "feature": { "map": { "approval": false } } }""");
-        await CreateFeatureAsync("feature");
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
-        var startRefine = await RunJsonAsync("phase", "start", "refine", "--json");
+        var startRefine = await _harness.RunJsonAsync("phase", "start", "refine", "--json");
 
         // Assert
         startRefine.ExitCode
@@ -849,15 +822,15 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task FeatureProfile_TeamChecklistTemplate_CopiesItIntoFeatureFolderAndReturnsItsPath()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
         await WriteGatesAsync("""{ "feature": { "refine": { "approval": true, "checklist": "checks/refine.md" } } }""");
-        Directory.CreateDirectory(GetKitPath("templates", "checks"));
-        await File.WriteAllTextAsync(GetKitPath("templates", "checks", "refine.md"),
+        Directory.CreateDirectory(_harness.GetKitPath("templates", "checks"));
+        await File.WriteAllTextAsync(_harness.GetKitPath("templates", "checks", "refine.md"),
             "# Refine check: {{feature-id}}\n\n- [ ] Request understood\n", TestContext.Current.CancellationToken);
-        await CreateFeatureAsync("feature");
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
-        var startRefine = await RunJsonAsync("phase", "start", "refine", "--json");
+        var startRefine = await _harness.RunJsonAsync("phase", "start", "refine", "--json");
 
         // Assert
         startRefine.ExitCode
@@ -870,7 +843,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         // repository that is the line ending of the operating system.
         var newLine = Environment.NewLine;
 
-        (await File.ReadAllTextAsync(GetFeaturePath("checks", "refine.md"), TestContext.Current.CancellationToken))
+        (await File.ReadAllTextAsync(_harness.GetIssueFeaturePath("checks", "refine.md"), TestContext.Current.CancellationToken))
             .Should().Be($"# Refine check: {FeatureId}{newLine}{newLine}- [ ] Request understood{newLine}");
     }
 
@@ -878,14 +851,14 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseStart_ChecklistTemplateMissing_Returns47AndLeavesFeatureFileUnchanged()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(StartAndApproveRefineAndMap);
-        File.Delete(GetKitPath("templates", "checks", "definition-of-ready.md"));
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(StartAndApproveRefineAndMap);
+        File.Delete(_harness.GetKitPath("templates", "checks", "definition-of-ready.md"));
         var featureBytes = await ReadFeatureFileBytesAsync();
 
         // Act
-        var startPlan = await RunJsonAsync("phase", "start", "plan", "--json");
+        var startPlan = await _harness.RunJsonAsync("phase", "start", "plan", "--json");
 
         // Assert
         AssertError(startPlan, 47, "checklist-template-not-found");
@@ -896,7 +869,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         (await ReadFeatureFileBytesAsync())
             .Should().Equal(featureBytes);
 
-        File.Exists(GetFeaturePath("checks", "definition-of-ready.md"))
+        File.Exists(_harness.GetIssueFeaturePath("checks", "definition-of-ready.md"))
             .Should().BeFalse();
     }
 
@@ -904,14 +877,14 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseStart_FileAtChecksDirectoryOfFeature_Returns17AndLeavesFeatureFileUnchanged()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(StartAndApproveRefineAndMap);
-        await File.WriteAllTextAsync(GetFeaturePath("checks"), "stray\n", TestContext.Current.CancellationToken);
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(StartAndApproveRefineAndMap);
+        await File.WriteAllTextAsync(_harness.GetIssueFeaturePath("checks"), "stray\n", TestContext.Current.CancellationToken);
         var featureBytes = await ReadFeatureFileBytesAsync();
 
         // Act
-        var startPlan = await RunJsonAsync("phase", "start", "plan", "--json");
+        var startPlan = await _harness.RunJsonAsync("phase", "start", "plan", "--json");
 
         // Assert
         AssertError(startPlan, 17, "kit-file-write-failed");
@@ -922,7 +895,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         (await ReadFeatureFileBytesAsync())
             .Should().Equal(featureBytes);
 
-        (await File.ReadAllTextAsync(GetFeaturePath("checks"), TestContext.Current.CancellationToken))
+        (await File.ReadAllTextAsync(_harness.GetIssueFeaturePath("checks"), TestContext.Current.CancellationToken))
             .Should().Be("stray\n");
     }
 
@@ -930,14 +903,14 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseStart_TwoGatesShareChecklist_WarnsAndStartsLaterGateWithoutChecklist()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
         await WriteGatesAsync(
             """{ "feature": { "refine": { "checklist": "checks/definition-of-ready.md" }, "map": { "checklist": "checks/definition-of-ready.md" } } }""");
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"]);
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"]);
 
         // Act
-        var startMap = await RunJsonAsync("phase", "start", "map", "--json");
+        var startMap = await _harness.RunJsonAsync("phase", "start", "map", "--json");
 
         // Assert
         startMap.ExitCode
@@ -954,15 +927,15 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     public async Task PhaseStartAndNext_GatesFileWithoutProfiles_WarnDefaultsUsedAndCopyDefinitionOfReady()
     {
         // Arrange
-        await InitAsync();
-        await File.WriteAllTextAsync(GetKitPath("gates.json"), TestGatesJson.HeaderOnly,
+        await _harness.InitAsync();
+        await File.WriteAllTextAsync(_harness.GetKitPath("gates.json"), TestGatesJson.HeaderOnly,
             TestContext.Current.CancellationToken);
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(StartAndApproveRefineAndMap);
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(StartAndApproveRefineAndMap);
 
         // Act
-        var startPlan = await RunJsonAsync("phase", "start", "plan", "--json");
-        var next = await RunJsonAsync("phase", "next", "--json");
+        var startPlan = await _harness.RunJsonAsync("phase", "start", "plan", "--json");
+        var next = await _harness.RunJsonAsync("phase", "next", "--json");
 
         // Assert
         startPlan.ExitCode
@@ -979,14 +952,13 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         startPlan.Root.GetProperty("data").GetProperty("gate").GetProperty("checklist").GetString()
             .Should().Be("checks/definition-of-ready.md");
 
-        File.Exists(GetFeaturePath("checks", "definition-of-ready.md"))
+        File.Exists(_harness.GetIssueFeaturePath("checks", "definition-of-ready.md"))
             .Should().BeTrue();
     }
 
     public void Dispose()
     {
-        _currentDirectory.Dispose();
-        _tempDirectory.Dispose();
+        _harness.Dispose();
     }
 
     private static string[][] StartAndApproveRefineAndMap =>
@@ -1001,67 +973,8 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     /// </summary>
     private Task WriteGatesAsync(string profiles)
     {
-        return File.WriteAllTextAsync(GetKitPath("gates.json"), TestGatesJson.WithProfiles(profiles),
+        return File.WriteAllTextAsync(_harness.GetKitPath("gates.json"), TestGatesJson.WithProfiles(profiles),
             TestContext.Current.CancellationToken);
-    }
-
-    private string GetKitPath(params string[] parts)
-    {
-        return Path.Combine([_tempDirectory.RootPath, ".shadekit", .. parts]);
-    }
-
-    private static void AssertError((int ExitCode, JsonElement Root) run, int exitCode, string errorCode)
-    {
-        run.ExitCode
-            .Should().Be(exitCode);
-
-        run.Root.GetProperty("ok").GetBoolean()
-            .Should().BeFalse();
-
-        run.Root.GetProperty("error").GetProperty("code").GetString()
-            .Should().Be(errorCode);
-    }
-
-    private ExternalProcessResult AnswerGit(IReadOnlyList<string> arguments)
-    {
-        if (arguments.SequenceEqual(CurrentBranchArguments))
-        {
-            return _branch is null
-                ? new ExternalProcessResult(1, string.Empty, string.Empty)
-                : new ExternalProcessResult(0, _branch + "\n", string.Empty);
-        }
-
-        return arguments switch
-        {
-            ["config", "user.name"] => new ExternalProcessResult(0, UserName + "\n", string.Empty),
-            ["config", "user.email"] => new ExternalProcessResult(0, UserEmail + "\n", string.Empty),
-            _ => new ExternalProcessResult(128, string.Empty, $"unexpected git call: {string.Join(' ', arguments)}")
-        };
-    }
-
-    private async Task InitAsync()
-    {
-        _tempDirectory.CreateGitRoot();
-        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
-
-        (await RunAsync("init", "--json")).ExitCode
-            .Should().Be(0);
-    }
-
-    private async Task CreateFeatureAsync(string profile)
-    {
-        (await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO", "--profile", profile,
-                "--json"))
-            .ExitCode.Should().Be(0);
-    }
-
-    private async Task RunAllOkAsync(params string[][] commands)
-    {
-        foreach (var command in commands)
-        {
-            (await RunJsonAsync([.. command, "--json"])).ExitCode
-                .Should().Be(0, string.Join(' ', command));
-        }
     }
 
     /// <summary>
@@ -1071,7 +984,7 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     {
         _timeProvider.SetUtcNow(StartUtc.AddMinutes(minute));
 
-        return RunAsync(args);
+        return _harness.RunAsync(args);
     }
 
     /// <summary>
@@ -1081,44 +994,12 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
     {
         _timeProvider.SetUtcNow(StartUtc.AddMinutes(minute));
 
-        return RunJsonAsync(args);
-    }
-
-    private async Task<(int ExitCode, string Output, string Error)> RunAsync(params string[] args)
-    {
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-
-        var exitCode = await Program.RunAsync(args, output, error, x => x
-            .AddSingleton(_gitCommandRunner)
-            .AddSingleton(_trackerIssueReader)
-            .AddSingleton<TimeProvider>(_timeProvider));
-
-        return (exitCode, output.ToString(), error.ToString());
-    }
-
-    private async Task<(int ExitCode, JsonElement Root)> RunJsonAsync(params string[] args)
-    {
-        var (exitCode, output, _) = await RunAsync(args);
-
-        using var document = JsonDocument.Parse(output);
-
-        return (exitCode, document.RootElement.Clone());
-    }
-
-    private string GetFeaturePath(params string[] parts)
-    {
-        return Path.Combine([_tempDirectory.RootPath, ".shadekit", "features", FeatureId, .. parts]);
-    }
-
-    private string GetCurrentFeatureFilePath()
-    {
-        return Path.Combine(_tempDirectory.RootPath, ".shadekit", "features", "current-feature.json");
+        return _harness.RunJsonAsync(args);
     }
 
     private Task<byte[]> ReadFeatureFileBytesAsync()
     {
-        return File.ReadAllBytesAsync(GetFeaturePath("feature.json"), TestContext.Current.CancellationToken);
+        return File.ReadAllBytesAsync(_harness.GetIssueFeaturePath("feature.json"), TestContext.Current.CancellationToken);
     }
 
     private async Task<JsonDocument> ReadFeatureFileAsync()
@@ -1126,17 +1007,4 @@ public sealed partial class PhaseCommandsEndToEndTests : IDisposable
         return JsonDocument.Parse(await ReadFeatureFileBytesAsync());
     }
 
-    private static string[] GetLines(string output)
-    {
-        return [.. output.Split('\n').Select(x => x.TrimEnd('\r'))];
-    }
-
-    private static string FoldWhitespace(string text)
-    {
-        // The console wraps long lines, so line breaks are folded back into single spaces.
-        return WhitespaceRegex().Replace(text, " ");
-    }
-
-    [GeneratedRegex(@"\s+")]
-    private static partial Regex WhitespaceRegex();
 }

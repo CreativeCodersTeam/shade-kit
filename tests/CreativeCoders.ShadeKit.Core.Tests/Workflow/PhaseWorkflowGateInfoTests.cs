@@ -6,29 +6,30 @@ using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
 using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Gates.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
-using CreativeCoders.ShadeKit.Core.Tests.Workflow;
 using CreativeCoders.ShadeKit.Core.Workflow;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
 using CreativeCoders.ShadeKit.Core.Workflow.Profiles;
-using CreativeCoders.ShadeKit.Tests.Shared;
 using FakeItEasy;
 using static CreativeCoders.ShadeKit.Core.Tests.Workflow.PhaseWorkflowTestContext;
 
-namespace CreativeCoders.ShadeKit.Core.Tests.Gates;
+namespace CreativeCoders.ShadeKit.Core.Tests.Workflow;
 
 /// <summary>
-/// Tests <see cref="GateInfoReader" /> with a real <see cref="KitStore" />, a real <see cref="FeatureStore" />, and a
-/// real <see cref="GatesConfigTransitionGateProvider" />; only the resolver of the current feature, the git
-/// information, and the feature id factory are faked, so no test starts <c>git</c>.
+/// Tests <see cref="PhaseWorkflow.GetGateInfoAsync" /> with a real <see cref="KitStore" /> and a real
+/// <see cref="GatesConfigTransitionGateProvider" />; only the resolver of the current feature and the git information
+/// are faked, so no test starts <c>git</c>.
 /// </summary>
-public sealed class GateInfoReaderTests : IDisposable
+public sealed class PhaseWorkflowGateInfoTests : IDisposable
 {
     private const string OtherFeatureId = "gh-7-export-csv";
 
     private const string Checklist = "checks/definition-of-ready.md";
 
     private const string ChecklistPath = ".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md";
+
+    private const string PlanGateWithChecklist =
+        $$"""{ "feature": { "plan": { "approval": true, "checklist": "{{Checklist}}" } } }""";
 
     private static readonly WorkflowProfile Feature = BuiltInWorkflowProfiles.Feature;
 
@@ -52,108 +53,94 @@ public sealed class GateInfoReaderTests : IDisposable
         WorkflowProfileNames.Quick
     };
 
-    [Fact]
+    // gates.json profiles, requested phase, expected approval; none of these gates has a checklist.
+    public static TheoryData<string, string, bool> GatesWithoutChecklist { get; } =
+        new TheoryData<string, string, bool>
+        {
+            // A phase without an entry has the default gate.
+            { $$"""{ "feature": { "plan": { "approval": false, "checklist": "{{Checklist}}" } } }""", "map", true },
+            { """{ "feature": { "verify": { "approval": false } } }""", "verify", false },
+            // The gate of an approved phase is its configured gate.
+            { """{ "feature": { "refine": { "approval": false } } }""", "refine", false }
+        };
+
+    [Theory]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_GateWithChecklist_ReturnsGateWithChecklistPathsAndExistence()
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GetGateInfoAsync_GateWithChecklist_ReturnsGateWithChecklistPathsAndExistence(bool copyExists)
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
-        WriteGates("""{ "feature": { "plan": { "approval": true, "checklist": "checks/definition-of-ready.md" } } }""");
-        _context.WriteKitFile("# Definition of Ready\n", KitStorePaths.FeaturesDirName, FeatureId,
-            KitStorePaths.ChecksDirName, "definition-of-ready.md");
+        _context.WriteGates(PlanGateWithChecklist);
+
+        if (copyExists)
+        {
+            _context.WriteKitFile("# Definition of Ready\n", KitStorePaths.FeaturesDirName, FeatureId,
+                KitStorePaths.ChecksDirName, "definition-of-ready.md");
+        }
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Plan, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Plan, FeatureId);
 
         // Assert
         result.Gate
-            .Should().Be(new GateInfoGate(WorkflowPhaseNames.Plan, Approval: true, Checklist, ChecklistPath,
-                ChecklistExists: true));
+            .Should().Be(new GateInfoGate(new PhaseGate(WorkflowPhaseNames.Plan, new TransitionGate(true, Checklist)),
+                ChecklistPath, copyExists));
     }
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_ChecklistCopyMissing_ReturnsExistsFalse()
+    public async Task GetGateInfoAsync_DirectoryInPlaceOfChecklistCopy_ReturnsExistsFalse()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
-        WriteGates("""{ "feature": { "plan": { "approval": true, "checklist": "checks/definition-of-ready.md" } } }""");
-
-        // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Plan, FeatureId);
-
-        // Assert
-        result.Gate
-            .Should().Be(new GateInfoGate(WorkflowPhaseNames.Plan, Approval: true, Checklist, ChecklistPath,
-                ChecklistExists: false));
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_DirectoryInPlaceOfChecklistCopy_ReturnsExistsFalse()
-    {
-        // Arrange
-        _context.WriteFeature(FeatureInMap);
-        WriteGates("""{ "feature": { "plan": { "approval": true, "checklist": "checks/definition-of-ready.md" } } }""");
+        _context.WriteGates(PlanGateWithChecklist);
         _context.Repository.CreateDirectory(KitStorePaths.RootPath, KitStorePaths.FeaturesDirName, FeatureId,
             KitStorePaths.ChecksDirName, "definition-of-ready.md");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Plan, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Plan, FeatureId);
 
         // Assert
         result.Gate!.ChecklistExists
             .Should().BeFalse();
     }
 
-    [Fact]
+    [Theory]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_PhaseWithoutGateEntry_ReturnsDefaultGate()
+    [MemberData(nameof(GatesWithoutChecklist))]
+    public async Task GetGateInfoAsync_GateWithoutChecklist_ReturnsConfiguredGateWithoutChecklistPaths(
+        string profiles, string phase, bool approval)
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
-        WriteGates("""{ "feature": { "plan": { "approval": false, "checklist": "checks/definition-of-ready.md" } } }""");
+        _context.WriteGates(profiles);
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Map, FeatureId);
+        var result = await GetGateInfoAsync(phase, FeatureId);
 
         // Assert
         result.Gate
-            .Should().Be(new GateInfoGate(WorkflowPhaseNames.Map, Approval: true, Checklist: null,
+            .Should().Be(new GateInfoGate(new PhaseGate(phase, new TransitionGate(approval, Checklist: null)),
                 ChecklistPath: null, ChecklistExists: null));
     }
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_GateWithoutApproval_ReturnsApprovalFalse()
-    {
-        // Arrange
-        _context.WriteFeature(FeatureInMap);
-        WriteGates("""{ "feature": { "verify": { "approval": false } } }""");
-
-        // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Verify, FeatureId);
-
-        // Assert
-        result.Gate
-            .Should().Be(new GateInfoGate(WorkflowPhaseNames.Verify, Approval: false, Checklist: null,
-                ChecklistPath: null, ChecklistExists: null));
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_GatesFileMissing_ReturnsDefaultGateWithDefaultsUsedWarning()
+    public async Task GetGateInfoAsync_GatesFileMissing_ReturnsDefaultGateWithDefaultsUsedWarning()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Plan, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Plan, FeatureId);
 
         // Assert
         result.Gate
-            .Should().Be(new GateInfoGate(WorkflowPhaseNames.Plan, Approval: true,
-                GatesConfig.DefinitionOfReadyChecklist, ChecklistPath, ChecklistExists: false));
+            .Should().Be(new GateInfoGate(
+                new PhaseGate(WorkflowPhaseNames.Plan, new TransitionGate(true, GatesConfig.DefinitionOfReadyChecklist)),
+                ChecklistPath, ChecklistExists: false));
 
         result.Warnings
             .Should().Equal(new GatesDefaultsUsedWarning(IsFileMissing: true));
@@ -161,34 +148,34 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_GateOfPhaseAlreadyApproved_ReturnsConfiguredGate()
+    public async Task GetGateInfoAsync_PendingTransitionIntoPhase_ReturnsConfiguredApproval()
     {
         // Arrange
-        _context.WriteFeature(FeatureInMap);
-        WriteGates("""{ "feature": { "refine": { "approval": false } } }""");
+        _context.WriteFeature(PhaseFields(Feature, WorkflowPhaseNames.Map, WorkflowPhaseNames.Plan,
+            ["approved", "approved", "awaiting-approval"]));
+        _context.WriteGates("""{ "feature": { "plan": { "approval": false } } }""");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Refine, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Plan, FeatureId);
 
         // Assert
-        result.Gate
-            .Should().Be(new GateInfoGate(WorkflowPhaseNames.Refine, Approval: false, Checklist: null,
-                ChecklistPath: null, ChecklistExists: null));
+        result.Gate!.Gate.Gate
+            .Should().Be(new TransitionGate(Approval: false, Checklist: null));
     }
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_Feature_ReturnsProfilePhasesInOrderWithState()
+    public async Task GetGateInfoAsync_Feature_ReturnsPhasesInOrderWithStateAndArtifacts()
     {
         // Arrange
         _context.WriteFeature(
             """
             "currentPhase": "map", "phases": { "map": "in-progress", "legacy": "approved", "new": "approved", "refine": "approved" }, "history": []
             """);
-        WriteGates("{}");
+        _context.WriteGates("{}");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Map, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Map, FeatureId);
 
         // Assert
         result.FeatureId
@@ -197,86 +184,76 @@ public sealed class GateInfoReaderTests : IDisposable
         result.Profile
             .Should().Be(WorkflowProfileNames.Feature);
 
-        result.Paths
-            .Should().Be(FeaturePaths.For(FeatureId));
-
         result.Paths.FeatureDir
             .Should().Be(".shadekit/features/gh-142-login-sso/");
 
         result.Phases
+            .Select(x => (x.Name, x.State))
             .Should().Equal(
-                new PhaseSnapshot(WorkflowPhaseNames.New, PhaseState.Approved),
-                new PhaseSnapshot(WorkflowPhaseNames.Refine, PhaseState.Approved),
-                new PhaseSnapshot(WorkflowPhaseNames.Map, PhaseState.InProgress),
-                new PhaseSnapshot(WorkflowPhaseNames.Plan, PhaseState.Pending),
-                new PhaseSnapshot(WorkflowPhaseNames.Implement, PhaseState.Pending),
-                new PhaseSnapshot(WorkflowPhaseNames.Verify, PhaseState.Pending),
-                new PhaseSnapshot(WorkflowPhaseNames.Finish, PhaseState.Pending));
+                (WorkflowPhaseNames.New, PhaseState.Approved),
+                (WorkflowPhaseNames.Refine, PhaseState.Approved),
+                (WorkflowPhaseNames.Map, PhaseState.InProgress),
+                (WorkflowPhaseNames.Plan, PhaseState.Pending),
+                (WorkflowPhaseNames.Implement, PhaseState.Pending),
+                (WorkflowPhaseNames.Verify, PhaseState.Pending),
+                (WorkflowPhaseNames.Finish, PhaseState.Pending),
+                ("legacy", PhaseState.Approved));
+
+        result.Phases
+            .Select(x => x.Artifacts)
+            .Should().Equal([.. Feature.Phases.Select(x => x.Artifacts), []],
+                (actual, expected) => actual.SequenceEqual(expected));
     }
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_FeatureWithoutPhaseFields_ReturnsInitialStateOfProfile()
+    public async Task GetGateInfoAsync_FeatureWithoutPhaseFields_ReturnsInitialStateOfProfile()
     {
         // Arrange
         _context.WriteFeature(string.Empty, WorkflowProfileNames.Quick);
-        WriteGates("{}");
+        _context.WriteGates("{}");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Quick, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Quick, FeatureId);
 
         // Assert
         result.Phases
+            .Select(x => (x.Name, x.State))
             .Should().Equal(
-                new PhaseSnapshot(WorkflowPhaseNames.New, PhaseState.InProgress),
-                new PhaseSnapshot(WorkflowPhaseNames.Quick, PhaseState.Pending),
-                new PhaseSnapshot(WorkflowPhaseNames.Finish, PhaseState.Pending));
+                (WorkflowPhaseNames.New, PhaseState.InProgress),
+                (WorkflowPhaseNames.Quick, PhaseState.Pending),
+                (WorkflowPhaseNames.Finish, PhaseState.Pending));
     }
 
-    [Fact]
+    [Theory]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_ConfigWithCoverageThreshold_ReturnsThreshold()
+    [InlineData(""", "coverageThreshold": 82.5 """, 82.5)]
+    [InlineData(""", "defaultProfile": "feature" """, null)]
+    public async Task GetGateInfoAsync_Config_ReturnsCoverageThreshold(string fields, double? expected)
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
-        WriteGates("{}");
-        WriteConfig(""" "coverageThreshold": 82.5 """);
+        _context.WriteGates("{}");
+        _context.WriteConfig(fields);
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Verify, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Verify, FeatureId);
 
         // Assert
         result.CoverageThreshold
-            .Should().Be(82.5);
+            .Should().Be(expected);
     }
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_ConfigWithoutThreshold_ReturnsNull()
+    public async Task GetGateInfoAsync_ConfigMissing_ReturnsNullThreshold()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
-        WriteGates("{}");
-        WriteConfig(""" "defaultProfile": "feature" """);
+        _context.WriteGates("{}");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Verify, FeatureId);
-
-        // Assert
-        result.CoverageThreshold
-            .Should().BeNull();
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_ConfigMissing_ReturnsNullThreshold()
-    {
-        // Arrange
-        _context.WriteFeature(FeatureInMap);
-        WriteGates("{}");
-
-        // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Verify, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Verify, FeatureId);
 
         // Assert
         result.CoverageThreshold
@@ -288,15 +265,15 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_ConfigInvalid_ThrowsInvalidKitFile()
+    public async Task GetGateInfoAsync_ConfigInvalid_ThrowsInvalidKitFile()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
-        WriteGates("{}");
-        WriteConfig(""" "coverageThreshold": "80" """);
+        _context.WriteGates("{}");
+        _context.WriteConfig(""", "coverageThreshold": "80" """);
 
         // Act
-        var act = () => ReadAsync(WorkflowPhaseNames.Verify, FeatureId);
+        var act = () => GetGateInfoAsync(WorkflowPhaseNames.Verify, FeatureId);
 
         // Assert
         await act
@@ -305,13 +282,13 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_FeatureIdMismatchAndGatesFileMissing_ReturnsFeatureWarningsThenGatesWarnings()
+    public async Task GetGateInfoAsync_FeatureIdMismatchAndGatesFileMissing_ReturnsFeatureWarningsThenGatesWarnings()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap, recordedId: OtherFeatureId);
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Plan, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Plan, FeatureId);
 
         // Assert
         result.Warnings
@@ -322,16 +299,16 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_CurrentFeatureWithResolverWarning_ReturnsResolverWarning()
+    public async Task GetGateInfoAsync_CurrentFeatureWithResolverWarning_ReturnsResolverWarning()
     {
         // Arrange
         var resolverWarning = new CurrentFeatureMismatchWarning(FeatureId, OtherFeatureId);
         _context.SelectFeature(FeatureId, resolverWarning);
         _context.WriteFeature(FeatureInMap);
-        WriteGates("{}");
+        _context.WriteGates("{}");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Plan, featureId: null);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Plan, featureId: null);
 
         // Assert
         result.Warnings
@@ -340,37 +317,40 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_AnyFeature_ChangesNoFile()
+    public async Task GetGateInfoAsync_AnyFeature_ChangesNoFile()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
         _context.WriteOverride(FeatureId);
-        WriteGates("""{ "feature": { "plan": { "approval": true, "checklist": "checks/definition-of-ready.md" } } }""");
-        WriteConfig(""" "coverageThreshold": 80 """);
+        _context.WriteGates(PlanGateWithChecklist);
+        _context.WriteConfig(""", "coverageThreshold": 80 """);
         _context.WriteKitFile("# Definition of Ready: {{feature-id}}\n", KitStorePaths.TemplatesDirName,
             KitStorePaths.ChecksDirName, "definition-of-ready.md");
         var snapshot = _context.Repository.TakeSnapshot();
 
         // Act
-        await ReadAsync(WorkflowPhaseNames.Plan, featureId: null);
-        await ReadAsync(WorkflowPhaseNames.Plan, FeatureId);
+        await GetGateInfoAsync(WorkflowPhaseNames.Plan, featureId: null);
+        await GetGateInfoAsync(WorkflowPhaseNames.Plan, FeatureId);
 
         // Assert
         _context.Repository.TakeSnapshot()
             .Should().BeEquivalentTo(snapshot);
+
+        _context.VerifyChecklistNotCopied();
+        _context.VerifyIdentityNotRead();
     }
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC5")]
-    public async Task ReadAsync_WithFeatureId_ReadsThatFeature()
+    public async Task GetGateInfoAsync_WithFeatureId_ReadsThatFeature()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
         _context.WriteFeature(FeatureDone, status: "done", featureId: OtherFeatureId);
-        WriteGates("{}");
+        _context.WriteGates("{}");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Plan, OtherFeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Plan, OtherFeatureId);
 
         // Assert
         result.FeatureId
@@ -388,16 +368,16 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC5")]
-    public async Task ReadAsync_WithoutFeatureId_ReadsCurrentFeature()
+    public async Task GetGateInfoAsync_WithoutFeatureId_ReadsCurrentFeature()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
         _context.WriteFeature(FeatureDone, status: "done", featureId: OtherFeatureId);
         _context.SelectFeature(OtherFeatureId);
-        WriteGates("{}");
+        _context.WriteGates("{}");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Plan, featureId: null);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Plan, featureId: null);
 
         // Assert
         result.FeatureId
@@ -409,13 +389,13 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC5")]
-    public async Task ReadAsync_UnknownFeature_ThrowsFeatureNotFound()
+    public async Task GetGateInfoAsync_UnknownFeature_ThrowsFeatureNotFound()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
 
         // Act
-        var act = () => ReadAsync(WorkflowPhaseNames.Plan, OtherFeatureId);
+        var act = () => GetGateInfoAsync(WorkflowPhaseNames.Plan, OtherFeatureId);
 
         // Assert
         (await act
@@ -430,13 +410,13 @@ public sealed class GateInfoReaderTests : IDisposable
     [InlineData("a/b")]
     [InlineData("Login SSO")]
     [InlineData("")]
-    public async Task ReadAsync_InvalidFeatureId_ThrowsInvalidFeatureId(string featureId)
+    public async Task GetGateInfoAsync_InvalidFeatureId_ThrowsInvalidFeatureId(string featureId)
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
 
         // Act
-        var act = () => ReadAsync(WorkflowPhaseNames.Plan, featureId);
+        var act = () => GetGateInfoAsync(WorkflowPhaseNames.Plan, featureId);
 
         // Assert
         await act
@@ -445,14 +425,14 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC5")]
-    public async Task ReadAsync_NoCurrentFeature_ThrowsNoCurrentFeature()
+    public async Task GetGateInfoAsync_NoCurrentFeature_ThrowsNoCurrentFeature()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
         _context.SelectFeature(null);
 
         // Act
-        var act = () => ReadAsync(WorkflowPhaseNames.Plan, featureId: null);
+        var act = () => GetGateInfoAsync(WorkflowPhaseNames.Plan, featureId: null);
 
         // Assert
         await act
@@ -462,14 +442,14 @@ public sealed class GateInfoReaderTests : IDisposable
     [Theory]
     [Trait("Requirement", "FP06-4-AC6")]
     [MemberData(nameof(FirstPhaseProfiles))]
-    public async Task ReadAsync_FirstPhaseOfProfile_ReturnsNullGate(string profile)
+    public async Task GetGateInfoAsync_FirstPhaseOfProfile_ReturnsNullGate(string profile)
     {
         // Arrange
         _context.WriteFeature(string.Empty, profile);
-        WriteGates("{}");
+        _context.WriteGates("{}");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.New, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.New, FeatureId);
 
         // Assert
         result.Gate
@@ -481,14 +461,14 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC6")]
-    public async Task ReadAsync_PhaseNotInProfile_ThrowsPhaseNotInProfile()
+    public async Task GetGateInfoAsync_PhaseNotInProfile_ThrowsPhaseNotInProfile()
     {
         // Arrange
         _context.WriteFeature(string.Empty, WorkflowProfileNames.Bugfix);
-        WriteGates("{}");
+        _context.WriteGates("{}");
 
         // Act
-        var act = () => ReadAsync(WorkflowPhaseNames.Map, FeatureId);
+        var act = () => GetGateInfoAsync(WorkflowPhaseNames.Map, FeatureId);
 
         // Assert
         var exception = (await act
@@ -507,7 +487,7 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC6")]
-    public async Task ReadAsync_PhaseNotInProfileAndGatesAndConfigInvalid_ThrowsPhaseNotInProfile()
+    public async Task GetGateInfoAsync_PhaseNotInProfileAndGatesAndConfigInvalid_ThrowsPhaseNotInProfile()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
@@ -515,7 +495,7 @@ public sealed class GateInfoReaderTests : IDisposable
         _context.WriteKitFile("{ not json", KitStorePaths.ConfigFileName);
 
         // Act
-        var act = () => ReadAsync("Plan", FeatureId);
+        var act = () => GetGateInfoAsync("Plan", FeatureId);
 
         // Assert
         await act
@@ -524,13 +504,13 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC6")]
-    public async Task ReadAsync_InvalidPhaseStateAndPhaseNotInProfile_ThrowsInvalidPhaseState()
+    public async Task GetGateInfoAsync_InvalidPhaseStateAndPhaseNotInProfile_ThrowsInvalidPhaseState()
     {
         // Arrange
         _context.WriteFeature(PhaseFields(Feature, "unknown", null, ["approved"]));
 
         // Act
-        var act = () => ReadAsync("unknown", FeatureId);
+        var act = () => GetGateInfoAsync("unknown", FeatureId);
 
         // Assert
         await act
@@ -539,15 +519,15 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC6")]
-    public async Task ReadAsync_GatesInvalidAndConfigInvalid_ThrowsForGatesFile()
+    public async Task GetGateInfoAsync_GatesInvalidAndConfigInvalid_ThrowsForGatesFile()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
         _context.WriteKitFile("{ not json", KitStorePaths.GatesFileName);
-        WriteConfig(""" "coverageThreshold": "80" """);
+        _context.WriteConfig(""", "coverageThreshold": "80" """);
 
         // Act
-        var act = () => ReadAsync(WorkflowPhaseNames.Plan, FeatureId);
+        var act = () => GetGateInfoAsync(WorkflowPhaseNames.Plan, FeatureId);
 
         // Assert
         (await act
@@ -558,21 +538,22 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC6")]
-    public async Task ReadAsync_DoneFeature_ReturnsInfo()
+    public async Task GetGateInfoAsync_DoneFeature_ReturnsInfo()
     {
         // Arrange
         _context.WriteFeature(FeatureDone, status: "done");
-        WriteGates("""{ "feature": { "finish": { "approval": true, "checklist": "checks/definition-of-done.md" } } }""");
+        _context.WriteGates(
+            """{ "feature": { "finish": { "approval": true, "checklist": "checks/definition-of-done.md" } } }""");
         _context.WriteKitFile("# Definition of Done\n", KitStorePaths.FeaturesDirName, FeatureId,
             KitStorePaths.ChecksDirName, "definition-of-done.md");
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Finish, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Finish, FeatureId);
 
         // Assert
         result.Gate
-            .Should().Be(new GateInfoGate(WorkflowPhaseNames.Finish, Approval: true,
-                GatesConfig.DefinitionOfDoneChecklist,
+            .Should().Be(new GateInfoGate(
+                new PhaseGate(WorkflowPhaseNames.Finish, new TransitionGate(true, GatesConfig.DefinitionOfDoneChecklist)),
                 ".shadekit/features/gh-142-login-sso/checks/definition-of-done.md", ChecklistExists: true));
 
         result.Phases
@@ -582,23 +563,23 @@ public sealed class GateInfoReaderTests : IDisposable
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
-    public async Task ReadAsync_SharedChecklistIgnored_ReturnsGateWithoutChecklistAndIgnoredWarning()
+    public async Task GetGateInfoAsync_SharedChecklistIgnored_ReturnsGateWithoutChecklistAndIgnoredWarning()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
-        WriteGates(
-            """
-            { "feature": {
-                "plan": { "approval": true, "checklist": "checks/definition-of-ready.md" },
-                "verify": { "approval": false, "checklist": "checks/definition-of-ready.md" } } }
-            """);
+        _context.WriteGates(
+            $$"""
+              { "feature": {
+                  "plan": { "approval": true, "checklist": "{{Checklist}}" },
+                  "verify": { "approval": false, "checklist": "{{Checklist}}" } } }
+              """);
 
         // Act
-        var result = await ReadAsync(WorkflowPhaseNames.Verify, FeatureId);
+        var result = await GetGateInfoAsync(WorkflowPhaseNames.Verify, FeatureId);
 
         // Assert
         result.Gate
-            .Should().Be(new GateInfoGate(WorkflowPhaseNames.Verify, Approval: false, Checklist: null,
+            .Should().Be(new GateInfoGate(new PhaseGate(WorkflowPhaseNames.Verify, new TransitionGate(false, null)),
                 ChecklistPath: null, ChecklistExists: null));
 
         result.Warnings
@@ -607,16 +588,16 @@ public sealed class GateInfoReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task ReadAsync_CanceledToken_ThrowsOperationCanceled()
+    public async Task GetGateInfoAsync_CanceledToken_ThrowsOperationCanceled()
     {
         // Arrange
         _context.WriteFeature(FeatureInMap);
-        WriteGates("{}");
+        _context.WriteGates("{}");
         using var cancellationTokenSource = new CancellationTokenSource();
         await cancellationTokenSource.CancelAsync();
 
         // Act
-        var act = () => CreateReader().ReadAsync(_context.CreateStore(), WorkflowPhaseNames.Plan, FeatureId,
+        var act = () => CreateWorkflow().GetGateInfoAsync(_context.CreateStore(), WorkflowPhaseNames.Plan, FeatureId,
             cancellationTokenSource.Token);
 
         // Assert
@@ -625,13 +606,13 @@ public sealed class GateInfoReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task ReadAsync_NullStore_ThrowsArgumentNull()
+    public async Task GetGateInfoAsync_NullStore_ThrowsArgumentNull()
     {
         // Arrange
-        var reader = CreateReader();
+        var workflow = CreateWorkflow();
 
         // Act
-        var act = () => reader.ReadAsync(null!, WorkflowPhaseNames.Plan, FeatureId,
+        var act = () => workflow.GetGateInfoAsync(null!, WorkflowPhaseNames.Plan, FeatureId,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -640,13 +621,13 @@ public sealed class GateInfoReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task ReadAsync_NullPhase_ThrowsArgumentNull()
+    public async Task GetGateInfoAsync_NullPhase_ThrowsArgumentNull()
     {
         // Arrange
-        var reader = CreateReader();
+        var workflow = CreateWorkflow();
 
         // Act
-        var act = () => reader.ReadAsync(_context.CreateStore(), null!, FeatureId,
+        var act = () => workflow.GetGateInfoAsync(_context.CreateStore(), null!, FeatureId,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -654,29 +635,14 @@ public sealed class GateInfoReaderTests : IDisposable
             .Should().ThrowAsync<ArgumentNullException>();
     }
 
-    private Task<GateInfoResult> ReadAsync(string phase, string? featureId)
+    private Task<GateInfoResult> GetGateInfoAsync(string phase, string? featureId)
     {
-        return CreateReader().ReadAsync(_context.CreateStore(), phase, featureId,
+        return CreateWorkflow().GetGateInfoAsync(_context.CreateStore(), phase, featureId,
             TestContext.Current.CancellationToken);
     }
 
-    private GateInfoReader CreateReader()
+    private PhaseWorkflow CreateWorkflow()
     {
-        var catalog = new BuiltInWorkflowProfileCatalog();
-        var featureStore = new FeatureStore(A.Fake<IFeatureIdFactory>(), _context.CurrentFeatureResolver,
-            _context.GitRepositoryInfo, catalog, new PhaseEngine());
-
-        return new GateInfoReader(featureStore, new GatesConfigTransitionGateProvider(catalog));
-    }
-
-    private void WriteGates(string profiles)
-    {
-        _context.WriteKitFile(TestGatesJson.WithProfiles(profiles), KitStorePaths.GatesFileName);
-    }
-
-    private void WriteConfig(string fields)
-    {
-        _context.WriteKitFile($$"""{ "schemaVersion": 1, "minEngineVersion": "0.1.0", {{fields}} }""",
-            KitStorePaths.ConfigFileName);
+        return _context.CreateWorkflow(new GatesConfigTransitionGateProvider(new BuiltInWorkflowProfileCatalog()));
     }
 }

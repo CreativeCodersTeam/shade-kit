@@ -1,6 +1,6 @@
 using CreativeCoders.Core;
-using CreativeCoders.ShadeKit.Cli.Commands.Phase;
-using CreativeCoders.ShadeKit.Core.Gates;
+using CreativeCoders.ShadeKit.Cli.Commands.Feature;
+using CreativeCoders.ShadeKit.Core.Workflow;
 
 namespace CreativeCoders.ShadeKit.Cli.Commands.Gate.Info;
 
@@ -18,7 +18,11 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Gate.Info;
 /// The folder of the feature relative to the repository root, with a trailing <c>/</c>, for example
 /// <c>.shadekit/features/gh-142-login-sso/</c>.
 /// </param>
-/// <param name="Phases">The phases of the workflow profile in profile order, each with its normalized state.</param>
+/// <param name="Phases">
+/// The phases of the feature with their normalized state and their artifacts, in the same form as the
+/// <c>phases</c> of <c>shade-kit feature show</c>: the phases of the workflow profile in profile order, followed by the
+/// preserved entries of phases the profile no longer has.
+/// </param>
 /// <param name="Gate">
 /// The configured gate of the forward transition into the requested phase, or <see langword="null" /> if the phase is
 /// the first phase of the profile.
@@ -30,7 +34,7 @@ public sealed record GateInfoCommandData(
     string FeatureId,
     string Profile,
     string FeatureDir,
-    IReadOnlyList<PhaseSnapshotData> Phases,
+    IReadOnlyList<FeaturePhaseData> Phases,
     GateInfoCommandGateData? Gate,
     double? CoverageThreshold)
 {
@@ -47,7 +51,7 @@ public sealed record GateInfoCommandData(
         Ensure.NotNull(result);
 
         return new GateInfoCommandData(result.FeatureId, result.Profile, result.Paths.FeatureDir,
-            [.. result.Phases.Select(PhaseSnapshotData.FromSnapshot)],
+            FeaturePhaseData.FromPhases(result.Phases),
             result.Gate is null ? null : GateInfoCommandGateData.FromGate(result.Gate),
             result.CoverageThreshold);
     }

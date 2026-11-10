@@ -1,5 +1,5 @@
 using CreativeCoders.Core;
-using CreativeCoders.ShadeKit.Core.Gates;
+using CreativeCoders.ShadeKit.Core.Workflow;
 
 namespace CreativeCoders.ShadeKit.Cli.Commands.Gate.Info;
 
@@ -42,7 +42,7 @@ public sealed record GateInfoCommandGateData(
     {
         Ensure.NotNull(gate);
 
-        return new GateInfoCommandGateData(gate.Phase, gate.Approval, gate.Checklist, gate.ChecklistPath,
-            gate.ChecklistExists);
+        return new GateInfoCommandGateData(gate.Gate.Phase, gate.Gate.Gate.Approval, gate.Gate.Gate.Checklist,
+            gate.ChecklistPath, gate.ChecklistExists);
     }
 }

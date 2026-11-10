@@ -156,6 +156,58 @@ public class BuiltInWorkflowProfilesTests
                                        && !x.GeneralSkills.Contains(WorkflowSkillNames.GateCheck));
     }
 
+    [Fact]
+    [Trait("Requirement", "FP06-4-AC4")]
+    public void Feature_Contract_PhasesWriteTheirArtifacts()
+    {
+        // Assert
+        DescribeArtifacts(BuiltInWorkflowProfiles.Feature)
+            .Should().Equal(
+                "new: request.md",
+                "refine: spec.md, researches.md",
+                "map: researches.md",
+                "plan: plan.md, tasks.md",
+                "implement: review.md",
+                "verify: verification.md, playbook.md",
+                "finish: report.md (on demand)");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-4-AC4")]
+    public void Bugfix_Contract_DiagnoseWritesDiagnosisSpecAndResearches()
+    {
+        // Assert
+        DescribeArtifacts(BuiltInWorkflowProfiles.Bugfix)
+            .Should().Equal(
+                "new: request.md",
+                "diagnose: diagnosis.md, spec.md, researches.md",
+                "plan: plan.md, tasks.md",
+                "implement: review.md",
+                "verify: verification.md, playbook.md",
+                "finish: report.md (on demand)");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-4-AC4")]
+    public void Quick_Contract_QuickWritesPlaybookOnlyOnDemand()
+    {
+        // Assert
+        DescribeArtifacts(BuiltInWorkflowProfiles.Quick)
+            .Should().Equal(
+                "new: request.md",
+                "quick: spec.md, review.md, verification.md, playbook.md (on demand)",
+                "finish: report.md (on demand)");
+    }
+
+    private static string[] DescribeArtifacts(WorkflowProfile profile)
+    {
+        return
+        [
+            .. profile.Phases.Select(x =>
+                $"{x.Name}: {string.Join(", ", x.Artifacts.Select(a => a.OnDemand ? $"{a.File} (on demand)" : a.File))}")
+        ];
+    }
+
     private static string[] Describe(WorkflowProfile profile)
     {
         return

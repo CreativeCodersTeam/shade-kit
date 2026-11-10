@@ -3,57 +3,31 @@ using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Tests.Commands.Phase;
 using CreativeCoders.ShadeKit.Core.Git;
-using CreativeCoders.ShadeKit.Core.Processes;
-using CreativeCoders.ShadeKit.Core.Trackers;
-using CreativeCoders.ShadeKit.Tests.Shared;
-using FakeItEasy;
-using Microsoft.Extensions.DependencyInjection;
+using static CreativeCoders.ShadeKit.Cli.Tests.Commands.CliEndToEndHarness;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Gate;
 
 /// <summary>
-/// Runs <c>shade-kit gate info</c> through
-/// <see cref="Program.RunAsync(string[], TextWriter, TextWriter, Action{IServiceCollection})" /> against a real temporary
-/// repository; git is answered by a fake <see cref="IGitCommandRunner" /> and the tracker issue reader is a fake, so no
+/// Runs <c>shade-kit gate info</c> through the <see cref="CliEndToEndHarness" /> against a real temporary repository; git is answered by a fake <see cref="IGitCommandRunner" /> and the tracker issue reader is a fake, so no
 /// test starts <c>git</c> or <c>gh</c>.
 /// </summary>
 [Collection(CurrentDirectoryCollectionDefinition.Name)]
 public sealed class GateCommandsEndToEndTests : IDisposable
 {
-    private const string IssueUrl = "https://github.com/acme/shop/issues/142";
+    private const string FeatureId = IssueFeatureId;
 
-    private const string FeatureId = "gh-142-login-sso";
-
-    private static readonly string[] CurrentBranchArguments = ["symbolic-ref", "--short", "-q", "HEAD"];
-
-    private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
-
-    private readonly IGitCommandRunner _gitCommandRunner = A.Fake<IGitCommandRunner>();
-
-    private readonly ITrackerIssueReader _trackerIssueReader = A.Fake<ITrackerIssueReader>();
-
-    private readonly TempKitDirectory _tempDirectory = new TempKitDirectory("shade-kit-gate-tests-");
-
-    public GateCommandsEndToEndTests()
-    {
-        A.CallTo(() => _gitCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
-            .ReturnsLazily((string _, IReadOnlyList<string> arguments, CancellationToken _) =>
-                Task.FromResult(AnswerGit(arguments)));
-
-        A.CallTo(() => _trackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
-            .Returns(new TrackerIssue("Login with SSO", "Users sign in with the company account.", []));
-    }
+    private readonly CliEndToEndHarness _harness = new CliEndToEndHarness("shade-kit-gate-tests-");
 
     [Fact]
     [Trait("Requirement", "FP06-4-AC4")]
     public async Task GateInfo_AfterInitAndFeatureNew_ReturnsDefinitionOfReadyGateForPlan()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "plan", "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "plan", "--json");
 
         // Assert
         run.ExitCode
@@ -71,10 +45,20 @@ public sealed class GateCommandsEndToEndTests : IDisposable
               "featureId": "gh-142-login-sso", "profile": "feature",
               "featureDir": ".shadekit/features/gh-142-login-sso/",
               "phases": [
-                { "name": "new", "state": "in-progress" }, { "name": "refine", "state": "pending" },
-                { "name": "map", "state": "pending" }, { "name": "plan", "state": "pending" },
-                { "name": "implement", "state": "pending" }, { "name": "verify", "state": "pending" },
-                { "name": "finish", "state": "pending" }
+                { "name": "new", "state": "in-progress",
+                  "artifacts": [ { "file": "request.md", "onDemand": false } ] },
+                { "name": "refine", "state": "pending",
+                  "artifacts": [ { "file": "spec.md", "onDemand": false }, { "file": "researches.md", "onDemand": false } ] },
+                { "name": "map", "state": "pending",
+                  "artifacts": [ { "file": "researches.md", "onDemand": false } ] },
+                { "name": "plan", "state": "pending",
+                  "artifacts": [ { "file": "plan.md", "onDemand": false }, { "file": "tasks.md", "onDemand": false } ] },
+                { "name": "implement", "state": "pending",
+                  "artifacts": [ { "file": "review.md", "onDemand": false } ] },
+                { "name": "verify", "state": "pending",
+                  "artifacts": [ { "file": "verification.md", "onDemand": false }, { "file": "playbook.md", "onDemand": false } ] },
+                { "name": "finish", "state": "pending",
+                  "artifacts": [ { "file": "report.md", "onDemand": true } ] }
               ],
               "gate": { "phase": "plan", "approval": true, "checklist": "checks/definition-of-ready.md",
                         "checklistPath": ".shadekit/features/gh-142-login-sso/checks/definition-of-ready.md",
@@ -90,13 +74,13 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_FeatureOptionAfterPlanStart_ReturnsExistingChecklistCopyAndPhaseStates()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        await RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"],
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        await _harness.RunAllOkAsync(["phase", "start", "refine"], ["phase", "approve", "refine"],
             ["phase", "start", "map"], ["phase", "approve", "map"], ["phase", "start", "plan"]);
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "plan", "--feature", FeatureId, "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "plan", "--feature", FeatureId, "--json");
 
         // Assert
         run.ExitCode
@@ -104,20 +88,15 @@ public sealed class GateCommandsEndToEndTests : IDisposable
 
         var data = run.Root.GetProperty("data");
 
-        data.GetProperty("phases").ShouldBeJson(
-            """
-            [
-              { "name": "new", "state": "approved" }, { "name": "refine", "state": "approved" },
-              { "name": "map", "state": "awaiting-approval" }, { "name": "plan", "state": "pending" },
-              { "name": "implement", "state": "pending" }, { "name": "verify", "state": "pending" },
-              { "name": "finish", "state": "pending" }
-            ]
-            """);
+        data.GetProperty("phases").EnumerateArray()
+            .Select(x => $"{x.GetProperty("name").GetString()}={x.GetProperty("state").GetString()}")
+            .Should().Equal("new=approved", "refine=approved", "map=awaiting-approval", "plan=pending",
+                "implement=pending", "verify=pending", "finish=pending");
 
         data.GetProperty("gate").GetProperty("checklistExists").GetBoolean()
             .Should().BeTrue();
 
-        File.Exists(GetFeaturePath("checks", "definition-of-ready.md"))
+        File.Exists(_harness.GetIssueFeaturePath("checks", "definition-of-ready.md"))
             .Should().BeTrue();
     }
 
@@ -126,12 +105,12 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_ConfigWithCoverageThreshold_ReturnsThreshold()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
         await SetCoverageThresholdAsync(82.5);
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "verify", "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "verify", "--json");
 
         // Assert
         run.ExitCode
@@ -146,11 +125,11 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_PlainText_WritesFeaturePhasesGateAndThreshold()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
-        var (exitCode, output, _) = await RunAsync("gate", "info", "refine");
+        var (exitCode, output, _) = await _harness.RunAsync("gate", "info", "refine");
 
         // Assert
         exitCode
@@ -178,11 +157,11 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_UnknownFeature_WritesFailureEnvelopeWithFeatureNotFound()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "plan", "--feature", "does-not-exist", "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "plan", "--feature", "does-not-exist", "--json");
 
         // Assert
         AssertError(run, 31, "feature-not-found");
@@ -193,11 +172,11 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_InvalidFeatureId_WritesFailureEnvelopeWithInvalidFeatureId()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "plan", "--feature", "Not_Valid", "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "plan", "--feature", "Not_Valid", "--json");
 
         // Assert
         AssertError(run, 32, "invalid-feature-id");
@@ -208,10 +187,10 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_NoCurrentFeature_WritesFailureEnvelopeWithNoCurrentFeature()
     {
         // Arrange
-        await InitAsync();
+        await _harness.InitAsync();
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "plan", "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "plan", "--json");
 
         // Assert
         AssertError(run, 37, "no-current-feature");
@@ -221,11 +200,11 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_WithoutPhaseArgument_WritesInvalidArgumentsEnvelope()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "--json");
 
         // Assert
         AssertError(run, 2, "invalid-arguments");
@@ -235,11 +214,11 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_BeforeInit_WritesFailureEnvelopeWithKitRootNotFound()
     {
         // Arrange
-        _tempDirectory.CreateGitRoot();
-        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
+        _harness.TempDirectory.CreateGitRoot();
+        Directory.SetCurrentDirectory(_harness.TempDirectory.RootPath);
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "plan", "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "plan", "--json");
 
         // Assert
         AssertError(run, 10, "kit-root-not-found");
@@ -250,11 +229,11 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_FirstPhase_ReturnsNullGate()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "new", "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "new", "--json");
 
         // Assert
         run.ExitCode
@@ -277,11 +256,11 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_PhaseNotInProfile_WritesFailureEnvelopeWithPhaseNotInProfile()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "nope", "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "nope", "--json");
 
         // Assert
         AssertError(run, 41, "phase-not-in-profile");
@@ -292,13 +271,13 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_DoneFeature_AnswersNormally()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("quick");
-        await RunAllOkAsync(["phase", "start", "quick"], ["phase", "start", "finish"],
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("quick");
+        await _harness.RunAllOkAsync(["phase", "start", "quick"], ["phase", "start", "finish"],
             ["phase", "approve", "finish"], ["phase", "complete"]);
 
         // Act
-        var run = await RunJsonAsync("gate", "info", "finish", "--feature", FeatureId, "--json");
+        var run = await _harness.RunJsonAsync("gate", "info", "finish", "--feature", FeatureId, "--json");
 
         // Assert
         run.ExitCode
@@ -310,8 +289,11 @@ public sealed class GateCommandsEndToEndTests : IDisposable
               "featureId": "gh-142-login-sso", "profile": "quick",
               "featureDir": ".shadekit/features/gh-142-login-sso/",
               "phases": [
-                { "name": "new", "state": "approved" }, { "name": "quick", "state": "approved" },
-                { "name": "finish", "state": "approved" }
+                { "name": "new", "state": "approved", "artifacts": [ { "file": "request.md", "onDemand": false } ] },
+                { "name": "quick", "state": "approved", "artifacts": [
+                    { "file": "spec.md", "onDemand": false }, { "file": "review.md", "onDemand": false },
+                    { "file": "verification.md", "onDemand": false }, { "file": "playbook.md", "onDemand": true } ] },
+                { "name": "finish", "state": "approved", "artifacts": [ { "file": "report.md", "onDemand": true } ] }
               ],
               "gate": { "phase": "finish", "approval": true, "checklist": "checks/definition-of-done.md",
                         "checklistPath": ".shadekit/features/gh-142-login-sso/checks/definition-of-done.md",
@@ -326,127 +308,40 @@ public sealed class GateCommandsEndToEndTests : IDisposable
     public async Task GateInfo_Json_ChangesNoFileInKitStore()
     {
         // Arrange
-        await InitAsync();
-        await CreateFeatureAsync("feature");
-        var before = _tempDirectory.TakeSnapshot();
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+        var before = _harness.TempDirectory.TakeSnapshot();
 
         // Act
         var runs = new[]
         {
-            (await RunAsync("gate", "info", "plan", "--json")).ExitCode,
-            (await RunAsync("gate", "info", "new", "--json")).ExitCode,
-            (await RunAsync("gate", "info", "finish", "--feature", FeatureId, "--json")).ExitCode,
-            (await RunAsync("gate", "info", "refine")).ExitCode,
-            (await RunAsync("gate", "info", "nope", "--json")).ExitCode
+            (await _harness.RunAsync("gate", "info", "plan", "--json")).ExitCode,
+            (await _harness.RunAsync("gate", "info", "new", "--json")).ExitCode,
+            (await _harness.RunAsync("gate", "info", "finish", "--feature", FeatureId, "--json")).ExitCode,
+            (await _harness.RunAsync("gate", "info", "refine")).ExitCode,
+            (await _harness.RunAsync("gate", "info", "nope", "--json")).ExitCode
         };
 
         // Assert
         runs
             .Should().Equal(0, 0, 0, 0, 41);
 
-        _tempDirectory.TakeSnapshot()
+        _harness.TempDirectory.TakeSnapshot()
             .Should().BeEquivalentTo(before);
     }
 
     public void Dispose()
     {
-        _currentDirectory.Dispose();
-        _tempDirectory.Dispose();
-    }
-
-    private static void AssertError((int ExitCode, JsonElement Root) run, int exitCode, string errorCode)
-    {
-        run.ExitCode
-            .Should().Be(exitCode);
-
-        run.Root.GetProperty("ok").GetBoolean()
-            .Should().BeFalse();
-
-        run.Root.GetProperty("data").ValueKind
-            .Should().Be(JsonValueKind.Null);
-
-        run.Root.GetProperty("error").GetProperty("code").GetString()
-            .Should().Be(errorCode);
-    }
-
-    private static ExternalProcessResult AnswerGit(IReadOnlyList<string> arguments)
-    {
-        if (arguments.SequenceEqual(CurrentBranchArguments))
-        {
-            return new ExternalProcessResult(0, "main\n", string.Empty);
-        }
-
-        return arguments switch
-        {
-            ["config", "user.name"] => new ExternalProcessResult(0, "Jane Doe\n", string.Empty),
-            ["config", "user.email"] => new ExternalProcessResult(0, "jane@example.com\n", string.Empty),
-            _ => new ExternalProcessResult(128, string.Empty, $"unexpected git call: {string.Join(' ', arguments)}")
-        };
-    }
-
-    private async Task InitAsync()
-    {
-        _tempDirectory.CreateGitRoot();
-        Directory.SetCurrentDirectory(_tempDirectory.RootPath);
-
-        (await RunAsync("init", "--json")).ExitCode
-            .Should().Be(0);
-    }
-
-    private async Task CreateFeatureAsync(string profile)
-    {
-        (await RunJsonAsync("feature", "new", "--source", IssueUrl, "--title", "Login SSO", "--profile", profile,
-                "--json"))
-            .ExitCode.Should().Be(0);
-    }
-
-    private async Task RunAllOkAsync(params string[][] commands)
-    {
-        foreach (var command in commands)
-        {
-            (await RunJsonAsync([.. command, "--json"])).ExitCode
-                .Should().Be(0, string.Join(' ', command));
-        }
+        _harness.Dispose();
     }
 
     private async Task SetCoverageThresholdAsync(double threshold)
     {
-        var configPath = Path.Combine(_tempDirectory.RootPath, ".shadekit", "config.json");
+        var configPath = _harness.GetKitPath("config.json");
         var config = JsonNode.Parse(await File.ReadAllTextAsync(configPath, TestContext.Current.CancellationToken))!;
 
         config["coverageThreshold"] = threshold;
 
         await File.WriteAllTextAsync(configPath, config.ToJsonString(), TestContext.Current.CancellationToken);
-    }
-
-    private async Task<(int ExitCode, string Output, string Error)> RunAsync(params string[] args)
-    {
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-
-        var exitCode = await Program.RunAsync(args, output, error, x => x
-            .AddSingleton(_gitCommandRunner)
-            .AddSingleton(_trackerIssueReader));
-
-        return (exitCode, output.ToString(), error.ToString());
-    }
-
-    private async Task<(int ExitCode, JsonElement Root)> RunJsonAsync(params string[] args)
-    {
-        var (exitCode, output, _) = await RunAsync(args);
-
-        using var document = JsonDocument.Parse(output);
-
-        return (exitCode, document.RootElement.Clone());
-    }
-
-    private string GetFeaturePath(params string[] parts)
-    {
-        return Path.Combine([_tempDirectory.RootPath, ".shadekit", "features", FeatureId, .. parts]);
-    }
-
-    private static string[] GetLines(string output)
-    {
-        return [.. output.Split('\n').Select(x => x.TrimEnd('\r'))];
     }
 }

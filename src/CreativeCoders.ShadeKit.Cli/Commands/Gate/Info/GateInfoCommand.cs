@@ -4,7 +4,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Commands.Phase;
 using CreativeCoders.ShadeKit.Cli.Output;
-using CreativeCoders.ShadeKit.Core.Gates;
+using CreativeCoders.ShadeKit.Core.Workflow;
 using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
@@ -12,16 +12,16 @@ using Spectre.Console;
 namespace CreativeCoders.ShadeKit.Cli.Commands.Gate.Info;
 
 /// <summary>
-/// Shows everything a gate check needs about the gate into a phase of a feature: the feature, the phases of its
-/// profile with their state, the configured gate with the feature's checklist copy, and the coverage threshold.
+/// Shows everything a gate check needs about the gate into a phase of a feature: the feature, its phases with their
+/// state and artifacts, the configured gate with the feature's checklist copy, and the coverage threshold.
 /// </summary>
 /// <param name="context">The context that runs the core operation and writes the result or the failure.</param>
-/// <param name="gateInfoReader">The reader that collects the gate data of the feature.</param>
+/// <param name="phaseWorkflow">The phase workflow that collects the gate data of the feature.</param>
 [UsedImplicitly]
 [CliCommand([GateCommandGroup.Name, Name], Description = "Shows the gate into a phase of a feature")]
 public class GateInfoCommand(
     ShadeKitCommandContext context,
-    IGateInfoReader gateInfoReader)
+    IPhaseWorkflow phaseWorkflow)
     : ICliCommand<GateInfoCommandOptions>
 {
     /// <summary>
@@ -31,7 +31,7 @@ public class GateInfoCommand(
 
     private readonly ShadeKitCommandContext _context = Ensure.NotNull(context);
 
-    private readonly IGateInfoReader _gateInfoReader = Ensure.NotNull(gateInfoReader);
+    private readonly IPhaseWorkflow _phaseWorkflow = Ensure.NotNull(phaseWorkflow);
 
     /// <summary>
     /// Reads the gate data of the feature for the phase and writes it, as plain text or as a JSON envelope.
@@ -59,7 +59,7 @@ public class GateInfoCommand(
 
         var result = await _context.RunAsync(options.Json,
                 (store, cancellationToken) =>
-                    _gateInfoReader.ReadAsync(store, options.Phase, options.FeatureId, cancellationToken))
+                    _phaseWorkflow.GetGateInfoAsync(store, options.Phase, options.FeatureId, cancellationToken))
             .ConfigureAwait(false);
 
         var data = GateInfoCommandData.FromResult(result);

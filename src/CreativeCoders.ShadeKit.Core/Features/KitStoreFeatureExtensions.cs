@@ -1,4 +1,5 @@
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Core.Features.Exceptions;
 using CreativeCoders.ShadeKit.Core.Features.Warnings;
 using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Formats.Exceptions;
@@ -32,6 +33,27 @@ internal static class KitStoreFeatureExtensions
 
         return FeatureIds.IsValid(featureId)
                && store.GetFeatureNames().Contains(featureId, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Makes sure that the specified store has a feature with the specified id.
+    /// </summary>
+    /// <remarks>An invalid id is reported as such, not as a missing feature.</remarks>
+    /// <param name="store">The SHADE kit store.</param>
+    /// <param name="featureId">The id of the feature.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="store" /> is <see langword="null" />.</exception>
+    /// <exception cref="InvalidFeatureIdException"><paramref name="featureId" /> is not a valid feature id.</exception>
+    /// <exception cref="FeatureNotFoundException">The folder of the feature does not exist.</exception>
+    public static void EnsureFeatureExists(this IKitStore store, string featureId)
+    {
+        Ensure.NotNull(store);
+
+        FeatureIds.EnsureValid(featureId);
+
+        if (!store.FeatureExists(featureId))
+        {
+            throw new FeatureNotFoundException(featureId);
+        }
     }
 
     /// <summary>

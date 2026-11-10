@@ -129,6 +129,18 @@ public sealed class PhaseEngine : IPhaseEngine
     }
 
     /// <inheritdoc />
+    public bool HasGate(WorkflowProfile profile, string phase)
+    {
+        Ensure.NotNull(profile);
+        Ensure.NotNull(phase);
+
+        GetPhase(profile, phase);
+
+        // No transition leads forward into the first phase of a profile.
+        return profile.IndexOf(phase) > 0;
+    }
+
+    /// <inheritdoc />
     public PhaseNextSteps GetNext(FeaturePhaseState state, IReadOnlyDictionary<string, TransitionGate> gates)
     {
         Ensure.NotNull(state);
@@ -161,7 +173,7 @@ public sealed class PhaseEngine : IPhaseEngine
             .ToArray();
 
         return new PhaseNextSteps(state, CreateStep(current), null,
-            forward is null ? null : CreateGatedStep(forward, GetGate(gates, forward.Name)), reopen);
+            forward is null ? null : CreateGatedStep(forward, TransitionGate.ForPhase(gates, forward.Name)), reopen);
     }
 
     private static PhaseStartDecision StartWhilePending(FeaturePhaseState state, WorkflowPhase target,
@@ -208,7 +220,7 @@ public sealed class PhaseEngine : IPhaseEngine
             throw CreateNotAllowed(state, target.Name, PhaseTransitionRefusalReason.SkipsPhases);
         }
 
-        return StartForward(state, target, GetGate(gates, target.Name));
+        return StartForward(state, target, TransitionGate.ForPhase(gates, target.Name));
     }
 
     private static PhaseStartDecision RequestReopen(FeaturePhaseState state, WorkflowPhase target)
@@ -308,12 +320,7 @@ public sealed class PhaseEngine : IPhaseEngine
     {
         return pending.Kind == PhaseTransitionKind.Reopen
             ? TransitionGate.Default
-            : GetGate(gates, pending.To) with { Approval = true };
-    }
-
-    private static TransitionGate GetGate(IReadOnlyDictionary<string, TransitionGate> gates, string phase)
-    {
-        return gates.GetValueOrDefault(phase) ?? TransitionGate.Default;
+            : TransitionGate.ForPhase(gates, pending.To) with { Approval = true };
     }
 
     private static PhaseTransitionNotAllowedException CreateNotAllowed(FeaturePhaseState state, string phase,
