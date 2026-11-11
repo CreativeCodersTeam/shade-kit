@@ -86,7 +86,7 @@ Status as of 2026-11-06. There are no automated tests of the skill texts (skill 
 
 - **FP06-2-AC1** Every skill under `skills/` has `metadata.version` in its frontmatter, and all skills have the same SemVer value. **Implemented**: all 17 skills carry `metadata.version: 0.7.0`. Proven by a one-off check that all values are equal, are strings, and are a plain `x.y.z`; no automated test, by the rule of this package. Skill-creator's `quick_validate.py` (17 of 17 valid) shows that the frontmatter stays valid; it does not read `metadata`.
 - **FP06-2-AC2** The result of the visibility check for Claude Code is recorded in this package with the date and how it was checked. **Implemented**: recorded under Frontmatter visibility (2026-11-06, Claude Code 2.1.318).
-- **FP06-2-AC3** If the check finds that the model does not see the frontmatter, every skill that calls `version --expect` states the same version in the text of its handshake step. Rule and wording **Decided** on 2026-11-06 (Frontmatter visibility). No skill calls `version --expect` yet: the skeletons call `shade-kit version --json` without it. 06-5, 06-6, and 06-9 apply the rule when they write the handshake steps.
+- **FP06-2-AC3** If the check finds that the model does not see the frontmatter, every skill that calls `version --expect` states the same version in the text of its handshake step. Rule and wording **Decided** on 2026-11-06 (Frontmatter visibility). `shade-kit-phase-entry` (06-5) applies it since 2026-11-10 (`--expect 0.7.0` in the text of its handshake step); the skeletons still call `shade-kit version --json` without it until 06-6 and 06-9 write their handshake steps.
 
 ## Open points
 

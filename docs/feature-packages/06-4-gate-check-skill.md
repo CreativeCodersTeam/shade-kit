@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Implemented (AC1 to AC7), last changed 2026-11-10 by the simplify review (D-43). Loading the skill from the entry protocol follows in 06-5. The history of the decisions (D-1 to D-43) and of the review rounds is in [docs/implementation/06-4-gate-check-skill.md](../implementation/06-4-gate-check-skill.md). |
+| Status | Implemented (AC1 to AC7), last changed 2026-11-10 by the simplify review (D-43). The entry protocol (06-5) loads the skill since 2026-11-10. The history of the decisions (D-1 to D-43) and of the review rounds is in [docs/implementation/06-4-gate-check-skill.md](../implementation/06-4-gate-check-skill.md). |
 | Source | [06 Skill foundation](06-skill-foundation.md) (general skills), [05 Gates and checklists](05-gates-and-checklists.md) (checklist format, "not applicable" rule) |
 | Kind | Skill (general skill) and CLI command (`gate info`) |
 | Depends on | 05, 06-2 |
@@ -130,7 +130,7 @@ An item that the skill cannot decide from the artifacts, `gate info`, and read-o
 
 ### `error`
 
-When `gate info` fails, `data.gate` is `null`, `data.gate.checklist` differs from the passed path, `checklistExists` is `false`, or the copy cannot be used (no table with the columns `ID | Criterion | Result | Evidence`, a duplicate ID, no "Check runs" section), the skill changes no file and returns `error` with the reason and the failure envelope when there is one. With approval on, the calling skill then ends with its next-steps message (06-3). **Decided** on 2026-11-08 (implementation clarification). With approval off the transition is already performed (package 05); what an `error` means then is decided in 06-5 (see open points).
+When `gate info` fails, `data.gate` is `null`, `data.gate.checklist` differs from the passed path, `checklistExists` is `false`, or the copy cannot be used (no table with the columns `ID | Criterion | Result | Evidence`, a duplicate ID, no "Check runs" section), the skill changes no file and returns `error` with the reason and the failure envelope when there is one. With approval on, the calling skill then ends with its next-steps message (06-3). **Decided** on 2026-11-08 (implementation clarification). With approval off the transition is already performed (package 05); 06-5 reports the `error` as a warning like a failed checklist and continues the phase (**Decided** on 2026-11-10, 06-5).
 
 ### Return to the calling skill
 
@@ -215,7 +215,6 @@ The runners noted points that both texts leave open: how to quote file text with
 ## Open points
 
 - The unit and value of the coverage threshold stay open (package 05). Until they are decided, the skill compares `coverageThreshold` and the measured value as percentages.
-- 06-5 must pass `featureId`, the target phase, and the checklist path from the `phase start` result to the skill, and decide what an `error` means when approval is off (the transition is already performed): end with the next-steps message, or report it as a warning like a failed checklist and continue.
 - The defaults of the implementation marked **Proposed** above.
 - Keeping the line endings of the copy is not covered by a scenario: all fixtures are LF, and the in-place rule of step 6 (D-41) has no scenario run.
 - The plan and verification templates (`plan.template.md`: "If config.json sets coverageThreshold, the value must reach it"; `verification.template.md`: "If config.json sets coverageThreshold, also the threshold …") and package 14 (section "Coverage") name `config.json` for `coverageThreshold`. The verify skill needs the threshold from the CLI (for example `shade-kit gate info finish`), not from the file (06-2). No template is changed in 06-4. **Decided** on 2026-11-08 (review rework, D-39: fix the finding); the wording is **Proposed**.
