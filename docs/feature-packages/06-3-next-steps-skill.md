@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal). AC1 to AC4 implemented; loading the skill from other skills follows in 06-5, 06-6, and 06-9. |
+| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal), 2026-11-11 (06-6: a `phase next` result passed by the calling skill replaces the skill's own call, stated once in flow step 3). AC1 to AC4 implemented; loading the skill from other skills follows in 06-5, 06-6, and 06-9. |
 | Source | [06 Skill foundation](06-skill-foundation.md) (next-steps message), [phase start analysis](../../research/shade-kit-phase-start-analysis.md) |
 | Kind | Skill (new general skill) |
 | Depends on | 06-2 |
@@ -30,6 +30,7 @@ Every kit skill ends the same way: the human sees what they can do now and which
 
 - Why the skill ends: end of its work, a "no" (with the reported gaps), or a refusal (the failure envelope).
 - The warnings of the CLI calls of the calling skill.
+- Optionally the result of a `phase next --json` that the calling skill ran in this run (for example `shade-kit-next-phase`, 06-6). The skill then uses it and does not run `phase next` itself: a second call reads the same state and only repeats the warnings. Without one, the skill runs `phase next` once where it needs the steps. **Decided** on 2026-11-11 (06-6 implementation). **Implemented**.
 
 ### Message
 
@@ -79,6 +80,8 @@ Status as of 2026-11-08. There are no automated tests of the skill texts (06-2),
 - **FP06-3-AC1** With a current feature, the message shows exactly the steps `phase next --json` returns, each with the skill to call, plus `/shade-kit-discuss` and `/shade-kit-drop`. **Implemented.** Two additions to "exactly" were decided on 2026-11-08: the step that discards a pending transition and the options of a `done` feature (functional description). Proven in the scenarios: in progress, pending, done, and 42.
 - **FP06-3-AC2** After a refusal, the message names the reason from the failure envelope and the options of its row in the refusal table; for a code without a row it shows the message of the failure envelope. **Implemented.** Proven in the scenarios: 37, 42, 47, the unknown code `git-unavailable`, and the failing `phase next` after `drop`.
 - **FP06-3-AC3** Every warning of `phase start` and `phase next` that the calling skill passes or the skill receives is shown. **Implemented.** Proven in the scenarios: a warning that is both passed in and received is shown once, and a passed warning is shown when `phase next` fails.
+Re-checked on 2026-11-11 after the change to flow step 3 (06-6, iteration 3): with a passed `phase next` result the skill ran no `phase next` (five scenarios of `shade-kit-next-phase`); without one it ran `phase next` exactly once (the end of work in `refine`, a refused `phase start` with `transition-not-allowed`, and two endings of `shade-kit-next-phase` without a feature). All 70 checks passed.
+
 - **FP06-3-AC4** The skill starts no skill and calls no command that changes the state (`phase start`, `phase approve`, `phase reject`, `phase complete`, `feature set`). **Implemented.** The rules of the skill allow only `shade-kit phase next --json`. In every scenario no command other than that one was run.
 
 ## Open points

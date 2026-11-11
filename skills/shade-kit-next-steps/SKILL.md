@@ -27,10 +27,12 @@ The calling skill has already run its version handshake; this skill does not che
 ## Flow
 
 1. **Refusal.** The reason is `error.message` of the envelope, quoted as it is. Find the options in the [refusal table](#refusal-table) by `error.code`.
-   - For `phase-not-in-profile`, `transition-not-allowed`, and `feature-done`, also get the steps: run `shade-kit phase next --json` (step 3).
+   - For `phase-not-in-profile`, `transition-not-allowed`, and `feature-done`, also get the steps (step 3).
    - For every other code, do not run `phase next`. For `no-current-feature`, `unknown-profile`, `phase-state-invalid`, and the format errors it would fail with the same code, so the options come from the refusal alone.
-2. **No, or end of work.** Get the steps: run `shade-kit phase next --json` (step 3).
-3. **Steps from `phase next`.** Whenever this skill's own `phase next` fails, in any case, do not run it again: add the options of the refusal-table row of its `error.code` and show its `error.message` as the reason there are no steps. After `shade-kit-drop`, for example, the drop worked, there is no current feature any more, and `phase next` fails with `no-current-feature`.
+2. **No, or end of work.** Get the steps (step 3).
+3. **Steps from `phase next`.** If the calling skill passed a result of `phase next` from this run, use it and do not run the command: a second call reads the same state and only repeats the warnings. Otherwise run `shade-kit phase next --json`, once.
+
+   Whenever this skill's own `phase next` fails, in any case, do not run it again: add the options of the refusal-table row of its `error.code` and show its `error.message` as the reason there are no steps. After `shade-kit-drop`, for example, the drop worked, there is no current feature any more, and `phase next` fails with `no-current-feature`.
 
    On success, take the steps from the result and do not derive any from the profile: the engine knows the profile, the gates, and which phases can be reopened, and a second copy of that logic in a skill drifts. `phase next` reads the state now; when it does not match what the calling skill expected, the result is right. Use the `skill` field of each step as the skill to call (`/<skill>`).
    - `continue`: continue the current phase with `/<continue.skill>`.
