@@ -30,7 +30,15 @@ Decides how the spec is built and why, and binds every acceptance criterion to t
    4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve plan`. On a no, call `shade-kit phase reject plan --note "<gaps>"` and end with the gaps and the next steps (see Ending). If approval is switched off, a failed checklist is only a warning.
    5. Load the skills the CLI returned.
 2. **Read** `spec.md` and `researches.md`.
-3. **Clarify** open design choices with `shade-kit-interview`, each with an own recommendation.
+3. **Clarify** open design choices: load `shade-kit-interview` and pass it:
+   - mode `targeted`;
+   - topics: the design choices that have a real alternative and that `spec.md` and `researches.md` leave open;
+   - target artifact: `plan.md` "Design decisions" (`bugfix`: the Summary, for the choice of the fix option);
+   - recording rule: one `D-nnn` subsection per answered choice, with context, decision, the rejected alternatives with the reason, and consequences;
+   - recording time `on return`: `plan.md` is written in step 4, from the return;
+   - artifacts to check against: `spec.md` and `researches.md` (`bugfix`: also `diagnosis.md`).
+
+   Name the choices still open in the report of step 7.
 4. **Write `plan.md`** from the template: summary, technical context, approach, affected components, design decisions (`D-` IDs), test strategy with the quality commands (build, test, lint, coverage), migration and rollout, risks, deviations ("None." while planning).
 5. **Write `tasks.md`** from the template: tasks (`T-` IDs) in work order with requirements, dependencies, parallelism, affected paths, and proving tests, plus the coverage matrix.
 6. **Check the mapping** and report gaps: every active requirement is in a task; every acceptance criterion has a planned test or is marked manual with a reason.
