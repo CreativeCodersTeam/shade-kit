@@ -65,4 +65,4 @@ A section whose artifact the profile does not produce says so in one line instea
 
 ## Open points
 
-- None.
+- FP15-AC7 must reach the skill: since 2026-11-13 (06-9) `phase start` runs in `shade-kit-phase-entry`, whose return does not carry the `report` setting yet. Package 15 adds the setting to the result of `phase start finish` and to that return; until then the `shade-kit-finish` skeleton treats a missing setting as `ask`.

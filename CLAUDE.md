@@ -106,7 +106,7 @@ The rules for the kit skills under `skills/` are in [06-2 Skill conventions and 
 - A phase skill runs only when the user calls it by name; no skill starts a phase skill.
 - A kit skill that needs decisions from the human loads `shade-kit-interview` and names in its text the mode (`open` or `targeted`), the topics, the target artifact, the recording rule, and the recording time (`immediately` or `on return`); only the human's answers become decisions.
 - A kit skill that researches loads `shade-kit-research` and names in its text the phase, the feature id, the focuses (each with a short name, which is the section heading `<phase> / <name>` in `researches.md`, an ID prefix that is unique in the file, and instructions), the files to read, and a context note (or none); only `shade-kit-research` writes the research sections.
-- Every kit skill that ends (end of its work, a "no", or a refused start) loads `shade-kit-next-steps` for its closing message and passes it why it ends and the warnings of its CLI calls; it writes no next steps of its own.
+- Every kit skill that ends (end of its work, a "no", or a refused start) loads `shade-kit-next-steps` for its closing message and passes it why it ends and the warnings of its CLI calls; it writes no next steps of its own. A recommendation in its own report names a skill only when the closing message does not list it (06-9).
 - Skill texts have no automated tests. A changed skill is checked by a review by hand and by scenario runs: a subagent loads the skill, follows it with canned CLI envelopes, and records the commands it would run and its output. skill-creator's `quick_validate.py` checks the frontmatter, but not the content of `metadata`.
 
 ## Workflow

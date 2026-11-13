@@ -7,7 +7,7 @@ metadata:
 
 # shade-kit-implement
 
-<!-- Skeleton: purpose and flow only, details follow. Sources: docs/feature-packages/13-implement.md, 16-bugfix-profile.md. CLI commands other than `shade-kit version`, `shade-kit init`, and `shade-kit feature …` (`new`, `list`, `current`, `set`, `show`, `drop`) are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Sources: docs/feature-packages/13-implement.md, 16-bugfix-profile.md. -->
 
 ## Purpose
 
@@ -19,21 +19,14 @@ Builds the plan task by task and does not stop at "it compiles": every change is
 
 ## Flow
 
-1. **Entry protocol:**
-   1. Version handshake: `shade-kit version --json`. Stop on a mismatch and name what to update.
-   2. `shade-kit phase start implement --json`. This is the check: it changes nothing when it refuses or when the phase is already active.
-      - Refused: end with the reason and the next steps (see Ending).
-      - Already in progress (no gate): tell the user that `implement` is already active and ask: continue it (go to step 5) or end with the next steps.
-      - A transition away from this phase is pending: tell the user and ask: discard it and continue (`shade-kit phase reject <pending> --note "resumed implement"`, then go to step 5), keep it (end and name `/shade-kit-<pending>`, which decides on it), or end with the next steps.
-      - The transition into `implement` was requested earlier and is still pending: say so and go on with the returned gate.
-   3. If the gate has a checklist: load `shade-kit-gate-check` on it.
-   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve implement`. On a no, call `shade-kit phase reject implement --note "<gaps>"` and end with the gaps and the next steps (see Ending). If approval is switched off, a failed checklist is only a warning.
-   5. Load the skills the CLI returned.
+1. **Entry protocol:** load `shade-kit-phase-entry` and pass it the phase `implement`. It runs the version handshake, `shade-kit phase start implement --json`, the gate check, and the human's approval, and returns one of two results:
+   - **Ended** (`Entry protocol of implement: ended (next-steps message written)`): stop here. Do no phase work and write nothing more; the closing message is already written.
+   - **Run the phase:** keep the feature (`featureId`, `profile`) and the warnings of the return for the [ending](#ending). If its gate warning is not `none`, show it to the human once now, before any phase work. The return also names the general skills of the phase; each step below loads its skill when it gets there, not before.
 2. **Implement:** work through the open tasks in order, respecting "Depends on". Tasks marked "Parallel: yes" may run in parallel subagents where the agent supports them. Per task: write code and proving tests, run build and tests with the commands from the test strategy, check off tests and the task. A task that cannot be finished gets a `Not done:` note. Record deviations in `plan.md` and keep the coverage matrix in sync.
 3. **Simplify (inline):** go over the changed code and remove duplication, needless complexity, and dead code without changing behaviour. Tests stay green.
 4. **Review:** load `shade-kit-review`. Findings go into `review.md`.
-5. **Loop:** while the review has open blockers, fix them and repeat from step 2. After three rounds with open blockers, ask the human how to continue: go on, accept a finding, or end here to reopen `plan`. Do not reopen `plan` yourself: on "reopen `plan`", end and name `/shade-kit-plan`.
-6. **Report** the result and the commands used (recorded in `review.md`). End with the next steps (see Ending).
+5. **Loop:** while the review has open blockers, fix them and repeat from step 2. After three rounds with open blockers, ask the human how to continue: go on, accept a finding, or end here to reopen `plan`. Do not reopen `plan` yourself: on "reopen `plan`", report the open blockers, recommend reopening `plan`, and end (end of work); the closing message lists the reopen.
+6. **Report** the result and the commands used (recorded in `review.md`). End as described in [Ending](#ending) (end of work).
 
 ## Profile `bugfix`
 
@@ -41,5 +34,11 @@ Write the regression test first and see it fail for the diagnosed reason before 
 
 ## Ending
 
-- End with the next steps: what the user can do now and the skill they call for each, from `shade-kit phase next --json` (continue the current phase, the pending transition, the next phase, reopen an earlier phase, each as `/shade-kit-<phase>`), plus `/shade-kit-discuss` and `/shade-kit-drop`. After a refused start, name the reason from the CLI first; without a current feature, name `shade-kit feature list`, `shade-kit feature set <id>`, and `/shade-kit-new`.
-- Never start another phase skill and never call `shade-kit phase start` for another phase: a phase starts only when the user calls its skill.
+Once the entry protocol said **run the phase**, every way this skill ends loads `shade-kit-next-steps` and passes it:
+
+- why the skill ends: **end of work**, with one line of what happened; or **refusal**, with the failure envelope of a CLI call of this skill that failed;
+- every warning of the entry protocol's return and of this skill's own CLI calls.
+
+When the report of this skill makes a recommendation, it names the recommendation and its reason, but a skill only when the closing message does not list it: that message lists the steps of `shade-kit phase next`, `/shade-kit-discuss`, and `/shade-kit-drop`. The closing message is the end of this skill; write nothing after it.
+
+Never start another phase skill, and never run `shade-kit phase start`, `phase approve`, or `phase reject` yourself: the entry protocol runs them for this phase, and a phase starts only when the human calls its skill.

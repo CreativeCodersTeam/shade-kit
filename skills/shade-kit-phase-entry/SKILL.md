@@ -124,7 +124,7 @@ Then go on with step 5.
 
 ### 5. Return to the phase skill
 
-Return to the calling skill ([return](#return)): it loads the skills in `data.skills.generalSkills` and runs its phase. It ends with its own next-steps message and passes the warnings of this return. This skill never starts another phase skill.
+Return to the calling skill ([return](#return)): it runs its phase and loads the skills in `data.skills.generalSkills` in the steps that use them. It ends with its own next-steps message and passes the warnings of this return. This skill never starts another phase skill.
 
 ## Return
 

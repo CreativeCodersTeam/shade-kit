@@ -172,7 +172,7 @@ public sealed class PhaseEngine : IPhaseEngine
             .Select(CreateStep)
             .ToArray();
 
-        return new PhaseNextSteps(state, CreateStep(current), null,
+        return new PhaseNextSteps(state, current.CanContinue ? CreateStep(current) : null, null,
             forward is null ? null : CreateGatedStep(forward, TransitionGate.ForPhase(gates, forward.Name)), reopen);
     }
 

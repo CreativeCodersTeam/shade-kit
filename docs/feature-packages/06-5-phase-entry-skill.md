@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Implemented (AC1 to AC9), 2026-11-10: `skills/shade-kit-phase-entry/SKILL.md`. Loading the skill from the phase skills follows in 06-9. |
+| Status | Implemented (AC1 to AC9), 2026-11-10: `skills/shade-kit-phase-entry/SKILL.md`. Since 2026-11-13 (06-9) the eight phase skills load it as their first step, and step 5 says that the phase skill loads the general skills in the steps that use them. |
 | Source | [06 Skill foundation](06-skill-foundation.md) (version handshake, entry protocol), [shade-kit-skills.md](../../research/shade-kit-skills.md), [phase start analysis](../../research/shade-kit-phase-start-analysis.md) |
 | Kind | Skill (new general skill) |
 | Depends on | 06-1, 06-3, 06-4 |
@@ -113,4 +113,3 @@ Five checks run in every scenario: the first command is the handshake with `--ex
 
 - The defaults of the implementation marked **Proposed** above, among them the keep-pending option after a passed check and the return format that 06-9 builds on.
 - No scenario run for a missing `shade-kit`, for a gate check `error` (approval on or off), for `transition-pending`, or for a failing `phase approve` or `phase reject`; the text covers each case.
-- The phase skeletons still run their own entry step until 06-9 makes them load this skill.

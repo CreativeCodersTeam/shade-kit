@@ -57,7 +57,7 @@ For reference, what `phase next` returns and what the closing message makes of i
 | `phase next` returns | Step shown |
 |---|---|
 | `current.status` `done` (every other field `null`) | The feature is finished; `shade-kit feature set <id>` for another feature, `/shade-kit-new` for a new one. |
-| `continue` (current phase `in-progress`) | Continue the current phase. |
+| `continue` (current phase `in-progress`; `null` in `new`) | Continue the current phase. |
 | `pending` (current phase `awaiting-approval`) | Decide on the pending transition with its skill, or discard it and continue the current phase with `/shade-kit-<current.phase>`. |
 | `forward` (current phase `in-progress`, not the last one) | Move on to the next phase, marked "needs approval" when `gate.approval` is `true`. |
 | `reopen` entries | Reopen that earlier phase, always marked "needs approval". |

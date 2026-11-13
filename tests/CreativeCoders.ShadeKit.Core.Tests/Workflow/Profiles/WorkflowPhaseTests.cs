@@ -28,6 +28,28 @@ public class WorkflowPhaseTests
     }
 
     [Fact]
+    public void Constructor_WithoutCanContinue_CanBeContinued()
+    {
+        // Act
+        var phase = new WorkflowPhase("alpha", "skill-alpha", []);
+
+        // Assert
+        phase.CanContinue
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void Constructor_CanContinueFalse_CannotBeContinued()
+    {
+        // Act
+        var phase = new WorkflowPhase("alpha", "skill-alpha", [], canContinue: false);
+
+        // Assert
+        phase.CanContinue
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public void Constructor_GeneralSkills_KeepsCopyInOrder()
     {
         // Arrange

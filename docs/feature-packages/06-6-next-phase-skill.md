@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Implemented (AC1 to AC5), 2026-11-11: `skills/shade-kit-next-phase/SKILL.md`. Draft of 2026-11-04 (split from package 06). |
+| Status | Implemented (AC1 to AC5), 2026-11-11: `skills/shade-kit-next-phase/SKILL.md`. Draft of 2026-11-04 (split from package 06). Updated 2026-11-13 (06-9): the reference table says that `continue` is `null` in `new`. |
 | Source | [06 Skill foundation](06-skill-foundation.md) (`shade-kit-next-phase`), [phase start analysis](../../research/shade-kit-phase-start-analysis.md) |
 | Kind | Skill (skeleton worked out) |
 | Depends on | 06-1, 06-3 |

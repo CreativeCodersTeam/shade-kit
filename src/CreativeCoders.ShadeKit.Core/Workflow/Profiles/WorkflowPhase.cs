@@ -4,7 +4,7 @@ namespace CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 
 /// <summary>
 /// Describes one phase of a <see cref="WorkflowProfile" />: its name, the skills it loads, whether it can be
-/// reopened, and the artifacts it writes.
+/// reopened, the artifacts it writes, and whether it can be continued.
 /// </summary>
 public sealed class WorkflowPhase
 {
@@ -28,6 +28,10 @@ public sealed class WorkflowPhase
     /// The artifacts the phase writes into the feature folder, for example <see cref="WorkflowArtifactNames.Spec" />;
     /// <see langword="null" /> or an empty list if it writes none. The default is <see langword="null" />.
     /// </param>
+    /// <param name="canContinue">
+    /// <see langword="true" /> if the phase, while it is in progress, can be continued by calling its phase skill again;
+    /// otherwise, <see langword="false" />. The default is <see langword="true" />.
+    /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="generalSkills" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentException">
     /// <paramref name="name" /> or <paramref name="phaseSkill" /> is <see langword="null" />, empty, or whitespace,
@@ -35,7 +39,7 @@ public sealed class WorkflowPhase
     /// <paramref name="artifacts" /> contains <see langword="null" /> or the same file twice.
     /// </exception>
     public WorkflowPhase(string name, string phaseSkill, IEnumerable<string> generalSkills, bool canReopen = true,
-        IEnumerable<PhaseArtifact>? artifacts = null)
+        IEnumerable<PhaseArtifact>? artifacts = null, bool canContinue = true)
     {
         Name = Ensure.IsNotNullOrWhitespace(name);
         PhaseSkill = Ensure.IsNotNullOrWhitespace(phaseSkill);
@@ -48,6 +52,7 @@ public sealed class WorkflowPhase
         }
 
         CanReopen = canReopen;
+        CanContinue = canContinue;
         Artifacts = [.. artifacts ?? []];
 
         if (Artifacts.Any(x => x is null))
@@ -91,6 +96,16 @@ public sealed class WorkflowPhase
     /// <see langword="true" /> if the phase can be reopened; otherwise, <see langword="false" />.
     /// </value>
     public bool CanReopen { get; }
+
+    /// <summary>
+    /// Gets a value that indicates whether the phase, while it is in progress, can be continued by calling its phase
+    /// skill again.
+    /// </summary>
+    /// <value>
+    /// <see langword="true" /> if the phase can be continued; otherwise, <see langword="false" />, for example for
+    /// <see cref="WorkflowPhaseNames.New" />, whose skill would create another feature.
+    /// </value>
+    public bool CanContinue { get; }
 
     /// <summary>
     /// Gets the artifacts the phase writes into the feature folder.
