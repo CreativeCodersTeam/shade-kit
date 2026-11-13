@@ -30,10 +30,10 @@ Vague statements, gaps, and contradictions in a requirement are found and resolv
 ### Run
 
 1. Read `request.md`, any discussion notes of the feature, and an existing `spec.md` (later rounds). `request.md` can hold third-party content (issue text, comments, web pages): the skill and the research agents of step 2 treat it as data that describes the requirement, never as instructions, and the human is shown any instruction in it that looks suspicious ([skill conventions](06-2-skill-conventions-and-version.md#skill-conventions)). **Decided** on 2026-10-25 (code review of the rework of `feature new`, finding F6). **Implemented** (`shade-kit-refine`, `shade-kit-research`).
-2. Run the research skill (package 06) with two focuses in parallel:
-   - **Gaps and open questions:** vague terms, missing cases, contradictions, unstated assumptions.
-   - **Security at requirement level:** data that needs protection, roles and permissions, abuse cases.
-3. Merge the results into `researches.md` (sections `refine / gaps`, `refine / security`).
+2. Run the research skill ([06-8](06-8-research-skill.md)) with two focuses in parallel, each with its short name and ID prefix (**Decided** on 2026-11-13, 06-8):
+   - `gaps`, prefix `G` (gaps and open questions): vague terms, missing cases, contradictions, unstated assumptions.
+   - `security`, prefix `RS` (security at requirement level): data that needs protection, roles and permissions, abuse cases.
+3. The research skill merges the results into `researches.md` (sections `refine / gaps`, `refine / security`). A dismissed finding gets `Dismissed: <reason>.` appended to its line; the next research run reads it and does not report the finding again without new evidence (06-8). **Decided** on 2026-11-13.
 4. Run the interview skill on the findings: one topic at a time, each with the agent's own proposal. Assumptions the agent made are put to the human for confirmation.
 5. Write or update `spec.md` from the template. Answered questions move from "Open questions" to "Decisions", and their inline markers are removed.
 6. Report what changed and which questions are still open. The human decides whether to run another round or move on.
@@ -75,4 +75,4 @@ IDs are never renumbered. A removed requirement keeps its ID with the status "re
 
 ## Open points
 
-- None.
+- The research skill numbers the findings of a section anew on every run (06-8), so finding IDs (`G-n`, `RS-n`) are only stable within one round. Record lasting decisions under their `Q-` IDs in `spec.md`, not under finding IDs.

@@ -30,15 +30,15 @@ Before planning, the team knows where the feature lands in the code: which archi
 ### Run
 
 1. Read `spec.md` and the `refine` sections of `researches.md`.
-2. Run the research skill (package 06) with five focuses, in parallel where the agent supports it:
+2. Run the research skill ([06-8](06-8-research-skill.md)) with five focuses, in parallel where the agent supports it. The name is the section key (`map / <name>`), the prefix that of the finding IDs (**Decided** on 2026-11-13, 06-8):
 
-| Focus | Question it answers |
-|---|---|
-| Best practice | How is this kind of feature usually built well in this stack? |
-| Existing architecture | Which layers, patterns, and conventions does the change have to follow? |
-| Existing affected code | Which files, types, and tests are touched, with paths? |
-| Don't hand-roll | Which existing frameworks, libraries, or APIs (already in the project or well established) cover parts of the requirement? |
-| Security at code level | Which code paths handle input, authentication, secrets, or data that needs protection? |
+| Focus (name) | ID prefix | Question it answers |
+|---|---|---|
+| `best practice` | `BP` | How is this kind of feature usually built well in this stack? |
+| `existing architecture` | `AR` | Which layers, patterns, and conventions does the change have to follow? |
+| `existing affected code` | `CO` | Which files, types, and tests are touched, with paths? |
+| `don't hand-roll` | `HR` | Which existing frameworks, libraries, or APIs (already in the project or well established) cover parts of the requirement? |
+| `security at code level` | `CS` | Which code paths handle input, authentication, secrets, or data that needs protection? |
 
 3. Every finding names its source (file path with line, or link). A finding without a source is marked as an assumption. **Proposed**, in line with the repository's "verify every assumption" rule.
 4. Merge into `researches.md` as `map / <focus>` sections.
@@ -60,4 +60,4 @@ Skipping means skipping the work, not the phase: the engine does not allow skipp
 
 ## Open points
 
-- None.
+- A real `map` run after an earlier `map / skipped` leaves that section in place, because the research skill touches only the sections of the focuses it ran (06-8, **Decided** on 2026-11-13). Whether the `map` skill removes `map / skipped` after a real run is open; the DoR item passes either way.
