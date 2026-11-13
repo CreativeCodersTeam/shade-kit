@@ -126,6 +126,9 @@ public class BuiltInWorkflowProfilesTests
 
         firstPhase.CanReopen
             .Should().BeFalse();
+
+        firstPhase.CanContinue
+            .Should().BeFalse("calling the skill of new again creates another feature");
     }
 
     [Theory]
@@ -141,6 +144,18 @@ public class BuiltInWorkflowProfilesTests
 
         profile.Phases.Skip(1)
             .Should().OnlyContain(x => x.CanReopen);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllProfileNames))]
+    public void Phases_EveryBuiltInProfile_EveryPhaseButNewCanBeContinued(string profileName)
+    {
+        // Arrange
+        var profile = BuiltInWorkflowProfiles.All.Single(x => x.Name == profileName);
+
+        // Assert
+        profile.Phases.Skip(1)
+            .Should().OnlyContain(x => x.CanContinue);
     }
 
     [Theory]

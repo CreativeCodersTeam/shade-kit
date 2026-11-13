@@ -35,7 +35,7 @@ The calling skill has already run its version handshake; this skill does not che
    Whenever this skill's own `phase next` fails, in any case, do not run it again: add the options of the refusal-table row of its `error.code` and show its `error.message` as the reason there are no steps. After `shade-kit-drop`, for example, the drop worked, there is no current feature any more, and `phase next` fails with `no-current-feature`.
 
    On success, take the steps from the result and do not derive any from the profile: the engine knows the profile, the gates, and which phases can be reopened, and a second copy of that logic in a skill drifts. `phase next` reads the state now; when it does not match what the calling skill expected, the result is right. Use the `skill` field of each step as the skill to call (`/<skill>`).
-   - `continue`: continue the current phase with `/<continue.skill>`.
+   - `continue`: continue the current phase with `/<continue.skill>`. `null` adds nothing: the phase `new` has no continue step, because calling `/shade-kit-new` again creates another feature.
    - `pending`: a transition to `pending.phase` waits for approval. Name two steps: decide on it with `/<pending.skill>`; or discard it and continue the current phase with `/shade-kit-<current.phase>` (that phase skill asks before it discards anything).
    - `forward`: move on to the next phase with `/<forward.skill>`, marked "needs approval" when `gate.approval` is `true`.
    - `reopen`: for each entry, reopen that earlier phase with `/<skill>`, marked "needs approval" (a reopen always does). `[]` and `null` add nothing.

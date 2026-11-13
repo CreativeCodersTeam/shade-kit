@@ -10,8 +10,10 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 /// </summary>
 /// <remarks>
 /// For a done feature only <paramref name="FeatureId" />, <paramref name="CurrentPhase" />, and
-/// <paramref name="Status" /> are set. While the current phase is in progress, <paramref name="Continue" /> and
-/// <paramref name="Reopen" /> are set, and <paramref name="Forward" /> unless the current phase is the last phase.
+/// <paramref name="Status" /> are set. While the current phase is in progress, <paramref name="Reopen" /> is set,
+/// <paramref name="Continue" /> unless the current phase cannot be continued (the phase
+/// <see cref="Profiles.WorkflowPhaseNames.New" />), and <paramref name="Forward" /> unless the current phase is the last
+/// phase.
 /// While it awaits approval, only <paramref name="Pending" /> is set besides the current data.
 /// </remarks>
 /// <param name="FeatureId">The id of the current feature, which is the name of its folder.</param>
@@ -19,7 +21,9 @@ namespace CreativeCoders.ShadeKit.Core.Workflow;
 /// The phase that is in progress, awaiting approval, or, for a done feature, approved last, with its state.
 /// </param>
 /// <param name="Status">One of the enumeration values that specifies whether the feature is active or done.</param>
-/// <param name="Continue">The current phase, if it is in progress; otherwise, <see langword="null" />.</param>
+/// <param name="Continue">
+/// The current phase, if it is in progress and can be continued; otherwise, <see langword="null" />.
+/// </param>
 /// <param name="Pending">
 /// The target of the pending transition with its gate, if the current phase awaits approval; otherwise,
 /// <see langword="null" />.

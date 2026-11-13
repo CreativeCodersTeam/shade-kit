@@ -7,7 +7,7 @@ metadata:
 
 # shade-kit-map
 
-<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/11-map.md. CLI commands other than `shade-kit version`, `shade-kit init`, and `shade-kit feature …` (`new`, `list`, `current`, `set`, `show`, `drop`) are planned and do not exist yet. -->
+<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/11-map.md. -->
 
 ## Purpose
 
@@ -19,16 +19,9 @@ Finds out where and how the specified feature fits into the existing code, so th
 
 ## Flow
 
-1. **Entry protocol:**
-   1. Version handshake: `shade-kit version --json`. Stop on a mismatch and name what to update.
-   2. `shade-kit phase start map --json`. This is the check: it changes nothing when it refuses or when the phase is already active.
-      - Refused: end with the reason and the next steps (see Ending).
-      - Already in progress (no gate): tell the user that `map` is already active and ask: continue it (go to step 5) or end with the next steps.
-      - A transition away from this phase is pending: tell the user and ask: discard it and continue (`shade-kit phase reject <pending> --note "resumed map"`, then go to step 5), keep it (end and name `/shade-kit-<pending>`, which decides on it), or end with the next steps.
-      - The transition into `map` was requested earlier and is still pending: say so and go on with the returned gate.
-   3. If the gate has a checklist: load `shade-kit-gate-check` on it.
-   4. If the gate needs approval: show the result, ask the human, and only after a yes call `shade-kit phase approve map`. On a no, call `shade-kit phase reject map --note "<gaps>"` and end with the gaps and the next steps (see Ending). If approval is switched off, a failed checklist is only a warning.
-   5. Load the skills the CLI returned.
+1. **Entry protocol:** load `shade-kit-phase-entry` and pass it the phase `map`. It runs the version handshake, `shade-kit phase start map --json`, the gate check, and the human's approval, and returns one of two results:
+   - **Ended** (`Entry protocol of map: ended (next-steps message written)`): stop here. Do no phase work and write nothing more; the closing message is already written.
+   - **Run the phase:** keep the feature (`featureId`, `profile`) and the warnings of the return for the [ending](#ending). If its gate warning is not `none`, show it to the human once now, before any phase work. The return also names the general skills of the phase; each step below loads its skill when it gets there, not before.
 2. **Read** `spec.md` and the `refine` sections of `researches.md`.
 3. **Research:** load `shade-kit-research` and pass it:
    - phase `map` and the feature id from the entry protocol;
@@ -42,7 +35,7 @@ Finds out where and how the specified feature fits into the existing code, so th
    - context note: none.
 
    Show the user the suspicious instructions and the failed focuses of the return.
-4. **Summarise** for the human: affected areas, risks, and recommendations for the plan. End with the next steps (see Ending).
+4. **Summarise** for the human: affected areas, risks, and recommendations for the plan. End as described in [Ending](#ending) (end of work).
 
 ## Skipping the work
 
@@ -50,5 +43,11 @@ The human can skip the mapping on purpose (for example a change confined to one 
 
 ## Ending
 
-- End with the next steps: what the user can do now and the skill they call for each, from `shade-kit phase next --json` (continue the current phase, the pending transition, the next phase, reopen an earlier phase, each as `/shade-kit-<phase>`), plus `/shade-kit-discuss` and `/shade-kit-drop`. After a refused start, name the reason from the CLI first; without a current feature, name `shade-kit feature list`, `shade-kit feature set <id>`, and `/shade-kit-new`.
-- Never start another phase skill and never call `shade-kit phase start` for another phase: a phase starts only when the user calls its skill.
+Once the entry protocol said **run the phase**, every way this skill ends loads `shade-kit-next-steps` and passes it:
+
+- why the skill ends: **end of work**, with one line of what happened; or **refusal**, with the failure envelope of a CLI call of this skill that failed;
+- every warning of the entry protocol's return and of this skill's own CLI calls.
+
+When the report of this skill makes a recommendation, it names the recommendation and its reason, but a skill only when the closing message does not list it: that message lists the steps of `shade-kit phase next`, `/shade-kit-discuss`, and `/shade-kit-drop`. The closing message is the end of this skill; write nothing after it.
+
+Never start another phase skill, and never run `shade-kit phase start`, `phase approve`, or `phase reject` yourself: the entry protocol runs them for this phase, and a phase starts only when the human calls its skill.

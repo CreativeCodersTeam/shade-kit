@@ -408,6 +408,35 @@ public sealed class PhaseCommandsEndToEndTests : IDisposable
     }
 
     [Fact]
+    [Trait("Requirement", "FP04-AC14")]
+    public async Task PhaseNext_NewFeature_ReturnsNoContinueButForwardToFirstWorkPhase()
+    {
+        // Arrange
+        await _harness.InitAsync();
+        await _harness.CreateIssueFeatureAsync("feature");
+
+        // Act
+        var next = await RunJsonAtAsync(1, "phase", "next", "--json");
+
+        // Assert
+        next.ExitCode
+            .Should().Be(0);
+
+        next.Root.GetProperty("data").ShouldBeJson(
+            """
+            {
+              "current": { "featureId": "gh-142-login-sso", "phase": "new", "state": "in-progress",
+                           "status": "active" },
+              "continue": null,
+              "pending": null,
+              "forward": { "phase": "refine", "gate": { "approval": true, "checklist": null },
+                           "skill": "shade-kit-refine" },
+              "reopen": []
+            }
+            """);
+    }
+
+    [Fact]
     [Trait("Requirement", "FP04-AC3")]
     public async Task PhaseStart_SkippedPhase_Returns42AndLeavesFeatureFileUnchanged()
     {
@@ -615,7 +644,6 @@ public sealed class PhaseCommandsEndToEndTests : IDisposable
         FoldWhitespace(next.Output)
             .Should().Be(
                 $"Feature: {FeatureId} (active) Current phase: new (in-progress) " +
-                "Continue: new (skill: shade-kit-new) " +
                 "Forward: diagnose (skill: shade-kit-diagnose, approval: required, checklist: none) Reopen: none ");
 
         using var featureFile = await ReadFeatureFileAsync();

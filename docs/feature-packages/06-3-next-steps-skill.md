@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal), 2026-11-11 (06-6: a `phase next` result passed by the calling skill replaces the skill's own call, stated once in flow step 3). AC1 to AC4 implemented; loading the skill from other skills follows in 06-5, 06-6, and 06-9. |
+| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal), 2026-11-11 (06-6: a `phase next` result passed by the calling skill replaces the skill's own call, stated once in flow step 3). 2026-11-13 (06-9: `continue` is `null` in `new`, flow step 3). AC1 to AC4 implemented; loaded by 06-5, 06-6, and, since 2026-11-13, by every phase skill and by `new`, `discuss`, and `drop` (06-9). |
 | Source | [06 Skill foundation](06-skill-foundation.md) (next-steps message), [phase start analysis](../../research/shade-kit-phase-start-analysis.md) |
 | Kind | Skill (new general skill) |
 | Depends on | 06-2 |

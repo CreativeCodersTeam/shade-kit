@@ -12,7 +12,8 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Phase.Next;
 /// </remarks>
 /// <param name="Current">The current feature, its current phase with its state, and the feature status.</param>
 /// <param name="Continue">
-/// The current phase and its skill if the current phase is in progress; otherwise, <see langword="null" />.
+/// The current phase and its skill if the current phase is in progress and can be continued (every phase except
+/// <c>new</c>); otherwise, <see langword="null" />.
 /// </param>
 /// <param name="Pending">
 /// The target phase of the pending transition with its gate and skill if the current phase awaits an approval;

@@ -27,7 +27,9 @@ public class PhaseEngineNextTests
             .Should().BeSameAs(state);
 
         steps.Continue
-            .Should().Be(new PhaseStep(current.Name, current.PhaseSkill));
+            .Should().Be(current.Name == WorkflowPhaseNames.New
+                ? null
+                : new PhaseStep(current.Name, current.PhaseSkill));
 
         steps.Pending
             .Should().BeNull();
@@ -39,6 +41,36 @@ public class PhaseEngineNextTests
             .Should().Equal(profile.Phases.Take(currentIndex)
                 .Where(x => x.Name != WorkflowPhaseNames.New)
                 .Select(x => new PhaseStep(x.Name, x.PhaseSkill)));
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP04-AC14")]
+    public void GetNext_PhaseThatCannotBeContinuedInProgress_ReturnsNoContinueButForwardAndReopen()
+    {
+        // Arrange
+        var profile = new WorkflowProfile("fixed",
+        [
+            new WorkflowPhase("intake", "skill-intake", []),
+            new WorkflowPhase("work", "skill-work", [], canContinue: false),
+            new WorkflowPhase("close", "skill-close", [])
+        ]);
+        var state = CreateState(profile, "work");
+
+        // Act
+        var steps = new PhaseEngine().GetNext(state, NoGates);
+
+        // Assert
+        steps.Continue
+            .Should().BeNull();
+
+        steps.Pending
+            .Should().BeNull();
+
+        steps.Forward
+            .Should().Be(new GatedPhaseStep("close", TransitionGate.Default, "skill-close"));
+
+        steps.Reopen
+            .Should().Equal(new PhaseStep("intake", "skill-intake"));
     }
 
     [Theory]

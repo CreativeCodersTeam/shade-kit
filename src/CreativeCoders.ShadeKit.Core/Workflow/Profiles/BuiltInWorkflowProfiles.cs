@@ -7,7 +7,8 @@ namespace CreativeCoders.ShadeKit.Core.Workflow.Profiles;
 /// Adding a profile or changing the phases of a profile means changing this class only: the
 /// <see cref="BuiltInWorkflowProfileCatalog" /> offers every profile in <see cref="All" />, and the phase engine takes
 /// the phase order from the profile it is given. Every phase runs through the skill named after it (see
-/// <see cref="WorkflowSkillNames.ForPhase" />), and the phase <see cref="WorkflowPhaseNames.New" /> cannot be reopened.
+/// <see cref="WorkflowSkillNames.ForPhase" />), and the phase <see cref="WorkflowPhaseNames.New" /> can neither be
+/// reopened nor continued: calling its skill again creates another feature.
 /// The artifacts of a phase are the files it writes into the feature folder (<see cref="WorkflowArtifactNames" />); a
 /// gate check decides from them whether a checklist item applies to the profile.
 /// </remarks>
@@ -71,7 +72,7 @@ public static class BuiltInWorkflowProfiles
     private static WorkflowPhase CreateNewPhase()
     {
         return new WorkflowPhase(WorkflowPhaseNames.New, WorkflowSkillNames.ForPhase(WorkflowPhaseNames.New), [],
-            canReopen: false, [Always(WorkflowArtifactNames.Request)]);
+            canReopen: false, [Always(WorkflowArtifactNames.Request)], canContinue: false);
     }
 
     private static WorkflowPhase CreatePlanPhase()
