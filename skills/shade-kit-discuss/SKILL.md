@@ -17,7 +17,12 @@ Open brainstorming outside every profile, possible at any time and in any phase.
 
 1. **Version handshake:** `shade-kit version --json`. Stop and tell the user what to update on a mismatch.
 2. **Context:** `shade-kit feature current --json` to find out whether a feature is current. No feature is needed.
-3. **Discuss:** load `shade-kit-interview` in open mode. Ask, propose alternatives, and challenge assumptions.
+3. **Discuss:** load `shade-kit-interview` and pass it:
+   - mode `open`: ask, propose alternatives, and challenge assumptions;
+   - topics: the subject the user brought up;
+   - target artifact: the discussion notes of step 4;
+   - recording rule: the options discussed, with their pros and cons, go to "Options", what the user decided to "Conclusions", and every question still unresolved to "Open questions";
+   - recording time `on return`: the notes are written in step 4, from the return.
 4. **Notes:** at the end, or when the user asks, write the notes from the `discussion.md` template in `.shadekit/templates/`: topic, date, participants, context, options, conclusions, open questions.
    - No current feature: `.shadekit/discussions/<yyyymmdd>-<hhmm>-<slug>.md`
    - Current feature: `.shadekit/features/<id>/discussions/<yyyymmdd>-<hhmm>-<slug>.md`
