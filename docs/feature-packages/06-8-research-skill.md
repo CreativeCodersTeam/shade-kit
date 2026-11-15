@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Implemented in `skills/shade-kit-research/SKILL.md` and `researches.template.md`, 2026-11-13. The research steps of the three calling skeletons (`refine`, `map`, `diagnose`) name the input since the same day. Scenario runs: see [acceptance criteria](#acceptance-criteria). |
+| Status | Implemented in `skills/shade-kit-research/SKILL.md` and `researches.template.md`, 2026-11-13. The research steps of the three calling skeletons (`refine`, `map`, `diagnose`) name the input since the same day. Scenario runs: see [acceptance criteria](#acceptance-criteria). Updated 2026-11-15 (package 08: the subagent tools of Copilot and Codex named, subagent support answered). |
 | Source | [06 Skill foundation](06-skill-foundation.md) (general skills, `researches.md`), [02 Repository initialisation](02-repository-initialisation.md) (template set) |
 | Kind | Skill (general skill) and template (`researches.template.md`) |
 | Depends on | 06-2 |
@@ -89,6 +89,6 @@ AC4 is shown by s3 (the focus ran in the main session from the same brief and ga
 
 ## Open points
 
-- **Unverified:** whether GitHub Copilot and OpenAI Codex CLI support subagents (package 08). Without them the skill runs the focuses one after the other.
+- Answered on 2026-11-15 (package 08, from documentation and source): GitHub Copilot CLI (`task`) and OpenAI Codex CLI (`spawn_agent`) both run subagents in parallel, and the skill names both tools beside Claude Code's `Agent`. Without subagents the skill still runs the focuses one after the other. A scenario run showed the same `researches.md` structure both ways (FP08-AC5).
 - Finding IDs are numbered anew on every run of a section (decided), so a `G-3` of an earlier round can name another finding later. Only dismissed findings keep their text (with a new number). Whether the interview topics or `spec.md` should ever quote finding IDs across rounds is left to package 10.
 - Resolved 2026-11-13: changing `researches.template.md` needs no change to `ShippedTemplatesTests` (**FACT**: it checks the catalog, the paths, and the DoR/DoD lines only; `TemplatesLockTests` uses fixed fake hashes). `dotnet test` passed after the change.

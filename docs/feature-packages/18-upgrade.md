@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-24 (documentation check: line endings of the instruction section follow package 02; staged multi-file write as open point) and 2026-10-25 (orphaned `request.md` template as open point) |
+| Status | Draft, 2026-10-14, updated 2026-10-24 (documentation check: line endings of the instruction section follow package 02; staged multi-file write as open point) and 2026-10-25 (orphaned `request.md` template as open point), and 2026-11-15 (package 08: no further instruction file) |
 | Source | Concept §2 (Lifecycle), §3.1 (`upgrade`), [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.2, §9.3, §9.5) |
 | Depends on | 01, 02, 05, 08 |
 | Enables | Kit releases that change a file format or a template, without stranding existing repositories |
@@ -62,7 +62,7 @@ For each template the running kit version ships (**Decided**, concept §9.5):
 
 ### Instruction section
 
-The managed section in `CLAUDE.md`, `AGENTS.md`, and any further instruction file from package 08 is replaced between its markers. Every line outside the markers is kept; a changed file is written as a whole with the line ending decided at write time (package 02, [Managed instruction section](02-repository-initialisation.md#managed-instruction-section)), so its other lines are normalised too. A file whose section is already identical is not written. A file whose markers were removed is reported, not changed. **Proposed.**
+The managed section in `CLAUDE.md` and `AGENTS.md` (package 08 adds no further instruction file, 2026-11-15) is replaced between its markers. Every line outside the markers is kept; a changed file is written as a whole with the line ending decided at write time (package 02, [Managed instruction section](02-repository-initialisation.md#managed-instruction-section)), so its other lines are normalised too. A file whose section is already identical is not written. A file whose markers were removed is reported, not changed. **Proposed.**
 
 ### All or nothing
 

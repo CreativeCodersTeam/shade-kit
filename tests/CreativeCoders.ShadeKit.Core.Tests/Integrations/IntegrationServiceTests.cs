@@ -679,6 +679,80 @@ public class IntegrationServiceTests
     }
 
     [Fact]
+    public async Task InstallAsync_ClaudeCopilotAndCodexDetected_InstallsAllInRegistrationOrderFromOneSource()
+    {
+        // Arrange
+        var copilot = CreateAgent("copilot", isAvailable: true);
+        var codex = CreateAgent("codex", isAvailable: true);
+        var service = CreateThreeAgentService(copilot, codex);
+
+        // Act
+        var result = await service.InstallAsync(null, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Integrations.Select(x => x.AgentId)
+            .Should().Equal("claude", "copilot", "codex");
+
+        foreach (var agent in new[] { _claude, copilot, codex })
+        {
+            A.CallTo(() => agent.InstallAsync(ReleaseSource, A<CancellationToken>._))
+                .MustHaveHappenedOnceExactly();
+        }
+
+        A.CallTo(() => _gitRemoteTagChecker.CheckTagAsync(A<string>._, A<string>._, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task InstallAsync_OnlyCopilotAndCodexDetected_InstallsOnlyThemInRegistrationOrder()
+    {
+        // Arrange
+        A.CallTo(() => _claude.IsAvailable()).Returns(false);
+        var copilot = CreateAgent("copilot", isAvailable: true);
+        var codex = CreateAgent("codex", isAvailable: true);
+        var service = CreateThreeAgentService(copilot, codex);
+
+        // Act
+        var result = await service.InstallAsync(null, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Integrations.Select(x => x.AgentId)
+            .Should().Equal("copilot", "codex");
+
+        A.CallTo(() => _claude.EnsureAvailable())
+            .MustNotHaveHappened();
+
+        A.CallTo(() => _claude.InstallAsync(A<MarketplaceSource>._, A<CancellationToken>._))
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task InstallAsync_CodexFailsAfterClaudeAndCopilot_ThrowsRunFailedWithBothResultsInOrder()
+    {
+        // Arrange
+        var copilot = CreateAgent("copilot", isAvailable: true);
+        var codex = CreateAgent("codex", isAvailable: true);
+        var failure = new CodexCommandFailedException(["plugin", "add"], 1, "failed.");
+        A.CallTo(() => codex.InstallAsync(A<MarketplaceSource>._, A<CancellationToken>._)).ThrowsAsync(failure);
+        var service = CreateThreeAgentService(copilot, codex);
+
+        // Act
+        var act = () => service.InstallAsync(null, TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<IntegrationRunFailedException>()).Which;
+
+        exception.FailedAgentId
+            .Should().Be("codex");
+
+        exception.CompletedIntegrations.Select(x => x.AgentId)
+            .Should().Equal("claude", "copilot");
+
+        exception.InnerException
+            .Should().BeSameAs(failure);
+    }
+
+    [Fact]
     public async Task InstallAsync_ExplicitAgentIdsInOtherOrder_InstallsInRequestedOrder()
     {
         // Arrange
@@ -698,7 +772,7 @@ public class IntegrationServiceTests
         // Arrange
         A.CallTo(() => _other.IsAvailable()).Returns(true);
         A.CallTo(() => _claude.InstallAsync(A<MarketplaceSource>._, A<CancellationToken>._))
-            .ThrowsAsync(new IntegrationConflictException("claude", "m", "a", "b", "c"));
+            .ThrowsAsync(new IntegrationConflictException("claude", "m", "a", "b", ["c"]));
         var service = CreateService();
 
         // Act
@@ -1053,6 +1127,33 @@ public class IntegrationServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_ThreeAgentsWithCopilotNotInstalled_UpdatesOthersFromSourceResolvedOnce()
+    {
+        // Arrange
+        var copilot = CreateAgent("copilot", isAvailable: true);
+        SetUpNotInstalled(copilot);
+        var codex = CreateAgent("codex", isAvailable: true);
+        var service = CreateThreeAgentService(copilot, codex);
+
+        // Act
+        var result = await service.UpdateAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Integrations.Select(x => x.AgentId)
+            .Should().Equal("claude", "codex");
+
+        _updateSources
+            .Should().Equal(("claude", ReleaseSource), ("codex", ReleaseSource));
+
+        A.CallTo(() => copilot.UpdateAsync(A<Func<CancellationToken, Task<MarketplaceSource>>>._,
+                A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+
+        A.CallTo(() => _gitRemoteTagChecker.CheckTagAsync(A<string>._, A<string>._, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
     public async Task UpdateAsync_FirstAgentNotInstalled_ResolvesSourceForSecondAgent()
     {
         // Arrange
@@ -1066,6 +1167,31 @@ public class IntegrationServiceTests
         // Assert
         result
             .Should().BeEquivalentTo(new IntegrationRunResult(ReleaseSource, [CreateResult("other")], []));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SecondAgentFailsWithReleaseTagMissing_KeepsFallbackSource()
+    {
+        // Arrange
+        A.CallTo(() => _gitRemoteTagChecker.CheckTagAsync(A<string>._, A<string>._, A<CancellationToken>._))
+            .Returns(GitRemoteTagState.Missing);
+        var copilot = CreateAgent("copilot", isAvailable: true);
+        A.CallTo(() => copilot.UpdateAsync(A<Func<CancellationToken, Task<MarketplaceSource>>>._,
+                A<CancellationToken>._))
+            .ThrowsAsync(new CopilotCommandFailedException(["plugin", "update"], 1, "failed."));
+        var service = CreateThreeAgentService(copilot, CreateAgent("codex", isAvailable: false));
+
+        // Act
+        var act = () => service.UpdateAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<IntegrationRunFailedException>()).Which;
+
+        exception.MarketplaceSource
+            .Should().Be(MainSource);
+
+        exception.CompletedIntegrations.Select(x => x.AgentId)
+            .Should().Equal("claude");
     }
 
     [Fact]
@@ -1400,6 +1526,30 @@ public class IntegrationServiceTests
     }
 
     [Fact]
+    public async Task GetInstalledAsync_ThreeAgentsWithCopilotFailingAndCodexMissing_ReturnsClaudeAndOneWarning()
+    {
+        // Arrange
+        var copilot = CreateAgent("copilot", isAvailable: true);
+        var failure = new CopilotCommandFailedException(["plugin", "list", "--json"], 1, "copilot failed.");
+        A.CallTo(() => copilot.GetInstalledAsync(A<CancellationToken>._)).ThrowsAsync(failure);
+        var codex = CreateAgent("codex", isAvailable: false);
+        var service = CreateThreeAgentService(copilot, codex);
+
+        // Act
+        var result = await service.GetInstalledAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Integrations.Select(x => x.AgentId)
+            .Should().Equal("claude");
+
+        result.Warnings
+            .Should().Equal(new AgentUnavailableWarning("copilot", failure.Message));
+
+        A.CallTo(() => codex.GetInstalledAsync(A<CancellationToken>._))
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
     public async Task GetInstalledAsync_UnexpectedFailure_PropagatesFailure()
     {
         // Arrange
@@ -1516,8 +1666,12 @@ public class IntegrationServiceTests
         return
         [
             new ClaudeUnavailableException(["plugin", "list", "--json"], "Cannot start."),
-            new IntegrationConflictException("other", "m", "a", "b", "c"),
-            new IntegrationIncompleteException("other", new ClaudeCommandFailedException(["x"], 1, "failed."))
+            new IntegrationConflictException("other", "m", "a", "b", ["c"]),
+            new IntegrationIncompleteException("other", new ClaudeCommandFailedException(["x"], 1, "failed.")),
+            new CopilotNotFoundException(["plugin", "list", "--json"], "Not on the PATH."),
+            new CopilotCommandFailedException(["plugin", "install"], 1, "failed."),
+            new CodexUnavailableException(["plugin", "list", "--json"], "Cannot start."),
+            new IntegrationIncompleteException("other", new CodexCommandFailedException(["x"], 1, "failed."))
         ];
     }
 
@@ -1525,6 +1679,13 @@ public class IntegrationServiceTests
     {
         return new IntegrationResult(agentId, "shade-kit@creativecoders-shade-kit", IntegrationOutcome.Installed,
             null, "0.8.0", "v0.8.0", true);
+    }
+
+    // The three agents in the registration order of AddShadeKitCore: claude, copilot, codex.
+    private IntegrationService CreateThreeAgentService(IAgentIntegration copilot, IAgentIntegration codex)
+    {
+        return new IntegrationService([_claude, copilot, codex], _engineVersionProvider, _gitRemoteTagChecker,
+            name => _environment.GetValueOrDefault(name), () => CurrentDirectory);
     }
 
     private IntegrationService CreateService()

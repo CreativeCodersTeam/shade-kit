@@ -24,6 +24,9 @@ public class ManagedInstructionSectionTests
                 "\n" +
                 "- A phase starts only when the user calls its phase skill (`/shade-kit-<phase>`). Never start a " +
                 "phase skill on your own or from another skill.\n" +
+                "- Call a skill as `/shade-kit-<skill>` in Claude Code and GitHub Copilot CLI and as " +
+                "`$shade-kit:shade-kit-<skill>` in OpenAI Codex CLI; write every skill name in SHADE kit output " +
+                "(for example in a closing message) in the form of the agent you run in.\n" +
                 "- To see where a feature stands and which skill to call next, use the `shade-kit-next-phase` " +
                 "skill.\n" +
                 "- Call the engine as `shade-kit <command> --json` and act on its JSON result.\n" +

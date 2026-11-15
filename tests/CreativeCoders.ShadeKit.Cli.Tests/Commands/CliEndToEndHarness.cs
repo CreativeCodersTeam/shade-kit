@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Integrations.Claude;
+using CreativeCoders.ShadeKit.Core.Integrations.Codex;
+using CreativeCoders.ShadeKit.Core.Integrations.Copilot;
 using CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
 using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Trackers;
@@ -23,8 +25,13 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands;
 /// <see cref="RemoteTags" /> if they are set, every other call fails), and the tracker issue
 /// reader is a fake that returns the issue <see cref="IssueUrl" />, so no test starts <c>git</c> or <c>gh</c>. Claude
 /// Code is answered by a fake <see cref="IClaudeExecutableLocator" /> and a fake <see cref="IClaudeCommandRunner" />;
-/// by default <c>claude</c> is not on the PATH, so no test starts <c>claude</c> either. The current directory is
-/// restored on disposal; a test class that uses the harness must be in the
+/// by default <c>claude</c> is not on the PATH, so no test starts <c>claude</c> either. The GitHub Copilot CLI is
+/// answered the same way by a fake <see cref="ICopilotExecutableLocator" /> and a fake
+/// <see cref="ICopilotCommandRunner" />, which by default find no <c>copilot</c>, and the OpenAI Codex CLI by a fake
+/// <see cref="ICodexExecutableLocator" /> and a fake <see cref="ICodexCommandRunner" />, which by default find no
+/// <c>codex</c>. A test makes an agent detected by attaching its simulator (<c>FakeClaudeCode</c>,
+/// <c>FakeCopilot</c>, or <c>FakeCodex</c>). The current directory is restored on disposal; a test class that uses
+/// the harness must be in the
 /// <see cref="CurrentDirectoryCollectionDefinition" /> collection.
 /// </remarks>
 internal sealed partial class CliEndToEndHarness : IDisposable
@@ -63,6 +70,22 @@ internal sealed partial class CliEndToEndHarness : IDisposable
             .ReturnsLazily((string _, IReadOnlyList<string> arguments, CancellationToken _) =>
                 Task.FromException<ExternalProcessResult>(new ClaudeNotFoundException(arguments,
                     "The Claude Code CLI claude was not found in any absolute directory of the PATH.")));
+
+        A.CallTo(() => CopilotExecutableLocator.FindCopilotExecutable())
+            .Returns((string?)null);
+
+        A.CallTo(() => CopilotCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
+            .ReturnsLazily((string _, IReadOnlyList<string> arguments, CancellationToken _) =>
+                Task.FromException<ExternalProcessResult>(new CopilotNotFoundException(arguments,
+                    "The GitHub Copilot CLI copilot was not found in any absolute directory of the PATH.")));
+
+        A.CallTo(() => CodexExecutableLocator.FindCodexExecutable())
+            .Returns((string?)null);
+
+        A.CallTo(() => CodexCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
+            .ReturnsLazily((string _, IReadOnlyList<string> arguments, CancellationToken _) =>
+                Task.FromException<ExternalProcessResult>(new CodexNotFoundException(arguments,
+                    "The OpenAI Codex CLI codex was not found in any absolute directory of the PATH.")));
     }
 
     public TempKitDirectory TempDirectory { get; }
@@ -82,6 +105,27 @@ internal sealed partial class CliEndToEndHarness : IDisposable
     public IClaudeCommandRunner ClaudeCommandRunner { get; } = A.Fake<IClaudeCommandRunner>();
 
     /// <summary>
+    /// Gets the fake locator of <c>copilot</c>; by default it finds none, so the GitHub Copilot CLI is not detected.
+    /// </summary>
+    public ICopilotExecutableLocator CopilotExecutableLocator { get; } = A.Fake<ICopilotExecutableLocator>();
+
+    /// <summary>
+    /// Gets the fake runner of <c>copilot</c>; by default every call fails with a
+    /// <see cref="CopilotNotFoundException" />.
+    /// </summary>
+    public ICopilotCommandRunner CopilotCommandRunner { get; } = A.Fake<ICopilotCommandRunner>();
+
+    /// <summary>
+    /// Gets the fake locator of <c>codex</c>; by default it finds none, so the OpenAI Codex CLI is not detected.
+    /// </summary>
+    public ICodexExecutableLocator CodexExecutableLocator { get; } = A.Fake<ICodexExecutableLocator>();
+
+    /// <summary>
+    /// Gets the fake runner of <c>codex</c>; by default every call fails with a <see cref="CodexNotFoundException" />.
+    /// </summary>
+    public ICodexCommandRunner CodexCommandRunner { get; } = A.Fake<ICodexCommandRunner>();
+
+    /// <summary>
     /// Gets or sets the current branch that the fake git reports; <see langword="null" /> for a detached HEAD.
     /// </summary>
     public string? Branch { get; set; } = "main";
@@ -99,7 +143,7 @@ internal sealed partial class CliEndToEndHarness : IDisposable
 
     /// <summary>
     /// Gets or sets an action that registers further services of a run, after the fake git runner, the fake tracker
-    /// issue reader, and the fake claude locator and runner.
+    /// issue reader, and the fake claude, copilot, and codex locators and runners.
     /// </summary>
     public Action<IServiceCollection>? ConfigureServices { get; set; }
 
@@ -156,7 +200,11 @@ internal sealed partial class CliEndToEndHarness : IDisposable
             x.AddSingleton(GitCommandRunner)
                 .AddSingleton(TrackerIssueReader)
                 .AddSingleton(ClaudeExecutableLocator)
-                .AddSingleton(ClaudeCommandRunner);
+                .AddSingleton(ClaudeCommandRunner)
+                .AddSingleton(CopilotExecutableLocator)
+                .AddSingleton(CopilotCommandRunner)
+                .AddSingleton(CodexExecutableLocator)
+                .AddSingleton(CodexCommandRunner);
 
             ConfigureServices?.Invoke(x);
         });

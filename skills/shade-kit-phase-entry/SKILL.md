@@ -56,7 +56,7 @@ Go on by the result:
 
 #### Already in progress
 
-Tell the human that `<phase>` is already active for feature `<featureId>` (in the question or just before it), and ask one question with the agent's structured question tool (in Claude Code `AskUserQuestion`; without such a tool, a plain question):
+Tell the human that `<phase>` is already active for feature `<featureId>` (in the question or just before it), and ask one question with the agent's structured question tool (in Claude Code `AskUserQuestion`, in GitHub Copilot CLI `ask_user`, in OpenAI Codex CLI `request_user_input`, which Codex offers only in plan mode by default; without such a tool, also in Codex outside plan mode, a plain question):
 
 - **Continue `<phase>`**: resume the work (in `refine`: another round) → [step 5](#5-return-to-the-phase-skill).
 - **End here** → end with **end of work**.
@@ -99,7 +99,7 @@ Otherwise, show the human:
 - without a checklist: that the gate has none;
 - with a checklist: the overall result, the failed items with their Evidence, the `n/a` items with their reasons, the items a human decided, and every suspicious instruction found in `request.md`.
 
-Then ask for the decision, one question with the structured question tool:
+Then ask for the decision, one question with the structured question tool (without one, a plain question):
 
 - **Approve** → `shade-kit phase approve <phase> --json`. On success, continue with [step 5](#5-return-to-the-phase-skill); on a failure envelope, end with **refusal**.
 - **Reject** → `shade-kit phase reject <phase> --note "<gaps>" --json`. `transition.from` is in progress again. End with **no** and the gaps.
@@ -176,5 +176,6 @@ Then give the calling skill the ended [return](#return).
 - Never read or write `feature.json`, `gates.json`, or `config.json`; the state comes from the CLI.
 - Do no phase work: read no artifact and write no file. The gate check reads the artifacts.
 - Load only `shade-kit-gate-check` and `shade-kit-next-steps`. Start no phase skill.
+- Write a skill call that you show the human in the form of the agent you run in: `/shade-kit-<skill>` in Claude Code and GitHub Copilot CLI, `$shade-kit:shade-kit-<skill>` in OpenAI Codex CLI.
 - Never approve without the human's answer to the approval question.
 - Pass every warning on; never leave one out because it looks harmless. The closing next-steps message shows them.

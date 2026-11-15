@@ -221,16 +221,19 @@ public static class ShadeKitCliExitCodes
     /// Represents the exit code returned when no supported agent is detected, for example by
     /// <c>shade-kit integrations install</c> without <c>--agent</c>, or when the CLI of an agent that a command needs
     /// is not found in any absolute directory of the <c>PATH</c> environment variable: for Claude Code <c>claude</c>,
-    /// also for an agent named with <c>--agent</c>, which is checked before the release tag. On Windows only the
-    /// <c>claude.exe</c> of the native installer is found. The error code is
+    /// for GitHub Copilot CLI <c>copilot</c>, and for OpenAI Codex CLI <c>codex</c>, also for an agent named with
+    /// <c>--agent</c>, which is checked before the release tag. On Windows only the <c>claude.exe</c> of the native
+    /// installer of Claude Code is found, while <c>copilot.exe</c> and <c>codex.exe</c> or the npm shims
+    /// <c>copilot.cmd</c> and <c>codex.cmd</c> are found for the other agents. The error code is
     /// <see cref="ShadeKitCliErrorCodes.AgentNotFound" />.
     /// </summary>
     public const int AgentNotFound = 51;
 
     /// <summary>
-    /// Represents the exit code returned when a <c>claude</c> command fails: <c>claude</c> cannot be started, exits
-    /// with a non-zero exit code, reports the outcome <c>failed</c>, or prints no JSON output that SHADE kit can read.
-    /// The error code is <see cref="ShadeKitCliErrorCodes.AgentCommandFailed" />.
+    /// Represents the exit code returned when a command of an agent CLI (<c>claude</c>, <c>copilot</c>, or
+    /// <c>codex</c>) fails: the CLI cannot be started, exits with a non-zero exit code, reports the outcome
+    /// <c>failed</c>, or prints no JSON output that SHADE kit can read, or an argument is refused before a Windows
+    /// <c>.cmd</c> shim is run. The error code is <see cref="ShadeKitCliErrorCodes.AgentCommandFailed" />.
     /// </summary>
     public const int AgentCommandFailed = 52;
 

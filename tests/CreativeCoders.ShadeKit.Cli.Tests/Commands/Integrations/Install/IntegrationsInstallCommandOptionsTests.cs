@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Commands.Integrations.Install;
+using System.Reflection;
 using CreativeCoders.SysConsole.Cli.Parsing;
 
 namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Integrations.Install;
@@ -9,6 +10,8 @@ public class IntegrationsInstallCommandOptionsTests
     [Theory]
     [InlineData("claude", "claude")]
     [InlineData("CLAUDE", "claude")]
+    [InlineData("copilot", "copilot")]
+    [InlineData("Codex", "codex")]
     public void Parse_AgentWithSupportedId_SetsAgentToSupportedId(string value, string expectedAgent)
     {
         // Act
@@ -36,7 +39,7 @@ public class IntegrationsInstallCommandOptionsTests
     }
 
     [Theory]
-    [InlineData("--agent", "copilot")]
+    [InlineData("--agent", "gemini")]
     [InlineData("--agent")]
     [InlineData("--agent", "--json")]
     public void Parse_AgentWithUnknownIdOrWithoutValue_ThrowsInvalidAgentOptionException(params string[] args)
@@ -50,5 +53,19 @@ public class IntegrationsInstallCommandOptionsTests
         // Assert
         act
             .Should().Throw<InvalidAgentOptionException>();
+    }
+
+    [Fact]
+    public void Agent_HelpText_NamesEverySupportedAgent()
+    {
+        // Act
+        var attribute = typeof(IntegrationsInstallCommandOptions)
+            .GetProperty(nameof(IntegrationsInstallCommandOptions.Agent))!
+            .GetCustomAttribute<OptionParameterAttribute>()!;
+
+        // Assert
+        attribute.HelpText
+            .Should().Be("The agent to install for: 'claude', 'copilot', or 'codex'; without it, every detected " +
+                         "agent");
     }
 }

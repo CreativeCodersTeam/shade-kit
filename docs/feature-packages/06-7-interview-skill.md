@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Implemented (AC1 to AC5) in `skills/shade-kit-interview/SKILL.md`, 2026-11-11. The load steps of the five calling skeletons (`discuss`, `refine`, `plan`, `diagnose`, `quick`) name the input since the same day. |
+| Status | Implemented (AC1 to AC5) in `skills/shade-kit-interview/SKILL.md`, 2026-11-11. The load steps of the five calling skeletons (`discuss`, `refine`, `plan`, `diagnose`, `quick`) name the input since the same day. Updated 2026-11-15 (package 08: question tool and limits per agent). |
 | Source | [06 Skill foundation](06-skill-foundation.md) (general skills) |
 | Kind | Skill (general skill) |
 | Depends on | 06-2 |
@@ -44,6 +44,7 @@ The calling skill names the values in its text; the interview skill describes th
 2. Order the topics: blocking questions first. A topic is blocking when the calling skill marks it so; otherwise the interview decides (other topics depend on its answer, or the calling skill cannot go on without it). Within a group the caller's order stays, except that a topic moves before the topics that depend on it. **Decided** on 2026-11-11.
 3. Ask one topic per question. Give the context, the agent's own proposal, and the alternatives. Use the agent's structured question tool where one exists, plain questions otherwise. A blocking topic is asked on its own; non-blocking topics that do not depend on each other may be asked together, up to four per call of the structured question tool, each a complete question with its own context, proposal, and alternatives. Without such a tool, one topic per message. **Decided** on 2026-11-11.
    - The proposal is the first option, marked as recommended; at most three alternatives, because the tool takes 2 to 4 options and adds free text itself. The header shows the progress (`Topic 3/8`). **Decided** on 2026-11-11.
+   - Per agent (package 08): the tool is `AskUserQuestion` in Claude Code, `ask_user` in GitHub Copilot CLI, and `request_user_input` in OpenAI Codex CLI, which takes at most three questions and 2 to 3 options (so at most two alternatives) and is available only in plan mode by default; outside plan mode Codex asks plain questions. **Decided** on 2026-11-15 (package 08, Gate 2). **Implemented** in `skills/shade-kit-interview/SKILL.md`.
    - When no real proposal is possible (a missing fact), the proposal is the best reasoned guess from the code and the artifacts, stated as a guess with its basis, so every question has the same shape. **Decided** on 2026-11-11.
    - Questions are asked in the language of the conversation; answers are recorded in the language of the target artifact, names and quotes unchanged. **Decided** on 2026-11-11.
 4. Challenge an answer that contradicts earlier answers or the artifacts, once, with the reason. The human's reply is final: when they keep the answer, it is recorded, and the conflict (both places) is reported in the return; the interview does not change the earlier decision. **Decided** on 2026-11-11.

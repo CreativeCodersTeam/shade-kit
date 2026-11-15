@@ -13,8 +13,14 @@ namespace CreativeCoders.ShadeKit.Core.Processes;
 /// </para>
 /// <para>
 /// With the Windows rules double quotes are removed, and a quoted <c>;</c> does not separate entries; <c>PATHEXT</c>
-/// is not evaluated, so only the Windows executable name is looked for. Every call of <see cref="Find" /> reads the
+/// is not evaluated, so only the Windows executable names are looked for. Every call of <see cref="Find" /> reads the
 /// <c>PATH</c> value again; the result is not cached.
+/// </para>
+/// <para>
+/// A tool can declare several Windows executable names in order of preference, for example <c>copilot.exe</c>, then
+/// <c>copilot.cmd</c>. The search goes directory by directory: each absolute <c>PATH</c> directory is checked for
+/// every name in order before the next directory, so the first directory that contains any of the names wins, and
+/// within that directory the earlier name wins. This keeps the <c>PATH</c> order the deciding rule, as with a shell.
 /// </para>
 /// </remarks>
 internal sealed class PathExecutableSearch
@@ -39,7 +45,7 @@ internal sealed class PathExecutableSearch
     private const UnixFileMode AnyExecute =
         UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
 
-    private readonly string _executableName;
+    private readonly IReadOnlyList<string> _executableNames;
 
     private readonly char _directorySeparator;
 
@@ -67,7 +73,31 @@ internal sealed class PathExecutableSearch
     /// empty, or whitespace.
     /// </exception>
     public PathExecutableSearch(string windowsExecutableName, string unixExecutableName)
-        : this(windowsExecutableName, unixExecutableName,
+        : this(ToNameList(windowsExecutableName), unixExecutableName)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PathExecutableSearch" /> class that searches the specified
+    /// Windows executable names in order of preference and the specified Unix executable name, reads the <c>PATH</c>
+    /// environment variable of the current process, and uses the rules of the current operating system.
+    /// </summary>
+    /// <param name="windowsExecutableNames">
+    /// The file names that are looked for with the Windows rules, in order of preference, for example
+    /// <c>copilot.exe</c>, then <c>copilot.cmd</c>.
+    /// </param>
+    /// <param name="unixExecutableName">
+    /// The file name that is looked for with the Unix rules, for example <c>copilot</c>.
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="windowsExecutableNames" /> is <see langword="null" />.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="windowsExecutableNames" /> is empty or contains a name that is <see langword="null" />, empty,
+    /// or whitespace, or <paramref name="unixExecutableName" /> is <see langword="null" />, empty, or whitespace.
+    /// </exception>
+    public PathExecutableSearch(IReadOnlyList<string> windowsExecutableNames, string unixExecutableName)
+        : this(windowsExecutableNames, unixExecutableName,
             static () => Environment.GetEnvironmentVariable(PathVariableName), OperatingSystem.IsWindows(),
             File.Exists, HasUnixExecuteBit)
     {
@@ -112,13 +142,67 @@ internal sealed class PathExecutableSearch
     /// </exception>
     public PathExecutableSearch(string windowsExecutableName, string unixExecutableName,
         Func<string?> getPathVariable, bool isWindows, Func<string, bool> fileExists, Func<string, bool> isExecutable)
+        : this(ToNameList(windowsExecutableName), unixExecutableName, getPathVariable, isWindows, fileExists,
+            isExecutable)
     {
-        Ensure.IsNotNullOrWhitespace(windowsExecutableName);
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PathExecutableSearch" /> class with the specified Windows
+    /// executable names in order of preference, the specified Unix executable name, and the specified sources for the
+    /// <c>PATH</c> value, the operating system rules, the file check, and the execute check.
+    /// </summary>
+    /// <param name="windowsExecutableNames">
+    /// The file names that are looked for with the Windows rules, in order of preference, for example
+    /// <c>copilot.exe</c>, then <c>copilot.cmd</c>. Each absolute <c>PATH</c> directory is checked for every name
+    /// before the next directory.
+    /// </param>
+    /// <param name="unixExecutableName">
+    /// The file name that is looked for with the Unix rules, for example <c>copilot</c>.
+    /// </param>
+    /// <param name="getPathVariable">
+    /// The function that returns the value of the <c>PATH</c> environment variable, or <see langword="null" /> if it
+    /// is not set.
+    /// </param>
+    /// <param name="isWindows">
+    /// <see langword="true" /> to use the Windows rules (separator <c>;</c>, <paramref name="windowsExecutableNames" />,
+    /// drive and UNC paths); <see langword="false" /> to use the Unix rules (separator <c>:</c>,
+    /// <paramref name="unixExecutableName" />, paths that start with <c>/</c>).
+    /// </param>
+    /// <param name="fileExists">
+    /// The function that returns <see langword="true" /> if the specified path is an existing file and not a
+    /// directory.
+    /// </param>
+    /// <param name="isExecutable">
+    /// The function that returns <see langword="true" /> if the existing file at the specified path has at least one
+    /// execute bit. It is called only with the Unix rules and only for a path for which
+    /// <paramref name="fileExists" /> returned <see langword="true" />.
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="windowsExecutableNames" />, <paramref name="getPathVariable" />, <paramref name="fileExists" />,
+    /// or <paramref name="isExecutable" /> is <see langword="null" />.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="windowsExecutableNames" /> is empty or contains a name that is <see langword="null" />, empty,
+    /// or whitespace, or <paramref name="unixExecutableName" /> is <see langword="null" />, empty, or whitespace.
+    /// </exception>
+    public PathExecutableSearch(IReadOnlyList<string> windowsExecutableNames, string unixExecutableName,
+        Func<string?> getPathVariable, bool isWindows, Func<string, bool> fileExists, Func<string, bool> isExecutable)
+    {
+        Ensure.NotNull(windowsExecutableNames);
+
+        if (windowsExecutableNames.Count == 0 || windowsExecutableNames.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException(
+                "At least one Windows executable name is required, and no name may be null, empty, or whitespace.",
+                nameof(windowsExecutableNames));
+        }
+
         Ensure.IsNotNullOrWhitespace(unixExecutableName);
 
         _getPathVariable = Ensure.NotNull(getPathVariable);
         _isWindows = isWindows;
-        _executableName = isWindows ? windowsExecutableName : unixExecutableName;
+        _executableNames = isWindows ? [.. windowsExecutableNames] : [unixExecutableName];
         _directorySeparator = isWindows ? WindowsDirectorySeparator : UnixDirectorySeparator;
         _fileExists = Ensure.NotNull(fileExists);
         _isExecutable = Ensure.NotNull(isExecutable);
@@ -127,9 +211,13 @@ internal sealed class PathExecutableSearch
     /// <summary>
     /// Searches the absolute directories of the <c>PATH</c> value in order for the executable.
     /// </summary>
+    /// <remarks>
+    /// Each directory is checked for every executable name in order of preference before the next directory.
+    /// </remarks>
     /// <returns>
-    /// The path of the executable in the first absolute <c>PATH</c> directory that contains it, or
-    /// <see langword="null" /> if the <c>PATH</c> value is not set, empty, or no absolute directory contains it.
+    /// The path of the executable in the first absolute <c>PATH</c> directory that contains one of the names, with
+    /// the earliest name that the directory contains, or <see langword="null" /> if the <c>PATH</c> value is not set,
+    /// empty, or no absolute directory contains any of the names.
     /// </returns>
     public string? Find()
     {
@@ -144,9 +232,10 @@ internal sealed class PathExecutableSearch
             ? SplitWindowsPathVariable(pathVariable)
             : pathVariable.Split(UnixPathListSeparator, StringSplitOptions.RemoveEmptyEntries);
 
+        // Directory by directory: every name is tried in a directory before the next directory is checked.
         return entries
             .Where(IsFullyQualified)
-            .Select(CreateCandidatePath)
+            .SelectMany(directory => _executableNames.Select(name => CreateCandidatePath(directory, name)))
             .FirstOrDefault(IsCandidate);
     }
 
@@ -176,6 +265,13 @@ internal sealed class PathExecutableSearch
         {
             return false;
         }
+    }
+
+    private static string[] ToNameList(string windowsExecutableName)
+    {
+        Ensure.IsNotNullOrWhitespace(windowsExecutableName);
+
+        return [windowsExecutableName];
     }
 
     // Like the PATH search of a shell: on Unix, a file without any execute bit is skipped.
@@ -225,33 +321,51 @@ internal sealed class PathExecutableSearch
             : directory.StartsWith(UnixDirectorySeparator);
     }
 
-    // Mirrors Path.IsPathFullyQualified on Windows, independent of the host operating system: a drive path such as
-    // "C:\Git\cmd" or a path that starts with two separators (UNC "\\server\share", device "\\?\C:\"). "C:Git" and
-    // "\Git" are relative to the current drive or directory.
-    private static bool IsWindowsFullyQualified(string directory)
+    /// <summary>
+    /// Determines whether the specified path is fully qualified with the Windows rules, independent of the host
+    /// operating system.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <see cref="Path.IsPathFullyQualified(string)" /> on Windows. <c>C:Git</c> and <c>\Git</c> are relative
+    /// to the current drive or directory, so they are not fully qualified.
+    /// </remarks>
+    /// <param name="path">The path to check.</param>
+    /// <returns>
+    /// <see langword="true" /> if <paramref name="path" /> is a drive path such as <c>C:\Git\cmd</c> or starts with
+    /// two separators (UNC <c>\\server\share</c>, device <c>\\?\C:\</c>); otherwise, <see langword="false" />.
+    /// </returns>
+    internal static bool IsWindowsFullyQualified(string path)
     {
-        if (directory.Length < 2)
+        if (path.Length < 2)
         {
             return false;
         }
 
-        if (IsWindowsDirectorySeparator(directory[0]))
+        if (IsWindowsDirectorySeparator(path[0]))
         {
-            return directory[1] == '?' || IsWindowsDirectorySeparator(directory[1]);
+            return path[1] == '?' || IsWindowsDirectorySeparator(path[1]);
         }
 
-        return directory.Length >= 3
-               && char.IsAsciiLetter(directory[0])
-               && directory[1] == ':'
-               && IsWindowsDirectorySeparator(directory[2]);
+        return path.Length >= 3
+               && char.IsAsciiLetter(path[0])
+               && path[1] == ':'
+               && IsWindowsDirectorySeparator(path[2]);
     }
 
-    private static bool IsWindowsDirectorySeparator(char character)
+    /// <summary>
+    /// Determines whether the specified character separates directories with the Windows rules.
+    /// </summary>
+    /// <param name="character">The character to check.</param>
+    /// <returns>
+    /// <see langword="true" /> if <paramref name="character" /> is <c>\</c> or <c>/</c>; otherwise,
+    /// <see langword="false" />.
+    /// </returns>
+    internal static bool IsWindowsDirectorySeparator(char character)
     {
         return character is WindowsDirectorySeparator or WindowsAltDirectorySeparator;
     }
 
-    private string CreateCandidatePath(string directory)
+    private string CreateCandidatePath(string directory, string executableName)
     {
         var lastCharacter = directory[^1];
 
@@ -260,7 +374,7 @@ internal sealed class PathExecutableSearch
             : lastCharacter == UnixDirectorySeparator;
 
         return endsWithSeparator
-            ? directory + _executableName
-            : $"{directory}{_directorySeparator}{_executableName}";
+            ? directory + executableName
+            : $"{directory}{_directorySeparator}{executableName}";
     }
 }

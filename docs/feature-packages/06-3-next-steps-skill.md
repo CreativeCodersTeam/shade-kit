@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal), 2026-11-11 (06-6: a `phase next` result passed by the calling skill replaces the skill's own call, stated once in flow step 3). 2026-11-13 (06-9: `continue` is `null` in `new`, flow step 3). AC1 to AC4 implemented; loaded by 06-5, 06-6, and, since 2026-11-13, by every phase skill and by `new`, `discuss`, and `drop` (06-9). |
+| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal), 2026-11-11 (06-6: a `phase next` result passed by the calling skill replaces the skill's own call, stated once in flow step 3). 2026-11-13 (06-9: `continue` is `null` in `new`, flow step 3), 2026-11-15 (package 08: calls in the form of the running agent). AC1 to AC4 implemented; loaded by 06-5, 06-6, and, since 2026-11-13, by every phase skill and by `new`, `discuss`, and `drop` (06-9). |
 | Source | [06 Skill foundation](06-skill-foundation.md) (next-steps message), [phase start analysis](../../research/shade-kit-phase-start-analysis.md) |
 | Kind | Skill (new general skill) |
 | Depends on | 06-2 |
@@ -37,6 +37,7 @@ Every kit skill ends the same way: the human sees what they can do now and which
 Every kit skill that ends, after a refused start, a "no", or the end of its work, ends with a message that says what the human can do now and which skill to call for it. **Decided** on 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md)). The message is written by the general skill `shade-kit-next-steps`. **Decided** on 2026-11-04.
 
 - With a current feature, the steps come from `shade-kit phase next --json` (package 04), so the skill derives no steps from the profile: continue the current phase, decide on the pending transition, move forward, or reopen an earlier phase, each with its phase skill (`/shade-kit-<phase>`), plus `/shade-kit-discuss` and `/shade-kit-drop`.
+- Every skill call in the message is written in the form of the agent the skill runs in: `/<skill>` in Claude Code and GitHub Copilot CLI, `$shade-kit:<skill>` in OpenAI Codex CLI; this text and the refusal table write the Claude Code form. **Decided** on 2026-11-15 (package 08, Gate 2). **Implemented** (`skills/shade-kit-next-steps/SKILL.md`, section "Call form").
 - After a "no", the message also names the gaps the calling skill reported.
 - After a refusal, the message names the reason from the failure envelope and the options for it. **Proposed:**
 

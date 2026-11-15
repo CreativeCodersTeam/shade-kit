@@ -19,7 +19,7 @@ Decides whether the implementation loop may end: only an open blocker keeps it g
 
 ## Flow
 
-1. **Start** the review in an independent context: a subagent where the agent supports it.
+1. **Start** the review in an independent context: a subagent where the agent supports it (in Claude Code the `Agent` tool, in GitHub Copilot CLI `task`, in OpenAI Codex CLI `spawn_agent`).
 2. **Review** the change against the spec, the plan, and the conventions: correctness, missing or weak tests, design, security, lowered quality bar.
 3. **Classify** each finding: ID `F-<nnn>`, severity `blocker`, `major`, `minor`, or `note`, file and line, description, status `open`. Re-check findings of earlier rounds and set them to `fixed` where they are.
 4. **Write `review.md`** from the template: a "Rounds" entry (date, what changed, check results), the findings, the commands used.

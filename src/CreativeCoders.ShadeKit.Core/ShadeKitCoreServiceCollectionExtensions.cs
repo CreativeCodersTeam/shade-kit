@@ -8,6 +8,8 @@ using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Integrations;
 using CreativeCoders.ShadeKit.Core.Integrations.Claude;
+using CreativeCoders.ShadeKit.Core.Integrations.Codex;
+using CreativeCoders.ShadeKit.Core.Integrations.Copilot;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Trackers;
@@ -32,8 +34,9 @@ public static class ShadeKitCoreServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// All services are singletons. Existing registrations are kept, so a registration made before the call replaces
-    /// the default. <see cref="IAgentIntegration" /> is an enumerable registration: the Claude Code integration is
-    /// added once, next to the integrations of other agents. The call also registers the
+    /// the default. <see cref="IAgentIntegration" /> is an enumerable registration: the Claude Code integration, the
+    /// GitHub Copilot CLI integration, and the OpenAI Codex CLI integration are each added once, in this order, next
+    /// to the integrations of other agents; the order of the registrations is the order in which the agents run. The call also registers the
     /// <see cref="IHttpClientFactory" /> and the named client <see cref="HttpUrlContentReader.HttpClientName" /> with a
     /// timeout of
     /// <see cref="HttpUrlContentReader.RequestTimeout" /> and the <c>User-Agent</c>
@@ -98,6 +101,14 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IClaudeCommandRunner, ClaudeCommandRunner>();
         services.TryAddSingleton<IClaudePluginCli, ClaudePluginCli>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentIntegration, ClaudeCodeIntegration>());
+        services.TryAddSingleton<ICopilotExecutableLocator, CopilotExecutableLocator>();
+        services.TryAddSingleton<ICopilotCommandRunner, CopilotCommandRunner>();
+        services.TryAddSingleton<ICopilotPluginCli, CopilotPluginCli>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentIntegration, CopilotCliIntegration>());
+        services.TryAddSingleton<ICodexExecutableLocator, CodexExecutableLocator>();
+        services.TryAddSingleton<ICodexCommandRunner, CodexCommandRunner>();
+        services.TryAddSingleton<ICodexPluginCli, CodexPluginCli>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentIntegration, CodexCliIntegration>());
         services.TryAddSingleton<IIntegrationService, IntegrationService>();
 
         return services;

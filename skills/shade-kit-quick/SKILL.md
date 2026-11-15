@@ -29,7 +29,7 @@ Runs the `quick` phase of the `quick` profile (`new` → `quick` → `finish`): 
    - recording time `on return`: `spec.md` is written in step 4, from the return;
    - artifacts to check against: `request.md`.
 
-   If the change is not small or not clear, recommend dropping it and creating a `feature` or `bugfix` instead with `/shade-kit-new` (the closing message lists `/shade-kit-drop`, but not `/shade-kit-new` while this feature is active), and end (end of work).
+   If the change is not small or not clear, recommend dropping it and creating a `feature` or `bugfix` instead with `/shade-kit-new` (written in the form of the agent you run in: `/shade-kit-new` in Claude Code and GitHub Copilot CLI, `$shade-kit:shade-kit-new` in OpenAI Codex CLI; the closing message lists `/shade-kit-drop`, but not `/shade-kit-new` while this feature is active), and end (end of work).
 4. **Compact spec:** write `spec.md` with only goal, `REQ-` requirements, and acceptance criteria; the other sections say "not applicable in quick".
 5. **Implement and test:** write the code and the tests that prove each acceptance criterion. No `plan.md`, no `tasks.md`.
 6. **Simplify and review:** simplify inline, then load `shade-kit-review`; loop until no blocker is open.

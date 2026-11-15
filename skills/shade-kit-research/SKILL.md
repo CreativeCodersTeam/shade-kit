@@ -38,7 +38,7 @@ A missing phase, a focus without a name, an ID prefix, or instructions, or two f
 2. **Brief.** Write one brief per focus from the [research brief](#research-brief). Use the same brief whether a subagent or you run the focus, so that both ways give the same sections.
 
 3. **Run.**
-   - When you can start subagents (a tool for that exists, in Claude Code the `Agent` tool), start one general-purpose subagent per focus with its brief, all in the same turn, so that they run in parallel. Use no specialised agent definition: the brief is everything the subagent gets.
+   - When you can start subagents (a tool for that exists: in Claude Code the `Agent` tool, in GitHub Copilot CLI `task`, in OpenAI Codex CLI `spawn_agent`), start one general-purpose subagent per focus with its brief, all in the same turn, so that they run in parallel. Use no specialised agent definition: the brief is everything the subagent gets.
    - Otherwise run the focuses one after the other yourself. Work on each focus only from its brief, as a fresh agent would: do not carry findings of an earlier focus of this run into the next one. Finish the result of one focus before you start the next.
    - A focus **fails** when its run ends with an error, gives no result, or gives a result that does not follow the result shape of the brief. A single line out of shape (for example a remark without source or assumption) does not fail the focus: leave it out and report it. Keep the reason. A failed focus is not run again: the calling skill decides about a new run.
 

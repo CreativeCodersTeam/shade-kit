@@ -209,7 +209,7 @@ public sealed class IntegrationsInstallCommandTests : IDisposable
         // Arrange
         A.CallTo(() => _integrationService.InstallAsync(A<IReadOnlyCollection<string>?>._, A<CancellationToken>._))
             .ThrowsAsync(new IntegrationConflictException("claude", "creativecoders-shade-kit", "someone/fork",
-                "CreativeCodersTeam/shade-kit#v0.8.0", "claude plugin marketplace remove creativecoders-shade-kit"));
+                "CreativeCodersTeam/shade-kit#v0.8.0", ["claude plugin marketplace remove creativecoders-shade-kit"]));
 
         var command = CreateCommand();
 

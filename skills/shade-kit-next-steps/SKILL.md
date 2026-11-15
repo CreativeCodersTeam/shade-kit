@@ -24,6 +24,10 @@ The calling skill has already run its version handshake; this skill does not che
 - **Warnings**: the `warnings` (`{ code, message }`) of the CLI calls of the calling skill, for example of `phase start`.
 - Optionally the result of a `shade-kit phase next --json` that the calling skill ran in this run (for example `shade-kit-next-phase`). Use it instead of running the command again.
 
+## Call form
+
+Write every skill call in the message in the form of the agent you run in, also a call in a line the calling skill passed: `/<skill>` in Claude Code and GitHub Copilot CLI (for example `/shade-kit-refine`), `$shade-kit:<skill>` in OpenAI Codex CLI (for example `$shade-kit:shade-kit-refine`). This text, its examples, and the refusal table write the Claude Code form. Commands such as `shade-kit feature set <id>` are the same in every agent.
+
 ## Flow
 
 1. **Refusal.** The reason is `error.message` of the envelope, quoted as it is. Find the options in the [refusal table](#refusal-table) by `error.code`.
@@ -34,7 +38,7 @@ The calling skill has already run its version handshake; this skill does not che
 
    Whenever this skill's own `phase next` fails, in any case, do not run it again: add the options of the refusal-table row of its `error.code` and show its `error.message` as the reason there are no steps. After `shade-kit-drop`, for example, the drop worked, there is no current feature any more, and `phase next` fails with `no-current-feature`.
 
-   On success, take the steps from the result and do not derive any from the profile: the engine knows the profile, the gates, and which phases can be reopened, and a second copy of that logic in a skill drifts. `phase next` reads the state now; when it does not match what the calling skill expected, the result is right. Use the `skill` field of each step as the skill to call (`/<skill>`).
+   On success, take the steps from the result and do not derive any from the profile: the engine knows the profile, the gates, and which phases can be reopened, and a second copy of that logic in a skill drifts. `phase next` reads the state now; when it does not match what the calling skill expected, the result is right. Use the `skill` field of each step as the skill to call (`/<skill>`, in the [call form](#call-form) of your agent).
    - `continue`: continue the current phase with `/<continue.skill>`. `null` adds nothing: the phase `new` has no continue step, because calling `/shade-kit-new` again creates another feature.
    - `pending`: a transition to `pending.phase` waits for approval. Name two steps: decide on it with `/<pending.skill>`; or discard it and continue the current phase with `/shade-kit-<current.phase>` (that phase skill asks before it discards anything).
    - `forward`: move on to the next phase with `/<forward.skill>`, marked "needs approval" when `gate.approval` is `true`.
@@ -68,6 +72,8 @@ What you can do now:
 Warnings:
 - gates-defaults-used: '.shadekit/gates.json' does not exist, so the built-in gate defaults apply. ...
 ```
+
+In OpenAI Codex CLI the same message writes the calls as `$shade-kit:shade-kit-refine`, `$shade-kit:shade-kit-map`, `$shade-kit:shade-kit-discuss`, and `$shade-kit:shade-kit-drop`.
 
 Example after a refused `phase start plan` with `checklist-template-not-found` (no `phase next` for this code):
 

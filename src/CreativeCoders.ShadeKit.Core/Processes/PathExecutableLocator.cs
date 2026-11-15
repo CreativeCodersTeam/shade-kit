@@ -11,8 +11,10 @@ namespace CreativeCoders.ShadeKit.Core.Processes;
 /// </para>
 /// <para>
 /// With the Windows rules double quotes are removed, and a quoted <c>;</c> does not separate entries; <c>PATHEXT</c>
-/// is not evaluated, so only the Windows executable name, for example <c>git.exe</c>, is found. The first path found
-/// is cached; a search that finds nothing is repeated by the next call.
+/// is not evaluated, so only the Windows executable names, for example <c>git.exe</c>, are found. A locator that
+/// declares several Windows names, for example <c>copilot.exe</c>, then <c>copilot.cmd</c>, gets the first name found
+/// in the first directory that contains any of them, as described for <see cref="PathExecutableSearch" />. The first
+/// path found is cached; a search that finds nothing is repeated by the next call.
 /// </para>
 /// </remarks>
 public abstract class PathExecutableLocator

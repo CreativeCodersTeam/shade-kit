@@ -24,7 +24,7 @@ namespace CreativeCoders.ShadeKit.Core.Integrations.Claude;
 /// kept; directories are compared with a <see cref="DirectoryPathComparer" />, after resolving their symbolic links
 /// and case-insensitively on Windows and macOS. A marketplace with the same repository but another ref is removed
 /// and added again (the switch). A marketplace with another repository, another kind of source, or another directory
-/// is a conflict, and nothing is changed. Claude Code stores the ref that was given, so a GitHub marketplace without
+/// is a conflict, and nothing is changed; these rules are the same for every agent. Claude Code stores the ref that was given, so a GitHub marketplace without
 /// a ref (the default branch) has another ref than every source with a ref, and refs are compared case-sensitively,
 /// as git does.
 /// </description></item>
@@ -56,12 +56,16 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
     /// <summary>
     /// Represents the name of the plugin marketplace of SHADE kit.
     /// </summary>
-    public const string MarketplaceName = "creativecoders-shade-kit";
+    /// <remarks>The name is <see cref="ShadeKitPlugin.MarketplaceName" />, the same for every agent.</remarks>
+    public const string MarketplaceName = ShadeKitPlugin.MarketplaceName;
 
     /// <summary>
     /// Represents the id of the SHADE kit plugin in Claude Code.
     /// </summary>
-    public const string PluginId = "shade-kit@" + MarketplaceName;
+    /// <remarks>The id is <see cref="ShadeKitPlugin.Id" />, the same for every agent.</remarks>
+    public const string PluginId = ShadeKitPlugin.Id;
+
+    private const string RemoveMarketplaceCommand = "claude plugin marketplace remove " + MarketplaceName;
 
     private static readonly string[] ListPluginsArguments = ["plugin", "list", "--json"];
 
@@ -69,7 +73,7 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
 
     private readonly IClaudeExecutableLocator _claudeExecutableLocator;
 
-    private readonly DirectoryPathComparer _directoryPathComparer;
+    private readonly MarketplaceChangeResolver _marketplaceChangeResolver;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ClaudeCodeIntegration" /> class that compares directories as the
@@ -101,14 +105,8 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
     {
         _claudePluginCli = Ensure.NotNull(claudePluginCli);
         _claudeExecutableLocator = Ensure.NotNull(claudeExecutableLocator);
-        _directoryPathComparer = Ensure.NotNull(directoryPathComparer);
-    }
-
-    private enum MarketplaceChange
-    {
-        Keep,
-        Add,
-        Switch
+        _marketplaceChangeResolver = new MarketplaceChangeResolver(ClaudeAgentId, [RemoveMarketplaceCommand],
+            Ensure.NotNull(directoryPathComparer));
     }
 
     /// <inheritdoc />
@@ -152,9 +150,7 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
         var marketplace = FindMarketplace(
             await _claudePluginCli.ListMarketplacesAsync(cancellationToken).ConfigureAwait(false));
 
-        var @ref = GetGitHubRef(marketplace);
-
-        return new InstalledIntegration(AgentId, PluginId, MarketplaceSource.GetKitVersion(@ref), @ref,
+        return new InstalledIntegration(AgentId, PluginId, marketplace?.KitVersion, marketplace?.GitHubRef,
             plugin.Enabled);
     }
 
@@ -193,11 +189,9 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
         var marketplace = FindMarketplace(
             await _claudePluginCli.ListMarketplacesAsync(cancellationToken).ConfigureAwait(false));
 
-        var change = GetMarketplaceChange(marketplace, source);
+        var change = _marketplaceChangeResolver.Resolve(marketplace, source);
 
-        var previousKitVersion = pluginBefore is null
-            ? null
-            : MarketplaceSource.GetKitVersion(GetGitHubRef(marketplace));
+        var previousKitVersion = pluginBefore is null ? null : marketplace?.KitVersion;
 
         var isRemoved = false;
 
@@ -256,7 +250,7 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
 
         var outcome = pluginBefore is null ? IntegrationOutcome.Installed : IntegrationOutcome.Updated;
 
-        return CreateResult(source, outcome, previousKitVersion, plugin.Enabled);
+        return IntegrationResult.ForShadeKitPlugin(AgentId, source, outcome, previousKitVersion, plugin.Enabled);
     }
 
     private async Task<IntegrationResult> UpdatePluginAsync(MarketplaceSource source, ClaudeInstalledPlugin plugin,
@@ -272,47 +266,12 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
             _ => IntegrationOutcome.Updated
         };
 
-        return CreateResult(source, outcome, previousKitVersion, plugin.Enabled);
-    }
-
-    private IntegrationResult CreateResult(MarketplaceSource source, IntegrationOutcome outcome,
-        string? previousKitVersion, bool enabled)
-    {
-        return new IntegrationResult(AgentId, PluginId, outcome, previousKitVersion, source.KitVersion, source.Ref,
-            enabled);
+        return IntegrationResult.ForShadeKitPlugin(AgentId, source, outcome, previousKitVersion, plugin.Enabled);
     }
 
     private async Task<ClaudeInstalledPlugin?> FindUserPluginAsync(CancellationToken cancellationToken)
     {
         return FindUserPlugin(await _claudePluginCli.ListPluginsAsync(cancellationToken).ConfigureAwait(false));
-    }
-
-    private MarketplaceChange GetMarketplaceChange(ClaudeMarketplace? marketplace, MarketplaceSource source)
-    {
-        if (marketplace is null)
-        {
-            return MarketplaceChange.Add;
-        }
-
-        if (source.Repo is { } repo)
-        {
-            if (IsSourceKind(marketplace, ClaudeMarketplace.GitHubSourceKind)
-                && string.Equals(marketplace.Repo, repo, StringComparison.OrdinalIgnoreCase))
-            {
-                return string.Equals(marketplace.Ref, source.Ref, StringComparison.Ordinal)
-                    ? MarketplaceChange.Keep
-                    : MarketplaceChange.Switch;
-            }
-        }
-        else if (IsSourceKind(marketplace, ClaudeMarketplace.DirectorySourceKind)
-                 && marketplace.Path is { } path
-                 && IsSameDirectory(path, source.Path))
-        {
-            return MarketplaceChange.Keep;
-        }
-
-        throw new IntegrationConflictException(AgentId, MarketplaceName, DescribeSource(marketplace), source.Text,
-            $"claude plugin marketplace remove {MarketplaceName}");
     }
 
     private static ClaudeInstalledPlugin? FindUserPlugin(IEnumerable<ClaudeInstalledPlugin> plugins)
@@ -322,40 +281,9 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
             && string.Equals(x.Scope, ClaudeInstalledPlugin.UserScope, StringComparison.Ordinal));
     }
 
-    private static ClaudeMarketplace? FindMarketplace(IEnumerable<ClaudeMarketplace> marketplaces)
+    private static AgentMarketplace? FindMarketplace(IEnumerable<ClaudeMarketplace> marketplaces)
     {
-        return marketplaces.FirstOrDefault(x => string.Equals(x.Name, MarketplaceName, StringComparison.Ordinal));
-    }
-
-    private static string? GetGitHubRef(ClaudeMarketplace? marketplace)
-    {
-        return marketplace is not null && IsSourceKind(marketplace, ClaudeMarketplace.GitHubSourceKind)
-            ? marketplace.Ref
-            : null;
-    }
-
-    private static bool IsSourceKind(ClaudeMarketplace marketplace, string sourceKind)
-    {
-        return string.Equals(marketplace.SourceKind, sourceKind, StringComparison.Ordinal);
-    }
-
-    // claude reports absolute paths; any other text names no directory that the source can have.
-    private bool IsSameDirectory(string marketplacePath, string? sourcePath)
-    {
-        return sourcePath is not null
-               && Path.IsPathFullyQualified(marketplacePath)
-               && _directoryPathComparer.AreSameDirectory(marketplacePath, sourcePath);
-    }
-
-    private static string DescribeSource(ClaudeMarketplace marketplace)
-    {
-        return marketplace.SourceKind switch
-        {
-            ClaudeMarketplace.GitHubSourceKind when marketplace.Repo is { } repo =>
-                marketplace.Ref is null ? repo : $"{repo}#{marketplace.Ref}",
-            ClaudeMarketplace.DirectorySourceKind when marketplace.Path is { } path => path,
-            { } sourceKind => $"a source of the kind '{sourceKind}'",
-            null => "a source of unknown kind"
-        };
+        return marketplaces.FirstOrDefault(x => string.Equals(x.Name, MarketplaceName, StringComparison.Ordinal))
+            ?.ToAgentMarketplace();
     }
 }

@@ -35,7 +35,7 @@ The calling skill names these values in its text:
 
 3. **Order the topics.** Blocking topics come first. A topic is blocking when the calling skill marked it so; for unmarked topics decide yourself: a topic is blocking when other topics depend on its answer or when the calling skill cannot go on without it. Within each group keep the calling skill's order, except that a topic moves before the topics that depend on it.
 
-4. **Ask** (see [asking](#asking)). Ask a blocking topic on its own and wait for its answer before the next question. Non-blocking topics that do not depend on each other may be asked together, up to four in one call of the structured question tool, each as a complete question of its own.
+4. **Ask** (see [asking](#asking)). Ask a blocking topic on its own and wait for its answer before the next question. Non-blocking topics that do not depend on each other may be asked together, up to four in one call of the structured question tool (up to three in OpenAI Codex CLI), each as a complete question of its own.
 
 5. **Evaluate each answer** (see [what counts as an answer](#what-counts-as-an-answer)).
 
@@ -72,16 +72,16 @@ Ask in the language the human uses in the conversation (before they have written
 
 The progress `Topic n/m` counts the topics to ask: `m` is the given topics without the dismissed ones, plus the new ones (so it can grow), and `n` is the number of the topic in the order they are asked. A follow-up or a challenge keeps the number of its topic.
 
-Use the agent's structured question tool where one exists (in Claude Code `AskUserQuestion`):
+Use the agent's structured question tool where one exists (in Claude Code `AskUserQuestion`, in GitHub Copilot CLI `ask_user`, in OpenAI Codex CLI `request_user_input`, which Codex offers only in plan mode by default):
 
 - The dialog can hide the earlier conversation, so each question has to stand on its own: put the context, the proposal, and its reason into the question text and the option descriptions.
-- Your proposal is the first option, marked as recommended (in Claude Code with `(Recommended)` at the end of the label). Exactly one option is marked.
-- The tool takes 2 to 4 options and adds a free-text option itself, so offer at most three alternatives; when there are more, offer the most plausible ones and name the others in the question text. Do not add an "Other" option of your own.
+- Your proposal is the first option, marked as recommended with `(Recommended)` at the end of the label, the same in every agent (OpenAI Codex CLI's tool asks for this marker on the first option). Exactly one option is marked.
+- The tool takes 2 to 4 options (in OpenAI Codex CLI 2 to 3) and adds a free-text option itself, so offer at most three alternatives (in Codex two); when there are more, offer the most plausible ones and name the others in the question text. Do not add an "Other" option of your own.
 - Show the progress in the header: `Topic 3/8` (in the human's language, at most 12 characters).
 - When a topic asks for several values (for example which providers to support), offer whole answers as single options ("Entra ID only", "Entra ID and Okta"), so that your proposal stays one option. Use a multiple selection only when the values combine too freely for four options; then name your proposed set in the question text and mark no option.
 - A challenge (step 6, or an assumption in `open` mode) is a question on the same topic: quote both places, offer keeping the answer and taking the earlier position, and mark no option as recommended, because the choice is between the human's own positions.
 
-Without such a tool, ask a plain question in the same structure, one topic per message, starting with the progress (`Topic 3/8`), so that every answer can be matched to its topic.
+Without such a tool, also in OpenAI Codex CLI outside plan mode, ask a plain question in the same structure, one topic per message, starting with the progress (`Topic 3/8`), so that every answer can be matched to its topic: the context, then your proposal first, marked as recommended, with its reason, then the alternatives.
 
 ## What counts as an answer
 
