@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Integrations.Claude;
+using CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
 using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Tests.Shared;
@@ -17,9 +19,12 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands;
 /// </summary>
 /// <remarks>
 /// git is answered by a fake <see cref="IGitCommandRunner" /> (the current branch is <see cref="Branch" />, the
-/// identity is <see cref="UserName" /> and <see cref="UserEmail" />, every other call fails), and the tracker issue
-/// reader is a fake that returns the issue <see cref="IssueUrl" />, so no test starts <c>git</c> or <c>gh</c>. The
-/// current directory is restored on disposal; a test class that uses the harness must be in the
+/// identity is <see cref="UserName" /> and <see cref="UserEmail" />, <c>git ls-remote --tags</c> lists the
+/// <see cref="RemoteTags" /> if they are set, every other call fails), and the tracker issue
+/// reader is a fake that returns the issue <see cref="IssueUrl" />, so no test starts <c>git</c> or <c>gh</c>. Claude
+/// Code is answered by a fake <see cref="IClaudeExecutableLocator" /> and a fake <see cref="IClaudeCommandRunner" />;
+/// by default <c>claude</c> is not on the PATH, so no test starts <c>claude</c> either. The current directory is
+/// restored on disposal; a test class that uses the harness must be in the
 /// <see cref="CurrentDirectoryCollectionDefinition" /> collection.
 /// </remarks>
 internal sealed partial class CliEndToEndHarness : IDisposable
@@ -50,6 +55,14 @@ internal sealed partial class CliEndToEndHarness : IDisposable
 
         A.CallTo(() => TrackerIssueReader.ReadIssueAsync(A<Uri>._, A<string>._, A<CancellationToken>._))
             .Returns(new TrackerIssue("Login with SSO", "Users sign in with the company account.", []));
+
+        A.CallTo(() => ClaudeExecutableLocator.FindClaudeExecutable())
+            .Returns((string?)null);
+
+        A.CallTo(() => ClaudeCommandRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
+            .ReturnsLazily((string _, IReadOnlyList<string> arguments, CancellationToken _) =>
+                Task.FromException<ExternalProcessResult>(new ClaudeNotFoundException(arguments,
+                    "The Claude Code CLI claude was not found in any absolute directory of the PATH.")));
     }
 
     public TempKitDirectory TempDirectory { get; }
@@ -59,9 +72,25 @@ internal sealed partial class CliEndToEndHarness : IDisposable
     public ITrackerIssueReader TrackerIssueReader { get; } = A.Fake<ITrackerIssueReader>();
 
     /// <summary>
+    /// Gets the fake locator of <c>claude</c>; by default it finds none, so Claude Code is not detected.
+    /// </summary>
+    public IClaudeExecutableLocator ClaudeExecutableLocator { get; } = A.Fake<IClaudeExecutableLocator>();
+
+    /// <summary>
+    /// Gets the fake runner of <c>claude</c>; by default every call fails with a <see cref="ClaudeNotFoundException" />.
+    /// </summary>
+    public IClaudeCommandRunner ClaudeCommandRunner { get; } = A.Fake<IClaudeCommandRunner>();
+
+    /// <summary>
     /// Gets or sets the current branch that the fake git reports; <see langword="null" /> for a detached HEAD.
     /// </summary>
     public string? Branch { get; set; } = "main";
+
+    /// <summary>
+    /// Gets or sets the tags that <c>git ls-remote --tags</c> finds in every remote repository; <see langword="null" />
+    /// (the default) makes the call fail, as without network, so a release tag stays unchecked.
+    /// </summary>
+    public IReadOnlyCollection<string>? RemoteTags { get; set; }
 
     /// <summary>
     /// Gets or sets an action that sees the arguments of every git call before it is answered.
@@ -69,8 +98,8 @@ internal sealed partial class CliEndToEndHarness : IDisposable
     public Action<IReadOnlyList<string>>? OnGitCall { get; set; }
 
     /// <summary>
-    /// Gets or sets an action that registers further services of a run, after the fake git runner and the fake
-    /// tracker issue reader.
+    /// Gets or sets an action that registers further services of a run, after the fake git runner, the fake tracker
+    /// issue reader, and the fake claude locator and runner.
     /// </summary>
     public Action<IServiceCollection>? ConfigureServices { get; set; }
 
@@ -125,7 +154,9 @@ internal sealed partial class CliEndToEndHarness : IDisposable
         var exitCode = await Program.RunAsync(args, output, error, x =>
         {
             x.AddSingleton(GitCommandRunner)
-                .AddSingleton(TrackerIssueReader);
+                .AddSingleton(TrackerIssueReader)
+                .AddSingleton(ClaudeExecutableLocator)
+                .AddSingleton(ClaudeCommandRunner);
 
             ConfigureServices?.Invoke(x);
         });
@@ -209,9 +240,18 @@ internal sealed partial class CliEndToEndHarness : IDisposable
 
         return arguments switch
         {
+            [.., "ls-remote", "--tags", _, var tagRef] when RemoteTags is { } remoteTags =>
+                AnswerLsRemote(remoteTags, tagRef),
             ["config", "user.name"] => new ExternalProcessResult(0, UserName + "\n", string.Empty),
             ["config", "user.email"] => new ExternalProcessResult(0, UserEmail + "\n", string.Empty),
             _ => new ExternalProcessResult(128, string.Empty, $"unexpected git call: {string.Join(' ', arguments)}")
         };
+    }
+
+    private static ExternalProcessResult AnswerLsRemote(IReadOnlyCollection<string> remoteTags, string tagRef)
+    {
+        var isListed = remoteTags.Any(x => $"refs/tags/{x}" == tagRef);
+
+        return new ExternalProcessResult(0, isListed ? $"4a1b2c3d4e5f\t{tagRef}\n" : string.Empty, string.Empty);
     }
 }

@@ -25,4 +25,16 @@ internal sealed record ExternalTool(
     string DisplayName,
     IReadOnlyDictionary<string, string>? EnvironmentVariables,
     Func<IReadOnlyList<string>, string, ExternalToolUnavailableException> CreateNotFoundException,
-    Func<IReadOnlyList<string>, string, Exception?, ExternalToolUnavailableException> CreateUnavailableException);
+    Func<IReadOnlyList<string>, string, Exception?, ExternalToolUnavailableException> CreateUnavailableException)
+{
+    /// <summary>
+    /// Gets the reason that is passed to <see cref="CreateNotFoundException" /> when the executable of the tool is not
+    /// found.
+    /// </summary>
+    /// <value>
+    /// The sentence that the executable was not found in any absolute directory of the <c>PATH</c> environment
+    /// variable, starting with <see cref="DisplayName" />.
+    /// </value>
+    public string NotFoundReason =>
+        $"{DisplayName} was not found in any absolute directory of the PATH environment variable.";
+}

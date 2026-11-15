@@ -27,6 +27,35 @@ public class GitCommandRunnerTests
     }
 
     [Fact]
+    public void EnvironmentVariables_Always_DisableTerminalAndAskpassPrompts()
+    {
+        // Act
+        var environmentVariables = GitCommandRunner.EnvironmentVariables;
+
+        // Assert
+        environmentVariables
+            .Should().BeEquivalentTo(new Dictionary<string, string>
+            {
+                ["GIT_TERMINAL_PROMPT"] = "0",
+                ["GIT_ASKPASS"] = string.Empty
+            });
+    }
+
+    [Fact]
+    public void Tool_Always_UsesGitNameAndEnvironmentVariables()
+    {
+        // Act
+        var tool = GitCommandRunner.Tool;
+
+        // Assert
+        tool.Name
+            .Should().Be("git");
+
+        tool.EnvironmentVariables
+            .Should().BeSameAs(GitCommandRunner.EnvironmentVariables);
+    }
+
+    [Fact]
     public async Task RunAsync_GitNotFound_ThrowsGitUnavailableException()
     {
         // Arrange

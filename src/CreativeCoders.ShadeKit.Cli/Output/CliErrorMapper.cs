@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Reflection;
 using CreativeCoders.Cli.Core;
 using CreativeCoders.Core;
+using CreativeCoders.ShadeKit.Cli.Commands.Integrations;
+using CreativeCoders.ShadeKit.Cli.Commands.Integrations.Install;
 using CreativeCoders.ShadeKit.Cli.Commands.Version;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Features;
@@ -18,6 +20,9 @@ using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Git.Warnings;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Init.Exceptions;
+using CreativeCoders.ShadeKit.Core.Integrations;
+using CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
+using CreativeCoders.ShadeKit.Core.Integrations.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
@@ -30,6 +35,7 @@ using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
 using CreativeCoders.ShadeKit.Core.Workflow.Profiles.Exceptions;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
+using Spectre.Console;
 
 namespace CreativeCoders.ShadeKit.Cli.Output;
 
@@ -191,6 +197,44 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             EngineVersionMismatchException e => CliError.Create(ShadeKitCliExitCodes.VersionMismatch,
                 CreateEngineVersionMismatchMessage(e.EngineVersion, e.ExpectedVersion, e.Direction)),
 
+            NoAgentFoundException e => CliError.Create(ShadeKitCliExitCodes.AgentNotFound,
+                $"No supported agent was found (supported: {FormatAgentIds(e.SupportedAgentIds)}). SHADE kit " +
+                "detects Claude Code by its CLI 'claude' in an absolute directory of the PATH. Install a supported " +
+                "agent, then run the command again. On Windows only the 'claude.exe' of the native installer of " +
+                "Claude Code is found; the 'claude.cmd' of an npm installation is not."),
+
+            ClaudeNotFoundException e => CliError.Create(ShadeKitCliExitCodes.AgentNotFound,
+                $"Claude Code is needed, but its CLI 'claude' was not found. {e.Reason} Install Claude Code and " +
+                "make sure 'claude' is in an absolute directory of the PATH, then run the command again. On Windows " +
+                "only the 'claude.exe' of the native installer is found; the 'claude.cmd' of an npm installation is " +
+                "not."),
+
+            ClaudeUnavailableException e => CliError.Create(ShadeKitCliExitCodes.AgentCommandFailed,
+                $"'{e.CommandText}' cannot be run: {e.Reason} Make sure Claude Code is installed correctly and " +
+                "'claude --version' works, then run the command again."),
+
+            ClaudeCommandFailedException e => CliError.Create(ShadeKitCliExitCodes.AgentCommandFailed,
+                $"'{e.CommandText}' failed: {e.Reason} Fix the cause that claude names, make sure Claude Code is up " +
+                "to date ('claude update'), then run the command again."),
+
+            IntegrationConflictException e => CliError.Create(ShadeKitCliExitCodes.IntegrationConflict,
+                $"The plugin marketplace '{e.MarketplaceName}' of the agent '{e.AgentId}' already exists with the " +
+                $"source '{e.ExistingSource}', but SHADE kit needs '{e.RequestedSource}'. Nothing was changed. Run " +
+                $"'{e.ResolveCommand}' to remove it, then run the command again."),
+
+            IntegrationIncompleteException e => CreateIntegrationIncompleteError(e),
+
+            IntegrationSwitchCanceledException e => CliError.Create(ShadeKitCliExitCodes.Canceled,
+                "The command was canceled while the plugin marketplace of SHADE kit was switched for the agent " +
+                $"'{e.AgentId}', so the integration may be incomplete; 'shade-kit integrations install' repairs it."),
+
+            IntegrationRunFailedException e => CreateIntegrationRunFailedError(e),
+
+            InvalidMarketplaceSourceException e => CliError.Create(ShadeKitCliExitCodes.InvalidArguments,
+                $"The environment variable {IntegrationService.MarketplaceSourceVariableName} is set to " +
+                $"'{e.Value}', which is not a marketplace source: {e.Reason} Set it to owner/repo#ref, owner/repo, " +
+                "or the path of a local directory, or remove it, then run the command again."),
+
             InvalidSemanticVersionException e => CliError.Create(ShadeKitCliExitCodes.InvalidArguments,
                 $"Invalid arguments: '{e.Value}' is not a SemVer version such as 1.2.3 or 1.2.3-beta.1. Run " +
                 "'shade-kit --help' for usage."),
@@ -208,7 +252,9 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     /// Exceptions wrapped in <see cref="TargetInvocationException" /> are unwrapped. An
     /// <see cref="CreativeCoders.SysConsole.Cli.Parsing.Exceptions.OptionCreationFailedException" /> is not mapped: it
     /// is a defect of the CLI, not of the arguments. An <see cref="ExpectedVersionMissingException" /> (<c>--expect</c>
-    /// without a value) gets a text that names <c>--expect</c>.
+    /// without a value) gets a text that names <c>--expect</c>, an <see cref="InvalidAgentOptionException" />
+    /// (<c>--agent</c> without a value or with an unknown agent id) one that names <c>--agent</c> and the supported
+    /// agents.
     /// </remarks>
     /// <param name="exception">The exception that ended the run.</param>
     /// <param name="args">The command-line arguments of the run.</param>
@@ -230,6 +276,7 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             NotAllArgumentsMatchException e => CreateNotMatchedArgumentsText(e),
             ExpectedVersionMissingException =>
                 "--expect needs a SemVer version such as 1.2.3 or 1.2.3-beta.1, but got none",
+            InvalidAgentOptionException e => CreateInvalidAgentOptionText(e),
             OptionParserException => "the arguments could not be read",
             _ => null
         };
@@ -336,6 +383,20 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch,
                 $"The prerelease engine {w.EngineVersion} does not fit the kit skills {w.ExpectedVersion} (the major " +
                 "and minor versions differ); it is used anyway because it is a prerelease."),
+
+            IntegrationPrereleaseRefWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.IntegrationPrereleaseRef,
+                $"The engine {w.EngineVersion} is a prerelease, so the integrations come from the branch '{w.Ref}' " +
+                $"of {IntegrationService.MarketplaceRepo} instead of a release tag; they may not fit this engine."),
+
+            IntegrationReleaseTagMissingWarning w => new CliJsonMessage(
+                ShadeKitCliWarningCodes.IntegrationReleaseTagMissing,
+                $"The release tag '{w.Tag}' of the engine {w.EngineVersion} does not exist in " +
+                $"{IntegrationService.MarketplaceRepo}, so the integrations come from the branch '{w.Ref}' instead; " +
+                "they may not fit this engine."),
+
+            AgentUnavailableWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.AgentUnavailable,
+                $"The SHADE kit integration of the agent '{w.AgentId}' cannot be read, so it is not listed: " +
+                $"{CreateSentence(w.Reason)}"),
 
             _ => throw new ArgumentOutOfRangeException(nameof(warning), warning,
                 "The warning is not supported.")
@@ -582,7 +643,8 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             EngineVersionMismatchDirection.EngineOlder =>
                 $"Update the engine to {FormatMajorMinor(expectedVersion)}",
             EngineVersionMismatchDirection.EngineNewer =>
-                $"Update the SHADE kit skills to {FormatMajorMinor(engineVersion)} by hand",
+                "Run 'shade-kit integrations install' to install the SHADE kit skills " +
+                FormatMajorMinor(engineVersion),
             _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, "The direction is not supported.")
         };
 
@@ -666,6 +728,63 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         return pendingTransition is null
             ? "no transition is pending."
             : $"the pending transition is to '{pendingTransition}'.";
+    }
+
+    private static string CreateInvalidAgentOptionText(InvalidAgentOptionException exception)
+    {
+        var supported = FormatAgentIds(exception.SupportedAgentIds);
+
+        return exception.Value is null
+            ? $"--agent needs the id of a supported agent ({supported}), but got none"
+            : $"'{exception.Value}' is not a supported agent for --agent (supported: {supported})";
+    }
+
+    private static string FormatAgentIds(IReadOnlyList<string>? agentIds)
+    {
+        return agentIds is { Count: > 0 } ids
+            ? string.Join(", ", ids)
+            : "none";
+    }
+
+    // Keeps the exit code and message of the failed agent command and adds that an install repairs the integration,
+    // because the marketplace was already switched when the command failed. Removing the marketplace also uninstalls
+    // its plugins, so an update would find nothing installed; the install installs the plugin again.
+    private CliError CreateIntegrationIncompleteError(IntegrationIncompleteException exception)
+    {
+        const string repairHint =
+            "The plugin marketplace of SHADE kit was already switched, so the integration may be incomplete; " +
+            "'shade-kit integrations install' repairs it.";
+
+        var innerError = exception.InnerException is { } innerException ? Map(innerException) : null;
+
+        return innerError is null
+            ? CliError.Create(ShadeKitCliExitCodes.AgentCommandFailed,
+                $"The SHADE kit integration of the agent '{exception.AgentId}' failed: " +
+                $"{CreateCauseSentence(exception.InnerException)} {repairHint}")
+            : CliError.Create(innerError.ExitCode, $"{innerError.Message} {repairHint}");
+    }
+
+    // Keeps the exit code and message of the failed agent and names the agents that were done before it, so their
+    // results are not lost; the JSON error keeps only code and message.
+    private CliError CreateIntegrationRunFailedError(IntegrationRunFailedException exception)
+    {
+        // The list is null only in an instance that was not created by its constructor; Map maps such an instance of
+        // every core exception without throwing (FP01-AC8), so the guard stays.
+        var completedIntegrations = exception.CompletedIntegrations ?? [];
+
+        var completedSentence = completedIntegrations.Count == 0
+            ? string.Empty
+            : $" Before the agent '{exception.FailedAgentId}' failed, these integrations were done: " +
+              string.Join("; ", completedIntegrations.Select(x =>
+                  IntegrationsTextFormat.FormatResult(x, exception.MarketplaceSource).RemoveMarkup())) + ".";
+
+        var innerError = exception.InnerException is { } innerException ? Map(innerException) : null;
+
+        return innerError is null
+            ? CliError.Create(ShadeKitCliExitCodes.AgentCommandFailed,
+                $"The SHADE kit integration of the agent '{exception.FailedAgentId}' failed: " +
+                $"{CreateCauseSentence(exception.InnerException)}{completedSentence}")
+            : CliError.Create(innerError.ExitCode, innerError.Message + completedSentence);
     }
 
     private string CreateFormatTooNewMessage(FormatTooNewException exception)

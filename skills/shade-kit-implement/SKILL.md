@@ -2,12 +2,10 @@
 name: shade-kit-implement
 description: SHADE kit phase skill for `implement` (feature and bugfix profiles). Works through tasks.md in a loop of implement, simplify, and independent review until the review has no open blockers; produces code, tests, and review.md. Bug fixes start with a failing regression test. Use when the user wants to implement the planned tasks of the current SHADE kit feature. Runs only when the user calls it by name (`/shade-kit-implement`); never load it on your own or from another skill.
 metadata:
-  version: 0.7.0
+  version: 0.8.0
 ---
 
 # shade-kit-implement
-
-<!-- Skeleton: purpose and flow only, details follow. Sources: docs/feature-packages/13-implement.md, 16-bugfix-profile.md. -->
 
 ## Purpose
 

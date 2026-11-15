@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.New;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
+using CreativeCoders.ShadeKit.Cli.Commands.Integrations.Install;
 using CreativeCoders.ShadeKit.Cli.Commands.Version;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Engine;
@@ -17,6 +18,9 @@ using CreativeCoders.ShadeKit.Core.Gates.Warnings;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Git.Warnings;
 using CreativeCoders.ShadeKit.Core.Init.Exceptions;
+using CreativeCoders.ShadeKit.Core.Integrations;
+using CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
+using CreativeCoders.ShadeKit.Core.Integrations.Warnings;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Versions;
@@ -841,12 +845,14 @@ public class CliErrorMapperTests
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.VersionMismatch, ShadeKitCliErrorCodes.VersionMismatch,
                 "The SHADE kit engine 2.1.4 does not fit the kit skills 1.9.0+build.2: the major and minor versions " +
-                "must be equal. Update the SHADE kit skills to 2.1 by hand, then run the skill again."));
+                "must be equal. Run 'shade-kit integrations install' to install the SHADE kit skills 2.1, then run " +
+                "the skill again."));
     }
 
     [Theory]
     [InlineData(EngineVersionMismatchDirection.EngineOlder, "Update the engine to 1.x, then")]
-    [InlineData(EngineVersionMismatchDirection.EngineNewer, "Update the SHADE kit skills to engine by hand, then")]
+    [InlineData(EngineVersionMismatchDirection.EngineNewer,
+        "Run 'shade-kit integrations install' to install the SHADE kit skills engine, then")]
     public void Map_EngineVersionMismatchWithVersionsThatAreNotSemVer_NamesVersionsWhole(
         EngineVersionMismatchDirection direction, string expectedRemedy)
     {
@@ -972,6 +978,378 @@ public class CliErrorMapperTests
                 ShadeKitCliErrorCodes.KitFileWriteFailed,
                 "'.shadekit/templates/spec.md' already exists, so it was not written and is unchanged. Move " +
                 "or remove the file, then run the command again."));
+    }
+
+    [Fact]
+    public void Map_ClaudeNotFound_ReturnsExitCode51NamingReasonInstallHintAndWindowsHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new ClaudeNotFoundException(["plugin", "list", "--json"],
+            "The Claude Code CLI claude was not found in any absolute directory of the PATH environment variable."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentNotFound, ShadeKitCliErrorCodes.AgentNotFound,
+                "Claude Code is needed, but its CLI 'claude' was not found. The Claude Code CLI claude was not found " +
+                "in any absolute directory of the PATH environment variable. Install Claude Code and make sure " +
+                "'claude' is in an absolute directory of the PATH, then run the command again. On Windows only the " +
+                "'claude.exe' of the native installer is found; the 'claude.cmd' of an npm installation is not."));
+    }
+
+    [Fact]
+    public void Map_ClaudeUnavailable_ReturnsExitCode52NamingCommandReasonAndFix()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new ClaudeUnavailableException(["plugin", "list", "--json"],
+            "The claude executable '/usr/local/bin/claude' could not be started: Permission denied."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "'claude plugin list --json' cannot be run: The claude executable '/usr/local/bin/claude' could not " +
+                "be started: Permission denied. Make sure Claude Code is installed correctly and 'claude --version' " +
+                "works, then run the command again."));
+    }
+
+    [Fact]
+    public void Map_ClaudeCommandFailed_ReturnsExitCode52NamingCommandClaudeMessageAndFailureCode()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new ClaudeCommandFailedException(
+            ["plugin", "update", "nope@creativecoders-shade-kit", "--scope", "user", "--json"], 1,
+            "claude exited with the exit code 1 and reported the outcome 'failed': Plugin \"nope\" not found " +
+            "(failure code 'not_found').", "Plugin \"nope\" not found", "not_found"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "'claude plugin update nope@creativecoders-shade-kit --scope user --json' failed: claude exited with " +
+                "the exit code 1 and reported the outcome 'failed': Plugin \"nope\" not found (failure code " +
+                "'not_found'). Fix the cause that claude names, make sure Claude Code is up to date ('claude " +
+                "update'), then run the command again."));
+    }
+
+    [Fact]
+    public void Map_NoAgentFound_ReturnsExitCode51NamingSupportedAgentsAndInstallHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new NoAgentFoundException(["claude"]));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentNotFound, ShadeKitCliErrorCodes.AgentNotFound,
+                "No supported agent was found (supported: claude). SHADE kit detects Claude Code by its CLI " +
+                "'claude' in an absolute directory of the PATH. Install a supported agent, then run the command " +
+                "again. On Windows only the 'claude.exe' of the native installer of Claude Code is found; the " +
+                "'claude.cmd' of an npm installation is not."));
+    }
+
+    [Theory]
+    [InlineData(new string[0], "none")]
+    [InlineData(new[] { "claude", "codex" }, "claude, codex")]
+    public void Map_NoAgentFoundWithOtherAgentLists_NamesSupportedAgents(string[] agentIds, string expectedText)
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new NoAgentFoundException(agentIds));
+
+        // Assert
+        error!.Message
+            .Should().StartWith($"No supported agent was found (supported: {expectedText}).");
+    }
+
+    [Fact]
+    public void Map_IntegrationIncompleteWithClaudeUnavailable_KeepsExitCode52AndAddsRepairHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationIncompleteException("claude",
+            new ClaudeUnavailableException(["plugin", "update"], "Cannot start.")));
+
+        // Assert
+        error!.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.AgentCommandFailed);
+
+        error.Message
+            .Should().StartWith("'claude plugin update' cannot be run: Cannot start.")
+            .And.EndWith("'shade-kit integrations install' repairs it.");
+    }
+
+    [Fact]
+    public void Map_IntegrationConflict_ReturnsExitCode53NamingSourcesAndRemoveCommand()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationConflictException("claude", "creativecoders-shade-kit",
+            "other/shade-kit#main", "CreativeCodersTeam/shade-kit#v0.8.0",
+            "claude plugin marketplace remove creativecoders-shade-kit"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.IntegrationConflict,
+                ShadeKitCliErrorCodes.IntegrationConflict,
+                "The plugin marketplace 'creativecoders-shade-kit' of the agent 'claude' already exists with the " +
+                "source 'other/shade-kit#main', but SHADE kit needs 'CreativeCodersTeam/shade-kit#v0.8.0'. Nothing " +
+                "was changed. Run 'claude plugin marketplace remove creativecoders-shade-kit' to remove it, then " +
+                "run the command again."));
+    }
+
+    [Fact]
+    public void Map_IntegrationIncompleteWithCommandFailure_KeepsExitCode52AndAddsRepairHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+        var failure = new ClaudeCommandFailedException(
+            ["plugin", "marketplace", "add", "CreativeCodersTeam/shade-kit#v0.8.0", "--scope", "user", "--json"], 1,
+            "claude exited with the exit code 1.");
+
+        // Act
+        var error = mapper.Map(new IntegrationIncompleteException("claude", failure));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "'claude plugin marketplace add CreativeCodersTeam/shade-kit#v0.8.0 --scope user --json' failed: " +
+                "claude exited with the exit code 1. Fix the cause that claude names, make sure Claude Code is up " +
+                "to date ('claude update'), then run the command again. The plugin marketplace of SHADE kit was " +
+                "already switched, so the integration may be incomplete; 'shade-kit integrations install' repairs " +
+                "it."));
+    }
+
+    [Fact]
+    public void Map_IntegrationIncompleteWithClaudeNotFound_KeepsExitCode51()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationIncompleteException("claude",
+            new ClaudeNotFoundException(["plugin", "list", "--json"], "Not on the PATH.")));
+
+        // Assert
+        error!.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.AgentNotFound);
+
+        error.Message
+            .Should().EndWith("'shade-kit integrations install' repairs it.");
+    }
+
+    [Fact]
+    public void Map_IntegrationIncompleteWithUnmappedCause_ReturnsExitCode52NamingCauseAndRepairHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationIncompleteException("claude", new IOException("Disk full")));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "The SHADE kit integration of the agent 'claude' failed: Disk full. The plugin marketplace of SHADE " +
+                "kit was already switched, so the integration may be incomplete; 'shade-kit integrations install' " +
+                "repairs it."));
+    }
+
+    [Fact]
+    public void Map_IntegrationSwitchCanceled_ReturnsExitCode130WithRepairHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationSwitchCanceledException("claude",
+            new OperationCanceledException(new CancellationToken(true))));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.Canceled, ShadeKitCliErrorCodes.Canceled,
+                "The command was canceled while the plugin marketplace of SHADE kit was switched for the agent " +
+                "'claude', so the integration may be incomplete; 'shade-kit integrations install' repairs it."));
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithCommandFailure_KeepsExitCodeAndMessageAndNamesCompletedAgents()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+        var failure = new ClaudeCommandFailedException(["plugin", "install", "--json"], 1, "claude failed.");
+        IntegrationResult[] completed =
+        [
+            new IntegrationResult("claude", "shade-kit@creativecoders-shade-kit", IntegrationOutcome.Updated, "0.7.0",
+                "0.8.0", "v0.8.0", true),
+            new IntegrationResult("codex", "shade-kit", IntegrationOutcome.Current, null, "0.8.0", "v0.8.0", true)
+        ];
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("copilot",
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"), completed, failure));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                $"{mapper.Map(failure)!.Message} Before the agent 'copilot' failed, these integrations were done: " +
+                "claude: updated shade-kit@creativecoders-shade-kit 0.7.0 -> 0.8.0 (v0.8.0); codex: already current " +
+                "shade-kit 0.8.0 (v0.8.0)."));
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithConflict_KeepsExitCode53()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("copilot",
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"),
+            [new IntegrationResult("claude", "p", IntegrationOutcome.Installed, null, "0.8.0", "v0.8.0", true)],
+            new IntegrationConflictException("copilot", "m", "a", "b", "c")));
+
+        // Assert
+        error!.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.IntegrationConflict);
+
+        error.Code
+            .Should().Be(ShadeKitCliErrorCodes.IntegrationConflict);
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithDirectorySourceAndBrackets_NamesPathAsPlainText()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+        var path = Path.Combine(Path.GetTempPath(), "[kit]");
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("copilot", MarketplaceSource.ForDirectory(path),
+            [new IntegrationResult("claude", "p", IntegrationOutcome.Installed, null, null, null, true)],
+            new ClaudeCommandFailedException(["plugin"], 1, "failed.")));
+
+        // Assert
+        error!.Message
+            .Should().EndWith($"these integrations were done: claude: installed p from {path}.",
+                "the message is plain text; markup is added only when it is printed");
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithIncompleteSwitch_AddsRepairHintBeforeCompletedAgents()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("copilot",
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"),
+            [new IntegrationResult("claude", "p", IntegrationOutcome.Installed, null, "0.8.0", "v0.8.0", true)],
+            new IntegrationIncompleteException("copilot",
+                new ClaudeNotFoundException(["plugin", "list", "--json"], "Not on the PATH."))));
+
+        // Assert
+        error!.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.AgentNotFound);
+
+        error.Message
+            .Should().EndWith("'shade-kit integrations install' repairs it. Before the agent 'copilot' failed, " +
+                              "these integrations were done: claude: installed p 0.8.0 (v0.8.0).");
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithoutCompletedAgents_ReturnsInnerErrorUnchanged()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+        var failure = new ClaudeCommandFailedException(["plugin"], 1, "failed.");
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("copilot",
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"), [], failure));
+
+        // Assert
+        error
+            .Should().Be(mapper.Map(failure));
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithoutInnerException_ReturnsExitCode52()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("copilot",
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"),
+            [new IntegrationResult("claude", "p", IntegrationOutcome.Installed, null, "0.8.0", "v0.8.0", true)],
+            null!));
+
+        // Assert
+        error!.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.AgentCommandFailed);
+
+        error.Message
+            .Should().StartWith("The SHADE kit integration of the agent 'copilot' failed: ")
+            .And.EndWith("these integrations were done: claude: installed p 0.8.0 (v0.8.0).");
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithUnmappedCause_ReturnsExitCode52NamingCauseAndCompletedAgents()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("copilot",
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"),
+            [new IntegrationResult("claude", "p", IntegrationOutcome.Installed, null, "0.8.0", "v0.8.0", true)],
+            new IOException("Disk full")));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "The SHADE kit integration of the agent 'copilot' failed: Disk full. Before the agent 'copilot' " +
+                "failed, these integrations were done: claude: installed p 0.8.0 (v0.8.0)."));
+    }
+
+    [Fact]
+    public void Map_InvalidMarketplaceSource_ReturnsExitCode2NamingVariableAndAllowedForms()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidMarketplaceSourceException("-x",
+            "The value starts with '-', so the agent CLI would read it as an option."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
+                "The environment variable SHADE_KIT_MARKETPLACE_SOURCE is set to '-x', which is not a marketplace " +
+                "source: The value starts with '-', so the agent CLI would read it as an option. Set it to " +
+                "owner/repo#ref, owner/repo, or the path of a local directory, or remove it, then run the command " +
+                "again."));
     }
 
     [Fact]
@@ -1519,6 +1897,57 @@ public class CliErrorMapperTests
     }
 
     [Fact]
+    public void MapWarning_IntegrationPrereleaseRef_ReturnsWarningNamingEngineAndBranch()
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new IntegrationPrereleaseRefWarning("0.8.0-beta.1", "main"));
+
+        // Assert
+        warning
+            .Should().Be(new CliJsonMessage(ShadeKitCliWarningCodes.IntegrationPrereleaseRef,
+                "The engine 0.8.0-beta.1 is a prerelease, so the integrations come from the branch 'main' of " +
+                "CreativeCodersTeam/shade-kit instead of a release tag; they may not fit this engine."));
+    }
+
+    [Fact]
+    public void MapWarning_IntegrationReleaseTagMissing_ReturnsWarningNamingEngineTagAndBranch()
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new IntegrationReleaseTagMissingWarning("0.8.1", "v0.8.1", "main"));
+
+        // Assert
+        warning
+            .Should().Be(new CliJsonMessage(ShadeKitCliWarningCodes.IntegrationReleaseTagMissing,
+                "The release tag 'v0.8.1' of the engine 0.8.1 does not exist in CreativeCodersTeam/shade-kit, so " +
+                "the integrations come from the branch 'main' instead; they may not fit this engine."));
+    }
+
+    [Fact]
+    public void MapWarning_AgentUnavailable_ReturnsWarningNamingAgentAndReason()
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new AgentUnavailableWarning("claude",
+            "The claude command 'claude plugin list --json' cannot be run: Not on the PATH."));
+
+        // Assert
+        warning
+            .Should().Be(new CliJsonMessage(ShadeKitCliWarningCodes.AgentUnavailable,
+                "The SHADE kit integration of the agent 'claude' cannot be read, so it is not listed: The claude " +
+                "command 'claude plugin list --json' cannot be run: Not on the PATH."));
+    }
+
+    [Fact]
+    public void MapWarning_AgentUnavailableWithReasonWithoutPeriod_EndsWithPeriod()
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new AgentUnavailableWarning("claude", "Not on the PATH"));
+
+        // Assert
+        warning.Message
+            .Should().EndWith("so it is not listed: Not on the PATH.");
+    }
+
+    [Fact]
     public void MapWarning_EveryConcreteCoreWarning_ReturnsCodeAndEveryWarningCodeOnce()
     {
         // Arrange
@@ -1789,6 +2218,52 @@ public class CliErrorMapperTests
             .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
                 "Invalid arguments: --expect needs a SemVer version such as 1.2.3 or 1.2.3-beta.1, but got none. " +
                 "Run 'shade-kit version --help' for usage."));
+    }
+
+    [Fact]
+    public void MapArgumentError_InvalidAgentOptionWithUnknownId_ReturnsInvalidArgumentsNamingSupportedAgents()
+    {
+        // Arrange
+        var exception = new InvalidAgentOptionException("copilot", ["claude"]);
+
+        // Act
+        var error = CliErrorMapper.MapArgumentError(exception, ["integrations", "install", "--agent", "copilot"]);
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
+                "Invalid arguments: 'copilot' is not a supported agent for --agent (supported: claude). Run " +
+                "'shade-kit integrations install --help' for usage."));
+    }
+
+    [Fact]
+    public void MapArgumentError_InvalidAgentOptionWithSeveralSupportedAgents_JoinsTheirIds()
+    {
+        // Arrange
+        var exception = new InvalidAgentOptionException("x", ["claude", "codex"]);
+
+        // Act
+        var error = CliErrorMapper.MapArgumentError(exception, ["integrations", "install", "--agent", "x"]);
+
+        // Assert
+        error!.Message
+            .Should().StartWith("Invalid arguments: 'x' is not a supported agent for --agent (supported: claude, codex).");
+    }
+
+    [Fact]
+    public void MapArgumentError_InvalidAgentOptionWithoutValue_ReturnsInvalidArgumentsWithGotNone()
+    {
+        // Arrange
+        var exception = new InvalidAgentOptionException(null, ["claude"]);
+
+        // Act
+        var error = CliErrorMapper.MapArgumentError(exception, ["integrations", "install", "--agent"]);
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
+                "Invalid arguments: --agent needs the id of a supported agent (claude), but got none. Run " +
+                "'shade-kit integrations install --help' for usage."));
     }
 
     [Fact]

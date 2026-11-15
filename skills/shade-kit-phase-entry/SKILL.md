@@ -2,7 +2,7 @@
 name: shade-kit-phase-entry
 description: "SHADE kit general skill that runs the entry protocol of a phase skill: the version handshake, `phase start` for the caller's phase, the gate check, and the human's approval of the transition. Tells the phase skill whether to run its phase and which skills to load, or ends the run with the next-steps message. Loaded as the first step of every SHADE kit phase skill (refine, map, plan, implement, verify, finish, diagnose, quick); not meant to be called directly."
 metadata:
-  version: 0.7.0
+  version: 0.8.0
 ---
 
 # shade-kit-phase-entry
@@ -25,7 +25,7 @@ Keep every `warnings` entry (`{ code, message }`) of every CLI call of this run.
 
 ### 1. Version handshake
 
-Version handshake: run `shade-kit version --json --expect 0.7.0`; 0.7.0 is the kit version of this skill (`metadata.version` in its frontmatter).
+Version handshake: run `shade-kit version --json --expect 0.8.0`; 0.8.0 is the kit version of this skill (`metadata.version` in its frontmatter).
 
 - `ok` is `true`: continue. A warning `engine-prerelease-version-mismatch` means that a prerelease engine is used although its major or minor version differs; keep it like every warning and continue.
 - `ok` is `false` (for example `version-mismatch`), or the shell reports that `shade-kit` is not found: stop before anything else. End with **refusal** and the failure envelope, or with "`shade-kit` not found".
@@ -172,7 +172,7 @@ Then give the calling skill the ended [return](#return).
 ## Rules
 
 - Run `phase start` only for the phase of the calling skill. Run `phase approve` only for `<phase>`, and `phase reject` only for `<phase>` (step 4) or for `transition.to` of `resume-pending`, each only after the human's answer.
-- The only commands this skill runs are `shade-kit version --json --expect 0.7.0`, `shade-kit phase start`, `shade-kit phase approve`, and `shade-kit phase reject`, the last three with `--json`. Never `phase complete`, `phase next` (the next-steps message runs it), a `feature` command, or `init`.
+- The only commands this skill runs are `shade-kit version --json --expect 0.8.0`, `shade-kit phase start`, `shade-kit phase approve`, and `shade-kit phase reject`, the last three with `--json`. Never `phase complete`, `phase next` (the next-steps message runs it), a `feature` command, or `init`.
 - Never read or write `feature.json`, `gates.json`, or `config.json`; the state comes from the CLI.
 - Do no phase work: read no artifact and write no file. The gate check reads the artifacts.
 - Load only `shade-kit-gate-check` and `shade-kit-next-steps`. Start no phase skill.

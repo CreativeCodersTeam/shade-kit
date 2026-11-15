@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (reduced to the remaining scope; CI and release workflow are implemented; release notes and branch protection checked) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (reduced to the remaining scope; CI and release workflow are implemented; release notes and branch protection checked) and 2026-11-13 (package 07 implementation: the content is not packed into the release; the release tag names the tree that `integrations install` installs; a release engine whose tag does not exist installs from `main`) and 2026-11-14 (package 07 review rework: the guard test `SkillKitVersionTests` ties the skills' kit version to the build version, so a tag build with stale skills fails its tests) |
 | Source | Concept §3.4; `CLAUDE.md` (Engine deliverables, CI), [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
-| Depends on | 07, 08 (content packed into the release); technically every package that is part of a release |
+| Depends on | 07, 08 (the content comes from the tagged tree of this repository); technically every package that is part of a release |
 | Enables | Teams outside the kit repository can install and use SHADE kit |
 
 Labels follow the concept: **Decided**, **Proposed**, **Open**, **Unverified**, **Implemented**.
@@ -26,7 +26,7 @@ The build and release pipeline exists. `CLAUDE.md` (sections ".NET conventions" 
 
 ### In scope
 
-- Packing the integration content (skills, research agent definitions) into the engine release, so engine and content share one version.
+- Keeping engine and integration content on one version. Until 2026-11-13 this meant packing the content (skills, research agent definitions) into the engine release; since package 07 the content is not packed: the release tag `v<version>` names the tree that `integrations install` installs. **Decided** on 2026-11-13 (package 07 implementation). What remains is the skills' hand-raised `metadata.version` (06-2), which a guard test checks against the build version since 2026-11-14.
 - The version rule for format changes.
 - An installer script for the binaries.
 - Release notes that list format changes and the need for `upgrade`.
@@ -35,14 +35,14 @@ The build and release pipeline exists. `CLAUDE.md` (sections ".NET conventions" 
 ### Out of scope
 
 - Everything listed under "Implemented".
-- Publishing the plugin to an agent's public marketplace. In v1 the content reaches the agent through `integrations install` (packages 07 and 08). **Proposed.**
+- Publishing the plugin to an agent's public marketplace. In v1 the content reaches the agent through `integrations install` (packages 07 and 08). **Proposed.** Since 2026-11-13 this repository is a Claude Code plugin marketplace itself (`creativecoders-shade-kit`, `.claude-plugin/`), which `integrations install` adds for the user (package 07).
 - Automatic self-update of the engine.
 
 ## Functional description
 
 ### Version
 
-- Engine and integration content are released together under one version number. **Decided** (concept §9.6). Because the content is packed into the engine (package 07), one build produces both.
+- Engine and integration content are released together under one version number. **Decided** (concept §9.6). The tag `v<version>` that builds the engine is also the ref from which `integrations install` installs the content, so both come from one tree. **Decided** on 2026-11-13 (package 07 implementation), replacing "the content is packed into the engine". A prerelease engine installs from `main`, and so does a release engine whose tag does not exist (a build of an untagged `main` commit, which GitVersion gives no prerelease label), with the warning `integration-release-tag-missing` (07).
 - The version follows semantic versioning; a format version change (package 01) is at least a minor release, so the handshake rule (major and minor equal, package 06) catches it. **Proposed.**
 
 ### Additional release artifacts
@@ -63,4 +63,4 @@ The build and release pipeline exists. `CLAUDE.md` (sections ".NET conventions" 
 
 ## Open points
 
-- None of its own.
+- Every skill's `metadata.version` must carry the major and minor of the tag before it is set (06-2, FP07-AC2). Since 2026-11-14 the guard test `SkillKitVersionTests` (Core tests) fails when the skills' major.minor differs from the engine version of the build, and the release workflow runs the tests on the tag (`-t pack` on all three platforms before `nuget-push` and the GitHub release; **FACT**, `.github/workflows/release.yml`, with pack running the tests as `CLAUDE.md` describes). So a tag build with stale skills fails its tests and publishes nothing; the builds of `main` and of pull requests fail the same way before the tag. Remaining gap: nothing checks it before the tag is set (the `verify-tag` job does not), so a bad tag exists already when its build fails and has to be removed by hand; a release check in `verify-tag` or a Cake task was proposed by the review of 07 (2026-11-13, Major, layer 2) and not selected. The value is still raised by hand, and the commit that raises the minor of the skills needs the minor of the build version raised too (06-2). A release tag also needs `.claude-plugin/` in its tree; `v0.7.0` and `v0.8.0` have none (07).

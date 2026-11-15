@@ -27,7 +27,7 @@ A developer starts every phase by calling its skill (for example `/shade-kit-pla
 
 ## Functional description
 
-**Implemented** in `skills/shade-kit-phase-entry/SKILL.md` (`metadata.version: 0.7.0`), written with skill-creator and proven by scenario runs (see [acceptance criteria](#acceptance-criteria)).
+**Implemented** in `skills/shade-kit-phase-entry/SKILL.md` (`metadata.version: 0.7.0`, `0.8.0` since 2026-11-14, 06-2), written with skill-creator and proven by scenario runs (see [acceptance criteria](#acceptance-criteria)).
 
 ### Input from the calling skill
 
@@ -76,7 +76,7 @@ The warnings of `phase start` are passed to the next-steps message (06-3). A pha
 - **Warnings**: the skill keeps the warnings of every CLI call of its run and does not show them on the way; the ending or the return passes them on, and the closing next-steps message shows each one once. **Proposed**.
 - **Ending**: every way of ending loads `shade-kit-next-steps` with the reason (refusal, no, or end of work) and the warnings, and then tells the phase skill that the run ended, so the phase skill does no phase work and writes no message of its own. **Proposed** (wording).
 - **Return**: on "run the phase", the skill returns the feature, how the entry went, the skills to load (`skills.generalSkills`), the warnings, and the gate warning of approval off. **Proposed** (format); 06-9 builds the phase skills on it.
-- The skill runs only `shade-kit version --json --expect 0.7.0`, `phase start`, `phase approve`, and `phase reject` (the last three with `--json`), loads only `shade-kit-gate-check` and `shade-kit-next-steps`, and reads or writes no file. **Implemented**.
+- The skill runs only `shade-kit version --json --expect 0.7.0` (`0.8.0` since 2026-11-14, 06-2; the scenario runs below used `0.7.0`), `phase start`, `phase approve`, and `phase reject` (the last three with `--json`), loads only `shade-kit-gate-check` and `shade-kit-next-steps`, and reads or writes no file. **Implemented**.
 
 ## Acceptance criteria
 

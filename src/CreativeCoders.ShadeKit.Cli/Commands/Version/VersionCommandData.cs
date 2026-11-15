@@ -6,7 +6,8 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Version;
 /// Represents the <c>data</c> object that <c>shade-kit version --json</c> returns.
 /// </summary>
 /// <remarks>
-/// Describes the installed engine, not a repository; skills use it for the version handshake.
+/// Describes the installed engine and the SHADE kit integrations of the agents, not a repository; skills use it for
+/// the version handshake.
 /// </remarks>
 /// <param name="EngineVersion">The version of the running engine without build metadata.</param>
 /// <param name="Formats">
@@ -24,4 +25,14 @@ public sealed record VersionCommandData(string EngineVersion, IReadOnlyDictionar
     /// </value>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ExpectedVersion { get; init; }
+
+    /// <summary>
+    /// Gets the SHADE kit integrations that are installed in the agents for the user.
+    /// </summary>
+    /// <value>
+    /// The installed integrations in the order in which the agents are registered, always written to the JSON output,
+    /// after <see cref="ExpectedVersion" />; an empty list if none is installed or no agent could be asked. The
+    /// default is an empty list.
+    /// </value>
+    public IReadOnlyList<VersionCommandIntegrationData> Integrations { get; init; } = [];
 }

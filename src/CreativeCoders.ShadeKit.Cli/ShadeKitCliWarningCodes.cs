@@ -80,4 +80,22 @@ public static class ShadeKitCliWarningCodes
     /// of the version passed with <c>shade-kit version --expect</c>; the engine is used anyway.
     /// </summary>
     public const string EnginePrereleaseVersionMismatch = "engine-prerelease-version-mismatch";
+
+    /// <summary>
+    /// Represents the warning code reported when a prerelease engine installs or updates the integrations from the
+    /// branch <c>main</c> instead of a release tag.
+    /// </summary>
+    public const string IntegrationPrereleaseRef = "integration-prerelease-ref";
+
+    /// <summary>
+    /// Represents the warning code reported when the release tag of a release engine does not exist in the marketplace
+    /// repository, so the integrations are installed or updated from the branch <c>main</c> instead.
+    /// </summary>
+    public const string IntegrationReleaseTagMissing = "integration-release-tag-missing";
+
+    /// <summary>
+    /// Represents the warning code reported when the CLI of an agent is detected but cannot be started or fails, so its
+    /// SHADE kit integration cannot be read and is not listed.
+    /// </summary>
+    public const string AgentUnavailable = "agent-unavailable";
 }

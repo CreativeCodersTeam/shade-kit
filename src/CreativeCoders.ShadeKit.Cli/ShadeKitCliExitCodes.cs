@@ -218,6 +218,30 @@ public static class ShadeKitCliExitCodes
     public const int VersionMismatch = 50;
 
     /// <summary>
+    /// Represents the exit code returned when no supported agent is detected, for example by
+    /// <c>shade-kit integrations install</c> without <c>--agent</c>, or when the CLI of an agent that a command needs
+    /// is not found in any absolute directory of the <c>PATH</c> environment variable: for Claude Code <c>claude</c>,
+    /// also for an agent named with <c>--agent</c>, which is checked before the release tag. On Windows only the
+    /// <c>claude.exe</c> of the native installer is found. The error code is
+    /// <see cref="ShadeKitCliErrorCodes.AgentNotFound" />.
+    /// </summary>
+    public const int AgentNotFound = 51;
+
+    /// <summary>
+    /// Represents the exit code returned when a <c>claude</c> command fails: <c>claude</c> cannot be started, exits
+    /// with a non-zero exit code, reports the outcome <c>failed</c>, or prints no JSON output that SHADE kit can read.
+    /// The error code is <see cref="ShadeKitCliErrorCodes.AgentCommandFailed" />.
+    /// </summary>
+    public const int AgentCommandFailed = 52;
+
+    /// <summary>
+    /// Represents the exit code returned when an agent already knows the plugin marketplace of SHADE kit
+    /// (<c>creativecoders-shade-kit</c>) with a different source repository or directory; nothing is changed. The error
+    /// code is <see cref="ShadeKitCliErrorCodes.IntegrationConflict" />.
+    /// </summary>
+    public const int IntegrationConflict = 53;
+
+    /// <summary>
     /// Represents the exit code returned when the user cancels a running command, for example by pressing Ctrl+C. The
     /// error code is <see cref="ShadeKitCliErrorCodes.Canceled" />.
     /// </summary>

@@ -53,8 +53,7 @@ internal static class ExternalToolRunner
 
         if (string.IsNullOrEmpty(executablePath))
         {
-            throw tool.CreateNotFoundException(arguments,
-                $"{tool.DisplayName} was not found in any absolute directory of the PATH environment variable.");
+            throw tool.CreateNotFoundException(arguments, tool.NotFoundReason);
         }
 
         if (!Path.IsPathFullyQualified(executablePath))

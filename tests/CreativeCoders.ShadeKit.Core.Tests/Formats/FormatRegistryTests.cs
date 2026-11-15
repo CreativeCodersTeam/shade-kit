@@ -19,8 +19,7 @@ public class FormatRegistryTests
                 (FormatIds.Gates, 1),
                 (FormatIds.Feature, 1),
                 (FormatIds.CurrentFeature, 1),
-                (FormatIds.TemplatesLock, 1),
-                (FormatIds.Integrations, 1));
+                (FormatIds.TemplatesLock, 1));
     }
 
     [Fact]
@@ -42,7 +41,7 @@ public class FormatRegistryTests
         var ids = FormatRegistry.CreateDefault().Formats.Select(x => x.Id);
 
         // Assert
-        ids.Should().Equal("config", "gates", "feature", "current-feature", "templates-lock", "integrations");
+        ids.Should().Equal("config", "gates", "feature", "current-feature", "templates-lock");
     }
 
     [Fact]
@@ -63,6 +62,7 @@ public class FormatRegistryTests
     [InlineData("unknown")]
     [InlineData("Config")]
     [InlineData("")]
+    [InlineData("integrations")]
     public void GetFormat_UnregisteredId_ThrowsArgumentException(string id)
     {
         // Arrange

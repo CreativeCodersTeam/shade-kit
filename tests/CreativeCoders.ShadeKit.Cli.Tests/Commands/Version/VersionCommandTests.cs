@@ -8,6 +8,8 @@ using CreativeCoders.ShadeKit.Cli.Commands.Version;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Formats;
+using CreativeCoders.ShadeKit.Core.Integrations;
+using CreativeCoders.ShadeKit.Core.Integrations.Warnings;
 using CreativeCoders.ShadeKit.Core.Versions;
 using FakeItEasy;
 using Spectre.Console;
@@ -23,11 +25,16 @@ public class VersionCommandTests
 
     private const string NewerEngineMessage =
         "The SHADE kit engine 1.2.3 does not fit the kit skills 1.1.0: the major and minor versions must be equal. " +
-        "Update the SHADE kit skills to 1.2 by hand, then run the skill again.";
+        "Run 'shade-kit integrations install' to install the SHADE kit skills 1.2, then run the skill again.";
+
+    private const string PluginId = "shade-kit@creativecoders-shade-kit";
 
     private const string PrereleaseWarningMessage =
         "The prerelease engine 1.2.3-beta.1 does not fit the kit skills 1.3.0 (the major and minor versions differ); " +
         "it is used anyway because it is a prerelease.";
+
+    private static readonly InstalledIntegration ClaudeIntegration =
+        new InstalledIntegration("claude", PluginId, "0.8.0", "v0.8.0", true);
 
     [Fact]
     [Trait("Requirement", "FP06-1-AC6")]
@@ -85,8 +92,7 @@ public class VersionCommandTests
                 ("gates", 1),
                 ("feature", 1),
                 ("current-feature", 1),
-                ("templates-lock", 1),
-                ("integrations", 1));
+                ("templates-lock", 1));
 
         root.GetProperty("warnings").GetArrayLength()
             .Should().Be(0);
@@ -122,9 +128,9 @@ public class VersionCommandTests
                       "gates": 1,
                       "feature": 1,
                       "current-feature": 1,
-                      "templates-lock": 1,
-                      "integrations": 1
-                    }
+                      "templates-lock": 1
+                    },
+                    "integrations": []
                   },
                   "warnings": [],
                   "error": null
@@ -141,7 +147,7 @@ public class VersionCommandTests
         // Arrange
         var checker = A.Fake<IEngineVersionChecker>();
         var command = new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()),
-            CreateEngineVersionProvider("1.2.3"), FormatRegistry.CreateDefault(), checker);
+            CreateEngineVersionProvider("1.2.3"), FormatRegistry.CreateDefault(), checker, CreateIntegrationService());
 
         // Act
         var result = await command.ExecuteAsync(new VersionCommandOptions { Json = json });
@@ -183,7 +189,7 @@ public class VersionCommandTests
             .Should().BeTrue();
 
         root.GetProperty("data").EnumerateObject().Select(x => x.Name)
-            .Should().Equal("engineVersion", "formats", "expectedVersion");
+            .Should().Equal("engineVersion", "formats", "expectedVersion", "integrations");
 
         root.GetProperty("data").GetProperty("engineVersion").GetString()
             .Should().Be("1.2.3");
@@ -563,11 +569,219 @@ public class VersionCommandTests
     }
 
     [Fact]
+    [Trait("Requirement", "FP07-AC4")]
+    public async Task ExecuteAsync_JsonModeWithInstalledIntegration_ListsIntegrationWithKitVersion()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), jsonOutput, "0.8.0",
+            integrationService: CreateIntegrationService(ClaudeIntegration));
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true });
+
+        // Assert
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        var root = document.RootElement;
+
+        JsonSerializer.Serialize(root.GetProperty("data").GetProperty("integrations"))
+            .Should().Be(
+                "[{\"agent\":\"claude\",\"pluginId\":\"shade-kit@creativecoders-shade-kit\",\"kitVersion\":\"0.8.0\"," +
+                "\"ref\":\"v0.8.0\",\"enabled\":true}]");
+
+        root.GetProperty("warnings").GetArrayLength()
+            .Should().Be(0);
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP07-AC4")]
+    public async Task ExecuteAsync_JsonModeWithIntegrationOfUnknownVersion_WritesNullKitVersionAndRef()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), jsonOutput, "0.8.0",
+            integrationService: CreateIntegrationService(
+                new InstalledIntegration("claude", PluginId, null, null, false)));
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true });
+
+        // Assert
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+
+        JsonSerializer.Serialize(document.RootElement.GetProperty("data").GetProperty("integrations"))
+            .Should().Be(
+                "[{\"agent\":\"claude\",\"pluginId\":\"shade-kit@creativecoders-shade-kit\",\"kitVersion\":null," +
+                "\"ref\":null,\"enabled\":false}]");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP07-AC4")]
+    public async Task ExecuteAsync_PlainModeWithInstalledIntegrations_WritesOneLinePerIntegrationAfterVersionLine()
+    {
+        // Arrange
+        var console = new TestConsole().Width(1000);
+        var command = CreateCommand(console, TextWriter.Null, "0.8.0",
+            integrationService: CreateIntegrationService(ClaudeIntegration,
+                new InstalledIntegration("claude", PluginId, null, "main", false)));
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions());
+
+        // Assert
+        console.Lines
+            .Should().Equal(
+                "shade-kit 0.8.0",
+                "claude: shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)",
+                "claude: shade-kit@creativecoders-shade-kit (main) (disabled)");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeAgentUnavailable_WritesSuccessWithEmptyIntegrationsAndWarning()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), jsonOutput, "0.8.0",
+            integrationService: CreateIntegrationService(new InstalledIntegrationsResult([],
+                [new AgentUnavailableWarning("claude", "claude was not found on the PATH.")])));
+
+        // Act
+        var result = await command.ExecuteAsync(new VersionCommandOptions { Json = true });
+
+        // Assert
+        result.ExitCode
+            .Should().Be(0);
+
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        var root = document.RootElement;
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeTrue();
+
+        root.GetProperty("data").GetProperty("integrations").GetArrayLength()
+            .Should().Be(0);
+
+        root.GetProperty("warnings").EnumerateArray()
+            .Select(x => (x.GetProperty("code").GetString(), x.GetProperty("message").GetString()))
+            .Should().Equal((ShadeKitCliWarningCodes.AgentUnavailable,
+                "The SHADE kit integration of the agent 'claude' cannot be read, so it is not listed: claude was not " +
+                "found on the PATH."));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeAgentUnavailable_WritesWarningBeforeVersionLine()
+    {
+        // Arrange
+        var console = new TestConsole().Width(1000);
+        var command = CreateCommand(console, TextWriter.Null, "0.8.0",
+            integrationService: CreateIntegrationService(new InstalledIntegrationsResult([],
+                [new AgentUnavailableWarning("claude", "claude was not found on the PATH.")])));
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions());
+
+        // Assert
+        console.Lines
+            .Should().Equal(
+                "Warning: The SHADE kit integration of the agent 'claude' cannot be read, so it is not listed: " +
+                "claude was not found on the PATH.",
+                "shade-kit 0.8.0");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC4")]
+    public async Task ExecuteAsync_PrereleaseMismatchAndAgentUnavailable_WritesCheckWarningBeforeAgentWarning()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), jsonOutput, "1.2.3-beta.1",
+            integrationService: CreateIntegrationService(new InstalledIntegrationsResult([ClaudeIntegration],
+                [new AgentUnavailableWarning("other", "It fails.")])));
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = "1.3.0" });
+
+        // Assert
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        var root = document.RootElement;
+
+        root.GetProperty("warnings").EnumerateArray().Select(x => x.GetProperty("code").GetString())
+            .Should().Equal(ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch,
+                ShadeKitCliWarningCodes.AgentUnavailable);
+
+        root.GetProperty("data").EnumerateObject().Select(x => x.Name)
+            .Should().Equal("engineVersion", "formats", "expectedVersion", "integrations");
+
+        root.GetProperty("data").GetProperty("integrations").GetArrayLength()
+            .Should().Be(1);
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC1")]
+    public async Task ExecuteAsync_ReleaseEngineMismatch_DoesNotReadIntegrations()
+    {
+        // Arrange
+        var integrationService = CreateIntegrationService(ClaudeIntegration);
+        var command = CreateCommand(new TestConsole(), TextWriter.Null, "1.2.3",
+            integrationService: integrationService);
+
+        // Act
+        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = "1.3.0" });
+
+        // Assert
+        await act.Should().ThrowAsync<CliCommandAbortException>();
+
+        A.CallTo(() => integrationService.GetInstalledAsync(A<CancellationToken>._))
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP06-1-AC5")]
+    public async Task ExecuteAsync_InvalidExpect_DoesNotReadIntegrations()
+    {
+        // Arrange
+        var integrationService = CreateIntegrationService(ClaudeIntegration);
+        var command = CreateCommand(new TestConsole(), TextWriter.Null, "1.2.3",
+            integrationService: integrationService);
+
+        // Act
+        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = "abc" });
+
+        // Assert
+        (await act.Should().ThrowAsync<CliCommandAbortException>())
+            .Which.ExitCode.Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+
+        A.CallTo(() => integrationService.GetInstalledAsync(A<CancellationToken>._))
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AnyMode_PassesCancellationTokenOfRunToIntegrationService()
+    {
+        // Arrange
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var integrationService = CreateIntegrationService();
+        var engineVersionProvider = CreateEngineVersionProvider("1.2.3");
+        var command = new VersionCommand(
+            TestShadeKitCommandContext.Create(new TestConsole(),
+                cancellation: new TestCliCancellation(cancellationTokenSource.Token)),
+            engineVersionProvider, FormatRegistry.CreateDefault(), new EngineVersionChecker(engineVersionProvider),
+            integrationService);
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true });
+
+        // Assert
+        A.CallTo(() => integrationService.GetInstalledAsync(cancellationTokenSource.Token))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
     public void Ctor_NullContext_ThrowsArgumentNullException()
     {
         // Act
         var act = () => new VersionCommand(null!, CreateEngineVersionProvider("1.0.0"), FormatRegistry.CreateDefault(),
-            A.Fake<IEngineVersionChecker>());
+            A.Fake<IEngineVersionChecker>(), CreateIntegrationService());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -579,7 +793,7 @@ public class VersionCommandTests
     {
         // Act
         var act = () => new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()), null!,
-            FormatRegistry.CreateDefault(), A.Fake<IEngineVersionChecker>());
+            FormatRegistry.CreateDefault(), A.Fake<IEngineVersionChecker>(), CreateIntegrationService());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -591,7 +805,7 @@ public class VersionCommandTests
     {
         // Act
         var act = () => new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()),
-            CreateEngineVersionProvider("1.0.0"), null!, A.Fake<IEngineVersionChecker>());
+            CreateEngineVersionProvider("1.0.0"), null!, A.Fake<IEngineVersionChecker>(), CreateIntegrationService());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -603,11 +817,24 @@ public class VersionCommandTests
     {
         // Act
         var act = () => new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()),
-            CreateEngineVersionProvider("1.0.0"), FormatRegistry.CreateDefault(), null!);
+            CreateEngineVersionProvider("1.0.0"), FormatRegistry.CreateDefault(), null!, CreateIntegrationService());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("engineVersionChecker");
+    }
+
+    [Fact]
+    public void Ctor_NullIntegrationService_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()),
+            CreateEngineVersionProvider("1.0.0"), FormatRegistry.CreateDefault(), A.Fake<IEngineVersionChecker>(),
+            null!);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("integrationService");
     }
 
     [Fact]
@@ -625,13 +852,26 @@ public class VersionCommandTests
     }
 
     private static VersionCommand CreateCommand(IAnsiConsole console, TextWriter jsonOutput, string engineVersion,
-        IFormatRegistry? formatRegistry = null)
+        IFormatRegistry? formatRegistry = null, IIntegrationService? integrationService = null)
     {
         var engineVersionProvider = CreateEngineVersionProvider(engineVersion);
 
         return new VersionCommand(TestShadeKitCommandContext.Create(console, jsonOutput: jsonOutput),
             engineVersionProvider, formatRegistry ?? FormatRegistry.CreateDefault(),
-            new EngineVersionChecker(engineVersionProvider));
+            new EngineVersionChecker(engineVersionProvider), integrationService ?? CreateIntegrationService());
+    }
+
+    private static IIntegrationService CreateIntegrationService(params InstalledIntegration[] integrations)
+    {
+        return CreateIntegrationService(new InstalledIntegrationsResult(integrations, []));
+    }
+
+    private static IIntegrationService CreateIntegrationService(InstalledIntegrationsResult result)
+    {
+        var integrationService = A.Fake<IIntegrationService>();
+        A.CallTo(() => integrationService.GetInstalledAsync(A<CancellationToken>._)).Returns(result);
+
+        return integrationService;
     }
 
     private static IEngineVersionProvider CreateEngineVersionProvider(string version)

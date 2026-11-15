@@ -1,0 +1,23 @@
+{
+  "name": "creativecoders-shade-kit",
+  "owner": {
+    "name": "CreativeCodersTeam"
+  },
+  "metadata": {
+    "description": "SHADE kit (Smart Harness for AI Driven Engineering): skills that run AI agents through the software lifecycle in a guided, gated workflow."
+  },
+  "plugins": [
+    {
+      "name": "shade-kit",
+      "source": "./",
+      "description": "SHADE kit skills: a gated workflow (feature, bugfix, and quick profiles) that takes a requirement through refine, map, plan, implement, verify, and finish, with quality gates and traceability driven by the shade-kit CLI.",
+      "author": {
+        "name": "CreativeCodersTeam",
+        "url": "https://github.com/CreativeCodersTeam"
+      },
+      "homepage": "https://github.com/CreativeCodersTeam/shade-kit",
+      "repository": "https://github.com/CreativeCodersTeam/shade-kit",
+      "license": "Apache-2.0"
+    }
+  ]
+}

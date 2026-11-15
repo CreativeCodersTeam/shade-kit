@@ -2,12 +2,10 @@
 name: shade-kit-discuss
 description: SHADE kit free brainstorming on any topic (an idea, a design question, a problem), with or without a current feature. Writes discussion notes that can feed a new feature or a refine round. Use when the user wants to discuss, brainstorm, or think something through in a SHADE kit repository. Runs only when the user calls it by name (`/shade-kit-discuss`) or asks for it; never load it on your own or from another skill.
 metadata:
-  version: 0.7.0
+  version: 0.8.0
 ---
 
 # shade-kit-discuss
-
-<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/09-discuss-and-intake.md. -->
 
 ## Purpose
 
@@ -17,7 +15,7 @@ Keep every `warnings` entry (`{ code, message }`) of every CLI call of this run.
 
 ## Flow
 
-1. Version handshake: run `shade-kit version --json --expect 0.7.0`; 0.7.0 is the kit version of this skill (`metadata.version` in its frontmatter).
+1. Version handshake: run `shade-kit version --json --expect 0.8.0`; 0.8.0 is the kit version of this skill (`metadata.version` in its frontmatter).
    - `ok` is `true`: continue. A warning `engine-prerelease-version-mismatch` means that a prerelease engine is used although its major or minor version differs; keep it like every warning and continue.
    - `ok` is `false` (for example `version-mismatch`), or the shell reports that `shade-kit` is not found: stop before any other CLI call. End ([Ending](#ending)) with **refusal** and the failure envelope, or with "`shade-kit` not found".
 2. **Context:** `shade-kit feature current --json` to find out whether a feature is current. No feature is needed. A failure envelope (for example `kit-root-not-found` without `.shadekit/`, where the notes would be written): end with **refusal** and the envelope, before the discussion.
