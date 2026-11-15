@@ -161,6 +161,21 @@ public static class ShadeKitCliErrorCodes
     public const string VersionMismatch = "version-mismatch";
 
     /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.AgentNotFound" />.
+    /// </summary>
+    public const string AgentNotFound = "agent-not-found";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.AgentCommandFailed" />.
+    /// </summary>
+    public const string AgentCommandFailed = "agent-command-failed";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.IntegrationConflict" />.
+    /// </summary>
+    public const string IntegrationConflict = "integration-conflict";
+
+    /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.Canceled" />.
     /// </summary>
     public const string Canceled = "canceled";
@@ -212,6 +227,9 @@ public static class ShadeKitCliErrorCodes
             ShadeKitCliExitCodes.PhaseStateInvalid => PhaseStateInvalid,
             ShadeKitCliExitCodes.ChecklistTemplateNotFound => ChecklistTemplateNotFound,
             ShadeKitCliExitCodes.VersionMismatch => VersionMismatch,
+            ShadeKitCliExitCodes.AgentNotFound => AgentNotFound,
+            ShadeKitCliExitCodes.AgentCommandFailed => AgentCommandFailed,
+            ShadeKitCliExitCodes.IntegrationConflict => IntegrationConflict,
             ShadeKitCliExitCodes.Canceled => Canceled,
             ShadeKitCliExitCodes.HostError => HostError,
             _ => throw new ArgumentOutOfRangeException(nameof(exitCode), exitCode, "The exit code is not defined.")

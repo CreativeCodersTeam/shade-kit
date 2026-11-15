@@ -2,11 +2,13 @@ using System.Reflection;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using CreativeCoders.ShadeKit.Cli.Commands.Feature.Show;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Git;
+using CreativeCoders.ShadeKit.Core.Integrations;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
@@ -43,7 +45,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["version", "--json"], output, error);
 
         // Assert
         exitCode
@@ -55,7 +57,7 @@ public sealed class ProgramTests : IDisposable
             .Should().BeTrue();
 
         document.RootElement.GetProperty("data").GetProperty("formats").EnumerateObject().Select(x => x.Name)
-            .Should().Equal("config", "gates", "feature", "current-feature", "templates-lock", "integrations");
+            .Should().Equal("config", "gates", "feature", "current-feature", "templates-lock");
 
         error.ToString()
             .Should().BeNullOrWhiteSpace("the host writes only its empty footer line to standard error");
@@ -69,7 +71,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version"], output, error);
+        var exitCode = await RunProgramAsync(["version"], output, error);
 
         // Assert
         exitCode
@@ -89,7 +91,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json", "--expect", "1.3.0"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--json", "--expect", "1.3.0"], output, error,
             x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
 
         // Assert
@@ -128,7 +130,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--expect", "1.1.0"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--expect", "1.1.0"], output, error,
             x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
 
         // Assert
@@ -136,10 +138,11 @@ public sealed class ProgramTests : IDisposable
             .Should().Be(ShadeKitCliExitCodes.VersionMismatch);
 
         // In plain mode the host prints the abort message to the console of the run, which writes to standard output
-        // and wraps long lines; removing the line ends joins the wrapped lines again.
-        output.ToString().ReplaceLineEndings(string.Empty)
+        // and wraps long lines at spaces; folding the whitespace joins the wrapped lines again.
+        Regex.Replace(output.ToString(), @"\s+", " ").TrimEnd()
             .Should().Be("The SHADE kit engine 1.2.3 does not fit the kit skills 1.1.0: the major and minor versions " +
-                         "must be equal. Update the SHADE kit skills to 1.2 by hand, then run the skill again.");
+                         "must be equal. Run 'shade-kit integrations install' to install the SHADE kit skills 1.2, " +
+                         "then run the skill again.");
 
         output.ToString()
             .Should().NotContain("shade-kit 1.2.3");
@@ -157,7 +160,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json", "--expect", "99.0.0"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--json", "--expect", "99.0.0"], output, error,
             x => x.AddSingleton(CreateEngineVersionProvider("1.2.3-beta.1")));
 
         // Assert
@@ -188,7 +191,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json", "--expect", expect], output, error);
+        var exitCode = await RunProgramAsync(["version", "--json", "--expect", expect], output, error);
 
         // Assert
         exitCode
@@ -213,7 +216,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(args, output, error,
+        var exitCode = await RunProgramAsync(args, output, error,
             x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
 
         // Assert
@@ -240,7 +243,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--expect"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--expect"], output, error,
             x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
 
         // Assert
@@ -263,7 +266,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json", "--expect", "1.2.0"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--json", "--expect", "1.2.0"], output, error,
             x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
 
         // Assert
@@ -375,7 +378,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--json"], output, error,
             x => x.AddSingleton(engineVersionProvider));
 
         // Assert
@@ -397,7 +400,7 @@ public sealed class ProgramTests : IDisposable
         var hookCalls = 0;
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json"], output, error, _ => hookCalls++);
+        var exitCode = await RunProgramAsync(["version", "--json"], output, error, _ => hookCalls++);
 
         // Assert
         exitCode
@@ -421,7 +424,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version"], output, error,
+        var exitCode = await RunProgramAsync(["version"], output, error,
             x => x.AddSingleton<IAnsiConsole>(hookConsole));
 
         // Assert
@@ -445,7 +448,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--json"], output, error,
             x => x.AddSingleton(hookJsonWriter));
 
         // Assert
@@ -470,7 +473,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--json"], output, error,
             _ => throw new InvalidOperationException("hook failed"));
 
         // Assert
@@ -496,7 +499,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["unknown-command", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["unknown-command", "--json"], output, error);
 
         // Assert
         exitCode
@@ -533,7 +536,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", .. jsonArgs], output, error);
+        var exitCode = await RunProgramAsync(["version", .. jsonArgs], output, error);
 
         // Assert
         exitCode
@@ -552,7 +555,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["--json", "version"], output, error);
+        var exitCode = await RunProgramAsync(["--json", "version"], output, error);
 
         // Assert
         exitCode
@@ -572,7 +575,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "---json"], output, error);
+        var exitCode = await RunProgramAsync(["version", "---json"], output, error);
 
         // Assert
         exitCode
@@ -596,7 +599,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(args, output, error);
+        var exitCode = await RunProgramAsync(args, output, error);
 
         // Assert
         exitCode
@@ -617,7 +620,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json=false", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["version", "--json=false", "--json"], output, error);
 
         // Assert
         exitCode
@@ -642,7 +645,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["version", "--json", "--json"], output, error);
 
         // Assert
         exitCode
@@ -663,7 +666,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json", "true"], output, error);
+        var exitCode = await RunProgramAsync(["version", "--json", "true"], output, error);
 
         // Assert
         exitCode
@@ -696,7 +699,7 @@ public sealed class ProgramTests : IDisposable
         try
         {
             // Act
-            var exitCode = await Program.RunAsync(["feature", "list", "--json"], output, error);
+            var exitCode = await RunProgramAsync(["feature", "list", "--json"], output, error);
 
             // Assert
             exitCode
@@ -728,7 +731,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["unknown-command"], output, error);
+        var exitCode = await RunProgramAsync(["unknown-command"], output, error);
 
         // Assert
         exitCode
@@ -752,7 +755,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "list", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "list", "--json"], output, error);
 
         // Assert
         exitCode
@@ -784,7 +787,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "list", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "list", "--json"], output, error);
 
         // Assert
         exitCode
@@ -809,7 +812,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "list"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "list"], output, error);
 
         // Assert
         exitCode
@@ -830,7 +833,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(args, output, error);
+        var exitCode = await RunProgramAsync(args, output, error);
 
         // Assert
         exitCode
@@ -854,7 +857,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["--json"], output, error);
+        var exitCode = await RunProgramAsync(["--json"], output, error);
 
         // Assert
         exitCode
@@ -874,7 +877,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json", "--bogus"], output, error);
+        var exitCode = await RunProgramAsync(["version", "--json", "--bogus"], output, error);
 
         // Assert
         exitCode
@@ -895,7 +898,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        await Program.RunAsync(["version", "--json"], output, error);
+        await RunProgramAsync(["version", "--json"], output, error);
 
         // Assert
         var text = output.ToString();
@@ -916,7 +919,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "list", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "list", "--json"], output, error);
 
         // Assert
         exitCode
@@ -946,7 +949,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "list"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "list"], output, error);
 
         // Assert
         exitCode
@@ -972,7 +975,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "list"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "list"], output, error);
 
         // Assert
         exitCode
@@ -1012,7 +1015,7 @@ public sealed class ProgramTests : IDisposable
         try
         {
             // Act
-            var exitCode = await Program.RunAsync(["feature", "list"], output, error);
+            var exitCode = await RunProgramAsync(["feature", "list"], output, error);
 
             // Assert
             exitCode
@@ -1041,7 +1044,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["version", "--json"], output, error);
 
         // Assert
         exitCode
@@ -1061,7 +1064,7 @@ public sealed class ProgramTests : IDisposable
         await using var error = new BrokenTextWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["version", "--json"], output, error);
 
         // Assert
         exitCode
@@ -1081,7 +1084,7 @@ public sealed class ProgramTests : IDisposable
         await using var error = new BrokenTextWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["version"], output, error);
+        var exitCode = await RunProgramAsync(["version"], output, error);
 
         // Assert
         exitCode
@@ -1096,7 +1099,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "show"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "show"], output, error);
 
         // Assert
         exitCode
@@ -1119,7 +1122,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "show", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "show", "--json"], output, error);
 
         // Assert
         exitCode
@@ -1144,7 +1147,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "new", ..extraArgs], output, error,
+        var exitCode = await RunProgramAsync(["feature", "new", ..extraArgs], output, error,
             x => x.AddSingleton(gitCommandRunner));
 
         // Assert
@@ -1173,7 +1176,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "new", "--title", "Login", "--json"], output, error,
+        var exitCode = await RunProgramAsync(["feature", "new", "--title", "Login", "--json"], output, error,
             x => x.AddSingleton(gitCommandRunner));
 
         // Assert
@@ -1200,7 +1203,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "list", "--bogus", "--json"], output, error,
+        var exitCode = await RunProgramAsync(["feature", "list", "--bogus", "--json"], output, error,
             _ => throw new NotAllArgumentsMatchException(
                 [new OptionArgument { Kind = OptionArgumentKind.LongName, OptionName = "bogus" }]));
 
@@ -1222,7 +1225,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "list", "extra"], output, error,
+        var exitCode = await RunProgramAsync(["feature", "list", "extra"], output, error,
             _ => throw new NotAllArgumentsMatchException(
                 [new OptionArgument { Kind = OptionArgumentKind.Value, Value = "extra" }]));
 
@@ -1250,7 +1253,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "show"], output, error,
+        var exitCode = await RunProgramAsync(["feature", "show"], output, error,
             _ => throw new TargetInvocationException(parserException));
 
         // Assert
@@ -1274,7 +1277,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "show", ..jsonArgs], output, error);
+        var exitCode = await RunProgramAsync(["feature", "show", ..jsonArgs], output, error);
 
         // Assert
         exitCode
@@ -1291,7 +1294,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "show", "--json", "false"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "show", "--json", "false"], output, error);
 
         // Assert
         exitCode
@@ -1314,7 +1317,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "show", "--json"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "show", "--json"], output, error);
 
         // Assert
         exitCode
@@ -1332,7 +1335,7 @@ public sealed class ProgramTests : IDisposable
         await using var error = new BrokenTextWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "show"], output, error);
+        var exitCode = await RunProgramAsync(["feature", "show"], output, error);
 
         // Assert
         exitCode
@@ -1347,7 +1350,7 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await Program.RunAsync(["feature", "show", "--json"], output, error,
+        var exitCode = await RunProgramAsync(["feature", "show", "--json"], output, error,
             _ => throw new OptionCreationFailedException(typeof(FeatureShowCommandOptions)));
 
         // Assert
@@ -1367,6 +1370,28 @@ public sealed class ProgramTests : IDisposable
     {
         _currentDirectory.Dispose();
         _tempDirectory.Dispose();
+    }
+
+    // Runs the CLI like Program.RunAsync, but registers a fake integration service first: version reads the installed
+    // integrations, and the fake keeps every test from starting claude. Overrides of configureServices still win.
+    private static Task<int> RunProgramAsync(string[] args, TextWriter output, TextWriter error,
+        Action<IServiceCollection>? configureServices = null)
+    {
+        return Program.RunAsync(args, output, error, x =>
+        {
+            x.AddSingleton(CreateIntegrationService());
+
+            configureServices?.Invoke(x);
+        });
+    }
+
+    private static IIntegrationService CreateIntegrationService()
+    {
+        var integrationService = A.Fake<IIntegrationService>();
+        A.CallTo(() => integrationService.GetInstalledAsync(A<CancellationToken>._))
+            .Returns(new InstalledIntegrationsResult([], []));
+
+        return integrationService;
     }
 
     private static IEngineVersionProvider CreateEngineVersionProvider(string version)

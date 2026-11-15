@@ -1,6 +1,6 @@
 # SHADE kit concept
 
-Status: draft, 2026-10-13, updated 2026-10-17 (template interview), 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over), 2026-10-21 (feature commands implemented, package 03), 2026-10-24 (documentation check against the code), 2026-10-25 (rework of `feature new`), 2026-10-27 (documentation check after package 04: phase commands and phase states implemented, phase state diagram completed), 2026-10-30 (phases start only when the user calls the phase skill; [shade-kit-phase-start-analysis.md](shade-kit-phase-start-analysis.md)), and 2026-11-01 (package 05 implemented: gates from `gates.json`, checklist copies). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
+Status: draft, 2026-10-13, updated 2026-10-17 (template interview), 2026-10-18 (consistency review: skills without router, `quick` phase, version-drift decisions moved into section 9; findings clarification: package changes confirmed and taken over), 2026-10-21 (feature commands implemented, package 03), 2026-10-24 (documentation check against the code), 2026-10-25 (rework of `feature new`), 2026-10-27 (documentation check after package 04: phase commands and phase states implemented, phase state diagram completed), 2026-10-30 (phases start only when the user calls the phase skill; [shade-kit-phase-start-analysis.md](shade-kit-phase-start-analysis.md)), 2026-11-01 (package 05 implemented: gates from `gates.json`, checklist copies), 2026-11-13 (package 07 implemented: this repository is the Claude Code plugin marketplace, the engine installs from the tag of its version, or from `main` with a warning when that tag does not exist), and 2026-11-14 (package 07 review rework: the skills' kit version is checked against the build version by a test). Result of an interview on the original working notes. Design notes only; nothing here is shipped.
 
 Labels used in this document:
 
@@ -62,11 +62,11 @@ SHADE kit keeps what worked (interviews, draft → approve, requirement-to-test 
 
 | Command (proposed name) | Purpose |
 |---|---|
-| `shade-kit integrations install [--agent claude\|copilot\|codex]` | Sets up the agent integration (skills and agents; hooks and MCP configuration come later, no v1 feature needs them) at **user level**: as a plugin where the agent has one, otherwise by writing the same content to the agent's user directory. **Decided.** |
-| `shade-kit integrations update` | Updates the user-level integration to the installed kit version. |
+| `shade-kit integrations install [--agent claude\|copilot\|codex]` | Sets up the agent integration (skills and agents; hooks and MCP configuration come later, no v1 feature needs them) at **user level**: as a plugin where the agent has one, otherwise by writing the same content to the agent's user directory. **Decided.** For Claude Code it adds this repository as the plugin marketplace `creativecoders-shade-kit` at the tag `v<engine version>` (`main` for a prerelease engine and for a release engine whose tag does not exist) and installs the plugin `shade-kit` with the scope `user`, through the `claude` CLI. **Decided** on 2026-11-13 (package 07 implementation). **Implemented** (`IntegrationsInstallCommand`, `ClaudeCodeIntegration`). |
+| `shade-kit integrations update` | Updates the user-level integration to the installed kit version. **Implemented** for Claude Code (`IntegrationsUpdateCommand`, package 07). |
 | `shade-kit init` | Creates `.shadekit/` in a repository: `config.json`, `gates.json`, templates, `templates.lock.json`, `.gitignore` entries, and a short SHADE kit section in `CLAUDE.md` / `AGENTS.md`. **Implemented** (`InitCommand`). |
 | `shade-kit upgrade` | Migrates an initialised repository to the current format versions. Rules in [section 9](#9-version-drift). |
-| `shade-kit version` | Prints the engine version; with `--json` also the current format version per file type. **Implemented** (`VersionCommand`). Skills call it before they run (section 9.6). |
+| `shade-kit version` | Prints the engine version and the installed integrations; with `--json` also the current format version per file type. **Implemented** (`VersionCommand`; integrations since package 07). Skills call it before they run (section 9.6). |
 | `shade-kit feature list` | Lists the features in the store with id, title, profile, and status. **Implemented** (`FeatureListCommand`). |
 
 Skills and agent files are not written into the repository (section 9.6, confirmed in the interview). The repository only holds kit data and the short instruction section.
@@ -116,6 +116,7 @@ The split between `refine` and `map` is **proposed**: `refine` deals with the re
 
 - CLI as a `dotnet` global tool and as self-contained single-file binaries (see `CLAUDE.md`). An installer script for the binaries is **proposed**.
 - Plugin and CLI are released together under one version number and check each other's version (section 9.6).
+- The plugin is not packed into the engine release: this repository is the Claude Code plugin marketplace (`.claude-plugin/`), and the release tag that builds the engine is the ref the engine installs from. **Decided** on 2026-11-13 (package 07 implementation).
 - Claude Code: plugin. Copilot: plugin if available, otherwise user directory. Codex: user directory. **Unverified:** whether Copilot and Codex can load the same `SKILL.md` format and support subagents and hooks. This decides how much of the content can be shared unchanged, and has to be researched before the integration work starts.
 
 ## 4. Store
@@ -354,7 +355,7 @@ An engine writes back every field it does not know, unchanged. Changes that only
 
 - Skills and agent files are installed at user level, never written into the target repository.
 - Plugin content and CLI share one version number. A skill checks `shade-kit version` before it runs.
-- The integration content is packed into the engine release, so an engine always installs the content of its own version (package 07). **Decided** on 2026-10-18.
+- The integration content is packed into the engine release, so an engine always installs the content of its own version (package 07). **Decided** on 2026-10-18. Replaced on 2026-11-13 (package 07 implementation): the engine contains no content; this repository is the Claude Code plugin marketplace, and an engine installs the tree of its own tag `v<version>` (a prerelease engine, and a release engine whose tag does not exist, installs from `main`). **Decided** on 2026-11-13. **Implemented** (`IntegrationService`). The skills' `metadata.version` is still raised by hand (package 06-2); since 2026-11-14 a guard test fails every build whose skills carry another major.minor than the engine version of the build, the tag build included (`SkillKitVersionTests`, package 07). **Decided** on 2026-11-14 (package 07 review rework).
 
 ### Why per-file versions
 

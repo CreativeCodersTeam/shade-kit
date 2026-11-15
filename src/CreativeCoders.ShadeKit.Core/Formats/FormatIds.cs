@@ -32,9 +32,4 @@ public static class FormatIds
     /// Represents the format id of <c>.shadekit/templates.lock.json</c>.
     /// </summary>
     public const string TemplatesLock = "templates-lock";
-
-    /// <summary>
-    /// Represents the format id of the user-level record of installed agent integrations.
-    /// </summary>
-    public const string Integrations = "integrations";
 }

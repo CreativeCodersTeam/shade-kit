@@ -6,6 +6,8 @@ using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Init;
+using CreativeCoders.ShadeKit.Core.Integrations;
+using CreativeCoders.ShadeKit.Core.Integrations.Claude;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Trackers;
@@ -30,8 +32,10 @@ public static class ShadeKitCoreServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// All services are singletons. Existing registrations are kept, so a registration made before the call replaces
-    /// the default. The call also registers the <see cref="IHttpClientFactory" /> and the named client
-    /// <see cref="HttpUrlContentReader.HttpClientName" /> with a timeout of
+    /// the default. <see cref="IAgentIntegration" /> is an enumerable registration: the Claude Code integration is
+    /// added once, next to the integrations of other agents. The call also registers the
+    /// <see cref="IHttpClientFactory" /> and the named client <see cref="HttpUrlContentReader.HttpClientName" /> with a
+    /// timeout of
     /// <see cref="HttpUrlContentReader.RequestTimeout" /> and the <c>User-Agent</c>
     /// <c>shade-kit/&lt;engine version&gt;</c> from the <see cref="IEngineVersionProvider" />. The client keeps the
     /// default primary handler, which follows redirects. The configuration of the named client does not follow the
@@ -58,6 +62,7 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IInstructionSectionPlanner, InstructionSectionPlanner>();
         services.TryAddSingleton<IGitExecutableLocator, GitExecutableLocator>();
         services.TryAddSingleton<IGitCommandRunner, GitCommandRunner>();
+        services.TryAddSingleton<IGitRemoteTagChecker, GitRemoteTagChecker>();
         services.TryAddSingleton<IGitRepositoryInfo, GitRepositoryInfo>();
         services.TryAddSingleton<IGitLineEndingResolver, GitLineEndingResolver>();
         services.TryAddSingleton<IEditorConfigLineEndingResolver, EditorConfigLineEndingResolver>();
@@ -89,6 +94,11 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IGhExecutableLocator, GhExecutableLocator>();
         services.TryAddSingleton<IGhCommandRunner, GhCommandRunner>();
         services.TryAddSingleton<ITrackerIssueReader, GitHubCliIssueReader>();
+        services.TryAddSingleton<IClaudeExecutableLocator, ClaudeExecutableLocator>();
+        services.TryAddSingleton<IClaudeCommandRunner, ClaudeCommandRunner>();
+        services.TryAddSingleton<IClaudePluginCli, ClaudePluginCli>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentIntegration, ClaudeCodeIntegration>());
+        services.TryAddSingleton<IIntegrationService, IntegrationService>();
 
         return services;
     }

@@ -8,6 +8,8 @@ using CreativeCoders.ShadeKit.Core.Gates;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Init;
+using CreativeCoders.ShadeKit.Core.Integrations;
+using CreativeCoders.ShadeKit.Core.Integrations.Claude;
 using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
@@ -93,6 +95,11 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IGhExecutableLocator), typeof(GhExecutableLocator))]
     [InlineData(typeof(IGhCommandRunner), typeof(GhCommandRunner))]
     [InlineData(typeof(ITrackerIssueReader), typeof(GitHubCliIssueReader))]
+    [InlineData(typeof(IGitRemoteTagChecker), typeof(GitRemoteTagChecker))]
+    [InlineData(typeof(IClaudeExecutableLocator), typeof(ClaudeExecutableLocator))]
+    [InlineData(typeof(IClaudeCommandRunner), typeof(ClaudeCommandRunner))]
+    [InlineData(typeof(IClaudePluginCli), typeof(ClaudePluginCli))]
+    [InlineData(typeof(IIntegrationService), typeof(IntegrationService))]
     public void AddShadeKitCore_ServiceCollection_RegistersServiceAsSingleton(Type serviceType, Type implementationType)
     {
         // Arrange
@@ -112,6 +119,49 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddShadeKitCore_CalledTwice_RegistersClaudeCodeIntegrationOnceAsSingleton()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var agentIntegrations = serviceProvider.GetServices<IAgentIntegration>().ToArray();
+
+        agentIntegrations
+            .Should().ContainSingle()
+            .Which.Should().BeOfType<ClaudeCodeIntegration>()
+            .And.BeSameAs(serviceProvider.GetServices<IAgentIntegration>().Single());
+
+        serviceProvider.GetRequiredService<IIntegrationService>().AgentIds
+            .Should().Equal(ClaudeCodeIntegration.ClaudeAgentId);
+    }
+
+    [Fact]
+    public void AddShadeKitCore_OtherAgentIntegrationRegistered_KeepsBothIntegrations()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var otherIntegration = A.Fake<IAgentIntegration>();
+        A.CallTo(() => otherIntegration.AgentId).Returns("other");
+        services.AddSingleton(otherIntegration);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        serviceProvider.GetRequiredService<IIntegrationService>().AgentIds
+            .Should().Equal("other", ClaudeCodeIntegration.ClaudeAgentId);
+    }
+
+    [Fact]
     public void AddShadeKitCore_ServiceCollection_RegistersFormatRegistryWithAllFileTypes()
     {
         // Arrange
@@ -125,7 +175,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         serviceProvider.GetRequiredService<IFormatRegistry>().Formats.Select(x => x.Id)
             .Should().Equal(FormatIds.Config, FormatIds.Gates, FormatIds.Feature, FormatIds.CurrentFeature,
-                FormatIds.TemplatesLock, FormatIds.Integrations);
+                FormatIds.TemplatesLock);
     }
 
     [Fact]
@@ -198,6 +248,11 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IGhExecutableLocator))]
     [InlineData(typeof(IGhCommandRunner))]
     [InlineData(typeof(ITrackerIssueReader))]
+    [InlineData(typeof(IGitRemoteTagChecker))]
+    [InlineData(typeof(IClaudeExecutableLocator))]
+    [InlineData(typeof(IClaudeCommandRunner))]
+    [InlineData(typeof(IClaudePluginCli))]
+    [InlineData(typeof(IIntegrationService))]
     [InlineData(typeof(IHttpClientFactory))]
     [InlineData(typeof(TimeProvider))]
     public void AddShadeKitCore_ExistingServiceRegistration_KeepsExistingRegistration(Type serviceType)
@@ -247,6 +302,11 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IGhExecutableLocator))]
     [InlineData(typeof(IGhCommandRunner))]
     [InlineData(typeof(ITrackerIssueReader))]
+    [InlineData(typeof(IGitRemoteTagChecker))]
+    [InlineData(typeof(IClaudeExecutableLocator))]
+    [InlineData(typeof(IClaudeCommandRunner))]
+    [InlineData(typeof(IClaudePluginCli))]
+    [InlineData(typeof(IIntegrationService))]
     [InlineData(typeof(IHttpClientFactory))]
     [InlineData(typeof(TimeProvider))]
     public void AddShadeKitCore_CalledTwice_RegistersServiceOnlyOnce(Type serviceType)
@@ -410,6 +470,30 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         featureId
             .Should().Be("login");
+    }
+
+    [Fact]
+    public async Task AddShadeKitCore_ExistingGitCommandRunnerRegistration_GitRemoteTagCheckerUsesExistingRunner()
+    {
+        // Arrange
+        var existingRunner = A.Fake<IGitCommandRunner>();
+        A.CallTo(() => existingRunner.RunAsync(A<string>._, A<IReadOnlyList<string>>._, A<CancellationToken>._))
+            .Returns(new ExternalProcessResult(0, "4a1b2c3d\trefs/tags/v0.8.0\n", ""));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(existingRunner);
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        var state = await serviceProvider.GetRequiredService<IGitRemoteTagChecker>()
+            .CheckTagAsync("https://example.com/repo.git", "v0.8.0", TestContext.Current.CancellationToken);
+
+        state
+            .Should().Be(GitRemoteTagState.Found);
     }
 
     [Fact]

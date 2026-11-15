@@ -56,6 +56,9 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.PhaseStateInvalid)]
     [InlineData(ShadeKitCliExitCodes.ChecklistTemplateNotFound)]
     [InlineData(ShadeKitCliExitCodes.VersionMismatch)]
+    [InlineData(ShadeKitCliExitCodes.AgentNotFound)]
+    [InlineData(ShadeKitCliExitCodes.AgentCommandFailed)]
+    [InlineData(ShadeKitCliExitCodes.IntegrationConflict)]
     [InlineData(ShadeKitCliExitCodes.Canceled)]
     [InlineData(ShadeKitCliExitCodes.HostError)]
     public void ToProcessExitCode_NonNegativeExitCode_ReturnsExitCodeUnchanged(int exitCode)
@@ -99,6 +102,9 @@ public class ShadeKitCliExitCodesTests
     [InlineData(ShadeKitCliExitCodes.PhaseStateInvalid, 46)]
     [InlineData(ShadeKitCliExitCodes.ChecklistTemplateNotFound, 47)]
     [InlineData(ShadeKitCliExitCodes.VersionMismatch, 50)]
+    [InlineData(ShadeKitCliExitCodes.AgentNotFound, 51)]
+    [InlineData(ShadeKitCliExitCodes.AgentCommandFailed, 52)]
+    [InlineData(ShadeKitCliExitCodes.IntegrationConflict, 53)]
     [InlineData(ShadeKitCliExitCodes.Canceled, 130)]
     [InlineData(ShadeKitCliExitCodes.HostError, 255)]
     public void ExitCodes_Contract_HaveStableValues(int exitCode, int expectedExitCode)

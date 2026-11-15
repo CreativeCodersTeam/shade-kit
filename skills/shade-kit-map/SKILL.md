@@ -2,12 +2,10 @@
 name: shade-kit-map
 description: SHADE kit phase skill for `map` (feature profile). Maps the current feature onto the code base with parallel research agents (best practice, existing architecture, affected code, don't hand-roll, security) and writes researches.md. Use when the user wants to map, analyse, or research the code base for the current SHADE kit feature. Runs only when the user calls it by name (`/shade-kit-map`); never load it on your own or from another skill.
 metadata:
-  version: 0.7.0
+  version: 0.8.0
 ---
 
 # shade-kit-map
-
-<!-- Skeleton: purpose and flow only, details follow. Source: docs/feature-packages/11-map.md. -->
 
 ## Purpose
 

@@ -2,23 +2,25 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`) and 2026-11-04 (split of package 06: FP07-AC7 taken over from FP06-AC13) |
-| Source | Concept §2 (Lifecycle), §3.1 (`integrations install/update`), §3.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`), 2026-11-04 (split of package 06: FP07-AC7 taken over from FP06-AC13), and 2026-11-13 (implementation: this repository is the Claude Code plugin marketplace `creativecoders-shade-kit`, the version pin by tag, no engine-owned record, `integrations install` and `integrations update`, `integrations` in `version --json`, exit codes 51–53, warning codes `integration-prerelease-ref` and `agent-unavailable`, skeleton source comments removed, namespacing checked in a smoke check), and 2026-11-13 (Gate 4 rework: release-tag check with `git ls-remote` and warning `integration-release-tag-missing`, `version` asks only detected agents, `update` with nothing installed resolves no source, the 06-1 message names `integrations install`, `git` never prompts), and 2026-11-14 (review rework, Gate 5, see [Review](#review): skills raised to the kit version `0.8.0` and guarded by `SkillKitVersionTests`, the FP07-AC7 guard scans every text file under `skills/`, a kept marketplace is refreshed with `claude plugin marketplace update`, a cancellation during the switch names the repair, `--agent claude` without `claude` fails before the tag check, `update` reads the state once per agent, completed agents are named when a later agent fails, URL forms of `SHADE_KIT_MARKETPLACE_SOURCE` are refused, directory sources are compared after resolving symbolic links), and 2026-11-15 (second review rework, Gate 5 round 2, see [Review](#review): a stray stdout line fails `install` and `update` with 52 but gives `agent-unavailable` in `version`, the kit version guard reports the outlier skill, the minimum Claude Code version for `marketplace update --json` recorded as an accepted open point). Implemented; FP07-AC1 checked by hand in a headless session; FP07-AC2 enforced by a guard test. |
+| Source | Concept §2 (Lifecycle), §3.1 (`integrations install/update`), §3.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift); Claude Code plugin and marketplace commands, checked with Claude Code 2.1.323 on 2026-11-13 and 2026-11-14 (`marketplace update`); [review report](../reviews/2026-11-13-feature-claude-code-integration-uncommitted.md), [second review report](../reviews/2026-11-15-feature-claude-code-integration-uncommitted-2.md) |
 | Depends on | 01, 06 |
 | Enables | 08 (same mechanism for more agents); end-to-end use of all phase packages in Claude Code |
 
 ## Benefit
 
-A developer installs the kit's skills and agents for Claude Code with one command, once per machine, and every repository on that machine can use them. Updating the engine and running `integrations update` keeps engine and skills on the same version, so the version handshake (package 06) does not fail.
+A developer installs the kit's skills for Claude Code with one command, once per machine, and every repository on that machine can use them. Updating the engine and running `integrations update` moves the skills to the release tag of the new engine, so engine and skills come from the same release.
 
 ## Scope
 
 ### In scope
 
-- `shade-kit integrations install --agent claude`.
-- `shade-kit integrations update`.
-- Where the integration content comes from and how its version is recorded.
+- `shade-kit integrations install [--agent claude] [--json]`.
+- `shade-kit integrations update [--json]`.
+- Where the integration content comes from, and how the engine picks its version.
 - Reporting installed integrations in `shade-kit version --json` (announced in package 01).
+- The plugin manifests in `.claude-plugin/`.
+- Removing the source comments of the skill skeletons, the guard test of FP07-AC7, and the kit version guard of FP07-AC2 (since 2026-11-14).
 
 ### Out of scope
 
@@ -26,42 +28,257 @@ A developer installs the kit's skills and agents for Claude Code with one comman
 - Hooks and MCP configuration. The concept lists them as possible integration content, but no v1 feature needs them (approval enforcement and the MCP server are later). **Decided** (confirmation list, 2026-10-18).
 - Writing anything into a repository (concept §9.6, **Decided**).
 - Removing an integration. `integrations uninstall` is a later addition. **Proposed.**
+- Installing with a scope other than `user`, and enabling a disabled plugin.
+- Writing `metadata.version` into the skills for a release; it is raised by hand, and since 2026-11-14 a guard test checks it ([Kit version guard](#kit-version-guard), 06-2, 19).
 
 ## Functional description
 
 ### Content source
 
-- The integration content (skills from package 06 and the phase packages, research agent definitions) is packed into the engine release, so an engine always installs exactly the content of its own version. **Decided** (confirmation list, 2026-10-18). This makes "plugin and CLI release together" (concept §9.6) hold by construction on every machine.
+- This repository is the Claude Code plugin marketplace `creativecoders-shade-kit` with one plugin, `shade-kit`. The plugin id is `shade-kit@creativecoders-shade-kit`. **Decided** on 2026-11-13 (package 07 implementation). **Implemented** (`.claude-plugin/marketplace.json`, `.claude-plugin/plugin.json`, `ClaudeCodeIntegration.MarketplaceName`, `ClaudeCodeIntegration.PluginId`).
+  - `marketplace.json` names the plugin with the source `./`, the repository root. The skills stay in `skills/`, where Claude Code finds them at the plugin root. **FACT** (smoke check below: the session lists `shade-kit:shade-kit-next-phase`).
+  - Rule: because the plugin root is the repository root, every plugin component that Claude Code finds at its default location in the repository root ships to every user. **Decided** on 2026-11-14 (package 07 review rework, Gate 5, finding S7; documentation only, no guard test). The default locations are `skills/`, `commands/`, `agents/`, `hooks/hooks.json`, `.mcp.json`, `.lsp.json`, `output-styles/`, `workflows/`, `themes/`, `monitors/monitors.json`, and `bin/`. **FACT** (Claude Code plugin manifest reference, "Standard layout", code.claude.com/docs/en/plugins-reference, read on 2026-11-14; it also says that claude.ai and Cowork do not install a plugin with `bin/`). So a developer-only `.mcp.json`, `hooks/`, `agents/`, or `commands/` must not be added at the repository root; the planned research agent definitions are the one intended use of `agents/`. **FACT** (`ls -a` of the repository root on 2026-11-14): today only `skills/` and `.claude-plugin/` of these exist. A `CLAUDE.md` at the plugin root is not loaded as context, and `claude plugin validate` warns about it (same documentation; seen in the review run of `claude plugin validate .`).
+  - `plugin.json` holds name, description, author, homepage, repository, license (`Apache-2.0`), and keywords. It has **no** `version` field. **Decided** on 2026-11-13 (package 07 implementation). Without it, Claude Code uses the 12-character commit SHA as the plugin version. **FACT** (Claude Code 2.1.323: `claude plugin list --json` reported `f35fdf204ffd`). The kit version comes from the tag (Version pin), so no second version is kept by hand.
+  - The names are allowed. **FACT** (Claude Code documentation, checked on 2026-11-13): plugin and marketplace names must not start with `claude-`, `anthropic-`, or `cc-plugin-`, and `skills-dir`, `github`, `gh`, `builtin`, `inline`, and `npm` are reserved marketplace names.
+- The engine contains and copies **no** integration content. It only runs the plugin commands of the Claude Code CLI `claude`, and Claude Code fetches the content from the marketplace. **Decided** on 2026-11-13 (package 07 implementation). This replaces the decision of 2026-10-18 (confirmation list) that the integration content is packed into the engine release. Concept §3.1, §3.4, §9.6 and package 19 are updated.
+- "Plugin and CLI release together" (concept §9.6) now holds through the tag: the release tag `v<version>` that builds the engine also names the tree that Claude Code installs.
 
-### `integrations install --agent claude`
+### Version pin
 
-- Installs the content at **user level** as a Claude Code plugin. **Decided** (concept §3.1).
-- **Unverified:** the exact way to register a plugin at user level from a CLI (for example a local plugin marketplace plus a plugin install command, or writing to the user's plugin directory). This has to be checked against the Claude Code documentation before the package is built. If no supported way exists, the fallback is writing the same content to the user's `~/.claude/` skills and agents directories. **Decided** as the general fallback in the concept §3.1.
-- Records the installed agent, kit version, and install location in an engine-owned file in the user's configuration directory (`schemaVersion` like every kit JSON file). **Proposed.** This file is outside every repository, so `upgrade` (package 18) does not touch it; `integrations install` and `integrations update` migrate it when its format is older.
-- Running it again for an installed agent behaves like `integrations update`.
-- Without `--agent`, it installs for every supported agent the engine can detect on the machine and reports what it found. **Proposed.** In this package, Claude Code is the only supported agent.
+The engine picks the marketplace source from its own version. **Decided** on 2026-11-13 (package 07 implementation; the release-tag check on 2026-11-13, Gate 4). **Implemented** (`IntegrationService.ResolveSourceAsync`, `MarketplaceSource`; `IntegrationServiceTests`, `MarketplaceSourceTests`).
 
-### `integrations update`
+| Engine | Marketplace source | Warning |
+|---|---|---|
+| Release, for example `0.8.0`, whose tag exists or cannot be checked | `CreativeCodersTeam/shade-kit#v0.8.0` (the engine version without build metadata) | none |
+| Release whose tag does not exist, for example `0.8.1` built from an untagged `main` commit | `CreativeCodersTeam/shade-kit#main` | `integration-release-tag-missing` |
+| Prerelease, for example `0.8.1-claude-code-integration.0` | `CreativeCodersTeam/shade-kit#main` | `integration-prerelease-ref` |
+| Any, with `SHADE_KIT_MARKETPLACE_SOURCE` set | the value of the variable | none |
 
-- Updates every installed integration to the content of the running engine version.
-- Reports per agent: old version, new version, or "already current".
-- Does not touch agents that are not installed.
+- The ref is a tag or a branch. Claude Code rejects a commit SHA as ref ("Remote branch <sha> not found"). **FACT** (Claude Code 2.1.323).
+- Prerelease warning: `The engine {engine} is a prerelease, so the integrations come from the branch 'main' of CreativeCodersTeam/shade-kit instead of a release tag; they may not fit this engine.` **Implemented** (`IntegrationPrereleaseRefWarning`, `CliErrorMapper.MapWarning`).
+- The branch `main` of both fallbacks is `IntegrationService.FallbackRef`. **Implemented.**
+- The kit version that the engine reports is the tag without the `v` (`v0.8.0` → `0.8.0`). For `main`, any ref that is not `v<SemVer>`, and a local directory it is `null`. **Implemented** (`MarketplaceSource.KitVersion`).
+- **Developer option** `SHADE_KIT_MARKETPLACE_SOURCE`: the environment variable replaces the whole source, for example the path of a working tree of this repository, or `owner/repo#ref`. It is meant for developing the kit, not for teams. **Decided** on 2026-11-13 (package 07 implementation). **Implemented** (`IntegrationService.MarketplaceSourceVariableName`, `MarketplaceSource.Parse`).
+  - A value whose part before the first `#` is not a fully qualified path, does not start with `.` or `~`, has exactly one `/`, and no `\` is a GitHub repository `owner/repo[#ref]`; the ref may contain `/`. Every other value is a local directory. A relative path is made absolute against the current directory; a relative path with one `/` is written as `./dir/sub`. `~` is not expanded.
+  - A URL is refused. **Decided** on 2026-11-14 (package 07 review rework, Gate 5, finding M5). **Implemented** (`MarketplaceSource.Parse`; `MarketplaceSourceTests.Parse_UrlWithScheme_ThrowsInvalidMarketplaceSourceExceptionNamingGitHubForm`, `MarketplaceSourceTests.Parse_ScpLikeGitUrl_ThrowsInvalidMarketplaceSourceExceptionNamingGitHubForm`, `IntegrationsCommandsEndToEndTests.IntegrationsInstall_UrlAsMarketplaceSourceOverride_Exits2NamingAllowedFormsWithoutClaudeCall`). Before, a URL was taken as a relative directory and failed later in `claude` with 52. The check runs after the empty and `-` checks and before the GitHub form:
+    - A value that starts with a scheme of at least two characters and `://` (`https://`, `http://`, `ssh://`, `git://`, `git+ssh://`, `file://`, any letter case). Reason: `It is a URL, and SHADE kit takes no URL as a marketplace source; a GitHub repository is written as owner/repo#ref or owner/repo.`
+    - An scp-like git URL, by git's rule: the first `:` comes after at least two characters without `/` or `\` (`git@github.com:owner/repo`, `user@host:path`, also `github.com:owner/repo`). Reason: `It is an scp-like git URL (user@host:path), and SHADE kit takes no URL as a marketplace source; a GitHub repository is written as owner/repo#ref or owner/repo.`
+    - A Windows drive path has a single letter before the `:` and is no URL: `C:\kit`, `C:/kit`, and `C://kit` are fully qualified directory paths on Windows (`MarketplaceSourceTests.Parse_WindowsDrivePathOnWindows_ReturnsDirectorySource`, run only on Windows). Known limit on Linux and macOS: `C:/kit` is read as a malformed GitHub form (exit code 2), and `C:\kit` and `C://kit` as relative paths. A separator before the `:` keeps a value a path (`./git@host:y`, `/x/git@host:y`, `./mirror/https://x`).
+  - An empty value, a value that starts with `-`, a URL, or a malformed GitHub form ends with exit code 2 `invalid-arguments` before `claude` runs: `The environment variable SHADE_KIT_MARKETPLACE_SOURCE is set to '{value}', which is not a marketplace source: {reason} Set it to owner/repo#ref, owner/repo, or the path of a local directory, or remove it, then run the command again.`
+  - `version` ignores the variable.
+
+### Release-tag check
+
+- Why: `GitVersion.yml` gives `main` no prerelease label (`label: ''`), so a build of an untagged `main` commit is a release version, for example `0.8.1`, whose tag `v0.8.1` does not exist. **FACT** (`GitVersion.yml`). Without a check, such an engine would target the missing tag and `claude plugin marketplace add` would fail with exit code 52.
+- A release engine without `SHADE_KIT_MARKETPLACE_SOURCE` checks that its tag exists in the marketplace repository before it installs or updates. **Decided** on 2026-11-13 (package 07 implementation, Gate 4). **Implemented** (`IGitRemoteTagChecker`, `GitRemoteTagChecker`, `IntegrationService.MarketplaceRepositoryUrl`; `GitRemoteTagCheckerTests`, `IntegrationServiceTests.ResolveSourceAsync_ReleaseTag*`, `IntegrationsCommandsEndToEndTests.IntegrationsInstall_ReleaseTag*`, `IntegrationsCommandsEndToEndTests.IntegrationsUpdate_PlainModeReleaseTagMissing_WritesWarningAndUpdatesFromMain`).
+  - The check runs, through `IGitCommandRunner`, `git -c credential.helper= -c protocol.allow=never -c protocol.https.allow=always ls-remote --tags https://github.com/CreativeCodersTeam/shade-kit.git refs/tags/v<x.y.z>`. `git` runs in the user's home directory (the temporary directory if there is none; `UserWorkingDirectory`, shared with `claude`), never in the repository, so the configuration of the current repository takes no part.
+  - The `-c` options clear the credential helpers and allow only `https`, so a URL that the user's configuration rewrites to `ssh` (`insteadOf`) fails instead of starting `ssh`, which could ask for a passphrase. **FACT** (git 2.54, spike on 2026-11-13: `protocol.allow=never` with `protocol.https.allow=always` stops an `insteadOf` rewrite to `ssh`, "transport 'ssh' not allowed").
+  - Exit code 0 with a line `<sha>\trefs/tags/v<x.y.z>` (or its peeled line `...^{}`) → the tag exists → `#v<x.y.z>`.
+  - Exit code 0 without such a line → the tag is missing → `#main` and the warning `integration-release-tag-missing`: `The release tag '{tag}' of the engine {engine} does not exist in CreativeCodersTeam/shade-kit, so the integrations come from the branch 'main' instead; they may not fit this engine.` `data.ref`, `data.source`, and the `ref` of each agent are then `main`. **Implemented** (`IntegrationReleaseTagMissingWarning`, `CliErrorMapper.MapWarning`).
+  - `git` not installed, `git` that cannot be started, or a non-zero exit code (no network, a remote that needs credentials) → the tag is used unchecked, with no warning and no error. If the tag is really missing, `claude` then fails with exit code 52. Cancellation still ends with 130.
+  - **FACT** (checked on 2026-11-13 against `CreativeCodersTeam/shade-kit`): a missing tag gives exit code 0 with empty output; `v0.8.0` was found, `v0.8.1` was not.
+- The check is skipped for a prerelease engine (it uses `main` anyway) and for the override.
+- Order in `install`: select the agents of `--agent` → resolve the local part of the source (an invalid override ends with exit code 2 before any agent is detected) → detect the agents (none → 51, no tag check) → `IAgentIntegration.EnsureAvailable()` for every selected or detected agent → tag check → install. `EnsureAvailable` makes `--agent claude` without `claude` end with 51 before the network call: no `git ls-remote` and no `claude` call. **Decided** on 2026-11-14 (package 07 review rework, Gate 5, finding S3). **Implemented** (`IntegrationService.InstallAsync`, `ClaudeCodeIntegration.EnsureAvailable`, which throws `ClaudeNotFoundException` naming `claude plugin list --json`, the first command of an install; `IntegrationServiceTests.InstallAsync_ExplicitAgentMissing_ThrowsItsNotFoundErrorBeforeReleaseTagCheck`, `IntegrationsCommandsEndToEndTests.IntegrationsInstall_NamedClaudeNotOnPath_WritesAgentNotFoundEnvelopeAndExits51`). In `update`, the source and the check come only after an installed integration was found (see `integrations update`).
+- Only `https` URLs are accepted, and a tag name that is empty, starts with `-`, or contains whitespace, a glob character, `^`, `~`, or `:` is refused, so `ls-remote` matches exactly one ref. These are guards against a defect, not user input.
+
+### State: no engine-owned record
+
+- The engine keeps no record of its own. It reads the state from `claude plugin list --json` and `claude plugin marketplace list --json`. **Decided** on 2026-11-13 (package 07 implementation). This replaces the **Proposed** engine-owned record file in the user's configuration directory. **Implemented** (`ClaudeCodeIntegration.GetInstalledAsync`).
+- The format id `integrations` is removed from `FormatIds` and `FormatRegistry.CreateDefault()`, so `formats` in `version --json` no longer lists it (package 01). **Implemented** (`FormatRegistryTests`).
+
+### How the engine runs `claude`
+
+- `claude` is found in an absolute directory of the `PATH`: `claude`, on Windows only `claude.exe` (the native installer). The `claude.cmd` of an npm installation is not found. **Implemented** (`ClaudeExecutableLocator` on `PathExecutableLocator`).
+- It is started through the process helpers like `git` and `gh`: absolute path, no shell, process tree killed on cancellation (exit code 130). It runs with `NO_COLOR=1` in the user's home directory (the temporary directory if there is none), never in the repository. Every call passes `--json`. The list commands (`plugin list`, `plugin marketplace list`) parse the whole stdout as one JSON array; a stray line on stdout makes `install` and `update` fail with 52, and in `version` the same failure becomes the warning `agent-unavailable` (Version reporting). The commands that change the configuration (`marketplace add`, `remove`, `update`, `plugin install`, `update`) read the last line of stdout that is a JSON object, because `claude` may print other lines before it. On a non-zero exit code the last JSON object line gives claude's `message` and `failureCode`. **Decided** on 2026-11-14 (package 07 review rework, Gate 5, finding M4: the code is kept, the text corrected; until then this text said that every call reads the last JSON line). **Implemented** (`ClaudeCommandRunner`, `ClaudePluginCli`, `ClaudeJsonOutputReader.ReadArray`, `ClaudeJsonOutputReader.ReadResultObject`).
+- Claude Code commands and outputs the engine relies on. **FACT** (Claude Code 2.1.323, spikes in an isolated `CLAUDE_CONFIG_DIR`, 2026-11-13):
+
+  | Command | Output |
+  |---|---|
+  | `claude plugin marketplace add <source> --scope user --json` | One JSON line, `outcome` `ok`. Again with the same source: `ok`, the message says it is already on disk. Sources: `owner/repo#<branch-or-tag>` or a local path. |
+  | `claude plugin marketplace list --json` | Array of `{name, source, repo, ref, installLocation}`; `source` is `github`, or `directory` with a `path`. |
+  | `claude plugin marketplace remove <name> --json` | `outcome` `ok`. It also **uninstalls every plugin of that marketplace**; `plugin list` is then `[]`. |
+  | `claude plugin marketplace update <name> --json` | One JSON line, `outcome` `ok`, exit code 0; the clone is refreshed at once (branch, tag, and directory marketplaces). An unknown name: exit code 1, `outcome` `failed`, `failureCode` `not_configured`. Checked on 2026-11-14 (see below). |
+  | `claude plugin install <plugin>@<marketplace> --scope user --json` | `outcome` `ok`; for an installed plugin also `ok`, with `installedVersion` and `availableVersion`. |
+  | `claude plugin update <plugin>@<marketplace> --scope user --json` | `outcome` `ok` with `updateOutcome` `updated` (`oldVersion`, `newVersion`) or `up_to_date`. |
+  | `claude plugin list --json` | Array of `{id, version, scope, enabled, installPath, installedAt, lastUpdated, projectEnabled}`. |
+  | Any failure | Exit code 1 and a JSON line with `outcome` `failed`, `message`, and `failureCode` (for example `not_found`). |
+
+- Refresh of a kept marketplace. **FACT** (Claude Code 2.1.323, spike on 2026-11-14 in an isolated `CLAUDE_CONFIG_DIR`; a local bare git repository served as `https://spike.example.invalid/spike/remote.git#main` through a `url.insteadOf` rewrite in an isolated `GIT_CONFIG_GLOBAL`; plugin without `version`):
+  - `claude plugin update` alone is not reliable for a marketplace that follows a branch. It refreshed the marketplace once (a pushed commit gave `updated`), but a commit pushed about 10 seconds after that refresh was not seen: `up_to_date` twice, and the clone stayed at the old commit. The documentation says that install skips the refresh "within the last 30 seconds". Without an explicit refresh, `current` could be wrong.
+  - `claude plugin marketplace update <name> --json` refreshed at once, and the following `plugin update` reported `updated` to the new commit.
+  - `claude plugin marketplace add` accepts only `owner/repo`, `https://...`, or a path (`Invalid marketplace source format. Try: owner/repo, https://..., or ./path` for `file://`, `git://`, `ssh://`).
+  - The documentation agrees (code.claude.com/docs/en/plugins/cli-reference.md, read on 2026-11-14): "Refresh one marketplace … A marketplace added with a branch or tag ref updates to the latest commit of that ref"; `--json` needs a marketplace name and Claude Code 2.1.287 or later.
+  - **Unverified:** the GitHub fetch path itself. The spike marketplace had the source kind `git`, not `github`; the same clone and refresh code is presumed.
+
+### `integrations install [--agent claude] [--json]`
+
+- Installs the plugin for the user (scope `user`) in Claude Code. **Decided** (concept §3.1). **Implemented** (`IntegrationsInstallCommand`, `IntegrationService.InstallAsync`, `ClaudeCodeIntegration.InstallAsync`).
+- Without `--agent`, it installs for every detected agent. Claude Code is detected by `claude` on the `PATH`. No detected agent ends with exit code 51. **Decided** on 2026-11-13 (package 07 implementation).
+- `--agent claude` without `claude` on the `PATH` ends with 51 before the release-tag check (Release-tag check, order).
+- `--agent` takes a supported agent id, case-insensitive (today only `claude`). An unknown id or a bare `--agent` ends with exit code 2 `invalid-arguments` before the command runs. **Implemented** (`AgentOptionConverter`, `InvalidAgentOptionException`, `CliErrorMapper.MapArgumentError`):
+  - `Invalid arguments: 'copilot' is not a supported agent for --agent (supported: claude). Run 'shade-kit integrations install --help' for usage.`
+  - `Invalid arguments: --agent needs the id of a supported agent (claude), but got none. Run 'shade-kit integrations install --help' for usage.`
+- Steps for Claude Code. **Decided** on 2026-11-13 (package 07 implementation). **Implemented** (`ClaudeCodeIntegration`; `ClaudeCodeIntegrationTests`):
+  1. `plugin list` reads whether `shade-kit@creativecoders-shade-kit` is installed with the scope `user`.
+  2. `marketplace list` reads the marketplace `creativecoders-shade-kit`:
+     - missing → `marketplace add <source> --scope user`;
+     - same repository (case-insensitive) and same ref (case-sensitive), or the same directory → kept, and refreshed with `marketplace update creativecoders-shade-kit` (step 3);
+     - same repository, other ref → `marketplace remove`, then `marketplace add` (the switch). A marketplace without a ref (the default branch) has another ref than every source with a ref;
+     - another repository, another kind of source, or another directory → exit code 53 `integration-conflict`, nothing is changed.
+
+     Two directories are the same when their paths, with every symbolic link resolved to its final target, are equal: case-insensitively on Windows and macOS, case-sensitively on Linux and every other system. **Decided** on 2026-11-14 (package 07 review rework, Gate 5, finding S2; before, the paths were compared ordinally, so `/tmp/x` and `/private/tmp/x` were a conflict). **Implemented** (`DirectoryPathComparer`, `ClaudeCodeIntegration`; `DirectoryPathComparerTests`, `ClaudeCodeIntegrationTests.InstallAsync_DirectoryMarketplaceThroughSymbolicLink_KeepsMarketplace`, `InstallAsync_SourceThroughSymbolicLinkInParentDirectory_KeepsMarketplace`, `InstallAsync_SymbolicLinkToOtherDirectory_ThrowsConflict`, `InstallAsync_DirectoryInOtherCaseAndCaseInsensitiveComparer_KeepsMarketplace`, `InstallAsync_DirectoryInOtherCaseAndCaseSensitiveComparer_ThrowsConflict`):
+     - A path is resolved segment by segment, as `realpath` does: a segment that is a link is replaced by its target (a relative target is combined with the resolved parent) and resolved again, so a link in a parent directory counts too. The `..` segments of the path itself are removed first, lexically, as for the source text passed to `claude`. At most 40 links are followed.
+     - A path that does not exist (a link loop included), whose links cannot be read, or with more than 40 links is compared in its normalized form without link resolution. A relative path reported by `claude` stays a conflict.
+     - The source text passed to `claude` and reported in `source` is not resolved.
+     - **FACT** (macOS, .NET 10, spike and tests on 2026-11-14): `/tmp`, `/var`, and `/etc` are links to `private/tmp`, `private/var`, and `private/etc`; `Path.GetFullPath("/tmp/x")` stays `/tmp/x`, and `Directory.ResolveLinkTarget("/tmp/x", true)` is `null`, because only the last segment is looked at; `DirectoryInfo("/TMP").LinkTarget` is `private/tmp` (case-insensitive APFS); `Path.GetTempPath()` is below `/var/folders/`, so a temporary directory resolves to a path below `/private/var/` (`DirectoryPathComparerTests.ResolvePath_MacOSTempDirectoryBelowVar_ReturnsPathBelowPrivateVar`).
+     - **Unverified:** Windows junction targets and UNC roots; they are not tested.
+  3. A kept marketplace is refreshed with `marketplace update creativecoders-shade-kit` (GitHub tag, branch, or directory), before `plugin install` or `plugin update`, so that `current` means that the content really is current. It is not run after an add or a switch, which fetch the content anyway. A failure of the refresh ends with 52 and nothing changed. **Decided** on 2026-11-14 (package 07 review rework, Gate 5, finding M3: `plugin update` alone does not refresh reliably, **FACT** above). **Implemented** (`IClaudePluginCli.UpdateMarketplaceAsync`, `ClaudeCodeIntegration`; `ClaudeCodeIntegrationTests.InstallAsync_KeptBranchMarketplace_RefreshesMarketplaceBeforePluginUpdate`, `InstallAsync_KeptDirectoryMarketplace_RefreshesMarketplaceBeforePluginUpdate`, `InstallAsync_MarketplaceSwitchedOrAdded_DoesNotRefreshMarketplace`, `InstallAsync_MarketplaceRefreshFails_ThrowsCauseUnwrappedWithoutPluginChange`, `IntegrationsCommandsEndToEndTests.IntegrationsUpdate_BranchMarketplaceWithNewCommits_RefreshesMarketplaceAndReportsUpdated`).
+  4. After a change of the marketplace (add or switch), `plugin list` again. A plugin that is not installed is installed (`plugin install`, then `plugin list` for `enabled`); otherwise it is updated (`plugin update`).
+- The `claude` calls of an `install` per case:
+  - kept marketplace, plugin installed: `plugin list`, `plugin marketplace list`, `plugin marketplace update creativecoders-shade-kit`, `plugin update`;
+  - kept marketplace, plugin missing: `plugin list`, `plugin marketplace list`, `plugin marketplace update creativecoders-shade-kit`, `plugin install`, `plugin list`;
+  - marketplace missing: `plugin list`, `plugin marketplace list`, `plugin marketplace add`, `plugin list`, then `plugin install` and `plugin list`, or `plugin update`;
+  - switch: `plugin list`, `plugin marketplace list`, `plugin marketplace remove`, `plugin marketplace add`, `plugin list`, then `plugin install` and `plugin list` (the removal uninstalled the plugin), or `plugin update`.
+- Run again for an installed agent, it behaves like `integrations update`.
+- Outcome per agent: `installed` if the plugin was not installed before the run; `current` if the marketplace was kept (and refreshed) and `plugin update` reported `up_to_date`; `updated` otherwise. The ref switch counts as `updated`, although Claude Code removes and installs the plugin again, because `marketplace remove` uninstalls it (**FACT** above). `previousKitVersion` is set only when the plugin was installed before the run, from the ref of the marketplace before the run.
+- A disabled plugin is updated, not enabled; `enabled` is `false` in the result.
+- No rollback. Every step can be repeated. A failure after the old marketplace was removed keeps the exit code and message of the cause and adds `The plugin marketplace of SHADE kit was already switched, so the integration may be incomplete; 'shade-kit integrations install' repairs it.` The hint names `install`, not `update`, because the removed marketplace took the plugin with it, so `update` would find nothing installed. **Decided** on 2026-11-13 (package 07 implementation, after the spike). **Implemented** (`IntegrationIncompleteException`, `CliErrorMapper`).
+- A cancellation (Ctrl+C) from the `marketplace remove` of a switch on, the removal included because the killed `claude` may already have removed the marketplace, still ends with exit code 130 and the error code `canceled`, with the message `The command was canceled while the plugin marketplace of SHADE kit was switched for the agent '{agent}', so the integration may be incomplete; 'shade-kit integrations install' repairs it.` In JSON mode it is the failure envelope with `canceled`. A cancellation while the marketplace is kept or added, or an `OperationCanceledException` without a canceled run token, stays the plain cancellation. **Decided** on 2026-11-14 (package 07 review rework, Gate 5, finding S1). **Implemented** (`IntegrationSwitchCanceledException`, which derives from `OperationCanceledException`; mapped in `CliErrorMapper.Map`, so the command maps it like any core failure and `CliErrorMapper.MapCancellation` and `Program` are unchanged; `ClaudeCodeIntegrationTests.InstallAsync_CanceledWhileMarketplaceIsRemoved_ThrowsSwitchCanceled`, `InstallAsync_CanceledWhileKeptMarketplaceIsRefreshed_PropagatesCancellationUnwrapped`, `CliErrorMapperTests.Map_IntegrationSwitchCanceled_ReturnsExitCode130WithRepairHint`, `IntegrationsInstallCommandTests.ExecuteAsync_JsonModeCanceledDuringMarketplaceSwitch_WritesCanceledEnvelopeWithRepairHint`).
+- The command needs no git repository and writes nothing into one (FP07-AC5). **Implemented** (`ShadeKitCommandContext.RunAsync` without the kit store).
+
+### `integrations update [--json]`
+
+- Updates every agent whose plugin is installed with the scope `user` to the source of the running engine, with the same steps as `install`. **Implemented** (`IntegrationsUpdateCommand`, `IntegrationService.UpdateAsync`, `ClaudeCodeIntegration.UpdateAsync`).
+- Does not touch agents that are not installed. A plugin installed with another scope counts as not installed.
+- Order: detect the agents (none → 51), then for each detected agent in registration order: the agent lists its plugins; not installed → nothing is done and no source is resolved; installed → the source is resolved (with the release-tag check) and the agent is updated with the steps of `install`. The source is resolved once per run, by the first agent that has the integration installed, before that agent changes anything; later agents get the same source. A failure while reading what is installed (for example 52) ends the command. **Decided** on 2026-11-13 (package 07 implementation, Gate 4); the reading changed on 2026-11-14 (package 07 review rework, Gate 5, finding S4): before, `update` first asked every agent what is installed (`plugin list`, `marketplace list`) and then let the agent list both again. **Implemented** (`IntegrationService.UpdateAsync`, `IAgentIntegration.UpdateAsync(getSource, cancellationToken)` with `getSource` a `Func<CancellationToken, Task<MarketplaceSource>>` that `IntegrationService` memoizes; `ClaudeCodeIntegrationTests.UpdateAsync_KeptMarketplace_ListsPluginsAndMarketplacesOnceEach`, `ClaudeCodeIntegrationTests.UpdateAsync_PluginInstalledWithOtherRef_ListsPluginsTwiceAndMarketplacesOnceWithoutRefresh`, `IntegrationServiceTests.UpdateAsync_SeveralInstalledAgents_UpdatesAllFromSourceResolvedOnceInRegistrationOrder`, `IntegrationsCommandsEndToEndTests.IntegrationsUpdate_KeptMarketplace_ReadsPluginsAndMarketplacesOnceAndRefreshesMarketplace`).
+  - The `claude` calls of an `update` with a kept marketplace: `plugin list`, `plugin marketplace list`, `plugin marketplace update creativecoders-shade-kit`, `plugin update`. With a switch: `plugin list`, `plugin marketplace list`, `plugin marketplace remove`, `plugin marketplace add`, `plugin list`, then `plugin install` and `plugin list`.
+  - Changed order for several agents: agent 1 is updated before the `plugin list` of agent 2 runs; before 2026-11-14 all reads came first. Today only Claude Code is registered, so this has no effect yet (08).
+  - `version` still reads the installed integrations with `IntegrationService.GetInstalledAsync` (Version reporting).
+- Nothing installed: an empty `integrations` list, `ref` and `source` `null`, the plain text `No SHADE kit integration is installed.` and `Run 'shade-kit integrations install' to install it.`, exit code 0 (FP07-AC6). No source is resolved, so there is no tag check, no `integration-prerelease-ref` or `integration-release-tag-missing` warning, and an invalid `SHADE_KIT_MARKETPLACE_SOURCE` is not reported. **Decided** on 2026-11-13 (package 07 implementation, Gate 4). **Implemented** (`IntegrationServiceTests.UpdateAsync_NothingInstalled_*`, `IntegrationsCommandsEndToEndTests.IntegrationsUpdate_NothingInstalled_ChecksNoTagAndWritesNoSourceWarning`).
+- `claude` not on the `PATH`: exit code 51, an error, not a warning. **Decided** on 2026-11-13 (package 07 implementation).
+
+### Several agents
+
+- `install` and `update` run the agents one after the other. When an agent fails after at least one agent was already installed or updated, the command keeps the exit code, error code, and message of the failure and adds which integrations were done, as plain text in the line format of the output: ` Before the agent '{agent}' failed, these integrations were done: claude: installed shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0); ….` **Decided** on 2026-11-14 (package 07 review rework, Gate 5, finding S5: a message, no change of the JSON contract). **Implemented** (`IntegrationRunFailedException`, `CliErrorMapper.CreateIntegrationRunFailedError`, `IntegrationsTextFormat.FormatResult`; `IntegrationServiceTests.InstallAsync_SecondAgentFails_ThrowsRunFailedWithResultOfFirstAgent`, `IntegrationServiceTests.UpdateAsync_SecondAgentUpdateFails_ThrowsRunFailedWithResultOfFirstAgent`, `CliErrorMapperTests.Map_IntegrationRunFailedWithCommandFailure_KeepsExitCodeAndMessageAndNamesCompletedAgents`, `IntegrationsInstallCommandTests.ExecuteAsync_JsonModeSecondAgentFailed_WritesFailureEnvelopeNamingCompletedAgents`).
+  - Wrapped are only the documented agent failures (an unavailable or failing agent CLI, `integration-conflict`, an incomplete switch); the repair hint of an incomplete switch comes before the sentence. A failure of the first agent, a cancellation (also during a switch), and an unexpected exception are reported unchanged.
+  - The JSON failure envelope is unchanged: `data` is `null`, and `error` holds only `code` (the code of the failure, so skills react as before) and `message`. Rejected: `data` on failure (the agent contract of package 01 says `data` is `null` on failure) and warnings on failure (the command context writes none on failure; more invasive).
+  - Known limit, older than this rework: the warnings of a failed run (`integration-prerelease-ref`, `integration-release-tag-missing`) are not reported.
+  - Today only Claude Code is registered, so a second agent comes with package 08.
+
+### Output of `install` and `update`
+
+JSON `data`, the same shape for both commands. **Implemented** (`IntegrationRunData`, `IntegrationResultData`):
+
+```json
+{
+  "ref": "v0.8.0",
+  "source": "CreativeCodersTeam/shade-kit#v0.8.0",
+  "integrations": [
+    { "agent": "claude", "pluginId": "shade-kit@creativecoders-shade-kit", "outcome": "updated",
+      "previousKitVersion": "0.7.0", "kitVersion": "0.8.0", "ref": "v0.8.0", "enabled": true }
+  ]
+}
+```
+
+- `ref` at the top is the ref the engine targets; `source` the text passed to `claude plugin marketplace add`. For a directory override, `source` is the absolute path and `ref` is `null`. For `update` with nothing installed, both are `null`. Per agent, `ref` and `kitVersion` are those now installed. `outcome` is `installed`, `updated`, or `current`. Null values are written.
+
+Plain output, one line per agent, then notes. **Implemented** (`IntegrationsTextFormat`):
+
+```text
+claude: installed shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)
+claude: updated shade-kit@creativecoders-shade-kit 0.7.0 -> 0.8.0 (v0.8.0)
+claude: already current shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)
+Restart Claude Code to load the skills.
+```
+
+- A prerelease and a release engine whose tag is missing show `(main)`, a directory override `from <path>`, a GitHub override without a ref `(default branch)`.
+- A disabled plugin adds `  The plugin is disabled in Claude Code. Run 'claude plugin enable shade-kit@creativecoders-shade-kit' to enable it.`
+- `Restart Claude Code to load the skills.` (muted) appears when a Claude Code result is not `current`.
+- Warnings come first as `Warning: <message>`, like for every command.
 
 ### Version reporting
 
-`shade-kit version --json` adds the installed integrations with agent and kit version. A skill or a human can then see at once whether engine and integration differ. **Proposed.**
+- `shade-kit version --json` has an always-present field `integrations`, after `expectedVersion`: `[ { "agent": "claude", "pluginId": "shade-kit@creativecoders-shade-kit", "kitVersion": "0.8.0", "ref": "v0.8.0", "enabled": true } ]`, empty when nothing is installed. **Decided** on 2026-11-13 (package 07 implementation). **Implemented** (`VersionCommandData.Integrations`, `VersionCommandIntegrationData`, `IntegrationService.GetInstalledAsync`).
+- Plain output: the line `shade-kit <version>` as before, then one line per installed integration, `claude: shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)`, with `(disabled)` for a disabled plugin.
+- The integrations are read only after a successful `--expect` check; a mismatch still exits with 50 and starts no `claude`.
+- `version` asks only the agents whose CLI is detected (`IAgentIntegration.IsAvailable()`). **Decided** on 2026-11-13 (package 07 implementation, Gate 4). **Implemented** (`IntegrationService.GetInstalledAsync`).
+- `version` never fails because of an agent. A missing `claude` gives no warning and an empty `integrations` list. **FACT** (real `version --json` with `PATH=/usr/bin:/bin`: `warnings` `[]`, 2026-11-13). Only a `claude` that is on the `PATH` but cannot be started or fails gives the warning `agent-unavailable`: `The SHADE kit integration of the agent '{agent}' cannot be read, so it is not listed: {reason}`. **Implemented** (`AgentUnavailableWarning`, `CliErrorMapper.MapWarning`; `IntegrationsCommandsEndToEndTests.Version_ClaudeNotOnPath_SucceedsWithEmptyIntegrationsAndNoWarning`, `IntegrationsCommandsEndToEndTests.Version_ClaudeOnPathFails_SucceedsWithEmptyIntegrationsAndAgentUnavailableWarning`).
+- Known cost: with `claude` on the `PATH`, every `version` call starts `claude` once or twice (`plugin list`, and `marketplace list` when the plugin is installed), also in each skill handshake. **FACT** (measured on 2026-11-13): `version --json --expect` took 0.73 s with `claude` on the `PATH` and 0.08 s without.
+- `kitVersion` and `ref` are `null` for a directory marketplace and for any ref that is not `v<SemVer>`.
+
+### Exit, error, and warning codes
+
+In the range 50–59 (06-1). **Decided** on 2026-11-13 (package 07 implementation). **Implemented** (`ShadeKitCliExitCodes`, `ShadeKitCliErrorCodes`, `ShadeKitCliWarningCodes`, `CliErrorMapper`).
+
+| Code | Error code | When |
+|---|---|---|
+| 51 | `agent-not-found` | No supported agent detected (`install` without `--agent`, `update`), or the CLI of an agent that the command needs is not on the `PATH` (for Claude Code `claude`), also for an agent named with `--agent`, which is checked before the release tag. The message says that on Windows only the `claude.exe` of the native installer is found. |
+| 52 | `agent-command-failed` | `claude` cannot be started, exits with a non-zero code, reports `outcome` `failed`, or prints no JSON the engine can read. The message names the `claude` command and the reason, with claude's message and `failureCode`. |
+| 53 | `integration-conflict` | The marketplace `creativecoders-shade-kit` already exists with another source repository, kind, or directory. Nothing is changed. The message names both sources and `claude plugin marketplace remove creativecoders-shade-kit`. |
+
+The XML documentation of `ShadeKitCliExitCodes.AgentNotFound` names both cases of 51 since 2026-11-14 (review finding N1). Outside the range: 2 `invalid-arguments` for an invalid `--agent` or `SHADE_KIT_MARKETPLACE_SOURCE`, and 130 `canceled`, since 2026-11-14 with the repair hint for a cancellation during a switch.
+
+Warnings: `integration-prerelease-ref` (prerelease engine installs from `main`), `integration-release-tag-missing` (the release tag of a release engine does not exist, so it installs from `main`), and `agent-unavailable` (`version` cannot read an agent whose CLI is detected).
+
+### Skill names in Claude Code
+
+- Plugin skills are namespaced as `/<plugin>:<skill>` (Claude Code documentation). The skill texts stay agent-neutral and keep the bare names (`/shade-kit-<x>`, "load `shade-kit-next-steps`"). **Decided** on 2026-11-13 (package 07 implementation). No skill text changed in this package except the removed source comments.
+- Smoke check on 2026-11-13, Claude Code 2.1.323, headless `claude -p` with the plugin loaded by `--plugin-dir <working tree>`, `--setting-sources project`, in a scratch directory:
+  - The model's skill listing shows the namespaced name `shade-kit:shade-kit-next-phase`. **FACT.**
+  - Both `/shade-kit-next-phase` and `/shade-kit:shade-kit-next-phase` expand the skill: the session started its version handshake (`--expect 0.7.0`, the kit version of the skills then; `0.8.0` since 2026-11-14) without a Skill tool call. **FACT.**
+  - A skill text that says "load `shade-kit-next-steps`" works: the model called the Skill tool with `shade-kit:shade-kit-next-steps`. **FACT.**
+  - Limits: one run per form, headless print mode, plugin loaded with `--plugin-dir`, not from the marketplace install (the same plugin loader). The interactive slash menu is **Unverified**.
+
+### Skeleton source comments
+
+- The repository is now the shipped plugin, so the source comments `<!-- Skeleton: purpose and flow only, details follow. Source: docs/... -->` are removed from the 13 skeletons that had them (`diagnose`, `discuss`, `drop`, `finish`, `implement`, `map`, `new`, `plan`, `quick`, `refine`, `report`, `review`, `verify`). **Decided** on 2026-11-13 (package 07 implementation). **Implemented.**
+- A guard test fails when any text file under `skills/` has a path segment `docs/` or `research/` (any letter case, `/` or `\`, also inside a URL or `.shadekit/research/`, on purpose). Since 2026-11-14 it scans every text file under `skills/`, not only `SKILL.md`, because the plugin ships everything there, bundled files such as `references/*.md` included. A text file is a file whose first 8000 bytes contain no NUL byte (git's rule); binary files are skipped, and a text file that is not valid UTF-8 fails the test. **Decided** on 2026-11-14 (package 07 review rework, Gate 5, finding S6). **Implemented** (`ShippedSkillsTests` and the helper `ShippedSkillFiles` in `CreativeCoders.ShadeKit.Core.Tests/Skills/`).
+
+### Kit version guard
+
+- A guard test ties the kit version of the skills to the engine version of the build. **Decided** on 2026-11-14 (package 07 review rework, Gate 5, review finding Major: a release engine installs the skills of its own tag, and if they carry another major.minor, every handshake fails with 50 and the hint `shade-kit integrations install` installs the same skills again). **Implemented** (`SkillKitVersionTests.SkillFiles_ShippedSkills_CarryOneKitVersionThatMatchesTheEngineMajorMinor`, `[Trait("Requirement", "FP07-AC2")]`, in `CreativeCoders.ShadeKit.Core.Tests/Skills/`). It fails, listing every violation as `<path>:<line>: expected …, found …`, unless:
+  - every `skills/**/SKILL.md` has a frontmatter with `metadata:` and a direct child `version: <v>`, where `<v>` is a plain, unquoted `x.y.z` (no prerelease, no build metadata);
+  - all skills carry the same value;
+  - its major.minor equals the major.minor of the engine version of the build (`EngineVersionProvider`, the informational version from GitVersion; patch and prerelease of the engine are ignored);
+  - every `--expect <v>` (or `--expect=<v>`) and every "`<v>` is the kit version of this skill" in any text file under `skills/` names that version, also when it is wrapped across lines; a placeholder such as `--expect <version>` counts as a violation.
+- The reference value of "the same value" is the most frequent valid version among the skills; on a tie, the version with the major.minor of the engine wins, then the version of the first skill in ordinal path order. A skill that differs from that version is reported as `expected metadata.version <v> (the kit version of <file>), found <w>`, where `<file>` is the first skill in path order with the reference version, and the handshake texts are checked against it. So a single outlier skill is the one reported, also when it comes first in path order. **Decided** on 2026-11-15 (package 07 review rework, Gate 5 round 2, finding N6: until then the reference was the first skill with a valid version in path order, so an outlier that came first made every other skill a violation). **Implemented** (`SkillKitVersionTests.SelectKitSkill`; `SkillKitVersionTests.FindKitVersionViolations_OutlierFirstInPathOrder_ReportsOnlyTheOutlier` and the tie and invalid-version tests beside it).
+- In the same rework every skill was raised to `0.8.0`, in the frontmatter and in every handshake text. **FACT** (`grep` on 2026-11-14: all 19 `skills/*/SKILL.md` carry `version: 0.8.0`, no `0.7.0` is left under `skills/`).
+- The test runs in every build that runs the tests: pull requests, `main`, `feature/**`, and the release tag (19). The value is still raised by hand (06-2).
 
 ## Acceptance criteria
 
-- **FP07-AC1** After `integrations install --agent claude`, a new Claude Code session in any repository can load `shade-kit-next-phase`.
-- **FP07-AC2** The installed skills have the same kit version as the engine that installed them.
-- **FP07-AC3** After an engine update, `integrations update` replaces the Claude Code content and reports old and new version.
-- **FP07-AC4** `shade-kit version --json` lists the installed Claude Code integration with its kit version.
-- **FP07-AC5** No file in the current repository is created or changed by `integrations install` or `integrations update`.
-- **FP07-AC6** `integrations update` with no installed integration reports that nothing is installed and exits without error.
-- **FP07-AC7** No skill in the integration content references a path under `research/` or `docs/` of the kit repository. Taken over from FP06-AC13 on 2026-11-04, because the rule only applies to shipped skills ([06-2 skill conventions](06-2-skill-conventions-and-version.md#skill-conventions)).
+The automated tests carry `[Trait("Requirement", "FP07-ACn")]`. No test starts `claude`: they fake `IClaudeCommandRunner` and the locator (`FakeClaudeCode` simulates the plugin commands, including "marketplace remove uninstalls the plugin").
+
+- **FP07-AC1** After `integrations install --agent claude`, a new Claude Code session in any repository can load `shade-kit-next-phase`. **Implemented**. The install is proven by `IntegrationsCommandsEndToEndTests.IntegrationsInstall_ClaudeWithoutIntegration_InstallsPluginFromReleaseTagOfEngine`. The session part is checked by hand only: in the smoke check `integrations install --json` installed the plugin from the working tree (`SHADE_KIT_MARKETPLACE_SOURCE`) in an isolated `CLAUDE_CONFIG_DIR`. That configuration has no login, so the session ran headless with the user's login and `--plugin-dir <working tree>` instead of the marketplace-installed copy, and loaded `shade-kit-next-phase` (Skill names in Claude Code).
+- **FP07-AC2** The installed skills have the same kit version as the engine that installed them. **Implemented**. A release engine installs the tree of the tag `v<engine version>`, the tree it was built from, proven by `IntegrationsCommandsEndToEndTests.IntegrationsInstall_ClaudeWithoutIntegration_InstallsPluginFromReleaseTagOfEngine`, `IntegrationsInstallCommandTests.ExecuteAsync_JsonMode_WritesEnvelopeWithTargetedSourceAndResultOfEachAgent`, and `IntegrationServiceTests.ResolveSourceAsync_*`. The kit version in that tree (`metadata.version` and every handshake text) has the major.minor of the engine version of the build, enforced by `SkillKitVersionTests.SkillFiles_ShippedSkills_CarryOneKitVersionThatMatchesTheEngineMajorMinor` since 2026-11-14 ([Kit version guard](#kit-version-guard)); the skills carry `0.8.0`. Limits: a release engine whose tag does not exist installs from `main` with the warning `integration-release-tag-missing`, so for such a build the content is that of `main`; and the guard compares major.minor, the rule of the handshake (06-1), not the patch.
+- **FP07-AC3** After an engine update, `integrations update` replaces the Claude Code content and reports old and new version. **Implemented**. Proven by `IntegrationsCommandsEndToEndTests` (`IntegrationsUpdate_AfterEngineUpdate_SwitchesToNewTagAndReportsOldAndNewVersion`, `IntegrationsUpdate_PlainModeAfterEngineUpdate_WritesOldAndNewVersionAndAsksForRestart`) and `IntegrationsUpdateCommandTests`.
+- **FP07-AC4** `shade-kit version --json` lists the installed Claude Code integration with its kit version. **Implemented**. Proven by `VersionCommandTests` and `IntegrationsCommandsEndToEndTests` (`Version_JsonModeWithInstalledClaudeIntegration_ListsItWithKitVersion`, `Version_AfterInstall_ListsIntegrationOfEngineVersionInPlainMode`); seen in the smoke check (`kitVersion` and `ref` `null` for the directory source).
+- **FP07-AC5** No file in the current repository is created or changed by `integrations install` or `integrations update`. **Implemented**. Proven by `IntegrationsCommandsEndToEndTests.IntegrationsInstallAndUpdate_InGitRepository_CreateOrChangeNoFileInIt` (snapshot of a temporary git repository; `claude` never runs inside it).
+- **FP07-AC6** `integrations update` with no installed integration reports that nothing is installed and exits without error. **Implemented**. Proven by `IntegrationsCommandsEndToEndTests` (`IntegrationsUpdate_NothingInstalled_WritesEmptyIntegrationsAndExits0`, `IntegrationsUpdate_NothingInstalled_ChecksNoTagAndWritesNoSourceWarning`, `IntegrationsUpdate_PlainModeNothingInstalled_SaysNothingIsInstalledAndExits0`) and `IntegrationsUpdateCommandTests`; seen in the smoke check.
+- **FP07-AC7** No skill in the integration content references a path under `research/` or `docs/` of the kit repository. Taken over from FP06-AC13 on 2026-11-04, because the rule only applies to shipped skills ([06-2 skill conventions](06-2-skill-conventions-and-version.md#skill-conventions)). **Implemented**. Proven by `ShippedSkillsTests.SkillFiles_ShippedSkills_ContainNoPathReferenceIntoDocsOrResearch`, `ShippedSkillsTests.FindDocsOrResearchReferences_NestedSkillsWithReferences_ReportsFileAndLineOfEachReference`, and, since 2026-11-14 for every text file under `skills/`, `ShippedSkillsTests.FindDocsOrResearchReferences_BundledFilesBesideSkillFiles_ReportsReferencesInEveryTextFile`, `ShippedSkillsTests.FindDocsOrResearchReferences_BinaryFileWithReference_IsNotScanned`, and `ShippedSkillsTests.FindDocsOrResearchReferences_TextFileThatIsNotUtf8_ThrowsInvalidDataException`.
+
+## Review
+
+- Code review of the uncommitted package 07 on 2026-11-13: [review report](../reviews/2026-11-13-feature-claude-code-integration-uncommitted.md) (1 Major, 5 Minor, 7 Suggestions, 2 Nitpicks).
+- Gate 5 (user, 2026-11-14): reworked the Major finding (Kit version guard), M3, M4, M5, S1 to S7, N1, and N2, as described above. Not reworked and accepted by the user: M1 and M2 (open points).
+- Second code review of the reworked package 07 on 2026-11-15: [second review report](../reviews/2026-11-15-feature-claude-code-integration-uncommitted-2.md) (0 Critical, 0 Major, 0 Minor, 1 Suggestion, 4 Nitpicks). Of the 15 findings of the first review, 12 were resolved, 1 was resolved as decided (the Major finding: the guard test, layer 1; the release check, layer 2, not selected), and 2 stayed unresolved because the user accepted them (M1, M2).
+- Gate 5 round 2 (user, 2026-11-15): reworked N3 (the 52 of a stray stdout line holds for `install` and `update`; in `version` it is the warning `agent-unavailable`, How the engine runs `claude`), N4 (the not-found reason of a missing `claude` is one text, `ExternalTool.NotFoundReason`, used by `ExternalToolRunner.RunAsync` and `ClaudeCodeIntegration.EnsureAvailable`; the text is unchanged; `ExternalToolTests`), and N6 (the kit version guard reports the outlier skill, [Kit version guard](#kit-version-guard)). N5 (the `?? []` guard on `IntegrationRunFailedException.CompletedIntegrations` in `CliErrorMapper.CreateIntegrationRunFailedError`) was checked and kept: a constructed instance never has a null list, but the FP01-AC8 guard test `CliErrorMapperTests.Map_EveryConcreteCoreException_ReturnsCliError` maps instances of every core exception created without running their constructor, and without the guard it fails with a `NullReferenceException` (**FACT**, by experiment in the rework); the comment at the guard now names that reason. Not reworked and accepted by the user: S8 (open points).
 
 ## Open points
 
-- **Unverified:** supported way to install a Claude Code plugin at user level from a script (see above).
-- Since 2026-11-04 every skill carries its kit version hardcoded in its frontmatter (`metadata.version`, 06-2), and its alignment with the engine version is skipped for now. FP07-AC2 ("same kit version as the engine that installed them") then only holds if the version in the skills was raised by hand for the release.
+- No timeout for `claude` in `version` (review finding M1): with `claude` on the `PATH`, every `version` call, and so every skill handshake, waits for `claude plugin list` (and `marketplace list`) without a time limit; a hanging `claude` blocks it until the user cancels. **Unverified** that the list commands can hang. Accepted by the user at Gate 5 on 2026-11-14.
+- No minimum Claude Code version is stated or checked (second review finding S8): every `install` and `update` with a kept marketplace runs `claude plugin marketplace update <name> --json`, and the Claude Code CLI reference says that `--json` on that command needs Claude Code 2.1.287 or later (see How the engine runs `claude`). **Unverified** locally: no `claude` older than 2.1.287 was run. An older `claude` would make such a run fail with the generic 52 `agent-command-failed`; its message only says to make sure Claude Code is up to date (`claude update`). Accepted by the user at Gate 5 round 2 on 2026-11-15.
+- No timeout for `git ls-remote` (review finding M2): on a stalled network the release-tag check of `install` and `update` can block for a long time instead of falling back to the unchecked tag; neither the engine nor git's default HTTP settings bound it. **Unverified** how long such a call blocks. Accepted by the user at Gate 5 on 2026-11-14.
+- The release check of the review's Major finding (a `verify-tag` job or Cake task that fails a tag whose skills have another major.minor) was not selected; the guard test fails the tag build instead (19).
+- The warnings of a failed `install` or `update` are not reported (Several agents).
+- Plugin components at the repository root ship with the plugin (Content source); nothing but this rule guards it.
+- On Linux and macOS a Windows drive path in `SHADE_KIT_MARKETPLACE_SOURCE` is not a directory (`C:/kit` gives exit code 2); **Unverified** for Windows junction targets and UNC roots in the directory comparison.
+- **Unverified:** that `claude plugin marketplace update` refreshes a GitHub-kind marketplace the same way as the `git`-kind marketplace of the spike.
+- The tags `v0.7.0` and `v0.8.0` have no `.claude-plugin/` (**FACT**, `git ls-tree`), so an engine of those versions cannot install from its tag. The first installable release is the first tag that contains the manifests.
+- **Unverified:** the interactive slash menu of Claude Code with the marketplace-installed plugin (the smoke check ran headless with `--plugin-dir`).
+- Windows: only the `claude.exe` of the native installer is found; the `claude.cmd` of an npm installation is not supported.
+- `integrations uninstall` is a later addition. **Proposed.**
+- The plugin source is `./`, the repository root, so the plugin is the whole tree, `src/`, `tests/`, `docs/`, and `research/` included. A directory source is loaded in place (**FACT**, smoke check: `readFromFolder` is the working tree). **Unverified:** whether Claude Code copies the whole tree of a GitHub source into its plugin cache, and how large that becomes. A plugin subdirectory would avoid it but moves `skills/`.
+- A plugin installed with the scope `project` or `local` is not seen; **Unverified** how `claude plugin install --scope user` behaves next to it.
+- `GitCommandRunner` now sets `GIT_TERMINAL_PROMPT=0` and an empty `GIT_ASKPASS` for every `git` call of the engine, not only for the tag check, so no `git` command of the engine can prompt; a call that would need credentials fails instead. **Decided** on 2026-11-13 (package 07 implementation, Gate 4). **Implemented** (`GitCommandRunner.EnvironmentVariables`; `GitCommandRunnerTests`). **FACT** (git 2.54, spike on 2026-11-13): an empty `GIT_ASKPASS` makes `git` ignore `core.askPass` and `SSH_ASKPASS`; `-c core.askPass=` alone does not beat a set `GIT_ASKPASS`. **FACT** (.NET 10): an empty value in `ProcessStartInfo.Environment` reaches the child process.
+- The release-tag check needs `git` and the network. When `ls-remote` cannot run or fails, the tag is used unchecked (Release-tag check), so a build of an untagged `main` commit on a machine without `git` still ends with exit code 52 from `claude`.

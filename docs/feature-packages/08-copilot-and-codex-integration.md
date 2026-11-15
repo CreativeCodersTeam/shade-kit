@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`) 2026-10-24 (documentation check: research note instead of an ADR in `docs/adr/`), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): research question on calling a skill by name) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (consistency review: router references replaced by `shade-kit-next-phase`) 2026-10-24 (documentation check: research note instead of an ADR in `docs/adr/`), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): research question on calling a skill by name), and 2026-11-13 (package 07 implementation: content source, version pin, and state as in 07; Gate 4 rework: `version` asks only detected agents), and 2026-11-14 (review rework of 07: the agent seam `IAgentIntegration` with `EnsureAvailable` and `UpdateAsync(getSource)`, the order of several agents, completed agents named on failure) |
 | Source | Concept §1 (Success, Constraint), §2 (Agents), §3.4, §10 open question 5, [concept §9](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 02, 06, 07 |
 | Enables | Phase packages 09–17 are built and accepted on all three agents |
@@ -45,8 +45,14 @@ The result is a research note `research/shade-kit-agent-compatibility.md` with a
 ### Step 2: install and update
 
 - `integrations install --agent copilot|codex` installs the same content as for Claude Code at user level, as a plugin where the agent has one, otherwise in the agent's user directory. **Decided** (concept §3.1).
-- If the research shows a format difference, the engine transforms the content at install time from the one skill source. There is no second copy of the skill text in the kit repository. **Proposed.**
-- Version recording and `integrations update` work as in package 07.
+- The engine contains no integration content; for Claude Code it is the tree of this repository at the tag of the engine version. **Decided** on 2026-11-13 (package 07 implementation). How Copilot and Codex get it from the tag (their own plugin or marketplace mechanism, or another way where they have none) is **Open** for step 1.
+- If the research shows a format difference, the content is transformed at install time from the one skill source. There is no second copy of the skill text in the kit repository. **Proposed.** Since the engine holds no content (07), a transformation needs a source the engine reads, for example the tagged tree. **Open** since 2026-11-13.
+- The version pin (tag `v<engine version>`, `main` for a prerelease engine and for a release engine whose tag does not exist), the state read from the agent instead of an engine-owned record, and `integrations update` work as in package 07. **Proposed** (2026-11-13, package 07 implementation).
+- `version` asks only the agents whose CLI is detected (`IAgentIntegration.IsAvailable()`), so on a machine with only Copilot or Codex it does not start `claude` and gives no warning for Claude Code; `agent-unavailable` appears only when a detected agent CLI cannot be started or fails. **Decided** on 2026-11-13 (package 07 implementation, Gate 4). **Implemented** (`IntegrationService.GetInstalledAsync`). The integrations of this package get the same behaviour through their own `IsAvailable()`. Before 2026-11-13 this was an open point here (every handshake would have carried `agent-unavailable` for Claude Code).
+- The seam for each agent is `IAgentIntegration` (07). **Implemented** for Claude Code (`ClaudeCodeIntegration`). Since 2026-11-14 (package 07 review rework, Gate 5) it has, besides `AgentId`, `IsAvailable()`, `GetInstalledAsync`, and `InstallAsync(source)`:
+  - `EnsureAvailable()`: throws the agent's not-found exception (an `ExternalToolUnavailableException`, mapped to 51) when its CLI is missing; `install` calls it for every selected or detected agent before the release-tag check, so `--agent copilot` or `--agent codex` without their CLI must fail there too.
+  - `UpdateAsync(getSource, cancellationToken)`: the agent reads its own state, returns `null` without calling `getSource` when nothing is installed, and otherwise calls `getSource` once before it changes anything. `IntegrationService` resolves the source (and checks the tag) once per run, for the first installed agent.
+  - The agents run one after the other in registration order; agent 1 is updated before agent 2 is read. When an agent fails after another one was done, the error keeps the failure's exit code and code and its message names the completed integrations (`IntegrationRunFailedException`); the JSON contract is unchanged. New agents report their failures as `ExternalToolUnavailableException`, `IntegrationConflictException`, or `IntegrationIncompleteException` to get this (07, Several agents).
 
 ### Step 3: degraded behaviour
 
@@ -72,4 +78,4 @@ From this package on, every phase package (09–17) counts as done only when its
 ## Open points
 
 - Concept open question 5 is the content of step 1.
-- Frontmatter visibility (06-2, 2026-11-06): this package checks whether Copilot and Codex show the skill frontmatter, and `metadata.version` in it, to the model, and how their parsers read the unquoted `version: 0.7.0` (as a string, as 06-2 expects). **Unverified.**
+- Frontmatter visibility (06-2, 2026-11-06): this package checks whether Copilot and Codex show the skill frontmatter, and `metadata.version` in it, to the model, and how their parsers read the unquoted `version: 0.8.0` (as a string, as 06-2 expects). **Unverified.**

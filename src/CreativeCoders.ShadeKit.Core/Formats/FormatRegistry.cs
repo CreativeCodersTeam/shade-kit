@@ -66,8 +66,7 @@ public sealed class FormatRegistry : IFormatRegistry
             CreateVersion1(FormatIds.Gates),
             CreateVersion1(FormatIds.Feature),
             CreateVersion1(FormatIds.CurrentFeature),
-            CreateVersion1(FormatIds.TemplatesLock),
-            CreateVersion1(FormatIds.Integrations)
+            CreateVersion1(FormatIds.TemplatesLock)
         ]);
     }
 

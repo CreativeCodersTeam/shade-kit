@@ -2,13 +2,13 @@
 
 SHADE kit runs AI coding agents through a gated feature workflow: from a raw requirement to a clarified spec, a plan, the implementation, and a verified result with a report. It is built for small teams of 2–5 developers who work on features in parallel, each on its own branch, with Claude Code, GitHub Copilot, or OpenAI Codex CLI.
 
-> **Status:** in development. Most commands described here are planned; today the CLI provides `shade-kit version`, `shade-kit init`, the feature commands `shade-kit feature new`, `list`, `current`, `set`, `show`, and `drop`, and the phase commands `shade-kit phase start`, `approve`, `reject`, `complete`, `skills`, and `next`.
+> **Status:** in development. Most commands described here are planned; today the CLI provides `shade-kit version`, `shade-kit init`, the feature commands `shade-kit feature new`, `list`, `current`, `set`, `show`, and `drop`, the phase commands `shade-kit phase start`, `approve`, `reject`, `complete`, `skills`, and `next`, `shade-kit gate info`, and `shade-kit integrations install` and `update` for Claude Code.
 
 ## How it works
 
 SHADE kit has two parts. The skills are the prompts the agent follows; the `shade-kit` CLI is the memory and the referee.
 
-- **Skills** (`skills/`): one skill per phase plus shared skills for interviews, gate checks, research, and reviews. They are installed once per machine for each agent (`shade-kit integrations install`), never into a repository.
+- **Skills** (`skills/`): one skill per phase plus shared skills for interviews, gate checks, research, and reviews. They are installed once per machine for each agent (`shade-kit integrations install`), never into a repository. For Claude Code this repository is the plugin marketplace: the command installs the plugin `shade-kit` from the release tag of the installed engine, and `shade-kit integrations update` moves it to the tag of a newer engine.
 - **Engine** (`shade-kit`): a .NET CLI that keeps the feature state in `.shadekit/` inside the repository, committed and merged with the code. Agents call it with `--json`.
 - **Phases:** `new` → `refine` → `map` → `plan` → `implement` → `verify` → `finish` in the `feature` profile. The `bugfix` profile replaces `refine` and `map` with `diagnose`; the `quick` profile runs `new` → `quick` → `finish` for small changes.
 - **Gates:** the human approves every phase transition. The Definition of Ready guards `plan`, the Definition of Done guards `finish`; each gate can be switched off per repository.

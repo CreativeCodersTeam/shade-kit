@@ -2,12 +2,10 @@
 name: shade-kit-drop
 description: SHADE kit skill to drop a feature from any phase. Deletes the feature after explicit confirmation and clears the local override only if it points to the dropped feature. Use when the user wants to drop, cancel, abandon, or delete a SHADE kit feature. Runs only when the user calls it by name (`/shade-kit-drop`) or asks for it; never load it on your own or from another skill.
 metadata:
-  version: 0.7.0
+  version: 0.8.0
 ---
 
 # shade-kit-drop
-
-<!-- Skeleton: purpose and flow only, details follow. Sources: research/shade-kit-skills.md, docs/feature-packages/03-feature-management.md. -->
 
 ## Purpose
 
@@ -17,7 +15,7 @@ Keep every `warnings` entry (`{ code, message }`) of every CLI call of this run.
 
 ## Flow
 
-1. Version handshake: run `shade-kit version --json --expect 0.7.0`; 0.7.0 is the kit version of this skill (`metadata.version` in its frontmatter).
+1. Version handshake: run `shade-kit version --json --expect 0.8.0`; 0.8.0 is the kit version of this skill (`metadata.version` in its frontmatter).
    - `ok` is `true`: continue. A warning `engine-prerelease-version-mismatch` means that a prerelease engine is used although its major or minor version differs; keep it like every warning and continue.
    - `ok` is `false` (for example `version-mismatch`), or the shell reports that `shade-kit` is not found: stop before any other CLI call. End ([Ending](#ending)) with **refusal** and the failure envelope, or with "`shade-kit` not found".
 2. **Feature:** the feature the user named (`shade-kit feature show <id> --json` for its profile and phase), or else `shade-kit feature current --json`. If no feature is resolved, run `shade-kit feature list --json` and ask the human which one to drop, with the agent's structured question tool (in Claude Code `AskUserQuestion`; without one, a plain question). No feature listed, no pick, or no answer: end with **end of work** and the line "No feature dropped." A failure envelope of any of these calls: end with **refusal** and the envelope.
