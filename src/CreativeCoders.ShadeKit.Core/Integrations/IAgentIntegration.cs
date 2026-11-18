@@ -10,7 +10,7 @@ namespace CreativeCoders.ShadeKit.Core.Integrations;
 /// <remarks>
 /// An implementation installs the integration for the user, never into a repository. Its steps are repeatable, so a
 /// failed run is repaired by running it again. A missing or failing agent CLI is reported as an
-/// <see cref="ExternalToolUnavailableException" />.
+/// <see cref="ExternalToolException" />.
 /// </remarks>
 public interface IAgentIntegration
 {
@@ -35,7 +35,7 @@ public interface IAgentIntegration
     /// Lets a caller report a named agent that is missing before it does anything else, for example before a network
     /// call.
     /// </remarks>
-    /// <exception cref="ExternalToolUnavailableException">
+    /// <exception cref="ExternalToolException">
     /// The CLI of the agent is not found, for example a <see cref="ClaudeNotFoundException" />.
     /// </exception>
     void EnsureAvailable();
@@ -48,7 +48,7 @@ public interface IAgentIntegration
     /// A task that represents the asynchronous operation. The task result contains the installed integration, or
     /// <see langword="null" /> if none is installed for the user.
     /// </returns>
-    /// <exception cref="ExternalToolUnavailableException">The agent CLI is missing, cannot be started, or fails.</exception>
+    /// <exception cref="ExternalToolException">The agent CLI is missing, cannot be started, or fails.</exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken" /> was canceled; a started process is killed.
     /// </exception>
@@ -72,7 +72,7 @@ public interface IAgentIntegration
     /// <exception cref="IntegrationSwitchCanceledException">
     /// <paramref name="cancellationToken" /> was canceled while the marketplace was switched to another branch or tag.
     /// </exception>
-    /// <exception cref="ExternalToolUnavailableException">The agent CLI is missing, cannot be started, or fails.</exception>
+    /// <exception cref="ExternalToolException">The agent CLI is missing, cannot be started, or fails.</exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken" /> was canceled; a started process is killed.
     /// </exception>
@@ -107,7 +107,7 @@ public interface IAgentIntegration
     /// <exception cref="IntegrationSwitchCanceledException">
     /// <paramref name="cancellationToken" /> was canceled while the marketplace was switched to another branch or tag.
     /// </exception>
-    /// <exception cref="ExternalToolUnavailableException">The agent CLI is missing, cannot be started, or fails.</exception>
+    /// <exception cref="ExternalToolException">The agent CLI is missing, cannot be started, or fails.</exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken" /> was canceled; a started process is killed. Any exception that
     /// <paramref name="getSource" /> throws escapes unchanged.

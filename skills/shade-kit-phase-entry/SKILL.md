@@ -56,7 +56,7 @@ Go on by the result:
 
 #### Already in progress
 
-Tell the human that `<phase>` is already active for feature `<featureId>` (in the question or just before it), and ask one question with the agent's structured question tool (in Claude Code `AskUserQuestion`, in GitHub Copilot CLI `ask_user`, in OpenAI Codex CLI `request_user_input`, which Codex offers only in plan mode by default; without such a tool, also in Codex outside plan mode, a plain question):
+Tell the human that `<phase>` is already active for feature `<featureId>` (in the question or just before it), and ask one question with the agent's structured question tool (in Claude Code `AskUserQuestion`, in GitHub Copilot CLI `ask_user`, in OpenAI Codex CLI `request_user_input`, which Codex offers only in plan mode by default; without one, also in Codex outside plan mode, a plain question):
 
 - **Continue `<phase>`**: resume the work (in `refine`: another round) → [step 5](#5-return-to-the-phase-skill).
 - **End here** → end with **end of work**.
@@ -81,7 +81,7 @@ When `data.gate.checklist` is not `null`, load `shade-kit-gate-check` and pass i
 - the target phase of the gate: `data.gate.phase`;
 - the checklist path: `data.gate.checklist`.
 
-Keep its return: the overall result (`pass`, `fail`, or `error`), the failed items, the `n/a` items, the items a human decided, the "Check runs" line, the warnings of `gate info`, and the suspicious instructions in `request.md`.
+Keep its return: the overall result (`pass`, `fail`, or `error`), the failed items, the `n/a` items, the items a human decided, the missing artifacts, the "Check runs" line, the warnings of `gate info`, and the suspicious instructions in `request.md`.
 
 When `data.gate.checklist` is `null`, there is no gate check; go on with step 4.
 
@@ -97,7 +97,7 @@ Otherwise, show the human:
 
 - the transition: `transition.from` → `<phase>`, and whether it is a reopen. Approving a reopen sets `<phase>` in progress again and every later phase of the profile back to pending. Say "every later phase" without listing them: `phase start` does not return the phases of the profile, and a list from memory can be wrong;
 - without a checklist: that the gate has none;
-- with a checklist: the overall result, the failed items with their Evidence, the `n/a` items with their reasons, the items a human decided, and every suspicious instruction found in `request.md`.
+- with a checklist: the overall result, the failed items with their Evidence, the `n/a` items with their reasons, the items a human decided, the missing artifacts the gate check named (a note; they change no result), and every suspicious instruction found in `request.md`.
 
 Then ask for the decision, one question with the structured question tool (without one, a plain question):
 
@@ -176,6 +176,7 @@ Then give the calling skill the ended [return](#return).
 - Never read or write `feature.json`, `gates.json`, or `config.json`; the state comes from the CLI.
 - Do no phase work: read no artifact and write no file. The gate check reads the artifacts.
 - Load only `shade-kit-gate-check` and `shade-kit-next-steps`. Start no phase skill.
-- Write a skill call that you show the human in the form of the agent you run in: `/shade-kit-<skill>` in Claude Code and GitHub Copilot CLI, `$shade-kit:shade-kit-<skill>` in OpenAI Codex CLI.
+- Write a skill call that you show the human in the form of the agent you run in: `/<skill>` in Claude Code and GitHub Copilot CLI, `$shade-kit:<skill>` in OpenAI Codex CLI (for example `/shade-kit-refine` and `$shade-kit:shade-kit-refine`).
+- A plain question (without a structured question tool) names its options numbered, in the order given here, and ends the message to wait for the human's answer.
 - Never approve without the human's answer to the approval question.
 - Pass every warning on; never leave one out because it looks harmless. The closing next-steps message shows them.

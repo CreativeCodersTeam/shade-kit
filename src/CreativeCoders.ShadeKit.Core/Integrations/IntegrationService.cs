@@ -213,7 +213,7 @@ public sealed class IntegrationService : IIntegrationService
                     integrations.Add(integration);
                 }
             }
-            catch (ExternalToolUnavailableException exception)
+            catch (ExternalToolException exception)
             {
                 warnings.Add(new AgentUnavailableWarning(agent.AgentId, exception.Message));
             }
@@ -294,7 +294,7 @@ public sealed class IntegrationService : IIntegrationService
     // The documented failures of an agent; anything else is a defect, and a cancellation stays a cancellation.
     private static bool IsAgentFailure(Exception exception)
     {
-        return exception is ExternalToolUnavailableException or IntegrationConflictException
+        return exception is ExternalToolException or IntegrationConflictException
             or IntegrationIncompleteException;
     }
 

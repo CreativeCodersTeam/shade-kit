@@ -26,7 +26,7 @@ The calling skill has already run its version handshake; this skill does not che
 
 ## Call form
 
-Write every skill call in the message in the form of the agent you run in, also a call in a line the calling skill passed: `/<skill>` in Claude Code and GitHub Copilot CLI (for example `/shade-kit-refine`), `$shade-kit:<skill>` in OpenAI Codex CLI (for example `$shade-kit:shade-kit-refine`). This text, its examples, and the refusal table write the Claude Code form. Commands such as `shade-kit feature set <id>` are the same in every agent.
+Write every skill call in the message in the form of the agent you run in, also a call in a line the calling skill passed: `/<skill>` in Claude Code and GitHub Copilot CLI, `$shade-kit:<skill>` in OpenAI Codex CLI (for example `/shade-kit-refine` and `$shade-kit:shade-kit-refine`). This text, its examples, and the refusal table write the Claude Code form. Commands such as `shade-kit feature set <id>` are the same in every agent.
 
 ## Flow
 
@@ -48,9 +48,9 @@ Write every skill call in the message in the form of the agent you run in, also 
    - Whenever `phase next` succeeded, `done` included, also name `/shade-kit-discuss` and `/shade-kit-drop`.
 4. **Warnings.** Collect the warnings the calling skill passed and those of this skill's own `phase next` call. Show each one with its code and message. When the same code and message come twice (for example `gates-defaults-used` from both `phase start` and `phase next`), show it once.
 5. **Write the message** and end. Keep this order, and leave out parts that are empty:
-   1. What happened, in one line, from the calling skill's point of view: its work is done, the human said no (name the transition), or its call was refused, with `error.message` as the reason.
+   1. What happened, in one line that you write yourself, from the point of view of the skill the human called (when the entry protocol of a phase skill ends the run, that phase skill): its work is done, the human said no (name the transition), or its call was refused, with `error.message` as the reason. What the calling skill passed is the input for this line, not its text.
    2. After a "no": the gaps the calling skill reported.
-   3. The current feature, phase, and state from `current`, when `phase next` succeeded; add the status only when it is `done`. When `phase next` failed, its `error.message` instead.
+   3. The current feature, phase, and state from `current`, when `phase next` succeeded, with the `featureId` as it is, never shortened (it is the `<id>` of `shade-kit feature set <id>`); add the status only when it is `done`. When `phase next` failed, its `error.message` instead.
    4. The options: the steps from step 3 and the options of the refusal row, each with the skill or command to call. When the options of a refusal fix its cause (every row except `no-current-feature`, `phase-not-in-profile`, `transition-not-allowed`, `feature-done`, and the fallback), end them with calling the calling skill again.
    5. The warnings.
 
@@ -61,7 +61,7 @@ Example after the end of work in `refine`: the phase is in progress, `forward` i
 ```text
 Refine is done for now.
 
-Feature: sso-login · phase refine (in-progress)
+Feature: 20261118-1935-sso-login · phase refine (in-progress)
 
 What you can do now:
 - Continue refine: /shade-kit-refine

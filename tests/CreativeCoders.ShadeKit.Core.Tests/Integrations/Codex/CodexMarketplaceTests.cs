@@ -14,7 +14,7 @@ public class CodexMarketplaceTests
     [InlineData("https://github.com/CreativeCodersTeam/shade-kit.git", "CreativeCodersTeam/shade-kit")]
     [InlineData("https://github.com/o/r.git", "o/r")]
     [InlineData("https://github.com/my_org.x/repo-name_1.git", "my_org.x/repo-name_1")]
-    public void ToAgentMarketplace_GitSourceOfGitHubUrl_MapsToGitHubWithRepoAndWithoutRef(string source,
+    public void ToAgentMarketplace_GitSourceOfGitHubUrl_MapsToGitHubWithRepoAndRefNotReported(string source,
         string expectedRepo)
     {
         // Arrange
@@ -26,7 +26,7 @@ public class CodexMarketplaceTests
         // Assert
         agentMarketplace
             .Should().Be(new AgentMarketplace(Name, AgentMarketplaceSourceKind.GitHub, "git", expectedRepo, null,
-                null), "codex does not report the ref of a marketplace");
+                null, IsRefReported: false), "codex does not report the ref of a marketplace");
     }
 
     [Theory]
@@ -49,7 +49,8 @@ public class CodexMarketplaceTests
 
         // Assert
         agentMarketplace
-            .Should().Be(new AgentMarketplace(Name, AgentMarketplaceSourceKind.Other, "git", null, null, null));
+            .Should().Be(new AgentMarketplace(Name, AgentMarketplaceSourceKind.Other, "git", null, null, null,
+                IsRefReported: false));
     }
 
     [Theory]
@@ -69,7 +70,7 @@ public class CodexMarketplaceTests
         // Assert
         agentMarketplace
             .Should().Be(new AgentMarketplace(Name, AgentMarketplaceSourceKind.Directory, "local", null, null,
-                expectedPath));
+                expectedPath, IsRefReported: false));
     }
 
     [Theory]
@@ -90,6 +91,7 @@ public class CodexMarketplaceTests
 
         // Assert
         agentMarketplace
-            .Should().Be(new AgentMarketplace(Name, AgentMarketplaceSourceKind.Other, sourceType, null, null, null));
+            .Should().Be(new AgentMarketplace(Name, AgentMarketplaceSourceKind.Other, sourceType, null, null, null,
+                IsRefReported: false));
     }
 }

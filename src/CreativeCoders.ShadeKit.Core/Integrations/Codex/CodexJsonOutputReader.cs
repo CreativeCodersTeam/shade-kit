@@ -28,7 +28,14 @@ namespace CreativeCoders.ShadeKit.Core.Integrations.Codex;
 /// <param name="result">The result of the finished <c>codex</c> process.</param>
 internal sealed class CodexJsonOutputReader(IReadOnlyList<string> arguments, ExternalProcessResult result)
 {
-    private static readonly char[] LineSeparators = ['\r', '\n'];
+    /// <summary>
+    /// Gets the reader for the fields of the output, whose failures are reported as
+    /// <see cref="CodexCommandFailedException" />.
+    /// </summary>
+    /// <value>The shared field reader for the tool name <c>codex</c>.</value>
+    public AgentJsonFieldReader<CodexCommandFailedException> Fields { get; } = new("codex", result,
+        (reason, codexMessage, innerException) => new CodexCommandFailedException(arguments, result.ExitCode,
+            reason, codexMessage, innerException));
 
     /// <summary>
     /// Reads the JSON object that the command printed and converts it.
@@ -45,7 +52,7 @@ internal sealed class CodexJsonOutputReader(IReadOnlyList<string> arguments, Ext
     {
         if (result.ExitCode != 0)
         {
-            throw CreateExitCodeException();
+            throw Fields.CreateExitCodeException();
         }
 
         JsonDocument document;
@@ -56,7 +63,7 @@ internal sealed class CodexJsonOutputReader(IReadOnlyList<string> arguments, Ext
         }
         catch (JsonException exception)
         {
-            throw Fail($"The output of codex is not valid JSON: {Sentences.Terminate(exception.Message)}",
+            throw Fields.Fail($"The output of codex is not valid JSON: {Sentences.Terminate(exception.Message)}",
                 exception);
         }
 
@@ -66,7 +73,7 @@ internal sealed class CodexJsonOutputReader(IReadOnlyList<string> arguments, Ext
 
             return root.ValueKind == JsonValueKind.Object
                 ? readOutput(root)
-                : throw Fail("The output of codex is not a JSON object.");
+                : throw Fields.Fail("The output of codex is not a JSON object.");
         }
     }
 
@@ -100,7 +107,7 @@ internal sealed class CodexJsonOutputReader(IReadOnlyList<string> arguments, Ext
     {
         if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.Array)
         {
-            throw Fail($"The codex output has no '{propertyName}' array.");
+            throw Fields.Fail($"The {Fields.Describe(null)} has no '{propertyName}' array.");
         }
 
         return
@@ -109,82 +116,11 @@ internal sealed class CodexJsonOutputReader(IReadOnlyList<string> arguments, Ext
             {
                 var subject = $"entry {(index + 1).ToString(CultureInfo.InvariantCulture)} of '{propertyName}'";
 
-                return entry.ValueKind == JsonValueKind.Object
-                    ? readEntry(entry, subject)
-                    : throw Fail($"The {subject} of the codex output is not a JSON object.");
+                Fields.EnsureObject(entry, subject);
+
+                return readEntry(entry, subject);
             })
         ];
-    }
-
-    /// <summary>
-    /// Reads a string field that must be present.
-    /// </summary>
-    /// <param name="element">The JSON object that contains the field.</param>
-    /// <param name="propertyName">The name of the field.</param>
-    /// <param name="subject">
-    /// The name of the object in messages, for example <c>entry 2 of 'installed'</c>, or <see langword="null" /> for
-    /// the output object.
-    /// </param>
-    /// <returns>The value of the field, which is neither empty nor whitespace.</returns>
-    /// <exception cref="CodexCommandFailedException">
-    /// The field is missing, <see langword="null" />, empty, whitespace, or not a string.
-    /// </exception>
-    public string ReadRequiredString(JsonElement element, string propertyName, string? subject)
-    {
-        var value = ReadOptionalString(element, propertyName, subject);
-
-        return string.IsNullOrWhiteSpace(value)
-            ? throw Fail($"The {Describe(subject)} has no non-empty '{propertyName}' string.")
-            : value;
-    }
-
-    /// <summary>
-    /// Reads a string field that may be missing.
-    /// </summary>
-    /// <param name="element">The JSON object that contains the field.</param>
-    /// <param name="propertyName">The name of the field.</param>
-    /// <param name="subject">
-    /// The name of the object in messages, for example <c>entry 2 of 'installed'</c>, or <see langword="null" /> for
-    /// the output object.
-    /// </param>
-    /// <returns>
-    /// The value of the field, or <see langword="null" /> if the field is missing or <see langword="null" />.
-    /// </returns>
-    /// <exception cref="CodexCommandFailedException">The field has a value that is not a string.</exception>
-    public string? ReadOptionalString(JsonElement element, string propertyName, string? subject)
-    {
-        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind == JsonValueKind.Null)
-        {
-            return null;
-        }
-
-        return value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : throw Fail($"The field '{propertyName}' of the {Describe(subject)} is not a string.");
-    }
-
-    /// <summary>
-    /// Reads a Boolean field that must be present.
-    /// </summary>
-    /// <param name="element">The JSON object that contains the field.</param>
-    /// <param name="propertyName">The name of the field.</param>
-    /// <param name="subject">
-    /// The name of the object in messages, for example <c>entry 2 of 'installed'</c>, or <see langword="null" /> for
-    /// the output object.
-    /// </param>
-    /// <returns>The value of the field.</returns>
-    /// <exception cref="CodexCommandFailedException">
-    /// The field is missing, <see langword="null" />, or not a Boolean.
-    /// </exception>
-    public bool ReadRequiredBoolean(JsonElement element, string propertyName, string? subject)
-    {
-        if (element.TryGetProperty(propertyName, out var value)
-            && value.ValueKind is JsonValueKind.True or JsonValueKind.False)
-        {
-            return value.GetBoolean();
-        }
-
-        throw Fail($"The {Describe(subject)} has no '{propertyName}' Boolean.");
     }
 
     /// <summary>
@@ -209,36 +145,6 @@ internal sealed class CodexJsonOutputReader(IReadOnlyList<string> arguments, Ext
 
         return value.ValueKind == JsonValueKind.Object
             ? value
-            : throw Fail($"The field '{propertyName}' of the {Describe(subject)} is not a JSON object.");
-    }
-
-    private static string Describe(string? subject)
-    {
-        return subject is null ? "codex output" : $"{subject} of the codex output";
-    }
-
-    private CodexCommandFailedException CreateExitCodeException()
-    {
-        var exitCodeText = "codex exited with the exit code " + result.ExitCode.ToString(CultureInfo.InvariantCulture);
-
-        var message = FindLastNonEmptyLine(result.StandardError) ?? FindLastNonEmptyLine(result.StandardOutput);
-
-        var reason = message is null ? $"{exitCodeText}." : $"{exitCodeText}: {Sentences.Terminate(message)}";
-
-        return new CodexCommandFailedException(arguments, result.ExitCode, reason, message);
-    }
-
-    // codex writes its error last (the deepest cause of an error chain is its last line), so the last line names the
-    // cause; earlier lines may be warnings. Lines end at CRLF, LF, or a lone CR.
-    private static string? FindLastNonEmptyLine(string text)
-    {
-        return text.Split(LineSeparators)
-            .Select(x => x.Trim())
-            .LastOrDefault(x => x.Length > 0);
-    }
-
-    private CodexCommandFailedException Fail(string reason, Exception? innerException = null)
-    {
-        return new CodexCommandFailedException(arguments, result.ExitCode, reason, innerException: innerException);
+            : throw Fields.Fail($"The field '{propertyName}' of the {Fields.Describe(subject)} is not a JSON object.");
     }
 }

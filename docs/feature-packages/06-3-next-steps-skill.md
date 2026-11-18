@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal), 2026-11-11 (06-6: a `phase next` result passed by the calling skill replaces the skill's own call, stated once in flow step 3). 2026-11-13 (06-9: `continue` is `null` in `new`, flow step 3), 2026-11-15 (package 08: calls in the form of the running agent). AC1 to AC4 implemented; loaded by 06-5, 06-6, and, since 2026-11-13, by every phase skill and by `new`, `discuss`, and `drop` (06-9). |
+| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal), 2026-11-11 (06-6: a `phase next` result passed by the calling skill replaces the skill's own call, stated once in flow step 3). 2026-11-13 (06-9: `continue` is `null` in `new`, flow step 3), 2026-11-15 (package 08: calls in the form of the running agent), 2026-11-18 (scenario runs: the `featureId` never shortened, the "what happened" line written by the skill itself). AC1 to AC4 implemented; loaded by 06-5, 06-6, and, since 2026-11-13, by every phase skill and by `new`, `discuss`, and `drop` (06-9). |
 | Source | [06 Skill foundation](06-skill-foundation.md) (next-steps message), [phase start analysis](../../research/shade-kit-phase-start-analysis.md) |
 | Kind | Skill (new general skill) |
 | Depends on | 06-2 |
@@ -73,6 +73,10 @@ Every kit skill that ends, after a refused start, a "no", or the end of its work
     - When the options of a refusal fix its cause, they end with calling the calling skill again. This applies to every row except 37, 41, 42, 44, and the fallback.
     - `pending` and `forward` name the checklist of their gate when it has one. `forward` and every reopen are marked as needing an approval when they need one.
     - The message order: what happened, the gaps after a "no", the current feature, phase, and state, the options, the warnings.
+- Clarifications after the scenario runs of 2026-11-18 (9 runs: fresh subagents with canned envelopes of the real engine, playing Claude Code, GitHub Copilot CLI, and OpenAI Codex CLI in default and plan mode). **Decided** on 2026-11-18 by the human. **Implemented** in `skills/shade-kit-next-steps/SKILL.md` unless marked otherwise:
+  - The current feature line shows the `featureId` as it is, never shortened, because it is the `<id>` of `shade-kit feature set <id>` (flow step 5, part 3). The example shows `Feature: 20261118-1935-sso-login · phase refine (in-progress)` instead of `sso-login`.
+  - The "what happened" line is always written by this skill itself, from the point of view of the skill the human called; when the entry protocol of a phase skill (06-5) ends the run, that is the phase skill. What the calling skill passes is the input for this line, not its text (flow step 5, part 1).
+  - After the human ended the run with "End here" (06-5), the message still lists the steps of `phase next` in full. Kept as is; no text change.
 
 ## Acceptance criteria
 

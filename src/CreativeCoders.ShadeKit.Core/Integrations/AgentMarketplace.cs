@@ -5,7 +5,7 @@ namespace CreativeCoders.ShadeKit.Core.Integrations;
 /// </summary>
 /// <remarks>
 /// Each agent integration maps the marketplace record of its agent CLI to this record, so that SHADE kit decides by
-/// the same rules for every agent whether the marketplace is added, kept, switched, or in conflict.
+/// the same rules for every agent whether the marketplace is added, kept, switched, verified, or in conflict.
 /// </remarks>
 /// <param name="Name">The name of the marketplace, for example <c>creativecoders-shade-kit</c>.</param>
 /// <param name="SourceKind">One of the enumeration values that specifies the kind of the source.</param>
@@ -25,13 +25,20 @@ namespace CreativeCoders.ShadeKit.Core.Integrations;
 /// The path of a <see cref="AgentMarketplaceSourceKind.Directory" /> source, or <see langword="null" /> if the agent
 /// reported none.
 /// </param>
+/// <param name="IsRefReported">
+/// <see langword="true" /> if the agent reports the ref of a marketplace, so that a <see langword="null" />
+/// <paramref name="Ref" /> means the default branch; <see langword="false" /> if the agent never reports it, so that
+/// the ref of the marketplace is unknown and <paramref name="Ref" /> is <see langword="null" />. The default is
+/// <see langword="true" />.
+/// </param>
 public sealed record AgentMarketplace(
     string Name,
     AgentMarketplaceSourceKind SourceKind,
     string? ReportedSourceKind,
     string? Repo,
     string? Ref,
-    string? Path)
+    string? Path,
+    bool IsRefReported = true)
 {
     /// <summary>
     /// Gets the branch or tag of the marketplace if its source is a GitHub repository.

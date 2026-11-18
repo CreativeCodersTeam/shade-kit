@@ -789,12 +789,16 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     // because the switch of the marketplace had begun when the command failed. The plugin is gone by then (Claude Code
     // uninstalls it with its marketplace, the Copilot CLI and Codex uninstall it before), so an update would find
     // nothing installed; the install installs the plugin again. The hint names no agent command, so it fits every
-    // agent.
+    // agent; an agent whose presentation has an incomplete note (Codex: the switch may follow a network failure) gets
+    // that sentence after it.
     private CliError CreateIntegrationIncompleteError(IntegrationIncompleteException exception)
     {
-        const string repairHint =
+        var repairHint =
             "The plugin marketplace of SHADE kit was already switched, so the integration may be incomplete; " +
-            "'shade-kit integrations install' repairs it.";
+            "'shade-kit integrations install' repairs it." +
+            (AgentPresentations.Find(exception.AgentId)?.IncompleteNote is { } incompleteNote
+                ? $" {incompleteNote}"
+                : string.Empty);
 
         var innerError = exception.InnerException is { } innerException ? Map(innerException) : null;
 

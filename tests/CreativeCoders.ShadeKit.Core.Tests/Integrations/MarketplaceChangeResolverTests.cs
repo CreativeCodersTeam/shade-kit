@@ -161,6 +161,63 @@ public class MarketplaceChangeResolverTests
             .Should().Be(MarketplaceChange.Switch);
     }
 
+    [Theory]
+    [InlineData("v0.8.0")]
+    [InlineData(null)]
+    public void Resolve_SameRepoRefNotReported_ReturnsVerify(string? sourceRef)
+    {
+        // Act
+        var change = _resolver.Resolve(CreateGitHubMarketplace(Repo, null, isRefReported: false),
+            MarketplaceSource.ForGitHub(Repo, sourceRef));
+
+        // Assert
+        change
+            .Should().Be(MarketplaceChange.Verify, "an unknown ref cannot be compared with the ref of the source");
+    }
+
+    [Fact]
+    public void Resolve_SameRepoInOtherCaseRefNotReported_ReturnsVerify()
+    {
+        // Act
+        var change = _resolver.Resolve(
+            CreateGitHubMarketplace("creativecodersteam/SHADE-KIT", null, isRefReported: false), ReleaseSource);
+
+        // Assert
+        change
+            .Should().Be(MarketplaceChange.Verify, "GitHub compares repositories case-insensitively");
+    }
+
+    [Fact]
+    public void Resolve_OtherRepoRefNotReported_ThrowsConflictNamingRepoOnly()
+    {
+        // Act
+        var act = () => _resolver.Resolve(CreateGitHubMarketplace("other/repo", null, isRefReported: false),
+            ReleaseSource);
+
+        // Assert
+        var exception = act.Should().Throw<IntegrationConflictException>().Which;
+
+        exception.ExistingSource
+            .Should().Be("other/repo");
+
+        exception.ResolveCommands
+            .Should().Equal(ResolveCommands);
+    }
+
+    [Fact]
+    public void Resolve_GitHubMarketplaceRefNotReportedAndDirectorySource_ThrowsConflictNamingRepo()
+    {
+        // Arrange
+        var source = MarketplaceSource.ForDirectory(Path.Combine(Path.GetTempPath(), "shade-kit"));
+
+        // Act
+        var act = () => _resolver.Resolve(CreateGitHubMarketplace(Repo, null, isRefReported: false), source);
+
+        // Assert
+        act.Should().Throw<IntegrationConflictException>()
+            .Which.ExistingSource.Should().Be(Repo);
+    }
+
     [Fact]
     public void Resolve_OtherRepoWithRef_ThrowsConflictNamingSources()
     {
@@ -277,6 +334,36 @@ public class MarketplaceChangeResolverTests
         // Assert
         change
             .Should().Be(MarketplaceChange.Keep);
+    }
+
+    [Fact]
+    public void Resolve_SameDirectoryRefNotReported_ReturnsKeep()
+    {
+        // Arrange
+        var path = Path.Combine(Path.GetTempPath(), "shade-kit");
+
+        // Act
+        var change = _resolver.Resolve(CreateDirectoryMarketplace(path, isRefReported: false),
+            MarketplaceSource.ForDirectory(path));
+
+        // Assert
+        change
+            .Should().Be(MarketplaceChange.Keep, "a directory marketplace has no ref to verify");
+    }
+
+    [Fact]
+    public void Resolve_OtherDirectoryRefNotReported_ThrowsConflictNamingPath()
+    {
+        // Arrange
+        var otherPath = Path.Combine(Path.GetTempPath(), "other");
+
+        // Act
+        var act = () => _resolver.Resolve(CreateDirectoryMarketplace(otherPath, isRefReported: false),
+            MarketplaceSource.ForDirectory(Path.Combine(Path.GetTempPath(), "shade-kit")));
+
+        // Assert
+        act.Should().Throw<IntegrationConflictException>()
+            .Which.ExistingSource.Should().Be(otherPath);
     }
 
     [Fact]
@@ -446,15 +533,15 @@ public class MarketplaceChangeResolverTests
             .WithParameterName("marketplace");
     }
 
-    private static AgentMarketplace CreateGitHubMarketplace(string repo, string? @ref)
+    private static AgentMarketplace CreateGitHubMarketplace(string repo, string? @ref, bool isRefReported = true)
     {
         return new AgentMarketplace(ShadeKitPlugin.MarketplaceName, AgentMarketplaceSourceKind.GitHub, "github", repo,
-            @ref, null);
+            @ref, null, isRefReported);
     }
 
-    private static AgentMarketplace CreateDirectoryMarketplace(string path)
+    private static AgentMarketplace CreateDirectoryMarketplace(string path, bool isRefReported = true)
     {
         return new AgentMarketplace(ShadeKitPlugin.MarketplaceName, AgentMarketplaceSourceKind.Directory, "directory",
-            null, null, path);
+            null, null, path, isRefReported);
     }
 }

@@ -54,6 +54,20 @@ public class ClaudeCommandRunnerTests
             .Should().BeSameAs(ClaudeCommandRunner.EnvironmentVariables);
     }
 
+    [Fact]
+    public void Tool_Always_DoesNotRunCmdShims()
+    {
+        // Act
+        var tool = ClaudeCommandRunner.Tool;
+
+        // Assert
+        tool.RunsCmdShims
+            .Should().BeFalse();
+
+        tool.CmdShims
+            .Should().BeNull();
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

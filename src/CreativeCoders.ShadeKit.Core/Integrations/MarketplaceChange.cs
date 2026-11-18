@@ -19,5 +19,12 @@ internal enum MarketplaceChange
     /// The marketplace has the needed GitHub repository but another ref, so it is removed and added again with the
     /// needed source.
     /// </summary>
-    Switch
+    Switch,
+
+    /// <summary>
+    /// The marketplace has the needed GitHub repository, but the agent does not report its ref
+    /// (<see cref="AgentMarketplace.IsRefReported" /> is <see langword="false" />), so the agent must check whether
+    /// the marketplace has the ref of the needed source, and keep or switch it accordingly.
+    /// </summary>
+    Verify
 }

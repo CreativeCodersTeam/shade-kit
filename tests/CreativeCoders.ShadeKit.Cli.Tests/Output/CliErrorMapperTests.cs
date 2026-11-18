@@ -1262,7 +1262,54 @@ public class CliErrorMapperTests
                 "'codex plugin marketplace remove creativecoders-shade-kit --json' failed: codex exited with the " +
                 "exit code 1. Fix the cause, make sure OpenAI Codex CLI is up to date, then run the command again. " +
                 "The plugin marketplace of SHADE kit was already switched, so the integration may be incomplete; " +
-                "'shade-kit integrations install' repairs it."));
+                "'shade-kit integrations install' repairs it. Codex counts a failed check of the marketplace as " +
+                "another source, so the switch may also have followed a network, proxy, or login failure; restore " +
+                "the connection first."));
+    }
+
+    [Fact]
+    public void Map_IntegrationIncompleteOfCodexWithUnmappedCause_AddsRepairHintAndNetworkCause()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationIncompleteException("codex", new IOException("Disk full")));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "The SHADE kit integration of the agent 'codex' failed: Disk full. The plugin marketplace of SHADE " +
+                "kit was already switched, so the integration may be incomplete; 'shade-kit integrations install' " +
+                "repairs it. Codex counts a failed check of the marketplace as another source, so the switch may " +
+                "also have followed a network, proxy, or login failure; restore the connection first."));
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithIncompleteCodexSwitch_AddsNetworkCauseBeforeCompletedAgents()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+        var failure = new CodexCommandFailedException(
+            ["plugin", "marketplace", "add", "CreativeCodersTeam/shade-kit", "--ref", "v0.8.0", "--json"], 1,
+            "codex exited with the exit code 1.");
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("codex",
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"),
+            [new IntegrationResult("claude", "p", IntegrationOutcome.Installed, null, "0.8.0", "v0.8.0", true)],
+            new IntegrationIncompleteException("codex", failure)));
+
+        // Assert
+        error!.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.AgentCommandFailed);
+
+        error.Message
+            .Should().EndWith("'shade-kit integrations install' repairs it. Codex counts a failed check of the " +
+                              "marketplace as another source, so the switch may also have followed a network, " +
+                              "proxy, or login failure; restore the connection first. Before the agent 'codex' " +
+                              "failed, these integrations were done: claude: installed p 0.8.0 (v0.8.0).");
     }
 
     [Fact]

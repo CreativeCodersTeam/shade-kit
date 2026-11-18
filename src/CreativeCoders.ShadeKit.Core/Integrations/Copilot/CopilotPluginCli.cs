@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Processes;
@@ -34,6 +33,8 @@ public sealed class CopilotPluginCli : ICopilotPluginCli
     private const string JsonOption = "--json";
 
     private const string SourceProperty = "source";
+
+    private const string ToolName = "copilot";
 
     private readonly ICopilotCommandRunner _copilotCommandRunner;
 
@@ -91,7 +92,7 @@ public sealed class CopilotPluginCli : ICopilotPluginCli
     /// <inheritdoc />
     public async Task AddMarketplaceAsync(string source, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(source, nameof(source));
+        PositionalArgument.Ensure(source, ToolName, nameof(source));
 
         await RunChangeAsync(["plugin", "marketplace", "add", source], cancellationToken).ConfigureAwait(false);
     }
@@ -99,7 +100,7 @@ public sealed class CopilotPluginCli : ICopilotPluginCli
     /// <inheritdoc />
     public async Task RemoveMarketplaceAsync(string name, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(name, nameof(name));
+        PositionalArgument.Ensure(name, ToolName, nameof(name));
 
         await RunChangeAsync(["plugin", "marketplace", "remove", name], cancellationToken).ConfigureAwait(false);
     }
@@ -107,7 +108,7 @@ public sealed class CopilotPluginCli : ICopilotPluginCli
     /// <inheritdoc />
     public async Task UpdateMarketplaceAsync(string name, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(name, nameof(name));
+        PositionalArgument.Ensure(name, ToolName, nameof(name));
 
         await RunChangeAsync(["plugin", "marketplace", "update", name], cancellationToken).ConfigureAwait(false);
     }
@@ -124,7 +125,7 @@ public sealed class CopilotPluginCli : ICopilotPluginCli
     /// <inheritdoc />
     public async Task InstallPluginAsync(string pluginId, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(pluginId, nameof(pluginId));
+        PositionalArgument.Ensure(pluginId, ToolName, nameof(pluginId));
 
         await RunChangeAsync(["plugin", "install", pluginId], cancellationToken).ConfigureAwait(false);
     }
@@ -132,7 +133,7 @@ public sealed class CopilotPluginCli : ICopilotPluginCli
     /// <inheritdoc />
     public async Task UpdatePluginAsync(string pluginId, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(pluginId, nameof(pluginId));
+        PositionalArgument.Ensure(pluginId, ToolName, nameof(pluginId));
 
         await RunChangeAsync(["plugin", "update", pluginId], cancellationToken).ConfigureAwait(false);
     }
@@ -140,7 +141,7 @@ public sealed class CopilotPluginCli : ICopilotPluginCli
     /// <inheritdoc />
     public async Task UninstallPluginAsync(string pluginId, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(pluginId, nameof(pluginId));
+        PositionalArgument.Ensure(pluginId, ToolName, nameof(pluginId));
 
         await RunChangeAsync(["plugin", "uninstall", pluginId], cancellationToken).ConfigureAwait(false);
     }
@@ -163,9 +164,9 @@ public sealed class CopilotPluginCli : ICopilotPluginCli
     private static CopilotMarketplace ReadMarketplace(CopilotJsonOutputReader reader, JsonElement entry,
         string entryName)
     {
-        reader.EnsureObject(entry, entryName);
+        reader.Fields.EnsureObject(entry, entryName);
 
-        var name = reader.ReadRequiredString(entry, "name", entryName);
+        var name = reader.Fields.ReadRequiredString(entry, "name", entryName);
 
         // The shape is not documented: the source is either an object (as in the marketplace settings) or a kind
         // string with the details next to it (as Claude Code reports it).
@@ -174,44 +175,29 @@ public sealed class CopilotPluginCli : ICopilotPluginCli
             var subject = $"source of the {entryName}";
 
             return new CopilotMarketplace(name,
-                reader.ReadOptionalString(source, SourceProperty, subject)
-                ?? reader.ReadOptionalString(source, "type", subject),
-                reader.ReadOptionalString(source, "repo", subject),
-                reader.ReadOptionalString(source, "ref", subject),
-                reader.ReadOptionalString(source, "path", subject));
+                reader.Fields.ReadOptionalString(source, SourceProperty, subject)
+                ?? reader.Fields.ReadOptionalString(source, "type", subject),
+                reader.Fields.ReadOptionalString(source, "repo", subject),
+                reader.Fields.ReadOptionalString(source, "ref", subject),
+                reader.Fields.ReadOptionalString(source, "path", subject));
         }
 
         return new CopilotMarketplace(name,
-            reader.ReadOptionalString(entry, SourceProperty, entryName),
-            reader.ReadOptionalString(entry, "repo", entryName),
-            reader.ReadOptionalString(entry, "ref", entryName),
-            reader.ReadOptionalString(entry, "path", entryName));
+            reader.Fields.ReadOptionalString(entry, SourceProperty, entryName),
+            reader.Fields.ReadOptionalString(entry, "repo", entryName),
+            reader.Fields.ReadOptionalString(entry, "ref", entryName),
+            reader.Fields.ReadOptionalString(entry, "path", entryName));
     }
 
     private static CopilotInstalledPlugin ReadInstalledPlugin(CopilotJsonOutputReader reader, JsonElement entry,
         string entryName)
     {
-        reader.EnsureObject(entry, entryName);
+        reader.Fields.EnsureObject(entry, entryName);
 
         return new CopilotInstalledPlugin(
-            reader.ReadRequiredString(entry, "name", entryName),
-            reader.ReadOptionalString(entry, "marketplace", entryName),
-            reader.ReadOptionalString(entry, "version", entryName),
-            reader.ReadRequiredBoolean(entry, "enabled", entryName));
-    }
-
-    // copilot would read a value that starts with '-' as an option instead of the positional argument.
-    [SuppressMessage("Minor Code Smell", "S3236:Caller information arguments should not be provided explicitly",
-        Justification = "The caller's parameter name is forwarded on purpose, so an invalid value names the " +
-                        "caller's parameter instead of this helper's.")]
-    private static void EnsurePositionalArgument(string value, string paramName)
-    {
-        Ensure.IsNotNullOrWhitespace(value, paramName);
-
-        if (value.StartsWith('-'))
-        {
-            throw new ArgumentException(
-                $"The value '{value}' starts with '-', so copilot would read it as an option.", paramName);
-        }
+            reader.Fields.ReadRequiredString(entry, "name", entryName),
+            reader.Fields.ReadOptionalString(entry, "marketplace", entryName),
+            reader.Fields.ReadOptionalString(entry, "version", entryName),
+            reader.Fields.ReadRequiredBoolean(entry, "enabled", entryName));
     }
 }

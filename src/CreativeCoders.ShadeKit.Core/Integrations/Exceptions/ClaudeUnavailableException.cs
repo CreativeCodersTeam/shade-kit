@@ -19,4 +19,4 @@ public class ClaudeUnavailableException(
     IReadOnlyList<string> arguments,
     string reason,
     Exception? innerException = null)
-    : ExternalToolUnavailableException("claude", "cannot be run", arguments, reason, innerException);
+    : ExternalToolException("claude", "cannot be run", arguments, reason, innerException);

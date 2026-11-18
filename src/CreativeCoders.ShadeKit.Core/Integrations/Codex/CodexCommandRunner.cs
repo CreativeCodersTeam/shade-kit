@@ -17,7 +17,7 @@ namespace CreativeCoders.ShadeKit.Core.Integrations.Codex;
 /// An <c>.exe</c> or Unix executable is started without a shell. A Windows <c>codex.cmd</c> shim of an npm
 /// installation is started through <c>cmd.exe</c>, because only <c>cmd.exe</c> can run it; a shim path or an argument
 /// with a character that <c>cmd.exe</c> would interpret is refused with a <see cref="CodexCommandFailedException" />
-/// before anything is started (see <see cref="ExternalTool.CreateCommandFailedException" />). Unverified: the shim
+/// before anything is started (see <see cref="ExternalTool.CmdShims" />). Unverified: the shim
 /// start has not been run on Windows.
 /// </para>
 /// </remarks>
@@ -59,7 +59,7 @@ public sealed class CodexCommandRunner(ICodexExecutableLocator codexExecutableLo
         static (arguments, reason) => new CodexNotFoundException(arguments, reason),
         static (arguments, reason, innerException) =>
             new CodexUnavailableException(arguments, reason, innerException),
-        static (arguments, reason) => new CodexCommandFailedException(arguments, null, reason));
+        new CmdShimPolicy(static (arguments, reason) => new CodexCommandFailedException(arguments, null, reason)));
 
     /// <inheritdoc />
     public Task<ExternalProcessResult> RunAsync(string workingDirectory, IReadOnlyList<string> arguments,

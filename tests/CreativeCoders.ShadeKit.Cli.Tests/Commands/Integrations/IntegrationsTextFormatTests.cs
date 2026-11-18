@@ -423,6 +423,22 @@ public class IntegrationsTextFormatTests
     }
 
     [Fact]
+    public void FormatResult_ClaudeUpdatedToOtherCommitWithSameKitVersion_WritesVersionOnce()
+    {
+        // Arrange
+        var result = new IntegrationResult("claude", PluginId, IntegrationOutcome.Updated, "0.8.0", "0.8.0", "main",
+            true);
+
+        // Act
+        var markup = IntegrationsTextFormat.FormatResult(result,
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "main"));
+
+        // Assert
+        ToPlainText(markup)
+            .Should().Be("claude: updated shade-kit@creativecoders-shade-kit 0.8.0 (main)");
+    }
+
+    [Fact]
     public void FormatResult_UpdatedWithOtherPreviousKitVersion_WritesArrow()
     {
         // Arrange

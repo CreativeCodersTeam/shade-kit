@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
 using CreativeCoders.ShadeKit.Core.Processes.Exceptions;
@@ -59,7 +60,7 @@ namespace CreativeCoders.ShadeKit.Core.Integrations.Copilot;
 /// <c>copilot</c>.
 /// </para>
 /// </remarks>
-public sealed class CopilotCliIntegration : IAgentIntegration
+public sealed class CopilotCliIntegration : AgentIntegrationBase<CopilotInstalledPlugin>
 {
     /// <summary>
     /// Represents the agent id of the GitHub Copilot CLI.
@@ -117,37 +118,14 @@ public sealed class CopilotCliIntegration : IAgentIntegration
 
     /// <inheritdoc />
     /// <value>The id <see cref="CopilotAgentId" />.</value>
-    public string AgentId => CopilotAgentId;
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// The Copilot CLI is detected by <c>copilot</c> (on Windows <c>copilot.exe</c> or <c>copilot.cmd</c>) in an
-    /// absolute directory of the <c>PATH</c>.
-    /// </remarks>
-    public bool IsAvailable()
-    {
-        return _copilotExecutableLocator.FindCopilotExecutable() is not null;
-    }
-
-    /// <inheritdoc />
-    /// <exception cref="CopilotNotFoundException">
-    /// <c>copilot</c> is not found; the exception names <c>copilot plugin list --json</c>, the first command of an
-    /// install or update.
-    /// </exception>
-    public void EnsureAvailable()
-    {
-        if (!IsAvailable())
-        {
-            throw new CopilotNotFoundException(ListPluginsArguments, CopilotCommandRunner.Tool.NotFoundReason);
-        }
-    }
+    public override string AgentId => CopilotAgentId;
 
     /// <inheritdoc />
     /// <remarks>
     /// The ref and the kit version come from the marketplace <see cref="ShadeKitPlugin.MarketplaceName" /> if it is a
     /// GitHub marketplace.
     /// </remarks>
-    public async Task<InstalledIntegration?> GetInstalledAsync(CancellationToken cancellationToken = default)
+    public override async Task<InstalledIntegration?> GetInstalledAsync(CancellationToken cancellationToken = default)
     {
         var plugin = await FindPluginAsync(cancellationToken).ConfigureAwait(false);
 
@@ -164,36 +142,28 @@ public sealed class CopilotCliIntegration : IAgentIntegration
     }
 
     /// <inheritdoc />
-    public async Task<IntegrationResult> InstallAsync(MarketplaceSource source,
-        CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// The Copilot CLI is detected by <c>copilot</c> (on Windows <c>copilot.exe</c> or <c>copilot.cmd</c>) in an
+    /// absolute directory of the <c>PATH</c>.
+    /// </remarks>
+    private protected override string? FindExecutable()
     {
-        Ensure.NotNull(source);
-
-        var pluginBefore = await FindPluginAsync(cancellationToken).ConfigureAwait(false);
-
-        return await ApplyAsync(source, pluginBefore, cancellationToken).ConfigureAwait(false);
+        return _copilotExecutableLocator.FindCopilotExecutable();
     }
 
     /// <inheritdoc />
-    public async Task<IntegrationResult?> UpdateAsync(Func<CancellationToken, Task<MarketplaceSource>> getSource,
-        CancellationToken cancellationToken = default)
+    /// <returns>
+    /// A <see cref="CopilotNotFoundException" /> that names <c>copilot plugin list --json</c>, the first command of an
+    /// install or update.
+    /// </returns>
+    private protected override ExternalToolException CreateNotFoundException()
     {
-        Ensure.NotNull(getSource);
-
-        var pluginBefore = await FindPluginAsync(cancellationToken).ConfigureAwait(false);
-
-        if (pluginBefore is null)
-        {
-            return null;
-        }
-
-        var source = Ensure.NotNull(await getSource(cancellationToken).ConfigureAwait(false));
-
-        return await ApplyAsync(source, pluginBefore, cancellationToken).ConfigureAwait(false);
+        return new CopilotNotFoundException(ListPluginsArguments, CopilotCommandRunner.Tool.NotFoundReason);
     }
 
-    private async Task<IntegrationResult> ApplyAsync(MarketplaceSource source, CopilotInstalledPlugin? pluginBefore,
-        CancellationToken cancellationToken)
+    /// <inheritdoc />
+    private protected override async Task<IntegrationResult> ApplyAsync(MarketplaceSource source,
+        CopilotInstalledPlugin? pluginBefore, CancellationToken cancellationToken)
     {
         var marketplace = FindMarketplace(
             await _copilotPluginCli.ListMarketplacesAsync(cancellationToken).ConfigureAwait(false));
@@ -202,62 +172,63 @@ public sealed class CopilotCliIntegration : IAgentIntegration
 
         var previousKitVersion = pluginBefore is null ? null : marketplace?.KitVersion;
 
-        var isRemoved = false;
+        return await RunStepsAsync(
+            steps => ApplyChangeAsync(source, change, pluginBefore, previousKitVersion, steps, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
+    }
 
-        try
+    private async Task<IntegrationResult> ApplyChangeAsync(MarketplaceSource source, MarketplaceChange change,
+        CopilotInstalledPlugin? pluginBefore, string? previousKitVersion, IntegrationStepState steps,
+        CancellationToken cancellationToken)
+    {
+        CopilotInstalledPlugin? plugin;
+
+        switch (change)
         {
-            CopilotInstalledPlugin? plugin;
+            case MarketplaceChange.Switch:
+                steps.StartSwitch();
 
-            switch (change)
-            {
-                case MarketplaceChange.Switch:
-                    // copilot refuses to remove a marketplace whose plugins are installed, so the plugin goes first.
-                    if (pluginBefore is not null)
-                    {
-                        await _copilotPluginCli.UninstallPluginAsync(ShadeKitPlugin.Id, cancellationToken)
-                            .ConfigureAwait(false);
-
-                        isRemoved = true;
-                    }
-
-                    await _copilotPluginCli.RemoveMarketplaceAsync(ShadeKitPlugin.MarketplaceName, cancellationToken)
+                // copilot refuses to remove a marketplace whose plugins are installed, so the plugin goes first.
+                if (pluginBefore is not null)
+                {
+                    await _copilotPluginCli.UninstallPluginAsync(ShadeKitPlugin.Id, cancellationToken)
                         .ConfigureAwait(false);
 
-                    isRemoved = true;
+                    steps.MarkRemoved();
+                }
 
-                    await _copilotPluginCli.AddMarketplaceAsync(source.Text, cancellationToken).ConfigureAwait(false);
+                await _copilotPluginCli.RemoveMarketplaceAsync(ShadeKitPlugin.MarketplaceName, cancellationToken)
+                    .ConfigureAwait(false);
 
-                    plugin = null;
-                    break;
+                steps.MarkRemoved();
 
-                case MarketplaceChange.Keep:
-                    // A kept marketplace that follows a branch would otherwise stay at the commit of its last fetch.
-                    await _copilotPluginCli.UpdateMarketplaceAsync(ShadeKitPlugin.MarketplaceName, cancellationToken)
-                        .ConfigureAwait(false);
+                await _copilotPluginCli.AddMarketplaceAsync(source.Text, cancellationToken).ConfigureAwait(false);
 
-                    plugin = pluginBefore;
-                    break;
+                plugin = null;
+                break;
 
-                default:
-                    await _copilotPluginCli.AddMarketplaceAsync(source.Text, cancellationToken).ConfigureAwait(false);
+            case MarketplaceChange.Keep:
+                // A kept marketplace that follows a branch would otherwise stay at the commit of its last fetch.
+                await _copilotPluginCli.UpdateMarketplaceAsync(ShadeKitPlugin.MarketplaceName, cancellationToken)
+                    .ConfigureAwait(false);
 
-                    plugin = await FindPluginAsync(cancellationToken).ConfigureAwait(false);
-                    break;
-            }
+                plugin = pluginBefore;
+                break;
 
-            return await InstallOrUpdatePluginAsync(source, plugin is null, pluginBefore, previousKitVersion,
-                cancellationToken).ConfigureAwait(false);
+            case MarketplaceChange.Add:
+                await _copilotPluginCli.AddMarketplaceAsync(source.Text, cancellationToken).ConfigureAwait(false);
+
+                plugin = await FindPluginAsync(cancellationToken).ConfigureAwait(false);
+                break;
+
+            default:
+                // copilot reports the ref, so the resolver never asks it to verify the marketplace.
+                throw new UnreachableException(
+                    $"The marketplace change '{change}' is not expected for {AgentId}, which reports the ref.");
         }
-        catch (ExternalToolUnavailableException exception) when (isRemoved)
-        {
-            throw new IntegrationIncompleteException(AgentId, exception);
-        }
-        catch (OperationCanceledException exception) when (change == MarketplaceChange.Switch &&
-                                                           cancellationToken.IsCancellationRequested)
-        {
-            // A cancellation while the first removal runs counts too: the killed copilot may have removed it.
-            throw new IntegrationSwitchCanceledException(AgentId, exception);
-        }
+
+        return await InstallOrUpdatePluginAsync(source, plugin is null, pluginBefore, previousKitVersion,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<IntegrationResult> InstallOrUpdatePluginAsync(MarketplaceSource source, bool isInstall,
@@ -283,7 +254,13 @@ public sealed class CopilotCliIntegration : IAgentIntegration
         return IntegrationResult.ForShadeKitPlugin(AgentId, source, outcome, previousKitVersion, plugin.Enabled);
     }
 
-    private async Task<CopilotInstalledPlugin?> FindPluginAsync(CancellationToken cancellationToken)
+    /// <inheritdoc />
+    /// <remarks>
+    /// The plugin counts only with the name <see cref="ShadeKitPlugin.Name" /> and the marketplace
+    /// <see cref="ShadeKitPlugin.MarketplaceName" />.
+    /// </remarks>
+    private protected override async Task<CopilotInstalledPlugin?> FindPluginAsync(
+        CancellationToken cancellationToken)
     {
         return FindPlugin(await _copilotPluginCli.ListPluginsAsync(cancellationToken).ConfigureAwait(false));
     }

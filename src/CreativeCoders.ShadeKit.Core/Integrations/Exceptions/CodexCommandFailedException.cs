@@ -41,7 +41,7 @@ public sealed class CodexCommandFailedException(
     string reason,
     string? codexMessage = null,
     Exception? innerException = null)
-    : ExternalToolUnavailableException("codex", "failed", arguments, reason, innerException)
+    : ExternalToolException("codex", "failed", arguments, reason, innerException)
 {
     /// <summary>
     /// Gets the exit code of the <c>codex</c> process.

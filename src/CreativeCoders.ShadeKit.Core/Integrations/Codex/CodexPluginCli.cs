@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
@@ -38,6 +37,8 @@ public sealed class CodexPluginCli : ICodexPluginCli
     private const string JsonOption = "--json";
 
     private const string NameProperty = "name";
+
+    private const string ToolName = "codex";
 
     private readonly ICodexCommandRunner _codexCommandRunner;
 
@@ -90,12 +91,12 @@ public sealed class CodexPluginCli : ICodexPluginCli
 
         return reader.ReadObject(output => reader.ReadRequiredObjectArray(output, "installed",
             (entry, subject) => new CodexInstalledPlugin(
-                reader.ReadRequiredString(entry, "pluginId", subject),
-                reader.ReadRequiredString(entry, NameProperty, subject),
-                reader.ReadRequiredString(entry, "marketplaceName", subject),
-                reader.ReadOptionalString(entry, "version", subject),
-                reader.ReadRequiredBoolean(entry, "installed", subject),
-                reader.ReadRequiredBoolean(entry, "enabled", subject))));
+                reader.Fields.ReadRequiredString(entry, "pluginId", subject),
+                reader.Fields.ReadRequiredString(entry, NameProperty, subject),
+                reader.Fields.ReadRequiredString(entry, "marketplaceName", subject),
+                reader.Fields.ReadOptionalString(entry, "version", subject),
+                reader.Fields.ReadRequiredBoolean(entry, "installed", subject),
+                reader.Fields.ReadRequiredBoolean(entry, "enabled", subject))));
     }
 
     /// <inheritdoc />
@@ -118,15 +119,15 @@ public sealed class CodexPluginCli : ICodexPluginCli
         var reader = await RunAsync(arguments, cancellationToken).ConfigureAwait(false);
 
         return reader.ReadObject(output => new CodexMarketplaceAddResult(
-            reader.ReadRequiredString(output, "marketplaceName", null),
-            reader.ReadRequiredString(output, "installedRoot", null),
-            reader.ReadRequiredBoolean(output, "alreadyAdded", null)));
+            reader.Fields.ReadRequiredString(output, "marketplaceName", null),
+            reader.Fields.ReadRequiredString(output, "installedRoot", null),
+            reader.Fields.ReadRequiredBoolean(output, "alreadyAdded", null)));
     }
 
     /// <inheritdoc />
     public async Task UpgradeMarketplaceAsync(string name, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(name, nameof(name));
+        PositionalArgument.Ensure(name, ToolName, nameof(name));
 
         await RunChangeAsync(["plugin", "marketplace", "upgrade", name, JsonOption], cancellationToken)
             .ConfigureAwait(false);
@@ -135,7 +136,7 @@ public sealed class CodexPluginCli : ICodexPluginCli
     /// <inheritdoc />
     public async Task RemoveMarketplaceAsync(string name, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(name, nameof(name));
+        PositionalArgument.Ensure(name, ToolName, nameof(name));
 
         await RunChangeAsync(["plugin", "marketplace", "remove", name, JsonOption], cancellationToken)
             .ConfigureAwait(false);
@@ -144,7 +145,7 @@ public sealed class CodexPluginCli : ICodexPluginCli
     /// <inheritdoc />
     public async Task AddPluginAsync(string pluginId, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(pluginId, nameof(pluginId));
+        PositionalArgument.Ensure(pluginId, ToolName, nameof(pluginId));
 
         await RunChangeAsync(["plugin", "add", pluginId, JsonOption], cancellationToken).ConfigureAwait(false);
     }
@@ -152,7 +153,7 @@ public sealed class CodexPluginCli : ICodexPluginCli
     /// <inheritdoc />
     public async Task RemovePluginAsync(string pluginId, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(pluginId, nameof(pluginId));
+        PositionalArgument.Ensure(pluginId, ToolName, nameof(pluginId));
 
         await RunChangeAsync(["plugin", "remove", pluginId, JsonOption], cancellationToken).ConfigureAwait(false);
     }
@@ -205,8 +206,8 @@ public sealed class CodexPluginCli : ICodexPluginCli
 
     private static CodexMarketplace ReadMarketplace(CodexJsonOutputReader reader, JsonElement entry, string subject)
     {
-        var name = reader.ReadRequiredString(entry, NameProperty, subject);
-        var root = reader.ReadRequiredString(entry, "root", subject);
+        var name = reader.Fields.ReadRequiredString(entry, NameProperty, subject);
+        var root = reader.Fields.ReadRequiredString(entry, "root", subject);
 
         if (reader.ReadOptionalObject(entry, "marketplaceSource", subject) is not { } marketplaceSource)
         {
@@ -216,22 +217,7 @@ public sealed class CodexPluginCli : ICodexPluginCli
         var sourceSubject = $"'marketplaceSource' of the {subject}";
 
         return new CodexMarketplace(name, root,
-            reader.ReadRequiredString(marketplaceSource, "sourceType", sourceSubject),
-            reader.ReadRequiredString(marketplaceSource, "source", sourceSubject));
-    }
-
-    // codex would read a value that starts with '-' as an option instead of the positional argument.
-    [SuppressMessage("Minor Code Smell", "S3236:Caller information arguments should not be provided explicitly",
-        Justification = "The caller's parameter name is forwarded on purpose, so an invalid value names the " +
-                        "caller's parameter instead of this helper's.")]
-    private static void EnsurePositionalArgument(string value, string paramName)
-    {
-        Ensure.IsNotNullOrWhitespace(value, paramName);
-
-        if (value.StartsWith('-'))
-        {
-            throw new ArgumentException(
-                $"The value '{value}' starts with '-', so codex would read it as an option.", paramName);
-        }
+            reader.Fields.ReadRequiredString(marketplaceSource, "sourceType", sourceSubject),
+            reader.Fields.ReadRequiredString(marketplaceSource, "source", sourceSubject));
     }
 }

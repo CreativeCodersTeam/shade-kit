@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
 using CreativeCoders.ShadeKit.Core.Processes.Exceptions;
@@ -46,7 +47,7 @@ namespace CreativeCoders.ShadeKit.Core.Integrations.Claude;
 /// disabled plugin stays disabled.
 /// </para>
 /// </remarks>
-public sealed class ClaudeCodeIntegration : IAgentIntegration
+public sealed class ClaudeCodeIntegration : AgentIntegrationBase<ClaudeInstalledPlugin>
 {
     /// <summary>
     /// Represents the agent id of Claude Code.
@@ -111,36 +112,16 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
 
     /// <inheritdoc />
     /// <value>The id <see cref="ClaudeAgentId" />.</value>
-    public string AgentId => ClaudeAgentId;
-
-    /// <inheritdoc />
-    /// <remarks>Claude Code is detected by <c>claude</c> in an absolute directory of the <c>PATH</c>.</remarks>
-    public bool IsAvailable()
-    {
-        return _claudeExecutableLocator.FindClaudeExecutable() is not null;
-    }
-
-    /// <inheritdoc />
-    /// <exception cref="ClaudeNotFoundException">
-    /// <c>claude</c> is not found; the exception names <c>claude plugin list --json</c>, the first command of an
-    /// install or update.
-    /// </exception>
-    public void EnsureAvailable()
-    {
-        if (!IsAvailable())
-        {
-            throw new ClaudeNotFoundException(ListPluginsArguments, ClaudeCommandRunner.Tool.NotFoundReason);
-        }
-    }
+    public override string AgentId => ClaudeAgentId;
 
     /// <inheritdoc />
     /// <remarks>
     /// The ref and the kit version come from the marketplace <see cref="MarketplaceName" /> if it is a GitHub
     /// marketplace.
     /// </remarks>
-    public async Task<InstalledIntegration?> GetInstalledAsync(CancellationToken cancellationToken = default)
+    public override async Task<InstalledIntegration?> GetInstalledAsync(CancellationToken cancellationToken = default)
     {
-        var plugin = await FindUserPluginAsync(cancellationToken).ConfigureAwait(false);
+        var plugin = await FindPluginAsync(cancellationToken).ConfigureAwait(false);
 
         if (plugin is null)
         {
@@ -155,87 +136,79 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
     }
 
     /// <inheritdoc />
-    public async Task<IntegrationResult> InstallAsync(MarketplaceSource source,
-        CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// Claude Code is detected by <c>claude</c> in an absolute directory of the <c>PATH</c>.
+    /// </remarks>
+    private protected override string? FindExecutable()
     {
-        Ensure.NotNull(source);
-
-        var pluginBefore = await FindUserPluginAsync(cancellationToken).ConfigureAwait(false);
-
-        return await ApplyAsync(source, pluginBefore, cancellationToken).ConfigureAwait(false);
+        return _claudeExecutableLocator.FindClaudeExecutable();
     }
 
     /// <inheritdoc />
-    public async Task<IntegrationResult?> UpdateAsync(Func<CancellationToken, Task<MarketplaceSource>> getSource,
-        CancellationToken cancellationToken = default)
+    /// <returns>
+    /// A <see cref="ClaudeNotFoundException" /> that names <c>claude plugin list --json</c>, the first command of an
+    /// install or update.
+    /// </returns>
+    private protected override ExternalToolException CreateNotFoundException()
     {
-        Ensure.NotNull(getSource);
-
-        var pluginBefore = await FindUserPluginAsync(cancellationToken).ConfigureAwait(false);
-
-        if (pluginBefore is null)
-        {
-            return null;
-        }
-
-        var source = Ensure.NotNull(await getSource(cancellationToken).ConfigureAwait(false));
-
-        return await ApplyAsync(source, pluginBefore, cancellationToken).ConfigureAwait(false);
+        return new ClaudeNotFoundException(ListPluginsArguments, ClaudeCommandRunner.Tool.NotFoundReason);
     }
 
-    private async Task<IntegrationResult> ApplyAsync(MarketplaceSource source, ClaudeInstalledPlugin? pluginBefore,
-        CancellationToken cancellationToken)
+    /// <inheritdoc />
+    private protected override async Task<IntegrationResult> ApplyAsync(MarketplaceSource source,
+        ClaudeInstalledPlugin? pluginBefore, CancellationToken cancellationToken)
     {
         var marketplace = FindMarketplace(
             await _claudePluginCli.ListMarketplacesAsync(cancellationToken).ConfigureAwait(false));
 
         var change = _marketplaceChangeResolver.Resolve(marketplace, source);
 
+        // claude reports the ref, so the resolver never asks it to verify the marketplace.
+        if (change is not (MarketplaceChange.Add or MarketplaceChange.Keep or MarketplaceChange.Switch))
+        {
+            throw new UnreachableException(
+                $"The marketplace change '{change}' is not expected for {AgentId}, which reports the ref.");
+        }
+
         var previousKitVersion = pluginBefore is null ? null : marketplace?.KitVersion;
 
-        var isRemoved = false;
+        return await RunStepsAsync(
+            steps => ApplyChangeAsync(source, change, pluginBefore, previousKitVersion, steps, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
+    }
 
-        try
+    private async Task<IntegrationResult> ApplyChangeAsync(MarketplaceSource source, MarketplaceChange change,
+        ClaudeInstalledPlugin? pluginBefore, string? previousKitVersion, IntegrationStepState steps,
+        CancellationToken cancellationToken)
+    {
+        if (change == MarketplaceChange.Switch)
         {
-            if (change == MarketplaceChange.Switch)
-            {
-                await _claudePluginCli.RemoveMarketplaceAsync(MarketplaceName, cancellationToken)
-                    .ConfigureAwait(false);
+            steps.StartSwitch();
 
-                isRemoved = true;
-            }
+            await _claudePluginCli.RemoveMarketplaceAsync(MarketplaceName, cancellationToken).ConfigureAwait(false);
 
-            // A kept marketplace that follows a branch would otherwise stay at the commit of its last refresh.
-            if (change == MarketplaceChange.Keep)
-            {
-                await _claudePluginCli.UpdateMarketplaceAsync(MarketplaceName, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            else
-            {
-                await _claudePluginCli.AddMarketplaceAsync(source.Text, cancellationToken).ConfigureAwait(false);
-            }
-
-            var plugin = change == MarketplaceChange.Keep
-                ? pluginBefore
-                : await FindUserPluginAsync(cancellationToken).ConfigureAwait(false);
-
-            return plugin is null
-                ? await InstallPluginAsync(source, pluginBefore, previousKitVersion, cancellationToken)
-                    .ConfigureAwait(false)
-                : await UpdatePluginAsync(source, plugin, pluginBefore, previousKitVersion,
-                    change == MarketplaceChange.Keep, cancellationToken).ConfigureAwait(false);
+            steps.MarkRemoved();
         }
-        catch (ExternalToolUnavailableException exception) when (isRemoved)
+
+        // A kept marketplace that follows a branch would otherwise stay at the commit of its last refresh.
+        if (change == MarketplaceChange.Keep)
         {
-            throw new IntegrationIncompleteException(AgentId, exception);
+            await _claudePluginCli.UpdateMarketplaceAsync(MarketplaceName, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException exception) when (change == MarketplaceChange.Switch &&
-                                                           cancellationToken.IsCancellationRequested)
+        else
         {
-            // A cancellation while the removal runs counts too: the killed claude may have removed the marketplace.
-            throw new IntegrationSwitchCanceledException(AgentId, exception);
+            await _claudePluginCli.AddMarketplaceAsync(source.Text, cancellationToken).ConfigureAwait(false);
         }
+
+        var plugin = change == MarketplaceChange.Keep
+            ? pluginBefore
+            : await FindPluginAsync(cancellationToken).ConfigureAwait(false);
+
+        return plugin is null
+            ? await InstallPluginAsync(source, pluginBefore, previousKitVersion, cancellationToken)
+                .ConfigureAwait(false)
+            : await UpdatePluginAsync(source, plugin, pluginBefore, previousKitVersion,
+                change == MarketplaceChange.Keep, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<IntegrationResult> InstallPluginAsync(MarketplaceSource source,
@@ -243,7 +216,7 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
     {
         await _claudePluginCli.InstallPluginAsync(PluginId, cancellationToken).ConfigureAwait(false);
 
-        var plugin = await FindUserPluginAsync(cancellationToken).ConfigureAwait(false)
+        var plugin = await FindPluginAsync(cancellationToken).ConfigureAwait(false)
                      ?? throw new ClaudeCommandFailedException(ListPluginsArguments, 0,
                          $"claude does not list the plugin '{PluginId}' with the scope " +
                          $"'{ClaudeInstalledPlugin.UserScope}' after it was installed.");
@@ -269,7 +242,10 @@ public sealed class ClaudeCodeIntegration : IAgentIntegration
         return IntegrationResult.ForShadeKitPlugin(AgentId, source, outcome, previousKitVersion, plugin.Enabled);
     }
 
-    private async Task<ClaudeInstalledPlugin?> FindUserPluginAsync(CancellationToken cancellationToken)
+    /// <inheritdoc />
+    /// <remarks>The plugin counts only with the scope <c>user</c>.</remarks>
+    private protected override async Task<ClaudeInstalledPlugin?> FindPluginAsync(
+        CancellationToken cancellationToken)
     {
         return FindUserPlugin(await _claudePluginCli.ListPluginsAsync(cancellationToken).ConfigureAwait(false));
     }

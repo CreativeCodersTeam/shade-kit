@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
 using CreativeCoders.ShadeKit.Core.Processes.Exceptions;
@@ -74,7 +75,7 @@ namespace CreativeCoders.ShadeKit.Core.Integrations.Codex;
 /// the commands work without a signed-in account; the exit code of a failed command.
 /// </para>
 /// </remarks>
-public sealed class CodexCliIntegration : IAgentIntegration
+public sealed class CodexCliIntegration : AgentIntegrationBase<CodexInstalledPlugin>
 {
     /// <summary>
     /// Represents the agent id of the OpenAI Codex CLI.
@@ -127,37 +128,14 @@ public sealed class CodexCliIntegration : IAgentIntegration
 
     /// <inheritdoc />
     /// <value>The id <see cref="CodexAgentId" />.</value>
-    public string AgentId => CodexAgentId;
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// The Codex CLI is detected by <c>codex</c> (on Windows <c>codex.exe</c> or <c>codex.cmd</c>) in an absolute
-    /// directory of the <c>PATH</c>.
-    /// </remarks>
-    public bool IsAvailable()
-    {
-        return _codexExecutableLocator.FindCodexExecutable() is not null;
-    }
-
-    /// <inheritdoc />
-    /// <exception cref="CodexNotFoundException">
-    /// <c>codex</c> is not found; the exception names <c>codex plugin list --json</c>, the first command of an install
-    /// or update.
-    /// </exception>
-    public void EnsureAvailable()
-    {
-        if (!IsAvailable())
-        {
-            throw new CodexNotFoundException(ListPluginsArguments, CodexCommandRunner.Tool.NotFoundReason);
-        }
-    }
+    public override string AgentId => CodexAgentId;
 
     /// <inheritdoc />
     /// <remarks>
     /// The ref and the kit version are always <see langword="null" />, because <c>codex</c> does not report the ref of
     /// a marketplace; so the marketplaces are not listed.
     /// </remarks>
-    public async Task<InstalledIntegration?> GetInstalledAsync(CancellationToken cancellationToken = default)
+    public override async Task<InstalledIntegration?> GetInstalledAsync(CancellationToken cancellationToken = default)
     {
         var plugin = await FindPluginAsync(cancellationToken).ConfigureAwait(false);
 
@@ -167,95 +145,89 @@ public sealed class CodexCliIntegration : IAgentIntegration
     }
 
     /// <inheritdoc />
-    public async Task<IntegrationResult> InstallAsync(MarketplaceSource source,
-        CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// The Codex CLI is detected by <c>codex</c> (on Windows <c>codex.exe</c> or <c>codex.cmd</c>) in an absolute
+    /// directory of the <c>PATH</c>.
+    /// </remarks>
+    private protected override string? FindExecutable()
     {
-        Ensure.NotNull(source);
-
-        var pluginBefore = await FindPluginAsync(cancellationToken).ConfigureAwait(false);
-
-        return await ApplyAsync(source, pluginBefore, cancellationToken).ConfigureAwait(false);
+        return _codexExecutableLocator.FindCodexExecutable();
     }
 
     /// <inheritdoc />
-    public async Task<IntegrationResult?> UpdateAsync(Func<CancellationToken, Task<MarketplaceSource>> getSource,
-        CancellationToken cancellationToken = default)
+    /// <returns>
+    /// A <see cref="CodexNotFoundException" /> that names <c>codex plugin list --json</c>, the first command of an
+    /// install or update.
+    /// </returns>
+    private protected override ExternalToolException CreateNotFoundException()
     {
-        Ensure.NotNull(getSource);
-
-        var pluginBefore = await FindPluginAsync(cancellationToken).ConfigureAwait(false);
-
-        if (pluginBefore is null)
-        {
-            return null;
-        }
-
-        var source = Ensure.NotNull(await getSource(cancellationToken).ConfigureAwait(false));
-
-        return await ApplyAsync(source, pluginBefore, cancellationToken).ConfigureAwait(false);
+        return new CodexNotFoundException(ListPluginsArguments, CodexCommandRunner.Tool.NotFoundReason);
     }
 
-    private async Task<IntegrationResult> ApplyAsync(MarketplaceSource source, CodexInstalledPlugin? pluginBefore,
-        CancellationToken cancellationToken)
+    /// <inheritdoc />
+    private protected override async Task<IntegrationResult> ApplyAsync(MarketplaceSource source,
+        CodexInstalledPlugin? pluginBefore, CancellationToken cancellationToken)
     {
         var marketplace = FindMarketplace(
             await _codexPluginCli.ListMarketplacesAsync(cancellationToken).ConfigureAwait(false));
 
         var change = _marketplaceChangeResolver.Resolve(marketplace, source);
 
+        return await RunStepsAsync(
+            steps => ApplyChangeAsync(source, change, pluginBefore, steps, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IntegrationResult> ApplyChangeAsync(MarketplaceSource source, MarketplaceChange change,
+        CodexInstalledPlugin? pluginBefore, IntegrationStepState steps, CancellationToken cancellationToken)
+    {
         string? previousKitVersion = null;
 
-        var isSwitching = false;
-
-        var isRemoved = false;
-
-        try
+        switch (change)
         {
-            if (change == MarketplaceChange.Add)
-            {
+            case MarketplaceChange.Add:
                 await _codexPluginCli.AddMarketplaceAsync(source, cancellationToken).ConfigureAwait(false);
-            }
-            else if (marketplace!.SourceKind == AgentMarketplaceSourceKind.GitHub)
-            {
+                break;
+
+            case MarketplaceChange.Verify:
                 // codex does not report the ref, so an add with the source tells whether the marketplace has it.
-                if (await TryKeepGitMarketplaceAsync(source, cancellationToken).ConfigureAwait(false) is { } isKept)
+                if (await TryKeepGitMarketplaceAsync(source, cancellationToken).ConfigureAwait(false) is
+                    { } isKept)
                 {
                     previousKitVersion = isKept && pluginBefore is not null ? source.KitVersion : null;
+                    break;
                 }
-                else
+
+                steps.StartSwitch();
+
+                if (pluginBefore is not null)
                 {
-                    isSwitching = true;
-
-                    if (pluginBefore is not null)
-                    {
-                        await _codexPluginCli.RemovePluginAsync(ShadeKitPlugin.Id, cancellationToken)
-                            .ConfigureAwait(false);
-
-                        isRemoved = true;
-                    }
-
-                    await _codexPluginCli.RemoveMarketplaceAsync(ShadeKitPlugin.MarketplaceName, cancellationToken)
+                    await _codexPluginCli.RemovePluginAsync(ShadeKitPlugin.Id, cancellationToken)
                         .ConfigureAwait(false);
 
-                    isRemoved = true;
-
-                    await _codexPluginCli.AddMarketplaceAsync(source, cancellationToken).ConfigureAwait(false);
+                    steps.MarkRemoved();
                 }
-            }
 
-            // A kept directory marketplace needs no step: codex refuses to upgrade it, and plugin add copies it again.
-            return await AddPluginAsync(source, pluginBefore, previousKitVersion, cancellationToken)
-                .ConfigureAwait(false);
+                await _codexPluginCli.RemoveMarketplaceAsync(ShadeKitPlugin.MarketplaceName, cancellationToken)
+                    .ConfigureAwait(false);
+
+                steps.MarkRemoved();
+
+                await _codexPluginCli.AddMarketplaceAsync(source, cancellationToken).ConfigureAwait(false);
+                break;
+
+            case MarketplaceChange.Keep:
+                // Only a directory marketplace is kept, because codex reports no ref for a GitHub one. It needs
+                // no step: codex refuses to upgrade it, and plugin add copies it again.
+                break;
+
+            default:
+                throw new UnreachableException(
+                    $"The marketplace change '{change}' is not expected for {AgentId}, which reports no ref.");
         }
-        catch (ExternalToolUnavailableException exception) when (isRemoved)
-        {
-            throw new IntegrationIncompleteException(AgentId, exception);
-        }
-        catch (OperationCanceledException exception) when (isSwitching && cancellationToken.IsCancellationRequested)
-        {
-            // A cancellation while the first removal runs counts too: the killed codex may have removed it.
-            throw new IntegrationSwitchCanceledException(AgentId, exception);
-        }
+
+        return await AddPluginAsync(source, pluginBefore, previousKitVersion, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     // Returns true if the marketplace has the source and was fetched again, false if codex added it just now, and
@@ -302,7 +274,13 @@ public sealed class CodexCliIntegration : IAgentIntegration
         return IntegrationResult.ForShadeKitPlugin(AgentId, source, outcome, previousKitVersion, plugin.Enabled);
     }
 
-    private async Task<CodexInstalledPlugin?> FindPluginAsync(CancellationToken cancellationToken)
+    /// <inheritdoc />
+    /// <remarks>
+    /// The plugin counts only with the name <see cref="ShadeKitPlugin.Name" />, the marketplace
+    /// <see cref="ShadeKitPlugin.MarketplaceName" />, and <c>installed</c> <see langword="true" />.
+    /// </remarks>
+    private protected override async Task<CodexInstalledPlugin?> FindPluginAsync(
+        CancellationToken cancellationToken)
     {
         return FindPlugin(await _codexPluginCli.ListPluginsAsync(cancellationToken).ConfigureAwait(false));
     }

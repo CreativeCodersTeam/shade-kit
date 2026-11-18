@@ -34,7 +34,7 @@ internal static class ExternalToolRunner
     /// <paramref name="workingDirectory" /> is <see langword="null" />, empty, or whitespace.
     /// </exception>
     /// <exception cref="ArgumentNullException"><paramref name="arguments" /> is <see langword="null" />.</exception>
-    /// <exception cref="ExternalToolUnavailableException">
+    /// <exception cref="ExternalToolException">
     /// The executable is not found, its path is not absolute, or it cannot be started; the exception is the one that
     /// <paramref name="tool" /> creates.
     /// </exception>
@@ -74,7 +74,7 @@ internal static class ExternalToolRunner
     /// <paramref name="workingDirectory" /> is <see langword="null" />, empty, or whitespace.
     /// </exception>
     /// <exception cref="ArgumentNullException"><paramref name="arguments" /> is <see langword="null" />.</exception>
-    /// <exception cref="ExternalToolUnavailableException">
+    /// <exception cref="ExternalToolException">
     /// The executable is not found, its path is not absolute, it cannot be started, the <c>ComSpec</c> value of a
     /// <c>.cmd</c> shim is unusable, or the shim is refused an argument; the exception is the one that
     /// <paramref name="tool" /> creates.
@@ -138,9 +138,9 @@ internal static class ExternalToolRunner
     /// <remarks>
     /// <para>
     /// An executable is started directly with the arguments one by one, without a shell, unless the tool runs
-    /// <c>.cmd</c> shims (<see cref="ExternalTool.CreateCommandFailedException" /> is set) and the executable ends
-    /// with <c>.cmd</c>. Such a shim is started as <c>%ComSpec% /d /s /c ""&lt;shim&gt;" &lt;arguments&gt;"</c>, as
-    /// built by <see cref="CmdShimCommandLine" />.
+    /// <c>.cmd</c> shims (<see cref="ExternalTool.RunsCmdShims" />, set by <see cref="ExternalTool.CmdShims" />) and
+    /// the executable ends with <c>.cmd</c>. Such a shim is started as
+    /// <c>%ComSpec% /d /s /c ""&lt;shim&gt;" &lt;arguments&gt;"</c>, as built by <see cref="CmdShimCommandLine" />.
     /// </para>
     /// <para>
     /// Why: npm installs the GitHub Copilot CLI and the OpenAI Codex CLI on Windows as <c>.cmd</c> shims, which only
@@ -158,11 +158,11 @@ internal static class ExternalToolRunner
     /// it is not set.
     /// </param>
     /// <returns>The start of the executable, or of <c>cmd.exe</c> for a <c>.cmd</c> shim.</returns>
-    /// <exception cref="ExternalToolUnavailableException">
+    /// <exception cref="ExternalToolException">
     /// The <c>ComSpec</c> value of a <c>.cmd</c> shim is not set, not fully qualified, or does not name
     /// <c>cmd.exe</c> (the exception that <see cref="ExternalTool.CreateUnavailableException" /> creates), or the shim
     /// path or an argument contains a refused character (the exception that
-    /// <see cref="ExternalTool.CreateCommandFailedException" /> creates).
+    /// <see cref="CmdShimPolicy.CreateRefusedArgumentException" /> of <see cref="ExternalTool.CmdShims" /> creates).
     /// </exception>
     internal static ExternalProcessStart CreateProcessStart(ExternalTool tool, string executablePath,
         IReadOnlyList<string> arguments, Func<string?> getComSpec)
@@ -172,8 +172,7 @@ internal static class ExternalToolRunner
         Ensure.NotNull(arguments);
         Ensure.NotNull(getComSpec);
 
-        if (tool.CreateCommandFailedException is not { } createCommandFailedException
-            || !CmdShimCommandLine.IsCmdShim(executablePath))
+        if (tool.CmdShims is not { } cmdShims || !CmdShimCommandLine.IsCmdShim(executablePath))
         {
             return ExternalProcessStart.WithArguments(executablePath, arguments);
         }
@@ -192,7 +191,7 @@ internal static class ExternalToolRunner
 
         if (refusal is not null)
         {
-            throw createCommandFailedException(arguments, refusal);
+            throw cmdShims.CreateRefusedArgumentException(arguments, refusal);
         }
 
         return ExternalProcessStart.WithVerbatimArguments(comSpec,

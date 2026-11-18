@@ -208,6 +208,36 @@ public sealed class IntegrationsUpdateCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteAsync_JsonModeCodexIncompleteAfterSwitch_WritesFailureEnvelopeNamingNetworkCause()
+    {
+        // Arrange
+        A.CallTo(() => _integrationService.UpdateAsync(A<CancellationToken>._))
+            .ThrowsAsync(new IntegrationIncompleteException("codex",
+                new CodexCommandFailedException(["plugin", "marketplace", "add"], 1, "codex failed.")));
+
+        var command = CreateCommand();
+
+        // Act
+        var act = () => command.ExecuteAsync(new IntegrationsUpdateCommandOptions { Json = true });
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
+
+        exception.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.AgentCommandFailed);
+
+        using var document = JsonDocument.Parse(_jsonOutput.ToString());
+
+        document.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.AgentCommandFailed);
+
+        document.RootElement.GetProperty("error").GetProperty("message").GetString()
+            .Should().EndWith("'shade-kit integrations install' repairs it. Codex counts a failed check of the " +
+                              "marketplace as another source, so the switch may also have followed a network, " +
+                              "proxy, or login failure; restore the connection first.");
+    }
+
+    [Fact]
     public async Task ExecuteAsync_JsonModeCanceledDuringMarketplaceSwitch_WritesCanceledEnvelopeWithRepairHint()
     {
         // Arrange

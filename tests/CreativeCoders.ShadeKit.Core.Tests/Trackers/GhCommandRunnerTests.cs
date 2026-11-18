@@ -20,6 +20,20 @@ public class GhCommandRunnerTests
     private readonly IGhExecutableLocator _ghExecutableLocator = A.Fake<IGhExecutableLocator>();
 
     [Fact]
+    public void Tool_Always_DoesNotRunCmdShims()
+    {
+        // Act
+        var tool = GhCommandRunner.Tool;
+
+        // Assert
+        tool.RunsCmdShims
+            .Should().BeFalse();
+
+        tool.CmdShims
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void Constructor_NullGhExecutableLocator_ThrowsArgumentNullException()
     {
         // Act

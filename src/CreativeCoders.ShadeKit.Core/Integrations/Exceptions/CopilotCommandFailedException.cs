@@ -32,7 +32,7 @@ public sealed class CopilotCommandFailedException(
     string reason,
     string? copilotMessage = null,
     Exception? innerException = null)
-    : ExternalToolUnavailableException("copilot", "failed", arguments, reason, innerException)
+    : ExternalToolException("copilot", "failed", arguments, reason, innerException)
 {
     /// <summary>
     /// Gets the exit code of the <c>copilot</c> process.

@@ -19,4 +19,4 @@ public class CopilotUnavailableException(
     IReadOnlyList<string> arguments,
     string reason,
     Exception? innerException = null)
-    : ExternalToolUnavailableException("copilot", "cannot be run", arguments, reason, innerException);
+    : ExternalToolException("copilot", "cannot be run", arguments, reason, innerException);

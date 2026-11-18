@@ -1,7 +1,4 @@
 using CreativeCoders.ShadeKit.Core.Integrations;
-using CreativeCoders.ShadeKit.Core.Integrations.Claude;
-using CreativeCoders.ShadeKit.Core.Integrations.Codex;
-using CreativeCoders.ShadeKit.Core.Integrations.Copilot;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.OptionProperties;
 
@@ -19,8 +16,9 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Integrations.Install;
 /// </para>
 /// <para>
 /// Because the parser does not resolve converters from the service provider, the converter cannot ask
-/// <see cref="IIntegrationService.AgentIds" />; <see cref="SupportedAgentIds" /> lists the same ids, which a test
-/// checks against the registered <see cref="IIntegrationService" />.
+/// <see cref="IIntegrationService.AgentIds" />; <see cref="SupportedAgentIds" /> lists the same ids, taken from
+/// <see cref="AgentPresentations.All" />, which a test checks against the registered
+/// <see cref="IIntegrationService" />.
 /// </para>
 /// </remarks>
 public sealed class AgentOptionConverter : ICliValueConverter
@@ -29,13 +27,10 @@ public sealed class AgentOptionConverter : ICliValueConverter
     /// Gets the ids of the agents that <c>--agent</c> accepts.
     /// </summary>
     /// <value>
-    /// The agent ids in the order of <see cref="IIntegrationService.AgentIds" />, today <c>claude</c>,
-    /// <c>copilot</c>, and <c>codex</c>.
+    /// The ids of <see cref="AgentPresentations.All" />, in the order of <see cref="IIntegrationService.AgentIds" />,
+    /// today <c>claude</c>, <c>copilot</c>, and <c>codex</c>.
     /// </value>
-    public static IReadOnlyList<string> SupportedAgentIds { get; } =
-    [
-        ClaudeCodeIntegration.ClaudeAgentId, CopilotCliIntegration.CopilotAgentId, CodexCliIntegration.CodexAgentId
-    ];
+    public static IReadOnlyList<string> SupportedAgentIds { get; } = [.. AgentPresentations.All.Select(x => x.AgentId)];
 
     /// <summary>
     /// Converts the specified value of <c>--agent</c> to the id of a supported agent.

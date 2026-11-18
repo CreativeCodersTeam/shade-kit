@@ -1,9 +1,6 @@
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Integrations;
-using CreativeCoders.ShadeKit.Core.Integrations.Claude;
-using CreativeCoders.ShadeKit.Core.Integrations.Codex;
-using CreativeCoders.ShadeKit.Core.Integrations.Copilot;
 using CreativeCoders.SysConsole.Core;
 using Spectre.Console;
 
@@ -38,14 +35,6 @@ internal static class IntegrationsTextFormat
     /// </summary>
     public const string RestartCodexText = "Start a new Codex session to load the skills.";
 
-    // The restart notes in the registration order of the agents, which is the order in which they are written.
-    private static readonly (string AgentId, string Text)[] RestartNotes =
-    [
-        (ClaudeCodeIntegration.ClaudeAgentId, RestartClaudeText),
-        (CopilotCliIntegration.CopilotAgentId, RestartCopilotText),
-        (CodexCliIntegration.CodexAgentId, RestartCodexText)
-    ];
-
     /// <summary>
     /// Writes one line per agent of the specified run, a note for every disabled integration, and the note to restart
     /// each agent whose integration was installed or updated.
@@ -54,7 +43,8 @@ internal static class IntegrationsTextFormat
     /// <para>
     /// The restart notes follow the lines of the agents, in the registration order of the agents (Claude Code,
     /// GitHub Copilot CLI, OpenAI Codex CLI), one per agent whose result is not
-    /// <see cref="IntegrationOutcome.Current" />; an agent without a known restart note gets none.
+    /// <see cref="IntegrationOutcome.Current" />, with the <see cref="AgentPresentation.RestartText" /> of its entry in
+    /// <see cref="AgentPresentations.All" />; an agent without an entry gets none.
     /// </para>
     /// <para>
     /// A run without results or without a source writes <see cref="NothingInstalledText" /> and a hint to
@@ -90,12 +80,13 @@ internal static class IntegrationsTextFormat
             }
         }
 
-        foreach (var (agentId, text) in RestartNotes)
+        // The restart notes follow the registration order of the agents, not the order of the results.
+        var restartedPresentations = AgentPresentations.All.Where(presentation => result.Integrations.Any(x =>
+            x.Outcome != IntegrationOutcome.Current && x.AgentId == presentation.AgentId));
+
+        foreach (var presentation in restartedPresentations)
         {
-            if (result.Integrations.Any(x => x.Outcome != IntegrationOutcome.Current && x.AgentId == agentId))
-            {
-                console.MarkupLine(text.ToEscapedMarkup().ToMutedMarkup());
-            }
+            console.MarkupLine(presentation.RestartText.ToEscapedMarkup().ToMutedMarkup());
         }
     }
 
@@ -172,29 +163,14 @@ internal static class IntegrationsTextFormat
     /// The markup of a sentence that names <c>claude plugin enable &lt;plugin id&gt;</c> for Claude Code,
     /// <c>copilot plugin enable &lt;plugin id&gt;</c> for GitHub Copilot CLI, the command <c>/plugins</c> of a Codex
     /// session for OpenAI Codex CLI (which has no enable command), or that says to enable the integration in the agent
-    /// for any other agent.
+    /// for any other agent. The note of a known agent is the <see cref="AgentPresentation.FormatDisabledNote" /> of its
+    /// entry in <see cref="AgentPresentations.All" />.
     /// </returns>
     public static string FormatDisabledNote(string agentId, string pluginId)
     {
-        return agentId switch
-        {
-            ClaudeCodeIntegration.ClaudeAgentId => FormatEnableCommandNote("Claude Code", "claude", pluginId),
-            CopilotCliIntegration.CopilotAgentId => FormatEnableCommandNote("GitHub Copilot CLI", "copilot", pluginId),
-            CodexCliIntegration.CodexAgentId =>
-                $"{"The plugin is disabled in Codex.".ToWarningMarkup()} Enable it in Codex with " +
-                $"{"/plugins".ToCommandMarkup()}.",
-            _ => $"The integration is disabled in the agent '{agentId.ToEscapedMarkup()}'; enable it there."
-                .ToWarningMarkup()
-        };
-    }
-
-    // The agents whose CLI can enable a plugin: the note names the command with the plugin id.
-    private static string FormatEnableCommandNote(string agentName, string executableName, string pluginId)
-    {
-        var command = $"{executableName} plugin enable {pluginId}".ToEscapedMarkup().ToCommandMarkup();
-
-        return $"{$"The plugin is disabled in {agentName}.".ToEscapedMarkup().ToWarningMarkup()} Run '{command}' to " +
-               "enable it.";
+        return AgentPresentations.Find(agentId)?.FormatDisabledNote(pluginId)
+               ?? $"The integration is disabled in the agent '{agentId.ToEscapedMarkup()}'; enable it there."
+                   .ToWarningMarkup();
     }
 
     // The kit version comes first, then the ref in parentheses, or the markup that stands for a missing ref.

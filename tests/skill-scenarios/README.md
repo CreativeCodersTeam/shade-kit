@@ -1,0 +1,89 @@
+# Skill scenario runs
+
+Reusable building blocks for the scenario runs that `CLAUDE.md` ("Skill conventions") requires for a changed skill: a
+subagent loads the skill, follows it with canned CLI envelopes, and records the commands it would run and its output. The
+skill texts have no automated tests; these runs and a review by hand are how a changed skill is checked.
+
+Nothing here is compiled or shipped: no project picks up this folder, and the skill guard tests scan only `skills/` (and,
+for `SingleSkillSourceTests`, files named `SKILL.md`, of which there are none here).
+
+## Layout
+
+| Path | Purpose |
+|---|---|
+| `RUNNER-PROTOCOL.md` | The rules every runner follows: which files it may read, how it records commands, questions, and answers, and the sections of its output. |
+| `SCENARIOS.md` | The scenario catalog with the shared fixture table. Placeholders: `<work>` (the work folder), `<repository>` (this repository), `<kit-version>`, `<sso-feature>`, `<quick-feature>`. |
+| `generate_fixtures.py` | Builds the work folder from the current engine: fixtures, fixture repositories, `ids.json`, and resolved copies of the catalog and the protocol. |
+| `checks/check_runs.py` | The expectations and the checker. Runners must never see it. |
+
+The work folder (outside this repository) holds after the generator:
+
+| Path | Content |
+|---|---|
+| `fixtures/*.json` | The JSON envelopes of the real engine calls; the fixture table of the catalog names the ones the runners use. |
+| `ids.json` | `sso` and `quick` (the generated feature ids) and `kitVersion`. |
+| `repo/` | The fixture repository: `init`, a `feature` profile feature in `refine`, and a `quick` profile feature whose `finish` was requested, with five team items in its Definition of Done copy. |
+| `repo-s5/`, `repo-s6/` | Copies of `repo/` that the gate-check runs edit. |
+| `repo-s9/` | A copy of `repo/` whose quick `request.md` asks for a change that is too large for `quick`. |
+| `out/` | Empty; each runner writes `out/<id>.md`. |
+| `SCENARIOS.md`, `RUNNER-PROTOCOL.md` | The resolved copies the runners read. |
+
+## Procedure
+
+1. Build the CLI: `dotnet build` from the repository root (the generator builds it too unless `--engine-dll` is given).
+2. Generate the work folder outside this repository:
+
+   ```sh
+   python3 -I tests/skill-scenarios/generate_fixtures.py [--work <dir>] [--engine-dll <path to shade-kit.dll>]
+   ```
+
+   Without `--work` it creates a new temporary folder and prints its path. A `--work` folder must not exist yet or be
+   empty, and must lie outside this repository (`init` would otherwise write into the wrong git repository). Unlike the
+   unit tests, the generator runs `git` and the real engine (with a `PATH` that holds only `git` and `dotnet`, so that no
+   installed agent changes the `version` envelope). It stops with a non-zero exit code and a message when an engine call
+   returns `ok: false` or an unexpected `outcome`, so a workflow change shows up at once; then update the generator, the
+   catalog, and the expectations together.
+3. Start one fresh subagent per scenario with the runner prompt below. Never run a scenario in the context that knows the
+   expectations (`checks/`), and never run two scenarios in one subagent. Runs can go in parallel.
+4. Check the outputs:
+
+   ```sh
+   python3 -I tests/skill-scenarios/checks/check_runs.py <work> [outdir]
+   ```
+
+   It prints one `PASS`/`FAIL` line per check and the totals, and exits with 1 when a check fails. Read the `## Unclear`
+   section of every output too: a check can pass while the skill still made the runner guess.
+5. Record the result (date, scenarios, agents, check totals, what was unclear and what changed) in the feature package
+   of the skill under `docs/feature-packages/`.
+
+## Runner prompt template
+
+Replace `<work>`, `<repository>`, and `<id>`:
+
+```text
+You are a scenario runner for the SHADE kit skills. Read <work>/RUNNER-PROTOCOL.md and follow it exactly.
+Your scenario is <id> in <work>/SCENARIOS.md: use the shared fixture table and the section of <id> (and of the
+scenario it refers to with "Otherwise identical to").
+The SHADE kit repository is <repository>; read only the skill files under <repository>/skills/.
+Write your output to <work>/out/<id>.md. Do not read any other file in <work>/out/.
+```
+
+## Rules
+
+- Runners read only the skill texts, the protocol, the catalog, the fixtures, and the repository folder of their
+  scenario. They never read `checks/`, the rest of this repository, or the outputs of other runs.
+- Outputs of runs and generated fixtures are never committed; they live in the work folder only. The fixtures are
+  generated from the current engine each time, so no envelope file goes stale.
+- The expectations in `checks/check_runs.py` describe what the skill texts do now; when a skill change changes what a
+  scenario does, change the expectation together with the skill.
+- To add a scenario: a catalog entry in `SCENARIOS.md` (agent, skill, inputs, canned answers, repository folder, and
+  every fixture it needs in the fixture table), its expectations in `checks/check_runs.py`, and its fixtures (engine
+  calls, repository content, or a repository copy) in `generate_fixtures.py`. Use the placeholders for every value the
+  generator produces.
+
+## Runs
+
+- **2026-11-18:** nine scenarios S1–S9 for the skill text clarifications after scenario runs: `shade-kit-gate-check`
+  (S5, S6), `shade-kit-interview` (S7, S8), `shade-kit-next-steps` (S1, S2), `shade-kit-phase-entry` (S3, S4), and
+  `shade-kit-quick` (S9), played as Claude Code, GitHub Copilot CLI, and OpenAI Codex CLI in default and plan mode. All
+  checks passed after the clarifications (69 of 69).

@@ -19,4 +19,4 @@ public class CodexUnavailableException(
     IReadOnlyList<string> arguments,
     string reason,
     Exception? innerException = null)
-    : ExternalToolUnavailableException("codex", "cannot be run", arguments, reason, innerException);
+    : ExternalToolException("codex", "cannot be run", arguments, reason, innerException);

@@ -20,7 +20,7 @@ public class CopilotExceptionTests
 
         // Assert
         exception
-            .Should().BeAssignableTo<ExternalToolUnavailableException>();
+            .Should().BeAssignableTo<ExternalToolException>();
 
         exception.Message
             .Should().Be("The copilot command 'copilot plugin list --json' cannot be run: The copilot executable " +
@@ -70,7 +70,7 @@ public class CopilotExceptionTests
 
         // Assert
         exception
-            .Should().BeAssignableTo<ExternalToolUnavailableException>()
+            .Should().BeAssignableTo<ExternalToolException>()
             .And.NotBeAssignableTo<CopilotUnavailableException>();
 
         exception.Message

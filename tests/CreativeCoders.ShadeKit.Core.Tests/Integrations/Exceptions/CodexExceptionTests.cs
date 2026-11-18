@@ -20,7 +20,7 @@ public class CodexExceptionTests
 
         // Assert
         exception
-            .Should().BeAssignableTo<ExternalToolUnavailableException>();
+            .Should().BeAssignableTo<ExternalToolException>();
 
         exception.Message
             .Should().Be("The codex command 'codex plugin list --json' cannot be run: The codex executable " +
@@ -70,7 +70,7 @@ public class CodexExceptionTests
 
         // Assert
         exception
-            .Should().BeAssignableTo<ExternalToolUnavailableException>()
+            .Should().BeAssignableTo<ExternalToolException>()
             .And.NotBeAssignableTo<CodexUnavailableException>();
 
         exception.Message

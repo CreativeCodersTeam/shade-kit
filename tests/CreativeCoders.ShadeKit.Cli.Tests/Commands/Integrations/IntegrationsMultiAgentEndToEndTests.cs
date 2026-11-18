@@ -502,7 +502,9 @@ public sealed class IntegrationsMultiAgentEndToEndTests : IDisposable
                          "the exit code 1: Error: permission denied. Fix the cause, make sure OpenAI Codex CLI is " +
                          "up to date, then run the command again. The plugin marketplace of SHADE kit was already " +
                          "switched, so the integration may be incomplete; 'shade-kit integrations install' repairs " +
-                         "it. Before the agent 'codex' failed, these integrations were done: copilot: updated " +
+                         "it. Codex counts a failed check of the marketplace as another source, so the switch may " +
+                         "also have followed a network, proxy, or login failure; restore the connection first. " +
+                         "Before the agent 'codex' failed, these integrations were done: copilot: updated " +
                          "shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0).");
     }
 

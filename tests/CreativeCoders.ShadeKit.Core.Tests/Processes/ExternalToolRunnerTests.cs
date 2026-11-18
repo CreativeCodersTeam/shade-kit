@@ -16,10 +16,10 @@ public class ExternalToolRunnerTests
         static (arguments, reason) => new ClaudeNotFoundException(arguments, reason),
         static (arguments, reason, innerException) =>
             new ClaudeUnavailableException(arguments, reason, innerException),
-        static (arguments, reason) => new ClaudeCommandFailedException(arguments, 0, reason));
+        new CmdShimPolicy(static (arguments, reason) => new ClaudeCommandFailedException(arguments, 0, reason)));
 
     // A tool without the .cmd opt-in, like git, gh, and claude.
-    private static readonly ExternalTool DirectTool = ShimTool with { CreateCommandFailedException = null };
+    private static readonly ExternalTool DirectTool = ShimTool with { CmdShims = null };
 
     [Fact]
     public async Task RunAsync_ExecutableNotFound_PassesNotFoundReasonToTheToolException()
