@@ -199,9 +199,12 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
 
             NoAgentFoundException e => CliError.Create(ShadeKitCliExitCodes.AgentNotFound,
                 $"No supported agent was found (supported: {FormatAgentIds(e.SupportedAgentIds)}). SHADE kit " +
-                "detects Claude Code by its CLI 'claude' in an absolute directory of the PATH. Install a supported " +
-                "agent, then run the command again. On Windows only the 'claude.exe' of the native installer of " +
-                "Claude Code is found; the 'claude.cmd' of an npm installation is not."),
+                "detects Claude Code by its CLI 'claude', GitHub Copilot CLI by 'copilot', and OpenAI Codex CLI by " +
+                "'codex', each in an absolute directory of the PATH. Install a supported agent, then run the command " +
+                "again. On Windows only the 'claude.exe' of the native installer of Claude Code is found, not the " +
+                "'claude.cmd' of an npm installation; for GitHub Copilot CLI and OpenAI Codex CLI 'copilot.exe' and " +
+                "'codex.exe' are found, and so are the npm shims 'copilot.cmd' and 'codex.cmd', which are run " +
+                "through cmd.exe."),
 
             ClaudeNotFoundException e => CliError.Create(ShadeKitCliExitCodes.AgentNotFound,
                 $"Claude Code is needed, but its CLI 'claude' was not found. {e.Reason} Install Claude Code and " +
@@ -217,10 +220,38 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 $"'{e.CommandText}' failed: {e.Reason} Fix the cause that claude names, make sure Claude Code is up " +
                 "to date ('claude update'), then run the command again."),
 
+            CopilotNotFoundException e => CliError.Create(ShadeKitCliExitCodes.AgentNotFound,
+                $"GitHub Copilot CLI is needed, but its command 'copilot' was not found. {e.Reason} Install GitHub " +
+                "Copilot CLI, for example with WinGet ('GitHub.Copilot'), Homebrew ('copilot-cli'), or npm " +
+                "('@github/copilot'), and make sure 'copilot' is in an absolute directory of the PATH, then run the " +
+                "command again. On Windows 'copilot.exe' is found, and so is the npm shim 'copilot.cmd'."),
+
+            CopilotUnavailableException e => CliError.Create(ShadeKitCliExitCodes.AgentCommandFailed,
+                $"'{e.CommandText}' cannot be run: {e.Reason} Make sure GitHub Copilot CLI is installed correctly " +
+                "and 'copilot --version' works, then run the command again."),
+
+            CopilotCommandFailedException e => CliError.Create(ShadeKitCliExitCodes.AgentCommandFailed,
+                $"'{e.CommandText}' failed: {e.Reason} Fix the cause, make sure GitHub Copilot CLI is up to date, " +
+                "then run the command again."),
+
+            CodexNotFoundException e => CliError.Create(ShadeKitCliExitCodes.AgentNotFound,
+                $"OpenAI Codex CLI is needed, but its command 'codex' was not found. {e.Reason} Install OpenAI Codex " +
+                "CLI, for example with Homebrew ('codex'), npm ('@openai/codex'), or the install script of Codex, " +
+                "and make sure 'codex' is in an absolute directory of the PATH, then run the command again. On " +
+                "Windows 'codex.exe' is found, and so is the npm shim 'codex.cmd'."),
+
+            CodexUnavailableException e => CliError.Create(ShadeKitCliExitCodes.AgentCommandFailed,
+                $"'{e.CommandText}' cannot be run: {e.Reason} Make sure OpenAI Codex CLI is installed correctly and " +
+                "'codex --version' works, then run the command again."),
+
+            CodexCommandFailedException e => CliError.Create(ShadeKitCliExitCodes.AgentCommandFailed,
+                $"'{e.CommandText}' failed: {e.Reason} Fix the cause, make sure OpenAI Codex CLI is up to date, then " +
+                "run the command again."),
+
             IntegrationConflictException e => CliError.Create(ShadeKitCliExitCodes.IntegrationConflict,
                 $"The plugin marketplace '{e.MarketplaceName}' of the agent '{e.AgentId}' already exists with the " +
                 $"source '{e.ExistingSource}', but SHADE kit needs '{e.RequestedSource}'. Nothing was changed. Run " +
-                $"'{e.ResolveCommand}' to remove it, then run the command again."),
+                $"{FormatResolveCommands(e.ResolveCommands)} to remove it, then run the command again."),
 
             IntegrationIncompleteException e => CreateIntegrationIncompleteError(e),
 
@@ -567,6 +598,14 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
             : $"The .editorconfig file '{filePath}'";
     }
 
+    // One command: 'a'; several, in the order to run them: 'a' and then 'b'.
+    private static string FormatResolveCommands(IReadOnlyList<string> commands)
+    {
+        // The list is null only in an instance that was not created by its constructor; Map maps such an instance of
+        // every core exception without throwing (FP01-AC8), so the guard stays.
+        return string.Join(" and then ", (commands ?? []).Select(command => $"'{command}'"));
+    }
+
     private static string CreateSentence(string text)
     {
         return text.EndsWith('.') ? text : text + ".";
@@ -747,13 +786,19 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     }
 
     // Keeps the exit code and message of the failed agent command and adds that an install repairs the integration,
-    // because the marketplace was already switched when the command failed. Removing the marketplace also uninstalls
-    // its plugins, so an update would find nothing installed; the install installs the plugin again.
+    // because the switch of the marketplace had begun when the command failed. The plugin is gone by then (Claude Code
+    // uninstalls it with its marketplace, the Copilot CLI and Codex uninstall it before), so an update would find
+    // nothing installed; the install installs the plugin again. The hint names no agent command, so it fits every
+    // agent; an agent whose presentation has an incomplete note (Codex: the switch may follow a network failure) gets
+    // that sentence after it.
     private CliError CreateIntegrationIncompleteError(IntegrationIncompleteException exception)
     {
-        const string repairHint =
+        var repairHint =
             "The plugin marketplace of SHADE kit was already switched, so the integration may be incomplete; " +
-            "'shade-kit integrations install' repairs it.";
+            "'shade-kit integrations install' repairs it." +
+            (AgentPresentations.Find(exception.AgentId)?.IncompleteNote is { } incompleteNote
+                ? $" {incompleteNote}"
+                : string.Empty);
 
         var innerError = exception.InnerException is { } innerException ? Map(innerException) : null;
 

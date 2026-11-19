@@ -10,6 +10,8 @@ using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Init;
 using CreativeCoders.ShadeKit.Core.Integrations;
 using CreativeCoders.ShadeKit.Core.Integrations.Claude;
+using CreativeCoders.ShadeKit.Core.Integrations.Codex;
+using CreativeCoders.ShadeKit.Core.Integrations.Copilot;
 using CreativeCoders.ShadeKit.Core.Processes;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
@@ -99,6 +101,12 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IClaudeExecutableLocator), typeof(ClaudeExecutableLocator))]
     [InlineData(typeof(IClaudeCommandRunner), typeof(ClaudeCommandRunner))]
     [InlineData(typeof(IClaudePluginCli), typeof(ClaudePluginCli))]
+    [InlineData(typeof(ICopilotExecutableLocator), typeof(CopilotExecutableLocator))]
+    [InlineData(typeof(ICopilotCommandRunner), typeof(CopilotCommandRunner))]
+    [InlineData(typeof(ICopilotPluginCli), typeof(CopilotPluginCli))]
+    [InlineData(typeof(ICodexExecutableLocator), typeof(CodexExecutableLocator))]
+    [InlineData(typeof(ICodexCommandRunner), typeof(CodexCommandRunner))]
+    [InlineData(typeof(ICodexPluginCli), typeof(CodexPluginCli))]
     [InlineData(typeof(IIntegrationService), typeof(IntegrationService))]
     public void AddShadeKitCore_ServiceCollection_RegistersServiceAsSingleton(Type serviceType, Type implementationType)
     {
@@ -119,7 +127,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void AddShadeKitCore_CalledTwice_RegistersClaudeCodeIntegrationOnceAsSingleton()
+    public void AddShadeKitCore_CalledTwice_RegistersEachAgentIntegrationOnceAsSingletonInRunOrder()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -133,13 +141,16 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         var agentIntegrations = serviceProvider.GetServices<IAgentIntegration>().ToArray();
 
+        agentIntegrations.Select(x => x.GetType())
+            .Should().Equal(typeof(ClaudeCodeIntegration), typeof(CopilotCliIntegration),
+                typeof(CodexCliIntegration));
+
         agentIntegrations
-            .Should().ContainSingle()
-            .Which.Should().BeOfType<ClaudeCodeIntegration>()
-            .And.BeSameAs(serviceProvider.GetServices<IAgentIntegration>().Single());
+            .Should().Equal(serviceProvider.GetServices<IAgentIntegration>(), ReferenceEquals);
 
         serviceProvider.GetRequiredService<IIntegrationService>().AgentIds
-            .Should().Equal(ClaudeCodeIntegration.ClaudeAgentId);
+            .Should().Equal(ClaudeCodeIntegration.ClaudeAgentId, CopilotCliIntegration.CopilotAgentId,
+                CodexCliIntegration.CodexAgentId);
     }
 
     [Fact]
@@ -158,7 +169,8 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
         using var serviceProvider = services.BuildServiceProvider();
 
         serviceProvider.GetRequiredService<IIntegrationService>().AgentIds
-            .Should().Equal("other", ClaudeCodeIntegration.ClaudeAgentId);
+            .Should().Equal("other", ClaudeCodeIntegration.ClaudeAgentId, CopilotCliIntegration.CopilotAgentId,
+                CodexCliIntegration.CodexAgentId);
     }
 
     [Fact]
@@ -252,6 +264,12 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IClaudeExecutableLocator))]
     [InlineData(typeof(IClaudeCommandRunner))]
     [InlineData(typeof(IClaudePluginCli))]
+    [InlineData(typeof(ICopilotExecutableLocator))]
+    [InlineData(typeof(ICopilotCommandRunner))]
+    [InlineData(typeof(ICopilotPluginCli))]
+    [InlineData(typeof(ICodexExecutableLocator))]
+    [InlineData(typeof(ICodexCommandRunner))]
+    [InlineData(typeof(ICodexPluginCli))]
     [InlineData(typeof(IIntegrationService))]
     [InlineData(typeof(IHttpClientFactory))]
     [InlineData(typeof(TimeProvider))]
@@ -306,6 +324,12 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IClaudeExecutableLocator))]
     [InlineData(typeof(IClaudeCommandRunner))]
     [InlineData(typeof(IClaudePluginCli))]
+    [InlineData(typeof(ICopilotExecutableLocator))]
+    [InlineData(typeof(ICopilotCommandRunner))]
+    [InlineData(typeof(ICopilotPluginCli))]
+    [InlineData(typeof(ICodexExecutableLocator))]
+    [InlineData(typeof(ICodexCommandRunner))]
+    [InlineData(typeof(ICodexPluginCli))]
     [InlineData(typeof(IIntegrationService))]
     [InlineData(typeof(IHttpClientFactory))]
     [InlineData(typeof(TimeProvider))]

@@ -1,3 +1,5 @@
+using CreativeCoders.Core;
+
 namespace CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
 
 /// <summary>
@@ -11,16 +13,20 @@ namespace CreativeCoders.ShadeKit.Core.Integrations.Exceptions;
 /// a directory.
 /// </param>
 /// <param name="requestedSource">The source that SHADE kit needs, for example <c>CreativeCodersTeam/shade-kit#v0.8.0</c>.</param>
-/// <param name="resolveCommand">
-/// The command that removes the existing marketplace, so that the next run can add it with the needed source, for
-/// example <c>claude plugin marketplace remove creativecoders-shade-kit</c>.
+/// <param name="resolveCommands">
+/// The commands, in the order to run them, that remove the existing marketplace, so that the next run can add it with
+/// the needed source, for example only <c>claude plugin marketplace remove creativecoders-shade-kit</c>, or
+/// <c>copilot plugin uninstall shade-kit@creativecoders-shade-kit</c> and then
+/// <c>copilot plugin marketplace remove creativecoders-shade-kit</c> for an agent that removes no marketplace while
+/// plugins of it are installed.
 /// </param>
+/// <exception cref="ArgumentNullException"><paramref name="resolveCommands" /> is <see langword="null" />.</exception>
 public sealed class IntegrationConflictException(
     string agentId,
     string marketplaceName,
     string existingSource,
     string requestedSource,
-    string resolveCommand)
+    IReadOnlyList<string> resolveCommands)
     : Exception($"The plugin marketplace '{marketplaceName}' of the agent '{agentId}' has the source " +
                 $"'{existingSource}', but SHADE kit needs '{requestedSource}'.")
 {
@@ -49,11 +55,11 @@ public sealed class IntegrationConflictException(
     public string RequestedSource { get; } = requestedSource;
 
     /// <summary>
-    /// Gets the command that resolves the conflict.
+    /// Gets the commands that resolve the conflict.
     /// </summary>
     /// <value>
-    /// The command that removes the existing marketplace, for example
+    /// The commands, in the order to run them, that remove the existing marketplace, for example only
     /// <c>claude plugin marketplace remove creativecoders-shade-kit</c>.
     /// </value>
-    public string ResolveCommand { get; } = resolveCommand;
+    public IReadOnlyList<string> ResolveCommands { get; } = [.. Ensure.NotNull(resolveCommands)];
 }

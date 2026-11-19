@@ -13,4 +13,4 @@ public class GitUnavailableException(
     IReadOnlyList<string> arguments,
     string reason,
     Exception? innerException = null)
-    : ExternalToolUnavailableException("git", "failed", arguments, reason, innerException);
+    : ExternalToolException("git", "failed", arguments, reason, innerException);

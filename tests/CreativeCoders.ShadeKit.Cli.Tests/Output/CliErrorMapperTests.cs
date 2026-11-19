@@ -1047,15 +1047,296 @@ public class CliErrorMapperTests
         var mapper = CreateMapper();
 
         // Act
-        var error = mapper.Map(new NoAgentFoundException(["claude"]));
+        var error = mapper.Map(new NoAgentFoundException(["claude", "copilot", "codex"]));
 
         // Assert
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.AgentNotFound, ShadeKitCliErrorCodes.AgentNotFound,
-                "No supported agent was found (supported: claude). SHADE kit detects Claude Code by its CLI " +
-                "'claude' in an absolute directory of the PATH. Install a supported agent, then run the command " +
-                "again. On Windows only the 'claude.exe' of the native installer of Claude Code is found; the " +
-                "'claude.cmd' of an npm installation is not."));
+                "No supported agent was found (supported: claude, copilot, codex). SHADE kit detects Claude Code by " +
+                "its CLI 'claude', GitHub Copilot CLI by 'copilot', and OpenAI Codex CLI by 'codex', each in an " +
+                "absolute directory of the PATH. Install a supported agent, then run the command again. On Windows " +
+                "only the 'claude.exe' of the native installer of Claude Code is found, not the 'claude.cmd' of an " +
+                "npm installation; for GitHub Copilot CLI and OpenAI Codex CLI 'copilot.exe' and 'codex.exe' are " +
+                "found, and so are the npm shims 'copilot.cmd' and 'codex.cmd', which are run through cmd.exe."));
+    }
+
+    [Fact]
+    public void Map_CopilotNotFound_ReturnsExitCode51NamingReasonInstallRoutesAndWindowsHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new CopilotNotFoundException(["plugin", "list", "--json"],
+            "The GitHub Copilot CLI copilot was not found in any absolute directory of the PATH environment " +
+            "variable."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentNotFound, ShadeKitCliErrorCodes.AgentNotFound,
+                "GitHub Copilot CLI is needed, but its command 'copilot' was not found. The GitHub Copilot CLI " +
+                "copilot was not found in any absolute directory of the PATH environment variable. Install GitHub " +
+                "Copilot CLI, for example with WinGet ('GitHub.Copilot'), Homebrew ('copilot-cli'), or npm " +
+                "('@github/copilot'), and make sure 'copilot' is in an absolute directory of the PATH, then run the " +
+                "command again. On Windows 'copilot.exe' is found, and so is the npm shim 'copilot.cmd'."));
+    }
+
+    [Fact]
+    public void Map_CodexNotFound_ReturnsExitCode51NamingReasonInstallRoutesAndWindowsHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new CodexNotFoundException(["plugin", "list", "--json"],
+            "The OpenAI Codex CLI codex was not found in any absolute directory of the PATH environment variable."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentNotFound, ShadeKitCliErrorCodes.AgentNotFound,
+                "OpenAI Codex CLI is needed, but its command 'codex' was not found. The OpenAI Codex CLI codex was " +
+                "not found in any absolute directory of the PATH environment variable. Install OpenAI Codex CLI, " +
+                "for example with Homebrew ('codex'), npm ('@openai/codex'), or the install script of Codex, and " +
+                "make sure 'codex' is in an absolute directory of the PATH, then run the command again. On Windows " +
+                "'codex.exe' is found, and so is the npm shim 'codex.cmd'."));
+    }
+
+    [Fact]
+    public void Map_CopilotUnavailable_ReturnsExitCode52NamingCommandReasonAndFix()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new CopilotUnavailableException(["plugin", "list", "--json"],
+            "The copilot executable '/usr/local/bin/copilot' could not be started: Permission denied."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "'copilot plugin list --json' cannot be run: The copilot executable '/usr/local/bin/copilot' could " +
+                "not be started: Permission denied. Make sure GitHub Copilot CLI is installed correctly and " +
+                "'copilot --version' works, then run the command again."));
+    }
+
+    [Fact]
+    public void Map_CodexUnavailable_ReturnsExitCode52NamingCommandReasonAndFix()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new CodexUnavailableException(["plugin", "list", "--json"],
+            "The codex executable '/usr/local/bin/codex' could not be started: Permission denied."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "'codex plugin list --json' cannot be run: The codex executable '/usr/local/bin/codex' could not be " +
+                "started: Permission denied. Make sure OpenAI Codex CLI is installed correctly and 'codex " +
+                "--version' works, then run the command again."));
+    }
+
+    [Fact]
+    public void Map_CopilotCommandFailed_ReturnsExitCode52NamingCommandExitCodeAndCopilotMessage()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new CopilotCommandFailedException(
+            ["plugin", "install", "shade-kit@creativecoders-shade-kit"], 1,
+            "copilot exited with the exit code 1: Error: Marketplace not found.", "Error: Marketplace not found"));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "'copilot plugin install shade-kit@creativecoders-shade-kit' failed: copilot exited with the exit " +
+                "code 1: Error: Marketplace not found. Fix the cause, make sure GitHub Copilot CLI is up to date, " +
+                "then run the command again."));
+    }
+
+    [Fact]
+    public void Map_CodexCommandFailed_ReturnsExitCode52NamingCommandExitCodeAndCodexMessage()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new CodexCommandFailedException(
+            ["plugin", "marketplace", "upgrade", "creativecoders-shade-kit", "--json"], 1,
+            "codex exited with the exit code 1: 1 upgrade failure(s) occurred.", "1 upgrade failure(s) occurred."));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "'codex plugin marketplace upgrade creativecoders-shade-kit --json' failed: codex exited with the " +
+                "exit code 1: 1 upgrade failure(s) occurred. Fix the cause, make sure OpenAI Codex CLI is up to " +
+                "date, then run the command again."));
+    }
+
+    [Fact]
+    public void Map_IntegrationConflictOfCodex_NamesRemoveCommandOfCodex()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationConflictException("codex", "creativecoders-shade-kit",
+            "someone/fork", "CreativeCodersTeam/shade-kit#v0.8.0",
+            ["codex plugin marketplace remove creativecoders-shade-kit"]));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.IntegrationConflict,
+                ShadeKitCliErrorCodes.IntegrationConflict,
+                "The plugin marketplace 'creativecoders-shade-kit' of the agent 'codex' already exists with the " +
+                "source 'someone/fork', but SHADE kit needs 'CreativeCodersTeam/shade-kit#v0.8.0'. Nothing was " +
+                "changed. Run 'codex plugin marketplace remove creativecoders-shade-kit' to remove it, then run " +
+                "the command again."));
+    }
+
+    [Fact]
+    public void Map_IntegrationConflictWithTwoResolveCommands_NamesBothInOrder()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationConflictException("copilot", "creativecoders-shade-kit",
+            "someone/fork", "CreativeCodersTeam/shade-kit#v0.8.0",
+            [
+                "copilot plugin uninstall shade-kit@creativecoders-shade-kit",
+                "copilot plugin marketplace remove creativecoders-shade-kit"
+            ]));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.IntegrationConflict,
+                ShadeKitCliErrorCodes.IntegrationConflict,
+                "The plugin marketplace 'creativecoders-shade-kit' of the agent 'copilot' already exists with the " +
+                "source 'someone/fork', but SHADE kit needs 'CreativeCodersTeam/shade-kit#v0.8.0'. Nothing was " +
+                "changed. Run 'copilot plugin uninstall shade-kit@creativecoders-shade-kit' and then 'copilot " +
+                "plugin marketplace remove creativecoders-shade-kit' to remove it, then run the command again."));
+    }
+
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("codex")]
+    public void Map_IntegrationSwitchCanceledOfAgent_NamesAgentWithRepairHint(string agentId)
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationSwitchCanceledException(agentId,
+            new OperationCanceledException(new CancellationToken(true))));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.Canceled, ShadeKitCliErrorCodes.Canceled,
+                "The command was canceled while the plugin marketplace of SHADE kit was switched for the agent " +
+                $"'{agentId}', so the integration may be incomplete; 'shade-kit integrations install' repairs it."));
+    }
+
+    [Fact]
+    public void Map_IntegrationIncompleteWithCodexCommandFailure_KeepsExitCode52AndAddsRepairHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+        var failure = new CodexCommandFailedException(
+            ["plugin", "marketplace", "remove", "creativecoders-shade-kit", "--json"], 1,
+            "codex exited with the exit code 1.");
+
+        // Act
+        var error = mapper.Map(new IntegrationIncompleteException("codex", failure));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "'codex plugin marketplace remove creativecoders-shade-kit --json' failed: codex exited with the " +
+                "exit code 1. Fix the cause, make sure OpenAI Codex CLI is up to date, then run the command again. " +
+                "The plugin marketplace of SHADE kit was already switched, so the integration may be incomplete; " +
+                "'shade-kit integrations install' repairs it. Codex counts a failed check of the marketplace as " +
+                "another source, so the switch may also have followed a network, proxy, or login failure; restore " +
+                "the connection first."));
+    }
+
+    [Fact]
+    public void Map_IntegrationIncompleteOfCodexWithUnmappedCause_AddsRepairHintAndNetworkCause()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationIncompleteException("codex", new IOException("Disk full")));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "The SHADE kit integration of the agent 'codex' failed: Disk full. The plugin marketplace of SHADE " +
+                "kit was already switched, so the integration may be incomplete; 'shade-kit integrations install' " +
+                "repairs it. Codex counts a failed check of the marketplace as another source, so the switch may " +
+                "also have followed a network, proxy, or login failure; restore the connection first."));
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithIncompleteCodexSwitch_AddsNetworkCauseBeforeCompletedAgents()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+        var failure = new CodexCommandFailedException(
+            ["plugin", "marketplace", "add", "CreativeCodersTeam/shade-kit", "--ref", "v0.8.0", "--json"], 1,
+            "codex exited with the exit code 1.");
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("codex",
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"),
+            [new IntegrationResult("claude", "p", IntegrationOutcome.Installed, null, "0.8.0", "v0.8.0", true)],
+            new IntegrationIncompleteException("codex", failure)));
+
+        // Assert
+        error!.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.AgentCommandFailed);
+
+        error.Message
+            .Should().EndWith("'shade-kit integrations install' repairs it. Codex counts a failed check of the " +
+                              "marketplace as another source, so the switch may also have followed a network, " +
+                              "proxy, or login failure; restore the connection first. Before the agent 'codex' " +
+                              "failed, these integrations were done: claude: installed p 0.8.0 (v0.8.0).");
+    }
+
+    [Fact]
+    public void Map_IntegrationRunFailedWithCopilotFailureAfterClaude_KeepsMessageAndNamesCompletedAgent()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+        var failure = new CopilotCommandFailedException(["plugin", "install", "shade-kit@creativecoders-shade-kit"],
+            1, "copilot exited with the exit code 1.");
+        IntegrationResult[] completed =
+        [
+            new IntegrationResult("claude", "shade-kit@creativecoders-shade-kit", IntegrationOutcome.Installed, null,
+                "0.8.0", "v0.8.0", true)
+        ];
+
+        // Act
+        var error = mapper.Map(new IntegrationRunFailedException("copilot",
+            MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"), completed, failure));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.AgentCommandFailed,
+                ShadeKitCliErrorCodes.AgentCommandFailed,
+                "'copilot plugin install shade-kit@creativecoders-shade-kit' failed: copilot exited with the exit " +
+                "code 1. Fix the cause, make sure GitHub Copilot CLI is up to date, then run the command again. " +
+                "Before the agent 'copilot' failed, these integrations were done: claude: installed " +
+                "shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)."));
     }
 
     [Theory]
@@ -1102,7 +1383,7 @@ public class CliErrorMapperTests
         // Act
         var error = mapper.Map(new IntegrationConflictException("claude", "creativecoders-shade-kit",
             "other/shade-kit#main", "CreativeCodersTeam/shade-kit#v0.8.0",
-            "claude plugin marketplace remove creativecoders-shade-kit"));
+            ["claude plugin marketplace remove creativecoders-shade-kit"]));
 
         // Assert
         error
@@ -1153,6 +1434,35 @@ public class CliErrorMapperTests
 
         error.Message
             .Should().EndWith("'shade-kit integrations install' repairs it.");
+    }
+
+    public static TheoryData<Exception> NotFoundFailuresOfOtherAgents()
+    {
+        return
+        [
+            new CopilotNotFoundException(["plugin", "list", "--json"], "Not on the PATH."),
+            new CodexNotFoundException(["plugin", "list", "--json"], "Not on the PATH.")
+        ];
+    }
+
+    [Theory]
+    [MemberData(nameof(NotFoundFailuresOfOtherAgents))]
+    public void Map_IntegrationIncompleteWithCopilotOrCodexNotFound_KeepsExitCode51AndAddsRepairHint(
+        Exception failure)
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new IntegrationIncompleteException("copilot", failure));
+
+        // Assert
+        error!.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.AgentNotFound);
+
+        error.Message
+            .Should().StartWith(mapper.Map(failure)!.Message)
+            .And.EndWith("'shade-kit integrations install' repairs it.");
     }
 
     [Fact]
@@ -1226,7 +1536,7 @@ public class CliErrorMapperTests
         var error = mapper.Map(new IntegrationRunFailedException("copilot",
             MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0"),
             [new IntegrationResult("claude", "p", IntegrationOutcome.Installed, null, "0.8.0", "v0.8.0", true)],
-            new IntegrationConflictException("copilot", "m", "a", "b", "c")));
+            new IntegrationConflictException("copilot", "m", "a", "b", ["c"])));
 
         // Assert
         error!.ExitCode

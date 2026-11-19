@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Core.Processes;
@@ -27,6 +26,8 @@ public sealed class ClaudePluginCli : IClaudePluginCli
     private const string JsonOption = "--json";
 
     private const string ScopeOption = "--scope";
+
+    private const string ToolName = "claude";
 
     private readonly IClaudeCommandRunner _claudeCommandRunner;
 
@@ -84,7 +85,7 @@ public sealed class ClaudePluginCli : IClaudePluginCli
     /// <inheritdoc />
     public async Task AddMarketplaceAsync(string source, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(source, nameof(source));
+        PositionalArgument.Ensure(source, ToolName, nameof(source));
 
         var reader = await RunAsync(
                 ["plugin", "marketplace", "add", source, ScopeOption, ClaudeInstalledPlugin.UserScope, JsonOption],
@@ -97,7 +98,7 @@ public sealed class ClaudePluginCli : IClaudePluginCli
     /// <inheritdoc />
     public async Task RemoveMarketplaceAsync(string name, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(name, nameof(name));
+        PositionalArgument.Ensure(name, ToolName, nameof(name));
 
         var reader = await RunAsync(["plugin", "marketplace", "remove", name, JsonOption], cancellationToken)
             .ConfigureAwait(false);
@@ -108,7 +109,7 @@ public sealed class ClaudePluginCli : IClaudePluginCli
     /// <inheritdoc />
     public async Task UpdateMarketplaceAsync(string name, CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(name, nameof(name));
+        PositionalArgument.Ensure(name, ToolName, nameof(name));
 
         var reader = await RunAsync(["plugin", "marketplace", "update", name, JsonOption], cancellationToken)
             .ConfigureAwait(false);
@@ -129,7 +130,7 @@ public sealed class ClaudePluginCli : IClaudePluginCli
     public async Task<ClaudePluginInstallResult> InstallPluginAsync(string pluginId,
         CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(pluginId, nameof(pluginId));
+        PositionalArgument.Ensure(pluginId, ToolName, nameof(pluginId));
 
         var reader = await RunAsync(
                 ["plugin", "install", pluginId, ScopeOption, ClaudeInstalledPlugin.UserScope, JsonOption],
@@ -139,15 +140,15 @@ public sealed class ClaudePluginCli : IClaudePluginCli
         var resultObject = reader.ReadResultObject();
 
         return new ClaudePluginInstallResult(
-            reader.ReadOptionalString(resultObject, "installedVersion", "result"),
-            reader.ReadOptionalString(resultObject, "availableVersion", "result"));
+            reader.Fields.ReadOptionalString(resultObject, "installedVersion", "result"),
+            reader.Fields.ReadOptionalString(resultObject, "availableVersion", "result"));
     }
 
     /// <inheritdoc />
     public async Task<ClaudePluginUpdateResult> UpdatePluginAsync(string pluginId,
         CancellationToken cancellationToken = default)
     {
-        EnsurePositionalArgument(pluginId, nameof(pluginId));
+        PositionalArgument.Ensure(pluginId, ToolName, nameof(pluginId));
 
         var reader = await RunAsync(
                 ["plugin", "update", pluginId, ScopeOption, ClaudeInstalledPlugin.UserScope, JsonOption],
@@ -157,9 +158,9 @@ public sealed class ClaudePluginCli : IClaudePluginCli
         var resultObject = reader.ReadResultObject();
 
         return new ClaudePluginUpdateResult(
-            reader.ReadOptionalString(resultObject, "updateOutcome", "result"),
-            reader.ReadOptionalString(resultObject, "oldVersion", "result"),
-            reader.ReadOptionalString(resultObject, "newVersion", "result"));
+            reader.Fields.ReadOptionalString(resultObject, "updateOutcome", "result"),
+            reader.Fields.ReadOptionalString(resultObject, "oldVersion", "result"),
+            reader.Fields.ReadOptionalString(resultObject, "newVersion", "result"));
     }
 
     private async Task<ClaudeJsonOutputReader> RunAsync(string[] arguments, CancellationToken cancellationToken)
@@ -173,40 +174,25 @@ public sealed class ClaudePluginCli : IClaudePluginCli
     private static ClaudeMarketplace ReadMarketplace(ClaudeJsonOutputReader reader, JsonElement entry,
         string entryName)
     {
-        reader.EnsureObject(entry, entryName);
+        reader.Fields.EnsureObject(entry, entryName);
 
         return new ClaudeMarketplace(
-            reader.ReadRequiredString(entry, "name", entryName),
-            reader.ReadOptionalString(entry, "source", entryName),
-            reader.ReadOptionalString(entry, "repo", entryName),
-            reader.ReadOptionalString(entry, "ref", entryName),
-            reader.ReadOptionalString(entry, "path", entryName));
+            reader.Fields.ReadRequiredString(entry, "name", entryName),
+            reader.Fields.ReadOptionalString(entry, "source", entryName),
+            reader.Fields.ReadOptionalString(entry, "repo", entryName),
+            reader.Fields.ReadOptionalString(entry, "ref", entryName),
+            reader.Fields.ReadOptionalString(entry, "path", entryName));
     }
 
     private static ClaudeInstalledPlugin ReadInstalledPlugin(ClaudeJsonOutputReader reader, JsonElement entry,
         string entryName)
     {
-        reader.EnsureObject(entry, entryName);
+        reader.Fields.EnsureObject(entry, entryName);
 
         return new ClaudeInstalledPlugin(
-            reader.ReadRequiredString(entry, "id", entryName),
-            reader.ReadOptionalString(entry, "version", entryName),
-            reader.ReadOptionalString(entry, "scope", entryName),
-            reader.ReadRequiredBoolean(entry, "enabled", entryName));
-    }
-
-    // claude would read a value that starts with '-' as an option instead of the positional argument.
-    [SuppressMessage("Minor Code Smell", "S3236:Caller information arguments should not be provided explicitly",
-        Justification = "The caller's parameter name is forwarded on purpose, so an invalid value names the " +
-                        "caller's parameter instead of this helper's.")]
-    private static void EnsurePositionalArgument(string value, string paramName)
-    {
-        Ensure.IsNotNullOrWhitespace(value, paramName);
-
-        if (value.StartsWith('-'))
-        {
-            throw new ArgumentException($"The value '{value}' starts with '-', so claude would read it as an option.",
-                paramName);
-        }
+            reader.Fields.ReadRequiredString(entry, "id", entryName),
+            reader.Fields.ReadOptionalString(entry, "version", entryName),
+            reader.Fields.ReadOptionalString(entry, "scope", entryName),
+            reader.Fields.ReadRequiredBoolean(entry, "enabled", entryName));
     }
 }

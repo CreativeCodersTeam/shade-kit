@@ -55,7 +55,7 @@ public interface IIntegrationService
     /// <paramref name="cancellationToken" /> was canceled while the marketplace of an agent was switched to another
     /// branch or tag.
     /// </exception>
-    /// <exception cref="ExternalToolUnavailableException">
+    /// <exception cref="ExternalToolException">
     /// The CLI of an agent is missing, cannot be started, or fails, for example a
     /// <see cref="ClaudeNotFoundException" /> for a named agent that is not detected; a named agent that is not
     /// detected fails before the release tag is checked.
@@ -99,7 +99,7 @@ public interface IIntegrationService
     /// <paramref name="cancellationToken" /> was canceled while the marketplace of an agent was switched to another
     /// branch or tag.
     /// </exception>
-    /// <exception cref="ExternalToolUnavailableException">The CLI of an agent cannot be started or fails.</exception>
+    /// <exception cref="ExternalToolException">The CLI of an agent cannot be started or fails.</exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken" /> was canceled; a started process is killed.
     /// </exception>

@@ -12,10 +12,14 @@ public class AgentOptionConverterTests
     private static readonly OptionParameterAttribute AgentAttribute = new OptionParameterAttribute("agent");
 
     [Theory]
-    [InlineData("claude")]
-    [InlineData("Claude")]
-    [InlineData("CLAUDE")]
-    public void Convert_SupportedIdInAnyCase_ReturnsIdOfSupportedAgent(string value)
+    [InlineData("claude", "claude")]
+    [InlineData("Claude", "claude")]
+    [InlineData("CLAUDE", "claude")]
+    [InlineData("copilot", "copilot")]
+    [InlineData("Copilot", "copilot")]
+    [InlineData("codex", "codex")]
+    [InlineData("CODEX", "codex")]
+    public void Convert_SupportedIdInAnyCase_ReturnsIdOfSupportedAgent(string value, string expectedId)
     {
         // Arrange
         var converter = new AgentOptionConverter();
@@ -25,11 +29,11 @@ public class AgentOptionConverterTests
 
         // Assert
         result
-            .Should().Be("claude");
+            .Should().Be(expectedId);
     }
 
     [Theory]
-    [InlineData("copilot")]
+    [InlineData("gemini")]
     [InlineData("")]
     [InlineData(" claude")]
     public void Convert_UnknownId_ThrowsInvalidAgentOptionExceptionWithValueAndSupportedAgents(string value)
@@ -47,7 +51,7 @@ public class AgentOptionConverterTests
             .Should().Be(value);
 
         exception.SupportedAgentIds
-            .Should().Equal("claude");
+            .Should().Equal("claude", "copilot", "codex");
     }
 
     [Fact]

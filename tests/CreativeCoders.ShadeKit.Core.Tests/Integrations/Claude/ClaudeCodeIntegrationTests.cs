@@ -674,8 +674,8 @@ public class ClaudeCodeIntegrationTests
         exception.RequestedSource
             .Should().Be(source.Text);
 
-        exception.ResolveCommand
-            .Should().Be("claude plugin marketplace remove creativecoders-shade-kit");
+        exception.ResolveCommands
+            .Should().Equal("claude plugin marketplace remove creativecoders-shade-kit");
 
         AssertNoChange();
     }

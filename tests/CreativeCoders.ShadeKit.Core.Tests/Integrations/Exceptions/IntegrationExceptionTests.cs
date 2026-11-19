@@ -10,6 +10,34 @@ public class IntegrationExceptionTests
         MarketplaceSource.ForGitHub("CreativeCodersTeam/shade-kit", "v0.8.0");
 
     [Fact]
+    public void IntegrationConflictException_ResolveCommandsChangedAfterConstruction_KeepsCommandsInOrder()
+    {
+        // Arrange
+        string[] resolveCommands = ["first", "second"];
+
+        // Act
+        var exception = new IntegrationConflictException("copilot", "creativecoders-shade-kit", "other/repo",
+            "CreativeCodersTeam/shade-kit#v0.8.0", resolveCommands);
+        resolveCommands[0] = "changed";
+
+        // Assert
+        exception.ResolveCommands
+            .Should().Equal("first", "second");
+    }
+
+    [Fact]
+    public void IntegrationConflictException_NullResolveCommands_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => new IntegrationConflictException("copilot", "creativecoders-shade-kit", "other/repo",
+            "CreativeCodersTeam/shade-kit#v0.8.0", null!);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("resolveCommands");
+    }
+
+    [Fact]
     public void IntegrationSwitchCanceledException_CanceledInnerException_TakesTokenAndNamesAgent()
     {
         // Arrange

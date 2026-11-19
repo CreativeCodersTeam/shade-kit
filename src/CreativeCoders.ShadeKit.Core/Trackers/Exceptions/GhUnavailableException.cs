@@ -19,4 +19,4 @@ public class GhUnavailableException(
     IReadOnlyList<string> arguments,
     string reason,
     Exception? innerException = null)
-    : ExternalToolUnavailableException("gh", "cannot be run", arguments, reason, innerException);
+    : ExternalToolException("gh", "cannot be run", arguments, reason, innerException);

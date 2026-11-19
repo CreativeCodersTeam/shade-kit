@@ -31,4 +31,25 @@ public sealed record ClaudeMarketplace(string Name, string? SourceKind, string? 
     /// Represents the source kind of a marketplace in a local directory.
     /// </summary>
     public const string DirectorySourceKind = "directory";
+
+    /// <summary>
+    /// Returns the marketplace in the agent-neutral form.
+    /// </summary>
+    /// <returns>
+    /// The marketplace with the kind <see cref="AgentMarketplaceSourceKind.GitHub" /> for
+    /// <see cref="GitHubSourceKind" />, <see cref="AgentMarketplaceSourceKind.Directory" /> for
+    /// <see cref="DirectorySourceKind" />, and <see cref="AgentMarketplaceSourceKind.Other" /> for every other kind;
+    /// the reported kind and all other values are taken over unchanged.
+    /// </returns>
+    internal AgentMarketplace ToAgentMarketplace()
+    {
+        var sourceKind = SourceKind switch
+        {
+            GitHubSourceKind => AgentMarketplaceSourceKind.GitHub,
+            DirectorySourceKind => AgentMarketplaceSourceKind.Directory,
+            _ => AgentMarketplaceSourceKind.Other
+        };
+
+        return new AgentMarketplace(Name, sourceKind, SourceKind, Repo, Ref, Path);
+    }
 }

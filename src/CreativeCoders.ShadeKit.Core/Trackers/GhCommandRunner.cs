@@ -32,8 +32,15 @@ public sealed class GhCommandRunner(IGhExecutableLocator ghExecutableLocator) : 
             ["NO_COLOR"] = "1"
         };
 
-    // Declared after EnvironmentVariables, because static initializers run in the order of declaration.
-    private static readonly ExternalTool Gh = new("gh", "The GitHub CLI gh", EnvironmentVariables,
+    /// <summary>
+    /// Gets the description of the <c>gh</c> tool that the <see cref="ExternalToolRunner" /> starts.
+    /// </summary>
+    /// <value>The tool with the name <c>gh</c>, the <see cref="EnvironmentVariables" />, and the gh exceptions.</value>
+    /// <remarks>
+    /// Declared after <see cref="EnvironmentVariables" />, because static initializers run in the order of
+    /// declaration.
+    /// </remarks>
+    internal static ExternalTool Tool { get; } = new("gh", "The GitHub CLI gh", EnvironmentVariables,
         static (arguments, reason) => new GhNotFoundException(arguments, reason),
         static (arguments, reason, innerException) => new GhUnavailableException(arguments, reason, innerException));
 
@@ -41,7 +48,7 @@ public sealed class GhCommandRunner(IGhExecutableLocator ghExecutableLocator) : 
     public Task<ExternalProcessResult> RunAsync(string workingDirectory, IReadOnlyList<string> arguments,
         CancellationToken cancellationToken = default)
     {
-        return ExternalToolRunner.RunAsync(Gh, _ghExecutableLocator.FindGhExecutable, workingDirectory, arguments,
+        return ExternalToolRunner.RunAsync(Tool, _ghExecutableLocator.FindGhExecutable, workingDirectory, arguments,
             cancellationToken);
     }
 }

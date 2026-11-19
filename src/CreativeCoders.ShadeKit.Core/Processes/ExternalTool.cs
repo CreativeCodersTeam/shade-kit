@@ -20,13 +20,33 @@ namespace CreativeCoders.ShadeKit.Core.Processes;
 /// The function that creates the exception for an executable that cannot be started from the arguments, the reason,
 /// and the exception that caused it.
 /// </param>
+/// <param name="CmdShims">
+/// The policy with which the tool runs a found Windows <c>.cmd</c> shim through <c>cmd.exe</c>, or
+/// <see langword="null" /> if the tool does not run <c>.cmd</c> shims. Setting it is the explicit opt-in to running a
+/// found <c>.cmd</c> file through <c>cmd.exe</c>, as described for <see cref="CmdShimCommandLine" />; a tool without it
+/// starts every found executable directly.
+/// </param>
+/// <remarks>
+/// The <c>.cmd</c> opt-in exists for the GitHub Copilot CLI and the OpenAI Codex CLI, which npm installs as
+/// <c>.cmd</c> shims on Windows. The tools that only look for an <c>.exe</c>, such as <c>git</c>, <c>gh</c>, and
+/// <c>claude</c>, do not set <see cref="CmdShims" />.
+/// </remarks>
 internal sealed record ExternalTool(
     string Name,
     string DisplayName,
     IReadOnlyDictionary<string, string>? EnvironmentVariables,
-    Func<IReadOnlyList<string>, string, ExternalToolUnavailableException> CreateNotFoundException,
-    Func<IReadOnlyList<string>, string, Exception?, ExternalToolUnavailableException> CreateUnavailableException)
+    Func<IReadOnlyList<string>, string, ExternalToolException> CreateNotFoundException,
+    Func<IReadOnlyList<string>, string, Exception?, ExternalToolException> CreateUnavailableException,
+    CmdShimPolicy? CmdShims = null)
 {
+    /// <summary>
+    /// Gets a value that indicates whether the tool runs a found Windows <c>.cmd</c> shim through <c>cmd.exe</c>.
+    /// </summary>
+    /// <value>
+    /// <see langword="true" /> if <see cref="CmdShims" /> is set; otherwise, <see langword="false" />.
+    /// </value>
+    public bool RunsCmdShims => CmdShims is not null;
+
     /// <summary>
     /// Gets the reason that is passed to <see cref="CreateNotFoundException" /> when the executable of the tool is not
     /// found.

@@ -116,7 +116,7 @@ public sealed class IntegrationsCommandsEndToEndTests : IDisposable
     }
 
     [Theory]
-    [InlineData("copilot")]
+    [InlineData("gemini")]
     [InlineData("")]
     public async Task IntegrationsInstall_UnknownAgent_WritesInvalidArgumentsEnvelopeAndExits2(string agent)
     {
@@ -130,7 +130,8 @@ public sealed class IntegrationsCommandsEndToEndTests : IDisposable
         AssertError(run, ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments);
 
         run.Root.GetProperty("error").GetProperty("message").GetString()
-            .Should().Be($"Invalid arguments: '{agent}' is not a supported agent for --agent (supported: claude). " +
+            .Should().Be($"Invalid arguments: '{agent}' is not a supported agent for --agent (supported: claude, " +
+                         "copilot, codex). " +
                          "Run 'shade-kit integrations install --help' for usage.");
 
         _claude.Calls
@@ -153,8 +154,8 @@ public sealed class IntegrationsCommandsEndToEndTests : IDisposable
         AssertError(run, ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments);
 
         run.Root.GetProperty("error").GetProperty("message").GetString()
-            .Should().Be("Invalid arguments: --agent needs the id of a supported agent (claude), but got none. Run " +
-                         "'shade-kit integrations install --help' for usage.");
+            .Should().Be("Invalid arguments: --agent needs the id of a supported agent (claude, copilot, codex), " +
+                         "but got none. Run 'shade-kit integrations install --help' for usage.");
 
         _claude.Calls
             .Should().BeEmpty();
@@ -164,7 +165,7 @@ public sealed class IntegrationsCommandsEndToEndTests : IDisposable
     public async Task IntegrationsInstall_PlainModeUnknownAgent_WritesMessageToStandardErrorAndExits2()
     {
         // Act
-        var (exitCode, output, error) = await _harness.RunAsync("integrations", "install", "--agent", "copilot");
+        var (exitCode, output, error) = await _harness.RunAsync("integrations", "install", "--agent", "gemini");
 
         // Assert
         exitCode
@@ -174,7 +175,7 @@ public sealed class IntegrationsCommandsEndToEndTests : IDisposable
             .Should().BeEmpty();
 
         error
-            .Should().Contain("'copilot' is not a supported agent for --agent (supported: claude)");
+            .Should().Contain("'gemini' is not a supported agent for --agent (supported: claude, copilot, codex)");
     }
 
     [Fact]
@@ -187,7 +188,7 @@ public sealed class IntegrationsCommandsEndToEndTests : IDisposable
         AssertError(run, ShadeKitCliExitCodes.AgentNotFound, ShadeKitCliErrorCodes.AgentNotFound);
 
         run.Root.GetProperty("error").GetProperty("message").GetString()
-            .Should().StartWith("No supported agent was found (supported: claude).");
+            .Should().StartWith("No supported agent was found (supported: claude, copilot, codex).");
     }
 
     [Fact]

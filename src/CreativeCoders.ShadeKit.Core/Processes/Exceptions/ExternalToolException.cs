@@ -3,13 +3,14 @@ using CreativeCoders.Core;
 namespace CreativeCoders.ShadeKit.Core.Processes.Exceptions;
 
 /// <summary>
-/// Represents the base class of the exceptions that are thrown when a command of an external tool, such as
-/// <c>git</c> or <c>gh</c>, cannot be run or fails in a way that SHADE kit does not expect.
+/// Represents the base class of every failure of a command of an external tool, such as <c>git</c>, <c>gh</c>, or
+/// an agent CLI: both a command whose tool cannot be found or started and a command that ran and failed in a way that
+/// SHADE kit does not expect.
 /// </summary>
-public abstract class ExternalToolUnavailableException : Exception
+public abstract class ExternalToolException : Exception
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="ExternalToolUnavailableException" /> class with the message
+    /// Initializes a new instance of the <see cref="ExternalToolException" /> class with the message
     /// <c>The &lt;tool&gt; command '&lt;command text&gt;' &lt;failure&gt;: &lt;reason&gt;</c>.
     /// </summary>
     /// <param name="toolName">The name of the tool, for example <c>git</c>.</param>
@@ -19,7 +20,7 @@ public abstract class ExternalToolUnavailableException : Exception
     /// <param name="innerException">
     /// The exception that caused this exception, or <see langword="null" /> if there is none.
     /// </param>
-    protected ExternalToolUnavailableException(string toolName, string failure, IReadOnlyList<string> arguments,
+    protected ExternalToolException(string toolName, string failure, IReadOnlyList<string> arguments,
         string reason, Exception? innerException)
         : base($"The {toolName} command '{FormatCommandText(toolName, arguments)}' {failure}: {reason}",
             innerException)

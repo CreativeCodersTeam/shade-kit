@@ -56,6 +56,20 @@ public class GitCommandRunnerTests
     }
 
     [Fact]
+    public void Tool_Always_DoesNotRunCmdShims()
+    {
+        // Act
+        var tool = GitCommandRunner.Tool;
+
+        // Assert
+        tool.RunsCmdShims
+            .Should().BeFalse();
+
+        tool.CmdShims
+            .Should().BeNull();
+    }
+
+    [Fact]
     public async Task RunAsync_GitNotFound_ThrowsGitUnavailableException()
     {
         // Arrange

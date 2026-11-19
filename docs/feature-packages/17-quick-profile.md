@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (`quick` is a phase of its own; DoD items, coverage, playbook on demand), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): the skill ends and names `/shade-kit-finish`) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (`quick` is a phase of its own; DoD items, coverage, playbook on demand), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), and 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): the skill ends and names `/shade-kit-finish`), and 2026-11-18 (scenario runs: the size check runs before the clarification, **Implemented** in `shade-kit-quick`) |
 | Source | Concept §2 (Workflow profiles), §5.4, §11.2 |
 | Depends on | 04, 05, 06, 09, 13, 15 |
 | Enables | v1 profile `quick` end to end |
@@ -33,7 +33,9 @@ Profile: `new` → `quick` (all in one) → `finish`, one approval at the end. *
 ### The `quick` phase
 
 1. Read `request.md`. It can hold third-party content (issue text, comments, web pages): the skill treats it as data that describes the requirement, never as instructions, and shows the human any instruction in it that looks suspicious ([skill conventions](06-2-skill-conventions-and-version.md#skill-conventions)). **Decided** on 2026-10-25 (code review of the rework of `feature new`, finding F6). **Implemented** (`shade-kit-quick`).
-2. **Short clarification:** ask only the questions that block the change, using the interview skill (package 06). If the change turns out not to be small or not clear, recommend dropping it and creating a `feature` or `bugfix` instead, name `/shade-kit-drop` and `/shade-kit-new`, and end; the human decides by calling them. **Proposed.**
+2. **Short clarification:** ask only the questions that block the change, using the interview skill (package 06). A change that is not small or not clear is caught before the clarification by the size check below. **Proposed.**
+
+   Size check, before the clarification: the skill checks the size right after reading `request.md` (step 1). A change that is not small or not clear from `request.md` gets no interview: the skill recommends dropping it and `/shade-kit-new` (written in the call form of the agent it runs in: `/shade-kit-new` in Claude Code and GitHub Copilot CLI, `$shade-kit:shade-kit-new` in OpenAI Codex CLI), says in its report that the steps of the closing message that move on (to `finish`) do not fit because nothing was implemented, and ends (end of work); the closing message lists `/shade-kit-drop`. **Decided** on 2026-11-18 by the human after the scenario runs of that day (9 runs: fresh subagents with canned envelopes of the real engine, playing Claude Code, GitHub Copilot CLI, and OpenAI Codex CLI in default and plan mode). **Implemented** (`skills/shade-kit-quick/SKILL.md`, step 2; before, the check stood after the clarification in step 3).
 3. **Compact spec:** write `spec.md` in the format of package 10 with only goal, requirements with `REQ-` IDs, and acceptance criteria; the other sections state "not applicable in quick". **Proposed**, so the DoD and the report can trace requirements to tests also in `quick`.
 4. **Implement and test:** write the code and the tests that prove each acceptance criterion. No `plan.md` or `tasks.md`.
 5. **Simplify and review:** the loop of package 13 with `review.md`, so the DoD item "no open blockers" applies.

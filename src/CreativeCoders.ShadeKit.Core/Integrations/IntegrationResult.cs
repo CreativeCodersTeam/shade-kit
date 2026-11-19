@@ -1,3 +1,5 @@
+using CreativeCoders.Core;
+
 namespace CreativeCoders.ShadeKit.Core.Integrations;
 
 /// <summary>
@@ -30,4 +32,36 @@ public sealed record IntegrationResult(
     string? PreviousKitVersion,
     string? KitVersion,
     string? Ref,
-    bool Enabled);
+    bool Enabled)
+{
+    /// <summary>
+    /// Creates the result of an install or update of the SHADE kit plugin <see cref="ShadeKitPlugin.Id" /> from the
+    /// specified source.
+    /// </summary>
+    /// <param name="agentId">The id of the agent, for example <c>claude</c>.</param>
+    /// <param name="source">The marketplace source that is installed now.</param>
+    /// <param name="outcome">One of the enumeration values that specifies what was done.</param>
+    /// <param name="previousKitVersion">
+    /// The kit version that was installed before, or <see langword="null" /> if the integration was not installed or
+    /// its ref is no <c>v&lt;SemVer&gt;</c> tag.
+    /// </param>
+    /// <param name="enabled">
+    /// <see langword="true" /> if the plugin is enabled in the agent; otherwise, <see langword="false" />.
+    /// </param>
+    /// <returns>
+    /// The result with the plugin id <see cref="ShadeKitPlugin.Id" /> and the kit version and ref of
+    /// <paramref name="source" />.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="agentId" /> or <paramref name="source" /> is <see langword="null" />.
+    /// </exception>
+    internal static IntegrationResult ForShadeKitPlugin(string agentId, MarketplaceSource source,
+        IntegrationOutcome outcome, string? previousKitVersion, bool enabled)
+    {
+        Ensure.NotNull(agentId);
+        Ensure.NotNull(source);
+
+        return new IntegrationResult(agentId, ShadeKitPlugin.Id, outcome, previousKitVersion, source.KitVersion,
+            source.Ref, enabled);
+    }
+}

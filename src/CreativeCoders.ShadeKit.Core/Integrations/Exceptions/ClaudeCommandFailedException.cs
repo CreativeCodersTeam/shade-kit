@@ -34,7 +34,7 @@ public sealed class ClaudeCommandFailedException(
     string? claudeMessage = null,
     string? failureCode = null,
     Exception? innerException = null)
-    : ExternalToolUnavailableException("claude", "failed", arguments, reason, innerException)
+    : ExternalToolException("claude", "failed", arguments, reason, innerException)
 {
     /// <summary>
     /// Gets the exit code of the <c>claude</c> process.

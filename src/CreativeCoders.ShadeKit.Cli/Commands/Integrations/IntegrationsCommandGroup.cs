@@ -8,7 +8,7 @@ namespace CreativeCoders.ShadeKit.Cli.Commands.Integrations;
 
 /// <summary>
 /// Defines the command group that contains the commands for installing and updating the SHADE kit integrations of the
-/// supported agents, such as the plugin of Claude Code.
+/// supported agents: Claude Code, GitHub Copilot CLI, and OpenAI Codex CLI.
 /// </summary>
 public static class IntegrationsCommandGroup
 {

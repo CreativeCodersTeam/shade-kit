@@ -58,10 +58,59 @@ internal static class ExternalProcessRunner
                 nameof(executablePath));
         }
 
+        return await RunAsync(ExternalProcessStart.WithArguments(executablePath, arguments), workingDirectory,
+            environmentVariables, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs the executable of the specified start in the specified directory and waits until it exits.
+    /// </summary>
+    /// <remarks>
+    /// The arguments of <paramref name="start" /> are passed one by one, without a shell; its verbatim arguments, if
+    /// set, are passed as one unchanged string, which on Windows is appended to the quoted executable path in the
+    /// command line. Everything else is as described for the overload with an argument list.
+    /// </remarks>
+    /// <param name="start">The executable and the arguments to start.</param>
+    /// <param name="workingDirectory">The directory in which the process runs.</param>
+    /// <param name="environmentVariables">
+    /// The environment variables that are set for the process in addition to the inherited ones, or
+    /// <see langword="null" /> to pass the inherited environment unchanged.
+    /// </param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task that represents the asynchronous run. The task result contains the exit code and the captured standard
+    /// output and standard error of the process.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="start" /> is <see langword="null" />.</exception>
+    /// <exception cref="ArgumentException">
+    /// The executable path of <paramref name="start" /> or <paramref name="workingDirectory" /> is
+    /// <see langword="null" />, empty, or whitespace, or the executable path is not fully qualified.
+    /// </exception>
+    /// <exception cref="Win32Exception">The process cannot be started.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken" /> was canceled; a started process is killed together with its descendants.
+    /// </exception>
+    public static async Task<ExternalProcessResult> RunAsync(ExternalProcessStart start, string workingDirectory,
+        IReadOnlyDictionary<string, string>? environmentVariables = null,
+        CancellationToken cancellationToken = default)
+    {
+        Ensure.NotNull(start);
+
+        var executablePath = start.ExecutablePath;
+
+        Ensure.IsNotNullOrWhitespace(executablePath);
+        Ensure.IsNotNullOrWhitespace(workingDirectory);
+
+        if (!Path.IsPathFullyQualified(executablePath))
+        {
+            throw new ArgumentException($"The executable path '{executablePath}' is not fully qualified.",
+                nameof(start));
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
         using var process = new Process();
-        process.StartInfo = CreateStartInfo(executablePath, workingDirectory, arguments, environmentVariables);
+        process.StartInfo = CreateStartInfo(start, workingDirectory, environmentVariables);
 
         process.Start();
 
@@ -85,10 +134,10 @@ internal static class ExternalProcessRunner
         return new ExternalProcessResult(process.ExitCode, standardOutput, standardError);
     }
 
-    private static ProcessStartInfo CreateStartInfo(string executablePath, string workingDirectory,
-        IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environmentVariables)
+    private static ProcessStartInfo CreateStartInfo(ExternalProcessStart start, string workingDirectory,
+        IReadOnlyDictionary<string, string>? environmentVariables)
     {
-        var startInfo = new ProcessStartInfo(executablePath)
+        var startInfo = new ProcessStartInfo(start.ExecutablePath)
         {
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
@@ -99,7 +148,12 @@ internal static class ExternalProcessRunner
             StandardErrorEncoding = TextFileEncoding.Utf8WithoutBom
         };
 
-        foreach (var argument in arguments)
+        if (start.VerbatimArguments is not null)
+        {
+            startInfo.Arguments = start.VerbatimArguments;
+        }
+
+        foreach (var argument in start.Arguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
