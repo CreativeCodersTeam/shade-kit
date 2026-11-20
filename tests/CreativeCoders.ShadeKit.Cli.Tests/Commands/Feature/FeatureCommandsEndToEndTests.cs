@@ -199,6 +199,88 @@ public sealed partial class FeatureCommandsEndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task FeatureNew_MoveSourceJson_ReturnsMovedSourceValueAndRemovesOriginal()
+    {
+        // Arrange
+        await _harness.InitAsync();
+        const string notes = "# Login SSO\n\nUse Entra ID.\n";
+        var notesPath = _harness.GetKitPath("discussions", "20261020-1500-login-sso.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(notesPath)!);
+        await File.WriteAllTextAsync(notesPath, notes, TestContext.Current.CancellationToken);
+
+        // Act
+        var (exitCode, root) = await _harness.RunJsonAsync("feature", "new", "--source",
+            ".shadekit/discussions/20261020-1500-login-sso.md", "--move-source", "--json");
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        var data = root.GetProperty("data");
+        var featureId = data.GetProperty("id").GetString()!;
+
+        data.GetProperty("source").GetProperty("value").GetString()
+            .Should().Be($".shadekit/features/{featureId}/discussions/20261020-1500-login-sso.md");
+
+        File.Exists(notesPath)
+            .Should().BeFalse();
+
+        (await File.ReadAllTextAsync(_harness.GetFeaturePath(featureId, "discussions", "20261020-1500-login-sso.md"),
+                TestContext.Current.CancellationToken))
+            .ReplaceLineEndings("\n")
+            .Should().Be(notes);
+
+        // The fake git answers no attribute query, so the run reports git-attributes-unavailable; the delete worked.
+        root.GetProperty("warnings").EnumerateArray().Select(x => x.GetProperty("code").GetString())
+            .Should().NotContain(ShadeKitCliWarningCodes.SourceNotRemoved);
+    }
+
+    [Fact]
+    public async Task FeatureNew_PlainMoveSource_WritesMovedLine()
+    {
+        // Arrange
+        await _harness.InitAsync();
+        var notesPath = _harness.GetKitPath("discussions", "20261020-1500-login-sso.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(notesPath)!);
+        await File.WriteAllTextAsync(notesPath, "# Login SSO\n", TestContext.Current.CancellationToken);
+
+        // Act
+        var (exitCode, output, _) = await _harness.RunAsync("feature", "new", "--source",
+            ".shadekit/discussions/20261020-1500-login-sso.md", "--move-source");
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        // The console wraps long lines, also inside a path, so the line is compared without any whitespace.
+        string.Concat(output.Where(x => !char.IsWhiteSpace(x)))
+            .Should().MatchRegex(@"Moved\.shadekit/discussions/20261020-1500-login-sso\.mdto" +
+                                 @"\.shadekit/features/\d{8}-\d{4}-login-sso/discussions/20261020-1500-login-sso\.md\.");
+    }
+
+    [Fact]
+    public async Task FeatureNew_MoveSourceWithTextSource_Returns33WithMoveSourceHintAndChangesNothing()
+    {
+        // Arrange
+        await _harness.InitAsync();
+        var snapshot = _harness.TempDirectory.TakeSnapshot();
+
+        // Act
+        var run = await _harness.RunJsonAsync("feature", "new", "--source", "Login SSO via Azure", "--move-source",
+            "--json");
+
+        // Assert
+        CliEndToEndHarness.AssertError(run, ShadeKitCliExitCodes.InvalidFeatureSource,
+            ShadeKitCliErrorCodes.InvalidFeatureSource);
+
+        run.Root.GetProperty("error").GetProperty("message").GetString()
+            .Should().Contain("--move-source").And.Contain(".shadekit/discussions/");
+
+        _harness.TempDirectory.TakeSnapshot()
+            .Should().Equal(snapshot);
+    }
+
+    [Fact]
     [Trait("Requirement", "FP03-AC3")]
     public async Task FeatureNew_IdExistsAlready_Returns30AndChangesNothing()
     {

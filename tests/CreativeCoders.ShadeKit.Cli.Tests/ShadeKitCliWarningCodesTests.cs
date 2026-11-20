@@ -19,6 +19,7 @@ public partial class ShadeKitCliWarningCodesTests
     [InlineData(ShadeKitCliWarningCodes.IntegrationPrereleaseRef, "integration-prerelease-ref")]
     [InlineData(ShadeKitCliWarningCodes.IntegrationReleaseTagMissing, "integration-release-tag-missing")]
     [InlineData(ShadeKitCliWarningCodes.AgentUnavailable, "agent-unavailable")]
+    [InlineData(ShadeKitCliWarningCodes.SourceNotRemoved, "source-not-removed")]
     public void WarningCodes_Contract_HaveStableValues(string warningCode, string expectedWarningCode)
     {
         // Assert

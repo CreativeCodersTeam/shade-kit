@@ -69,7 +69,7 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider, IFeatureSourceRe
                 cancellationToken).ConfigureAwait(false);
         }
 
-        var filePath = FindSourceFilePath(source, workingDirectory);
+        var filePath = FeatureSourceFiles.FindFilePath(source, workingDirectory);
 
         if (filePath is not null)
         {
@@ -193,29 +193,6 @@ public sealed class FeatureIdFactory(TimeProvider timeProvider, IFeatureSourceRe
         FeatureIds.EnsureValid(id);
 
         return new FeatureIdentity(id, title, source, requestContent, createdAt);
-    }
-
-    private static string? FindSourceFilePath(string source, string workingDirectory)
-    {
-        var fullPath = TryGetFullPath(source, workingDirectory);
-
-        return fullPath is not null && File.Exists(fullPath)
-            ? fullPath
-            : null;
-    }
-
-    private static string? TryGetFullPath(string source, string workingDirectory)
-    {
-        try
-        {
-            return Path.GetFullPath(source, Path.GetFullPath(workingDirectory));
-        }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException
-                                              or PathTooLongException)
-        {
-            // Text that is not a valid path, for example because it contains a null character, is no file.
-            return null;
-        }
     }
 
     private static string? FindTrackerPrefix(IReadOnlyDictionary<string, string> trackers, string host)

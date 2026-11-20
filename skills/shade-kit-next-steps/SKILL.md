@@ -2,7 +2,7 @@
 name: shade-kit-next-steps
 description: SHADE kit general skill that writes the closing message of a kit skill. Shows what the human can do now and which skill to call for it, after the end of the work, a "no", or a refused start, and shows the warnings of the CLI calls. Starts nothing. Loaded by every SHADE kit skill that ends; not meant to be called directly.
 metadata:
-  version: 0.8.0
+  version: 0.9.0
 ---
 
 # shade-kit-next-steps

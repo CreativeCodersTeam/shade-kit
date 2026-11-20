@@ -2,7 +2,7 @@
 name: shade-kit-report
 description: "SHADE kit general skill that writes report.md for a finished feature: requirements, acceptance criteria and proving tests, check results, review findings, manual checks, deviations, and approvals. Optional; loaded by the SHADE kit skill finish only when a report is written; not meant to be called directly."
 metadata:
-  version: 0.8.0
+  version: 0.9.0
 ---
 
 # shade-kit-report

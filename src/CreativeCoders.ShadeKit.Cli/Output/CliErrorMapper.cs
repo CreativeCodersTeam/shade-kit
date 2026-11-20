@@ -382,6 +382,10 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 $"The feature folder '{KitStorePaths.GetRepositoryFeatureDirPath(w.FeatureId)}' has no " +
                 $"'{KitStorePaths.FeatureFileName}' and was skipped."),
 
+            FeatureSourceNotRemovedWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.SourceNotRemoved,
+                $"The source '{w.FilePath}' was copied into the new feature but cannot be removed: {w.Reason} " +
+                "Delete it yourself; the feature uses its copy."),
+
             FeatureFolderInvalidWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.FeatureFolderInvalid,
                 $"The folder '{KitStorePaths.GetRepositoryFeatureDirPath(w.FolderName)}' is not a valid " +
                 "feature id and was skipped."),
@@ -550,8 +554,17 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 "Check the URL and run the command again, or save the content to a file and pass the path of the " +
                 "file with --source.",
 
+            FeatureSourceProblem.SourceNotMovable =>
+                $"Pass the path of discussion notes in '{GetDiscussionsDirectoryPath()}' with --source, or run the " +
+                "command without --move-source to leave the source where it is.",
+
             _ => "Pass an issue URL, the path of an existing UTF-8 text file, or the request text with --source."
         };
+    }
+
+    private static string GetDiscussionsDirectoryPath()
+    {
+        return KitStorePaths.GetRepositoryPath($"{KitStorePaths.DiscussionsDirName}/");
     }
 
     private static string GetFeaturesDirectoryPath()

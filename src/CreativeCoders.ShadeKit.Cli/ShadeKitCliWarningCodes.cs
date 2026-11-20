@@ -98,4 +98,10 @@ public static class ShadeKitCliWarningCodes
     /// SHADE kit integration cannot be read and is not listed.
     /// </summary>
     public const string AgentUnavailable = "agent-unavailable";
+
+    /// <summary>
+    /// Represents the warning code reported when <c>feature new --move-source</c> copied the discussion notes into the
+    /// new feature but could not delete the original file.
+    /// </summary>
+    public const string SourceNotRemoved = "source-not-removed";
 }

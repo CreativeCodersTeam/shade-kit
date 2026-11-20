@@ -15,9 +15,15 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// The format warnings from reading <c>config.json</c>, followed by the warnings of the files that the create operation
 /// wrote, for example an <see cref="EditorConfigUnreadableWarning" />; each warning only once.
 /// </param>
+/// <param name="MovedSourceFrom">
+/// The repository-relative path, with <c>/</c> as separator, of the discussion notes that were moved into the new
+/// feature, whose new path is the <see cref="FeatureSource.Value" /> of the <see cref="FeatureDocument.Source" />; or
+/// <see langword="null" /> if no source was moved. The default is <see langword="null" />.
+/// </param>
 public sealed record NewFeatureResult(
     FeatureDocument Feature,
-    IReadOnlyList<KitWarning> Warnings)
+    IReadOnlyList<KitWarning> Warnings,
+    string? MovedSourceFrom = null)
 {
     private const string SuggestedBranchPrefix = "feature/";
 
