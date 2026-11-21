@@ -33,7 +33,8 @@ canned CLI results, the repository to work in, and the human's canned answers.
 6. **Output.** Write one Markdown file at the path the scenario names, with these sections in order:
    - `## Run` — agent played, skill, start time.
    - `## Steps` — numbered: each skill step you took, each command with its fixture, each `TOOL CALL` / `MESSAGE TO HUMAN`
-     block verbatim, each answer, each file you changed.
+     block verbatim, each answer, each file you changed. Anything you did before the skill run that the skill did not ask
+     for (for example looking at the repository) goes into one step numbered `0.`, before step 1.
    - `## Closing message` — the exact final message you would show the human (the next-steps message), verbatim in a
      fenced block, or `none` when the skill returns to a caller instead; then the exact return text, if any.
    - `## Unclear` — every place where the skill text was unclear, contradictory, or made you guess, with the skill name and

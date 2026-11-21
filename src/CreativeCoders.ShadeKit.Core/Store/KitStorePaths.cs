@@ -46,6 +46,12 @@ public static class KitStorePaths
     public const string RequestFileName = "request.md";
 
     /// <summary>
+    /// Represents the name of the directory that holds discussion notes: in the SHADE kit root directory the notes
+    /// written without a current feature, in a feature directory the notes of that feature.
+    /// </summary>
+    public const string DiscussionsDirName = "discussions";
+
+    /// <summary>
     /// Represents the name of the gate configuration file in the SHADE kit root directory.
     /// </summary>
     public const string GatesFileName = "gates.json";

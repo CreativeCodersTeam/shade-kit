@@ -14,4 +14,14 @@ namespace CreativeCoders.ShadeKit.Core.Features;
 /// The workflow profile of the feature; or <see langword="null" /> to use <c>defaultProfile</c> of <c>config.json</c>.
 /// </param>
 /// <param name="WorkingDirectory">The directory against which a relative file path in the source is resolved.</param>
-public sealed record NewFeatureRequest(string Source, string? Title, string? Profile, string WorkingDirectory);
+/// <param name="MoveSource">
+/// <see langword="true" /> to move the source file, which must be discussion notes directly in
+/// <c>.shadekit/discussions/</c>, into the <c>discussions/</c> folder of the new feature and record the new path as
+/// the source; <see langword="false" /> to leave the source where it is. The default is <see langword="false" />.
+/// </param>
+public sealed record NewFeatureRequest(
+    string Source,
+    string? Title,
+    string? Profile,
+    string WorkingDirectory,
+    bool MoveSource = false);

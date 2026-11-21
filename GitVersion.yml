@@ -1,11 +1,18 @@
 # Version configuration for the whole repository.
 #
-# The version is derived from the git history alone and is maintained nowhere by hand - this file
-# holds no version number either. A release is a tag `v<SemVer>` on `main`; every build that is not
-# on such a tag is a prerelease.
+# The version is derived from the git history; a release is a tag `v<SemVer>` on `main`, and every
+# build that is not on such a tag is a prerelease.
+#
+# `next-version` is the one number kept here: the lowest version the next release may have. It
+# raises the minor place ahead of the release when the kit skills move to a new minor (their
+# `metadata.version` must match the major.minor of the build, see SkillKitVersionTests). GitVersion
+# is documented to ignore it once a tag at or above it exists (not yet observed in this repository,
+# see 06-2), so it should need no clean-up after the release. It is written with the tag prefix
+# `v`, because GitVersion parses it with `tag-prefix`.
 
 mode: ContinuousDelivery
 tag-prefix: 'v'
+next-version: v0.9.0
 
 branches:
 

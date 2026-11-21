@@ -46,4 +46,17 @@ public class FeatureNewCommandOptions : JsonCommandOptions
         HelpText = "The feature title; required for a URL that is not an issue URL of a tracker in config.json, " +
                    "otherwise derived from the source (the issue title for an issue URL)")]
     public string? Title { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the source file is moved into the new feature.
+    /// </summary>
+    /// <value>
+    /// <see langword="true" /> to move the discussion notes that <see cref="Source" /> names, a file directly in
+    /// <c>.shadekit/discussions/</c>, into the <c>discussions/</c> folder of the new feature and record the new path as
+    /// the source; <see langword="false" /> to leave the source where it is. The default is <see langword="false" />.
+    /// </value>
+    [OptionParameter("move-source",
+        HelpText = "Moves the --source file, discussion notes directly in .shadekit/discussions/, into the " +
+                   "discussions/ folder of the new feature")]
+    public bool MoveSource { get; set; }
 }

@@ -420,6 +420,26 @@ public class CliErrorMapperTests
     }
 
     [Fact]
+    public void Map_InvalidFeatureSourceWithSourceNotMovableProblem_ReturnsExitCode33WithMoveSourceHint()
+    {
+        // Arrange
+        var mapper = CreateMapper();
+
+        // Act
+        var error = mapper.Map(new InvalidFeatureSourceException("docs/login.md",
+            "--move-source moves only a file directly in '.shadekit/discussions/'.",
+            problem: FeatureSourceProblem.SourceNotMovable));
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidFeatureSource,
+                ShadeKitCliErrorCodes.InvalidFeatureSource,
+                "The source 'docs/login.md' cannot be used: --move-source moves only a file directly in " +
+                "'.shadekit/discussions/'. Pass the path of discussion notes in '.shadekit/discussions/' with " +
+                "--source, or run the command without --move-source to leave the source where it is."));
+    }
+
+    [Fact]
     public void Map_InvalidFeatureSourceWithInnerExceptionAndDefaultProblem_ReturnsExitCode33WithSourceHint()
     {
         // Arrange
@@ -1776,6 +1796,23 @@ public class CliErrorMapperTests
 
         warning.Message
             .Should().Be("The feature folder '.shadekit/features/login/' has no 'feature.json' and was skipped.");
+    }
+
+    [Fact]
+    public void MapWarning_FeatureSourceNotRemoved_ReturnsSourceNotRemovedWarningNamingFileAndReason()
+    {
+        // Act
+        var warning = CliErrorMapper.MapWarning(new FeatureSourceNotRemovedWarning(
+            ".shadekit/discussions/20261020-1500-login-sso.md", "Access to the path is denied."));
+
+        // Assert
+        warning.Code
+            .Should().Be(ShadeKitCliWarningCodes.SourceNotRemoved);
+
+        warning.Message
+            .Should().Be("The source '.shadekit/discussions/20261020-1500-login-sso.md' was copied into the new " +
+                         "feature but cannot be removed: Access to the path is denied. Delete it yourself; the " +
+                         "feature uses its copy.");
     }
 
     [Fact]

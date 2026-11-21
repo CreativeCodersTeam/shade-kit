@@ -9,13 +9,17 @@ real engine through the workflow that the scenarios need. It writes into the wor
 
 - fixtures/*.json   the JSON envelopes of the engine calls that the scenario catalog names
 - ids.json          the generated feature ids and the kit version (read by checks/check_runs.py)
-- repo/             the fixture repository; repo-s5/, repo-s6/, repo-s9/ are copies of it
+- repo/             the fixture repository; repo-s5/, repo-s6/, repo-s9/, repo-s11/, repo-s12/, repo-s15/, and
+                    repo-s16/ are copies of it
+- repo-empty/       an initialised repository without features; repo-s10/, repo-s13/, and repo-s14/ are copies of it
+- repo-s17/         a copy of repo/ on the branch feature/<sso>, so the branch selects the sso feature
 - out/              empty; the runners write their outputs here
 - SCENARIOS.md      the catalog with every placeholder resolved (what the runners read)
 - RUNNER-PROTOCOL.md the protocol with the paths resolved
 
-Unlike the unit tests, this script starts git and the real engine. Any engine call that returns ok: false or an
-unexpected outcome stops it with a non-zero exit code, so that a workflow change shows up at once.
+Unlike the unit tests, this script starts git and the real engine. Any engine call that returns ok: false (or, for
+the calls that must fail, another error code) or an unexpected outcome stops it with a non-zero exit code, so that a
+workflow change shows up at once.
 """
 import argparse
 import json
@@ -40,6 +44,41 @@ LARGE_CHANGE_LINE = (
     "Replace the whole authentication of all six services with SSO via Entra ID, including the migration of "
     "existing user accounts. The approach (gateway or per service) is not decided yet."
 )
+NOTES_FILE = "20261120-0900-login-with-sso.md"
+NOTES_TEXT = """# Login with SSO
+
+Feature: `none` · Date: 2026-11-20 · Participants: Scenario Fixture
+
+## Context
+
+Users ask to sign in with their company account instead of a password.
+
+## Options
+
+### Entra ID
+
+Sign in with the company tenant of Entra ID.
+
+Pros:
+
+- Every user already has an account.
+
+Cons:
+
+- Guests without a company account cannot sign in.
+
+## Conclusions
+
+- Use Entra ID for the company tenant; keep the password login for guests.
+
+## Open questions
+
+None.
+"""
+ISSUE_URL = "https://github.com/acme/shop/issues/142"
+CSV_SOURCE = "Export the order list as CSV."
+BUGFIX_TEXT = """Login fails when the user's name contains an umlaut
+Steps: sign in as "Jörg Müller"; the page shows error 500 and the log has $LOGIN_ERROR."""
 TEAM_ITEMS = [
     ("TEAM-01", "The product owner accepted the wording of the corrected text."),
     ("TEAM-02", "The support team was told about the change."),
@@ -123,6 +162,30 @@ class Engine:
                 fail(f"{command}: {problem}")
         return result.stdout, envelope
 
+    def call_failing(self, repo, args, error_code):
+        """Runs a call that must fail with the given error code and returns its stdout."""
+        command = "shade-kit " + " ".join(args)
+        result = subprocess.run([self.dotnet, self.dll] + args, cwd=str(repo), env=self.env, capture_output=True,
+                                text=True, encoding="utf-8")
+        try:
+            envelope = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            fail(f"{command}: no JSON envelope (exit code {result.returncode})\n{result.stdout}{result.stderr}")
+        code = (envelope.get("error") or {}).get("code")
+        if result.returncode == 0 or envelope.get("ok") is not False or code != error_code:
+            fail(f"{command}: exit code {result.returncode}, error code {code}, expected {error_code}")
+        return result.stdout
+
+
+def expect_current(feature_id, status):
+    def check(data):
+        feature = data.get("feature") or {}
+        actual = (feature.get("id"), feature.get("status")) if data.get("resolved") else (None, None)
+        if actual != (feature_id, status):
+            return f"current feature/status is {actual[0]}/{actual[1]}, expected {feature_id}/{status}"
+        return None
+    return check
+
 
 def expect_next(feature_id, continue_phase, forward_phase):
     def check(data):
@@ -190,6 +253,21 @@ def git_commit(git, repo, message):
     run([git, "commit", "-q", "--allow-empty", "-m", message], repo)
 
 
+def new_repository(git, path):
+    path.mkdir()
+    run([git, "init", "-q", "-b", "main"], path)
+    for key, value in (("user.name", "Scenario Fixture"), ("user.email", "scenario@example.invalid"),
+                       ("commit.gpgsign", "false"), ("tag.gpgsign", "false")):
+        run([git, "config", key, value], path)
+    run([git, "commit", "-q", "--allow-empty", "-m", "init"], path)
+
+
+def copy_repository(work, source, name):
+    target = work / name
+    shutil.copytree(str(source), str(target), symlinks=True)
+    return target
+
+
 def resolve_placeholders(text, values):
     for key, value in values.items():
         text = text.replace(key, value)
@@ -228,11 +306,8 @@ def generate(work, engine, git, kit_version):
         (fixtures / name).write_text(stdout, encoding="utf-8")
 
     # Empty git repository with an initial commit.
-    run([git, "init", "-q", "-b", "main"], repo)
-    for key, value in (("user.name", "Scenario Fixture"), ("user.email", "scenario@example.invalid"),
-                       ("commit.gpgsign", "false"), ("tag.gpgsign", "false")):
-        run([git, "config", key, value], repo)
-    run([git, "commit", "-q", "--allow-empty", "-m", "init"], repo)
+    repo.rmdir()
+    new_repository(git, repo)
 
     # 1. Version handshake.
     stdout, _ = engine.call(repo, ["version", "--json", "--expect", kit_version])
@@ -285,16 +360,112 @@ def generate(work, engine, git, kit_version):
     replace_request_line(s9_request, TYPO_LINE, LARGE_CHANGE_LINE)
     git_commit(git, work / "repo-s9", "fixture s9")
 
+    # 8. Discuss and new (S10-S17).
+    intake = generate_intake(work, engine, git, repo, fixtures, sso, quick)
+
     (work / "out").mkdir()
-    ids = {"sso": sso, "quick": quick, "kitVersion": kit_version}
+    ids = {"sso": sso, "quick": quick, "kitVersion": kit_version, "notesFile": NOTES_FILE, "csv": intake["csv"]}
     (work / "ids.json").write_text(json.dumps(ids, indent=2) + "\n", encoding="utf-8")
 
     values = {"<work>": str(work), "<repository>": str(REPOSITORY), "<kit-version>": kit_version,
-              "<sso-feature>": sso, "<quick-feature>": quick}
+              "<sso-feature>": sso, "<quick-feature>": quick, "<notes-file>": NOTES_FILE,
+              "<issue-url>": ISSUE_URL, "<csv-feature>": intake["csv"]}
     for name in ("SCENARIOS.md", "RUNNER-PROTOCOL.md"):
         text = (SCRIPT_DIR / name).read_text(encoding="utf-8")
         (work / name).write_text(resolve_placeholders(text, values), encoding="utf-8")
     return ids
+
+
+def generate_intake(work, engine, git, repo, fixtures, sso, quick):
+    """Builds the repositories and fixtures of the discuss and new scenarios S10-S17."""
+
+    def save(name, stdout):
+        (fixtures / name).write_text(stdout, encoding="utf-8")
+
+    # A repository without any feature: no current feature, so phase next fails.
+    empty = work / "repo-empty"
+    new_repository(git, empty)
+    engine.call(empty, ["init", "--json"])
+    git_commit(git, empty, "kit")
+    stdout, _ = engine.call(empty, ["feature", "current", "--json"], check=expect_current(None, None))
+    save("env-current-none.json", stdout)
+    save("env-next-none.json", engine.call_failing(empty, ["phase", "next", "--json"], "no-current-feature"))
+    copy_repository(work, empty, "repo-s10")
+    copy_repository(work, empty, "repo-s14")
+
+    # S13: notes written by discuss without a feature, created as a feature with --move-source. The fixtures come
+    # from a throwaway copy, so the runner's repository still holds the notes.
+    s13 = copy_repository(work, empty, "repo-s13")
+    (s13 / ".shadekit" / "discussions").mkdir()
+    write_text(s13 / ".shadekit" / "discussions" / NOTES_FILE, NOTES_TEXT, "\n")
+    git_commit(git, s13, "notes")
+    gen = copy_repository(work, s13, "gen-s13")
+    stdout, envelope = engine.call(gen, ["feature", "new", "--source", f".shadekit/discussions/{NOTES_FILE}",
+                                         "--move-source", "--json"])
+    notes_feature = envelope["data"]["id"]
+    if not envelope["data"]["source"]["value"].endswith(f"/{notes_feature}/discussions/{NOTES_FILE}"):
+        fail(f"feature new --move-source recorded the source {envelope['data']['source']['value']}")
+    save("env-new-notes.json", stdout)
+    stdout, _ = engine.call(gen, ["phase", "next", "--json"], check=expect_next(notes_feature, None, "refine"))
+    save("env-next-new-notes.json", stdout)
+    shutil.rmtree(str(gen))
+
+    # S14: an issue URL of the default tracker; gh is not on the PATH of the engine, so feature new refuses it.
+    # gh must not share a directory with git or dotnet, or the engine would find it and call it over the network.
+    if shutil.which("gh", path=engine.env["PATH"]) is not None:
+        fail("gh is on the engine PATH (it shares a directory with git or dotnet); S14 needs an engine without gh")
+    stdout = engine.call_failing(work / "repo-s14", ["feature", "new", "--source", ISSUE_URL, "--json"],
+                                 "invalid-source")
+    if "was not found" not in json.loads(stdout)["error"]["message"]:
+        fail("S14: feature new did not refuse the issue URL because gh is missing")
+    save("env-new-issue.json", stdout)
+
+    # S11, S15, S16: the sso feature is current (active, refine in progress).
+    s11 = copy_repository(work, repo, "repo-s11")
+    engine.call(s11, ["feature", "set", sso, "--json"])
+    stdout, _ = engine.call(s11, ["feature", "current", "--json"], check=expect_current(sso, "active"))
+    save("env-current-sso.json", stdout)
+    copy_repository(work, s11, "repo-s15")
+    s16 = copy_repository(work, s11, "repo-s16")
+    gen = copy_repository(work, s16, "gen-s16")
+    stdout, envelope = engine.call(gen, ["feature", "new", "--source", BUGFIX_TEXT, "--profile", "bugfix", "--json"])
+    bugfix_feature = envelope["data"]["id"]
+    save("env-new-bugfix.json", stdout)
+    stdout, _ = engine.call(gen, ["phase", "next", "--json"], check=expect_next(bugfix_feature, None, "diagnose"))
+    save("env-next-new-bugfix.json", stdout)
+    shutil.rmtree(str(gen))
+
+    # S17: the branch selects the sso feature; a new feature is created anyway, and the branch keeps winning.
+    s17 = copy_repository(work, repo, "repo-s17")
+    (s17 / ".shadekit" / "features" / "current-feature.json").unlink()
+    run([git, "switch", "-q", "-c", f"feature/{sso}"], s17)
+    _, envelope = engine.call(s17, ["feature", "current", "--json"], check=expect_current(sso, "active"))
+    if envelope["data"].get("resolvedFrom") != "branch":
+        fail(f"S17: feature current resolved from {envelope['data'].get('resolvedFrom')}, expected branch")
+    save("env-current-sso-branch.json", json.dumps(envelope, indent=2) + "\n")
+    gen = copy_repository(work, s17, "gen-s17")
+    stdout, envelope = engine.call(gen, ["feature", "new", "--source", CSV_SOURCE, "--profile", "feature", "--json"])
+    csv_feature = envelope["data"]["id"]
+    save("env-new-csv.json", stdout)
+    stdout, _ = engine.call(gen, ["feature", "show", csv_feature, "--json"])
+    save("env-show-csv.json", stdout)
+    stdout, _ = engine.call(gen, ["phase", "next", "--json"], check=expect_next(sso, "refine", "map"))
+    save("env-next-refine-branch.json", stdout)
+    shutil.rmtree(str(gen))
+
+    # S12: the quick feature is finished, and the discussion template is missing.
+    s12 = copy_repository(work, repo, "repo-s12")
+    engine.call(s12, ["phase", "approve", "finish", "--json"])
+    engine.call(s12, ["phase", "complete", "--json"])
+    # phase complete clears the override; the human selects the finished feature again.
+    engine.call(s12, ["feature", "set", quick, "--json"])
+    stdout, _ = engine.call(s12, ["feature", "current", "--json"], check=expect_current(quick, "done"))
+    save("env-current-done.json", stdout)
+    stdout, _ = engine.call(s12, ["phase", "next", "--json"])
+    save("env-next-done.json", stdout)
+    (s12 / ".shadekit" / "templates" / "discussion.md").unlink()
+    git_commit(git, s12, "fixture s12")
+    return {"csv": csv_feature}
 
 
 def main():

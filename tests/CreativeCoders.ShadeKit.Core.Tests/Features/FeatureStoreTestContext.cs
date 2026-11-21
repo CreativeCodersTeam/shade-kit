@@ -150,9 +150,10 @@ internal sealed class FeatureStoreTestContext : IDisposable
             new PhaseEngine());
     }
 
-    public NewFeatureRequest CreateRequest(string source, string? title = null, string? profile = null)
+    public NewFeatureRequest CreateRequest(string source, string? title = null, string? profile = null,
+        bool moveSource = false)
     {
-        return new NewFeatureRequest(source, title, profile, RepositoryRootPath);
+        return new NewFeatureRequest(source, title, profile, RepositoryRootPath, moveSource);
     }
 
     public void SetBranch(string? branchName)

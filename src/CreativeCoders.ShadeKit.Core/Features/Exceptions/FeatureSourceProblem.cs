@@ -25,5 +25,10 @@ public enum FeatureSourceProblem
     /// <summary>
     /// The source is a URL whose host is not a tracker, and its content cannot be read.
     /// </summary>
-    UrlReadFailed
+    UrlReadFailed,
+
+    /// <summary>
+    /// The source is to be moved into the new feature, but it is not a file directly in <c>.shadekit/discussions/</c>.
+    /// </summary>
+    SourceNotMovable
 }

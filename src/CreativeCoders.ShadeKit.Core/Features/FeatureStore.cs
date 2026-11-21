@@ -91,10 +91,20 @@ public sealed class FeatureStore(
         var creator = await _gitRepositoryInfo.GetIdentityAsync(repositoryRootPath, cancellationToken)
             .ConfigureAwait(false);
 
+        // Only a file can be moved, so a URL or a text is refused before gh runs or a request is sent.
+        if (request.MoveSource)
+        {
+            DiscussionNotesMove.EnsureFileSource(request.Source, request.WorkingDirectory);
+        }
+
         var identity = await _featureIdFactory
             .CreateAsync(request.Source, request.Title, request.WorkingDirectory, config.Trackers, repositoryRootPath,
                 cancellationToken)
             .ConfigureAwait(false);
+
+        // Whether the source can be moved is known only after the factory found its kind and path; the check still
+        // runs before anything is written.
+        var notesMove = request.MoveSource ? DiscussionNotesMove.Create(identity.Source, request.Source) : null;
 
         // The id can depend on the loaded content, for example on the issue title, so it is checked only now.
         if (store.FeatureExists(identity.Id))
@@ -109,7 +119,7 @@ public sealed class FeatureStore(
             Id = identity.Id,
             Title = identity.Title,
             Profile = profile.Name,
-            Source = identity.Source,
+            Source = notesMove?.CreateMovedSource(identity.Id) ?? identity.Source,
             CreatedAt = identity.CreatedAt,
             CreatedBy = new FeatureCreator { Name = creator.Name, Email = creator.Email },
             Status = FeatureStatus.Active
@@ -118,26 +128,34 @@ public sealed class FeatureStore(
         FeaturePhaseFields.Apply(feature,
             _phaseEngine.CreateInitialState(profile, feature.Id, FeaturePhaseFields.GetFeatureFilePath(feature.Id)));
 
-        // The three files are known now, so their git attributes are read at once instead of once per write; the
-        // feature files are prepared with the paths of the feature folder, for which their line endings are
-        // determined.
+        // The files are known now, so their git attributes are read at once instead of once per write; the feature
+        // files are prepared with the paths of the feature folder, for which their line endings are determined.
+        var featureDirPath = KitStorePaths.GetFeatureDirPath(feature.Id);
         await store
             .PrepareLineEndingsAsync(
             [
                 KitStorePaths.GetFeatureFilePath(feature.Id),
-                $"{KitStorePaths.GetFeatureDirPath(feature.Id)}/{KitStorePaths.RequestFileName}",
+                $"{featureDirPath}/{KitStorePaths.RequestFileName}",
+                .. (notesMove is null ? (string[])[] : [$"{featureDirPath}/{notesMove.FeatureRelativePath}"]),
                 KitStorePaths.CurrentFeatureFilePath
             ], cancellationToken)
             .ConfigureAwait(false);
 
-        var featureDirWarnings = await CreateFeatureDirAsync(store, feature, identity.RequestContent, cancellationToken)
+        var featureDirWarnings = await CreateFeatureDirAsync(store, feature, identity.RequestContent, notesMove,
+                cancellationToken)
             .ConfigureAwait(false);
 
         var overrideWarnings = await WriteOverrideOrRemoveFeatureAsync(store, identity.Id, cancellationToken)
             .ConfigureAwait(false);
 
+        // The original notes are deleted only now: until the override is written, every failure removes the new
+        // feature again, and the notes must still be where they were.
+        IReadOnlyList<KitWarning> moveWarnings = notesMove is null ? [] : RemoveOriginalNotes(store, notesMove);
+
         return new NewFeatureResult(feature,
-            KitWarningOrder.Arrange([.. configResult?.Warnings ?? [], .. featureDirWarnings, .. overrideWarnings]));
+            KitWarningOrder.Arrange(
+                [.. configResult?.Warnings ?? [], .. featureDirWarnings, .. overrideWarnings, .. moveWarnings]),
+            notesMove?.OriginalPath);
     }
 
     /// <inheritdoc />
@@ -334,7 +352,8 @@ public sealed class FeatureStore(
     // the hidden folders start with a dot, so they are never valid feature ids and ListAsync ignores them. Returns the
     // warnings of the written files.
     private static async Task<IReadOnlyList<KitWarning>> CreateFeatureDirAsync(IKitStore store,
-        FeatureDocument feature, string requestContent, CancellationToken cancellationToken)
+        FeatureDocument feature, string requestContent, DiscussionNotesMove? notesMove,
+        CancellationToken cancellationToken)
     {
         List<KitWarning> warnings = [];
 
@@ -343,7 +362,7 @@ public sealed class FeatureStore(
             await store
                 .CreateDirectoryExclusiveAsync(KitStorePaths.GetFeatureDirPath(feature.Id),
                     async (featureDirWriter, token) => warnings.AddRange(
-                        await WriteFeatureFilesAsync(featureDirWriter, feature, requestContent, token)
+                        await WriteFeatureFilesAsync(featureDirWriter, feature, requestContent, notesMove, token)
                             .ConfigureAwait(false)),
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -368,7 +387,7 @@ public sealed class FeatureStore(
     // files end up, so git attributes and .editorconfig sections for that path apply.
     private static async Task<IReadOnlyList<KitWarning>> WriteFeatureFilesAsync(
         IKitDirectoryWriter featureDirWriter, FeatureDocument feature, string requestContent,
-        CancellationToken cancellationToken)
+        DiscussionNotesMove? notesMove, CancellationToken cancellationToken)
     {
         var featureFileWarnings = await featureDirWriter
             .WriteJsonAsync(KitStorePaths.FeatureFileName, FormatIds.Feature, feature, FormatAccess.Write,
@@ -378,7 +397,31 @@ public sealed class FeatureStore(
         var requestWarnings = await WriteRequestAsync(featureDirWriter, requestContent, cancellationToken)
             .ConfigureAwait(false);
 
-        return [.. featureFileWarnings, .. requestWarnings];
+        // The moved notes are the content that was loaded for request.md, so they are written the same way.
+        IReadOnlyList<KitWarning> notesWarnings = notesMove is null
+            ? []
+            : await featureDirWriter
+                .WriteFileAsync(notesMove.FeatureRelativePath, TextFileContent.FromText(requestContent),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        return [.. featureFileWarnings, .. requestWarnings, .. notesWarnings];
+    }
+
+    // The feature is complete and current, so a failed delete must not fail the command: the feature uses its copy,
+    // and the warning tells the human to delete the original.
+    private static IReadOnlyList<KitWarning> RemoveOriginalNotes(IKitStore store, DiscussionNotesMove notesMove)
+    {
+        try
+        {
+            store.DeleteFile(notesMove.KitRelativeOriginalPath);
+
+            return [];
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return [new FeatureSourceNotRemovedWarning(notesMove.OriginalPath, exception.Message)];
+        }
     }
 
     private static async Task<IReadOnlyList<KitWarning>> WriteOverrideOrRemoveFeatureAsync(IKitStore store,
