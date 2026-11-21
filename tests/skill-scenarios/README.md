@@ -21,10 +21,16 @@ The work folder (outside this repository) holds after the generator:
 | Path | Content |
 |---|---|
 | `fixtures/*.json` | The JSON envelopes of the real engine calls; the fixture table of the catalog names the ones the runners use. |
-| `ids.json` | `sso` and `quick` (the generated feature ids) and `kitVersion`. |
+| `ids.json` | `sso` and `quick` (the generated feature ids), `kitVersion`, `notesFile` (the notes of S13), and `csv` (the feature that S17 creates). |
 | `repo/` | The fixture repository: `init`, a `feature` profile feature in `refine`, and a `quick` profile feature whose `finish` was requested, with five team items in its Definition of Done copy. |
 | `repo-s5/`, `repo-s6/` | Copies of `repo/` that the gate-check runs edit. |
 | `repo-s9/` | A copy of `repo/` whose quick `request.md` asks for a change that is too large for `quick`. |
+| `repo-empty/` | An initialised repository without features (no current feature). |
+| `repo-s10/`, `repo-s14/` | Copies of `repo-empty/`; the `discuss` run of S10 writes its notes into `repo-s10/`. |
+| `repo-s13/` | A copy of `repo-empty/` with discussion notes in `.shadekit/discussions/` (`notesFile` in `ids.json`). |
+| `repo-s11/`, `repo-s15/`, `repo-s16/` | Copies of `repo/` with the sso feature selected as current; S11 writes its notes into `repo-s11/`. |
+| `repo-s12/` | A copy of `repo/` whose quick feature is finished and selected again, without `templates/discussion.md`. |
+| `repo-s17/` | A copy of `repo/` on the branch `feature/<sso>`, without the local override, so the branch selects the sso feature. |
 | `out/` | Empty; each runner writes `out/<id>.md`. |
 | `SCENARIOS.md`, `RUNNER-PROTOCOL.md` | The resolved copies the runners read. |
 
@@ -48,8 +54,10 @@ The work folder (outside this repository) holds after the generator:
 4. Check the outputs:
 
    ```sh
-   python3 -I tests/skill-scenarios/checks/check_runs.py <work> [outdir]
+   python3 -I tests/skill-scenarios/checks/check_runs.py <work> [outdir] [--only S10,S11]
    ```
+
+   With `--only`, only the checks of the named scenarios are reported and counted.
 
    It prints one `PASS`/`FAIL` line per check and the totals, and exits with 1 when a check fails. Read the `## Unclear`
    section of every output too: a check can pass while the skill still made the runner guess.
@@ -87,3 +95,13 @@ Write your output to <work>/out/<id>.md. Do not read any other file in <work>/ou
   (S5, S6), `shade-kit-interview` (S7, S8), `shade-kit-next-steps` (S1, S2), `shade-kit-phase-entry` (S3, S4), and
   `shade-kit-quick` (S9), played as Claude Code, GitHub Copilot CLI, and OpenAI Codex CLI in default and plan mode. All
   checks passed after the clarifications (69 of 69).
+- **2026-11-20:** seven scenarios S10–S16 for package 09: `shade-kit-discuss` (S10 no current feature, S11 active
+  feature, S12 finished feature without template) and `shade-kit-new` (S13 notes with `--move-source`, S14 issue URL
+  without `gh`, S15 active feature ended, S16 two lines of bug-fix text), with their own fixture tables and
+  repositories. Iteration 1: 130 of 133 checks (after fixing two checker false positives); iteration 2 after the skill
+  clarifications: 133 of 133. After the review: S17 (the branch selects the active feature) added, the git check
+  of S13–S17 fails on any `git` command, the generator refuses an engine `PATH` with `gh`; iteration 3 of S13–S17:
+  83 of 84 (S13: the runner ran a read-only `git status` outside the skill), S10–S12 re-checked: 72 of 72. After
+  review round 2: S17 checks read the closing message, `feature new` must carry its own `--json`, step 0 of a runner
+  is left out of the git check, `--only` refuses unknown ids; iteration 3 re-checked 84 of 84, S17 iteration 4 18 of
+  18.

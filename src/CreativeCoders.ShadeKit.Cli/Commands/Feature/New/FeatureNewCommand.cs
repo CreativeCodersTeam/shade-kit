@@ -4,6 +4,7 @@ using CreativeCoders.Cli.Hosting.Exceptions;
 using CreativeCoders.Core;
 using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Features;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
 using CreativeCoders.SysConsole.Core;
 using JetBrains.Annotations;
 using Spectre.Console;
@@ -37,7 +38,8 @@ public class FeatureNewCommand(
     private readonly IFeatureStore _featureStore = Ensure.NotNull(featureStore);
 
     /// <summary>
-    /// Creates the feature and writes its id, paths, and suggested branch, as plain text or as a JSON envelope.
+    /// Creates the feature and writes its id, paths, moved source, and suggested branch, as plain text or as a JSON
+    /// envelope.
     /// </summary>
     /// <remarks>
     /// A relative file path in <see cref="FeatureNewCommandOptions.Source" /> is resolved against the current
@@ -58,7 +60,7 @@ public class FeatureNewCommand(
         Ensure.NotNull(options);
 
         var request = new NewFeatureRequest(options.Source, options.Title, options.Profile,
-            Directory.GetCurrentDirectory());
+            Directory.GetCurrentDirectory(), options.MoveSource);
 
         var result = await _context.RunAsync(options.Json,
                 (store, cancellationToken) => _featureStore.CreateAsync(store, request, cancellationToken))
@@ -66,18 +68,30 @@ public class FeatureNewCommand(
 
         var data = FeatureNewCommandData.FromResult(result);
 
-        _context.WriteSuccess(options.Json, data, result.Warnings, () => WriteSummary(data));
+        _context.WriteSuccess(options.Json, data, result.Warnings,
+            () => WriteSummary(data, result.MovedSourceFrom,
+                result.Warnings.OfType<FeatureSourceNotRemovedWarning>().Any()));
 
         return CommandResult.Success;
     }
 
-    private void WriteSummary(FeatureNewCommandData data)
+    private void WriteSummary(FeatureNewCommandData data, string? movedSourceFrom, bool isOriginalKept)
     {
         _context.Console.MarkupLine(
             $"Created feature {data.Id.ToEscapedMarkup().ToBoldMarkup()} ({data.Profile.ToEscapedMarkup()})."
                 .ToSuccessMarkup());
         _context.Console.MarkupLine($"  {data.Paths.FeatureFile.ToEscapedMarkup()}");
         _context.Console.MarkupLine($"  {data.Paths.Request.ToEscapedMarkup()}");
+
+        if (movedSourceFrom is not null)
+        {
+            // A failed delete leaves the original in place, so the line says what really happened; the warning
+            // printed before it gives the cause.
+            var verb = isOriginalKept ? "Copied" : "Moved";
+            _context.Console.MarkupLine(
+                $"{verb} {movedSourceFrom.ToEscapedMarkup()} to {(data.Source.Value ?? string.Empty).ToEscapedMarkup()}.");
+        }
+
         _context.Console.MarkupLine($"Suggested branch: {data.SuggestedBranch.ToEscapedMarkup().ToBoldMarkup()}");
     }
 }

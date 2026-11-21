@@ -2,7 +2,7 @@
 name: shade-kit-gate-check
 description: SHADE kit general skill that checks the feature's copy of a gate checklist (Definition of Ready, Definition of Done, or a team checklist) against the feature artifacts and the code base. Sets Result and Evidence of every item, logs the run in the Check runs section, and returns pass, fail, or error to the calling skill; never approves. Loaded by the entry protocol for every gate with a checklist; not meant to be called directly.
 metadata:
-  version: 0.8.0
+  version: 0.9.0
 ---
 
 # shade-kit-gate-check

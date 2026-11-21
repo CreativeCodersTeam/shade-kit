@@ -10,6 +10,7 @@ using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Cli.Tests.Output;
 using CreativeCoders.ShadeKit.Core.Features;
 using CreativeCoders.ShadeKit.Core.Features.Exceptions;
+using CreativeCoders.ShadeKit.Core.Features.Warnings;
 using CreativeCoders.ShadeKit.Core.Git.Exceptions;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
@@ -129,9 +130,131 @@ public class FeatureNewCommandTests
         // Assert
         A.CallTo(() => featureStore.CreateAsync(A<IKitStore>._,
                 A<NewFeatureRequest>.That.Matches(x => x.Title == null && x.Profile == null &&
-                                                       x.Source == "Login SSO via Azure"),
+                                                       x.Source == "Login SSO via Azure" && !x.MoveSource),
                 A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_MoveSourceSet_PassesMoveSourceToStore()
+    {
+        // Arrange
+        var featureStore = CreateFeatureStore(CreateResult());
+        var command = CreateCommand(new TestConsole(), featureStore);
+
+        // Act
+        await command.ExecuteAsync(new FeatureNewCommandOptions
+        {
+            Source = ".shadekit/discussions/20261020-1500-login-sso.md", MoveSource = true
+        });
+
+        // Assert
+        A.CallTo(() => featureStore.CreateAsync(A<IKitStore>._,
+                A<NewFeatureRequest>.That.Matches(x => x.MoveSource &&
+                                                       x.Source == ".shadekit/discussions/20261020-1500-login-sso.md"),
+                A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeMovedSource_WritesMovedLineAfterPaths()
+    {
+        // Arrange
+        // Wide enough that the long moved line is not wrapped.
+        var console = new TestConsole();
+        console.Profile.Width = 200;
+        var movedPath = $".shadekit/features/{Id}/discussions/20261020-1500-login-sso.md";
+        var result = CreateResult(source: new FeatureSource { Kind = FeatureSourceKind.File, Value = movedPath }) with
+        {
+            MovedSourceFrom = ".shadekit/discussions/20261020-1500-login-sso.md"
+        };
+        var command = CreateCommand(console, CreateFeatureStore(result));
+
+        // Act
+        await command.ExecuteAsync(CreateOptions());
+
+        // Assert
+        console.Lines
+            .Should().Equal(
+                $"Created feature {Id} (feature).",
+                $"  .shadekit/features/{Id}/feature.json",
+                $"  .shadekit/features/{Id}/request.md",
+                $"Moved .shadekit/discussions/20261020-1500-login-sso.md to {movedPath}.",
+                $"Suggested branch: feature/{Id}");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeMovedSourceNotRemoved_WritesCopiedLineAndWarning()
+    {
+        // Arrange
+        var console = new TestConsole();
+        console.Profile.Width = 200;
+        const string original = ".shadekit/discussions/20261020-1500-login-sso.md";
+        var movedPath = $".shadekit/features/{Id}/discussions/20261020-1500-login-sso.md";
+        var result = CreateResult(source: new FeatureSource { Kind = FeatureSourceKind.File, Value = movedPath },
+            warnings: [new FeatureSourceNotRemovedWarning(original, "Access to the path is denied.")]) with
+        {
+            MovedSourceFrom = original
+        };
+        var command = CreateCommand(console, CreateFeatureStore(result));
+
+        // Act
+        await command.ExecuteAsync(CreateOptions());
+
+        // Assert
+        console.Lines
+            .Should().Contain($"Copied {original} to {movedPath}.")
+            .And.NotContain(x => x.StartsWith("Moved ", StringComparison.Ordinal));
+
+        console.Lines
+            .Should().Contain(x => x.StartsWith("Warning: ", StringComparison.Ordinal) && x.Contains("cannot be removed"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeMovedSourceWithMarkupCharacters_WritesPathsVerbatim()
+    {
+        // Arrange
+        var console = new TestConsole();
+        console.Profile.Width = 200;
+        var movedPath = $".shadekit/features/{Id}/discussions/[draft].md";
+        var result = CreateResult(source: new FeatureSource { Kind = FeatureSourceKind.File, Value = movedPath }) with
+        {
+            MovedSourceFrom = ".shadekit/discussions/[draft].md"
+        };
+        var command = CreateCommand(console, CreateFeatureStore(result));
+
+        // Act
+        await command.ExecuteAsync(CreateOptions());
+
+        // Assert
+        console.Lines
+            .Should().Contain($"Moved .shadekit/discussions/[draft].md to {movedPath}.");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeMovedSource_WritesMovedPathAsSourceValueWithoutExtraField()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var movedPath = $".shadekit/features/{Id}/discussions/20261020-1500-login-sso.md";
+        var result = CreateResult(source: new FeatureSource { Kind = FeatureSourceKind.File, Value = movedPath }) with
+        {
+            MovedSourceFrom = ".shadekit/discussions/20261020-1500-login-sso.md"
+        };
+        var command = CreateCommand(new TestConsole(), CreateFeatureStore(result), jsonOutput: jsonOutput);
+
+        // Act
+        await command.ExecuteAsync(CreateOptions(json: true));
+
+        // Assert
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        var data = document.RootElement.GetProperty("data");
+
+        data.GetProperty("source").GetProperty("value").GetString()
+            .Should().Be(movedPath);
+
+        data.EnumerateObject().Select(x => x.Name)
+            .Should().Equal("id", "title", "profile", "status", "source", "paths", "suggestedBranch");
     }
 
     [Fact]
@@ -494,6 +617,27 @@ public class FeatureNewCommandTests
 
         attribute.IsRequired
             .Should().Be(isRequired);
+    }
+
+    [Fact]
+    public void FeatureNewCommandOptions_MoveSource_HasOptionalLongOnlyOptionParameter()
+    {
+        // Act
+        var attribute = typeof(FeatureNewCommandOptions).GetProperty(nameof(FeatureNewCommandOptions.MoveSource))!
+            .GetCustomAttribute<OptionParameterAttribute>();
+
+        // Assert
+        attribute
+            .Should().NotBeNull();
+
+        attribute.LongName
+            .Should().Be("move-source");
+
+        attribute.IsRequired
+            .Should().BeFalse();
+
+        new FeatureNewCommandOptions().MoveSource
+            .Should().BeFalse();
     }
 
     [Fact]

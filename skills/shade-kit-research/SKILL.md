@@ -2,7 +2,7 @@
 name: shade-kit-research
 description: SHADE kit general skill that runs the research focuses a calling skill names, one subagent per focus in parallel where the agent can start subagents and one after the other otherwise, checks the sources of every finding, and merges the results into the feature's researches.md, one section per phase and focus. Loaded by the SHADE kit skills refine, map, and diagnose; not meant to be called directly.
 metadata:
-  version: 0.8.0
+  version: 0.9.0
 ---
 
 # shade-kit-research
