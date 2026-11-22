@@ -58,7 +58,7 @@ public static class ShadeKitCoreServiceCollectionExtensions
         services.TryAddSingleton<IFormatRegistry>(_ => FormatRegistry.CreateDefault());
         services.TryAddSingleton<IVersionedJsonSerializer, VersionedJsonSerializer>();
         services.TryAddSingleton<IEngineVersionProvider, EngineVersionProvider>();
-        services.TryAddSingleton<IEngineVersionChecker, EngineVersionChecker>();
+        services.TryAddSingleton<ICliContractChecker>(_ => new CliContractChecker(CliContract.Window));
         services.TryAddSingleton<IRepositoryInitializer, RepositoryInitializer>();
         services.TryAddSingleton<IShippedTemplateReader, ShippedTemplateReader>();
         services.TryAddSingleton<IGitIgnorePlanner, GitIgnorePlanner>();

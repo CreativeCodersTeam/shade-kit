@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Reflection;
 using CreativeCoders.Cli.Core;
 using CreativeCoders.Core;
@@ -26,9 +25,7 @@ using CreativeCoders.ShadeKit.Core.Integrations.Warnings;
 using CreativeCoders.ShadeKit.Core.Store;
 using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
-using CreativeCoders.ShadeKit.Core.Versions;
 using CreativeCoders.ShadeKit.Core.Versions.Exceptions;
-using CreativeCoders.ShadeKit.Core.Versions.Warnings;
 using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine.Exceptions;
@@ -58,14 +55,12 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     /// <param name="exception">The exception to map.</param>
     /// <returns>
     /// The CLI error for <paramref name="exception" />, or <see langword="null" /> if it is not an expected failure
-    /// of the SHADE kit core. An <see cref="InvalidSemanticVersionException" /> gets the exit code
-    /// <see cref="ShadeKitCliExitCodes.InvalidArguments" />, because the version it rejects comes from the arguments;
-    /// its message names neither an option nor a command, so that it fits every argument that is checked with it.
+    /// of the SHADE kit core. The messages of <see cref="EngineContractOutdatedException" /> and
+    /// <see cref="SkillsContractOutdatedException" /> name the running engine version, the CLI contract window, the
+    /// requested CLI contract, and the remedy: update the engine, or reinstall the kit skills with
+    /// <c>shade-kit integrations install</c>.
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="exception" /> is <see langword="null" />.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The direction of an <see cref="EngineVersionMismatchException" /> is not supported.
-    /// </exception>
     public CliError? Map(Exception exception)
     {
         Ensure.NotNull(exception);
@@ -194,8 +189,16 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 "changed. Restore the template, for example from git, or change the 'checklist' of the gate, then " +
                 "run the command again."),
 
-            EngineVersionMismatchException e => CliError.Create(ShadeKitCliExitCodes.VersionMismatch,
-                CreateEngineVersionMismatchMessage(e.EngineVersion, e.ExpectedVersion, e.Direction)),
+            EngineContractOutdatedException e => CliError.Create(ShadeKitCliExitCodes.EngineOutdated,
+                $"The SHADE kit engine {_engineVersionProvider.Version} supports the CLI contracts " +
+                $"{e.MinSupportedContract} to {e.CurrentContract}, but the kit skills need the CLI contract " +
+                $"{e.RequestedContract}. Update the engine, then run the skill again."),
+
+            SkillsContractOutdatedException e => CliError.Create(ShadeKitCliExitCodes.SkillsOutdated,
+                $"The kit skills are written for the CLI contract {e.RequestedContract}, but the SHADE kit engine " +
+                $"{_engineVersionProvider.Version} supports only the CLI contracts {e.MinSupportedContract} to " +
+                $"{e.CurrentContract}. Run 'shade-kit integrations install' to install the matching kit skills, " +
+                "then run the skill again."),
 
             NoAgentFoundException e => CliError.Create(ShadeKitCliExitCodes.AgentNotFound,
                 $"No supported agent was found (supported: {FormatAgentIds(e.SupportedAgentIds)}). SHADE kit " +
@@ -266,10 +269,6 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
                 $"'{e.Value}', which is not a marketplace source: {e.Reason} Set it to owner/repo#ref, owner/repo, " +
                 "or the path of a local directory, or remove it, then run the command again."),
 
-            InvalidSemanticVersionException e => CliError.Create(ShadeKitCliExitCodes.InvalidArguments,
-                $"Invalid arguments: '{e.Value}' is not a SemVer version such as 1.2.3 or 1.2.3-beta.1. Run " +
-                "'shade-kit --help' for usage."),
-
             _ => null
         };
     }
@@ -282,8 +281,9 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
     /// <see langword="static" />, because the failure happens in the CLI host before any service of the run exists.
     /// Exceptions wrapped in <see cref="TargetInvocationException" /> are unwrapped. An
     /// <see cref="CreativeCoders.SysConsole.Cli.Parsing.Exceptions.OptionCreationFailedException" /> is not mapped: it
-    /// is a defect of the CLI, not of the arguments. An <see cref="ExpectedVersionMissingException" /> (<c>--expect</c>
-    /// without a value) gets a text that names <c>--expect</c>, an <see cref="InvalidAgentOptionException" />
+    /// is a defect of the CLI, not of the arguments. An <see cref="ExpectedContractInvalidException" />
+    /// (<c>--expect-contract</c> without a value or with a value that is not a CLI contract number) gets a text that
+    /// names <c>--expect-contract</c> and the value, an <see cref="InvalidAgentOptionException" />
     /// (<c>--agent</c> without a value or with an unknown agent id) one that names <c>--agent</c> and the supported
     /// agents.
     /// </remarks>
@@ -305,8 +305,7 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         {
             RequiredArgumentMissingException e => CreateRequiredArgumentMissingText(e),
             NotAllArgumentsMatchException e => CreateNotMatchedArgumentsText(e),
-            ExpectedVersionMissingException =>
-                "--expect needs a SemVer version such as 1.2.3 or 1.2.3-beta.1, but got none",
+            ExpectedContractInvalidException e => CreateExpectedContractInvalidText(e),
             InvalidAgentOptionException e => CreateInvalidAgentOptionText(e),
             OptionParserException => "the arguments could not be read",
             _ => null
@@ -413,11 +412,6 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
 
             GateEntryIgnoredWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.GateEntryIgnored,
                 CreateGateEntryIgnoredMessage(w.ProfileName, w.PhaseName, w.Reason)),
-
-            EnginePrereleaseVersionMismatchWarning w => new CliJsonMessage(
-                ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch,
-                $"The prerelease engine {w.EngineVersion} does not fit the kit skills {w.ExpectedVersion} (the major " +
-                "and minor versions differ); it is used anyway because it is a prerelease."),
 
             IntegrationPrereleaseRefWarning w => new CliJsonMessage(ShadeKitCliWarningCodes.IntegrationPrereleaseRef,
                 $"The engine {w.EngineVersion} is a prerelease, so the integrations come from the branch '{w.Ref}' " +
@@ -687,31 +681,6 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         };
     }
 
-    private static string CreateEngineVersionMismatchMessage(string engineVersion, string expectedVersion,
-        EngineVersionMismatchDirection direction)
-    {
-        var remedy = direction switch
-        {
-            EngineVersionMismatchDirection.EngineOlder =>
-                $"Update the engine to {FormatMajorMinor(expectedVersion)}",
-            EngineVersionMismatchDirection.EngineNewer =>
-                "Run 'shade-kit integrations install' to install the SHADE kit skills " +
-                FormatMajorMinor(engineVersion),
-            _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, "The direction is not supported.")
-        };
-
-        return $"The SHADE kit engine {engineVersion} does not fit the kit skills {expectedVersion}: the major and " +
-               $"minor versions must be equal. {remedy}, then run the skill again.";
-    }
-
-    // The checker throws the exception only for valid versions; any other text is named as a whole.
-    private static string FormatMajorMinor(string version)
-    {
-        return SemanticVersion.TryParse(version, out var semanticVersion)
-            ? string.Create(CultureInfo.InvariantCulture, $"{semanticVersion.Major}.{semanticVersion.Minor}")
-            : version;
-    }
-
     private static string CreateVersionMismatchText(string filePath, int fileVersion, int currentVersion)
     {
         return $"'{filePath}' uses format version {fileVersion}; this shade-kit uses version {currentVersion}.";
@@ -780,6 +749,15 @@ public sealed class CliErrorMapper(IEngineVersionProvider engineVersionProvider)
         return pendingTransition is null
             ? "no transition is pending."
             : $"the pending transition is to '{pendingTransition}'.";
+    }
+
+    private static string CreateExpectedContractInvalidText(ExpectedContractInvalidException exception)
+    {
+        const string expectation = "--expect-contract needs a CLI contract number such as 1, but got";
+
+        return exception.Value is null
+            ? $"{expectation} none"
+            : $"{expectation} '{exception.Value}'";
     }
 
     private static string CreateInvalidAgentOptionText(InvalidAgentOptionException exception)

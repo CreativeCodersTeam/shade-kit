@@ -15,7 +15,6 @@ public partial class ShadeKitCliWarningCodesTests
     [InlineData(ShadeKitCliWarningCodes.EditorConfigUnreadable, "editorconfig-unreadable")]
     [InlineData(ShadeKitCliWarningCodes.EditorConfigInvalid, "editorconfig-invalid")]
     [InlineData(ShadeKitCliWarningCodes.GitAttributesUnavailable, "git-attributes-unavailable")]
-    [InlineData(ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch, "engine-prerelease-version-mismatch")]
     [InlineData(ShadeKitCliWarningCodes.IntegrationPrereleaseRef, "integration-prerelease-ref")]
     [InlineData(ShadeKitCliWarningCodes.IntegrationReleaseTagMissing, "integration-release-tag-missing")]
     [InlineData(ShadeKitCliWarningCodes.AgentUnavailable, "agent-unavailable")]
@@ -53,6 +52,17 @@ public partial class ShadeKitCliWarningCodesTests
 
         warningCodes.Keys
             .Should().NotIntersectWith(errorCodes.Keys);
+    }
+
+    [Fact]
+    public void WarningCodes_AllConstants_DoNotContainRemovedPrereleaseVersionMismatch()
+    {
+        // Act
+        var warningCodes = ShadeKitCliExitCodesTests.GetConstants<string>(typeof(ShadeKitCliWarningCodes));
+
+        // Assert
+        warningCodes.Values
+            .Should().NotContain("engine-prerelease-version-mismatch");
     }
 
     [GeneratedRegex("^[a-z]+(-[a-z]+)*$")]

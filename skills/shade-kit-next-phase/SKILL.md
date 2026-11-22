@@ -1,8 +1,6 @@
 ---
 name: shade-kit-next-phase
 description: "SHADE kit status and next steps. Finds the current feature, or lets the human pick one, and shows its phase and state and every possible next step with the SHADE kit skill to call for it. Advisory: starts no phase and no skill. Use when the human says 'continue', 'next phase', or 'what's next', or asks where a SHADE kit feature stands or what to do with it now."
-metadata:
-  version: 0.9.0
 ---
 
 # shade-kit-next-phase
@@ -19,10 +17,10 @@ Keep every `warnings` entry (`{ code, message }`) of every CLI call of this run.
 
 ### 1. Version handshake
 
-Version handshake: run `shade-kit version --json --expect 0.9.0`; 0.9.0 is the kit version of this skill (`metadata.version` in its frontmatter).
+Version handshake: run `shade-kit version --json --expect-contract 1`; 1 is the CLI contract this skill is written for.
 
-- `ok` is `true`: continue. A warning `engine-prerelease-version-mismatch` means that a prerelease engine is used although its major or minor version differs; keep it like every warning and continue.
-- `ok` is `false` (for example `version-mismatch`), or the shell reports that `shade-kit` is not found: stop before any other CLI call. End ([Ending](#ending)) with **refusal** and the failure envelope, or with "`shade-kit` not found".
+- `ok` is `true`: continue.
+- `ok` is `false` (for example `engine-outdated` or `skills-outdated`), or the shell reports that `shade-kit` is not found: stop before any other CLI call. End ([Ending](#ending)) with **refusal** and the failure envelope, or with "`shade-kit` not found".
 
 ### 2. Current feature
 
@@ -90,7 +88,7 @@ The closing message of `shade-kit-next-steps` is the end of this skill; write no
 ## Rules
 
 - Start no skill and no phase. Name skills; the human calls them. Do not ask which step the human wants and do not offer to run one.
-- The only commands this skill runs are `shade-kit version --json --expect 0.9.0`, `shade-kit feature current --json`, `shade-kit feature list --json`, `shade-kit feature set <id> --json`, and `shade-kit phase next --json`. Run `feature set` only after the human picked that feature in step 2. Never `phase start`, `phase approve`, `phase reject`, `phase complete`, `gate info`, `feature new`, `feature drop`, or `init`.
+- The only commands this skill runs are `shade-kit version --json --expect-contract 1`, `shade-kit feature current --json`, `shade-kit feature list --json`, `shade-kit feature set <id> --json`, and `shade-kit phase next --json`. Run `feature set` only after the human picked that feature in step 2. Never `phase start`, `phase approve`, `phase reject`, `phase complete`, `gate info`, `feature new`, `feature drop`, or `init`.
 - Never run a gate check and never load `shade-kit-gate-check`. Load only `shade-kit-next-steps`.
 - Do not derive steps from the profile and do not add or drop any: the steps are those of `phase next`, plus `/shade-kit-discuss` and `/shade-kit-drop`.
 - Never read or write `feature.json`, `gates.json`, or `config.json`; the state comes from the CLI. Read no artifact and write no file.

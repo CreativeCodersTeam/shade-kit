@@ -3,12 +3,12 @@
 # The version is derived from the git history; a release is a tag `v<SemVer>` on `main`, and every
 # build that is not on such a tag is a prerelease.
 #
-# `next-version` is the one number kept here: the lowest version the next release may have. It
-# raises the minor place ahead of the release when the kit skills move to a new minor (their
-# `metadata.version` must match the major.minor of the build, see SkillKitVersionTests). GitVersion
-# is documented to ignore it once a tag at or above it exists (not yet observed in this repository,
-# see 06-2), so it should need no clean-up after the release. It is written with the tag prefix
-# `v`, because GitVersion parses it with `tag-prefix`.
+# `next-version` is the one number kept here: the lowest version the next product release may
+# have. It is a product decision only; the kit skills do not depend on it (they name the CLI
+# contract of the engine, not a product version, see SkillContractTests). GitVersion is documented
+# to ignore it once a tag at or above it exists (not yet observed in this repository, see 06-2), so
+# it should need no clean-up after the release. It is written with the tag prefix `v`, because
+# GitVersion parses it with `tag-prefix`.
 
 mode: ContinuousDelivery
 tag-prefix: 'v'

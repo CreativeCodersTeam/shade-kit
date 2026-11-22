@@ -1,8 +1,6 @@
 ---
 name: shade-kit-review
 description: SHADE kit general skill for an independent code review of the current change against spec.md, plan.md, and the repository's conventions, with findings classified by severity (blocker, major, minor, note) in review.md. Loaded by the SHADE kit skills implement and quick; not meant to be called directly.
-metadata:
-  version: 0.9.0
 ---
 
 # shade-kit-review

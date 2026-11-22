@@ -25,7 +25,6 @@ using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Trackers.Exceptions;
 using CreativeCoders.ShadeKit.Core.Versions;
 using CreativeCoders.ShadeKit.Core.Versions.Exceptions;
-using CreativeCoders.ShadeKit.Core.Versions.Warnings;
 using CreativeCoders.ShadeKit.Core.Warnings;
 using CreativeCoders.ShadeKit.Core.Web.Exceptions;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
@@ -831,136 +830,36 @@ public class CliErrorMapperTests
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC1")]
-    [Trait("Requirement", "FP06-1-AC2")]
-    public void Map_EngineVersionMismatchWithOlderEngine_ReturnsExitCode50NamingVersionsAndEngineUpdate()
+    public void Map_EngineContractOutdated_Returns54WithUpdateEngineMessage()
     {
         // Arrange
-        var mapper = CreateMapper();
+        var mapper = CreateMapper("1.4.2");
 
         // Act
-        var error = mapper.Map(new EngineVersionMismatchException("1.2.0", "1.3.1-beta.1+build.7",
-            EngineVersionMismatchDirection.EngineOlder));
+        var error = mapper.Map(new EngineContractOutdatedException(5, 2, 4));
 
         // Assert
         error
-            .Should().Be(new CliError(ShadeKitCliExitCodes.VersionMismatch, ShadeKitCliErrorCodes.VersionMismatch,
-                "The SHADE kit engine 1.2.0 does not fit the kit skills 1.3.1-beta.1+build.7: the major and minor " +
-                "versions must be equal. Update the engine to 1.3, then run the skill again."));
+            .Should().Be(new CliError(ShadeKitCliExitCodes.EngineOutdated, ShadeKitCliErrorCodes.EngineOutdated,
+                "The SHADE kit engine 1.4.2 supports the CLI contracts 2 to 4, but the kit skills need the CLI " +
+                "contract 5. Update the engine, then run the skill again."));
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC1")]
-    [Trait("Requirement", "FP06-1-AC2")]
-    public void Map_EngineVersionMismatchWithNewerEngine_ReturnsExitCode50NamingVersionsAndSkillsUpdate()
+    public void Map_SkillsContractOutdated_Returns55WithIntegrationsInstallMessage()
     {
         // Arrange
-        var mapper = CreateMapper();
+        var mapper = CreateMapper("1.4.2");
 
         // Act
-        var error = mapper.Map(new EngineVersionMismatchException("2.1.4", "1.9.0+build.2",
-            EngineVersionMismatchDirection.EngineNewer));
+        var error = mapper.Map(new SkillsContractOutdatedException(1, 2, 4));
 
         // Assert
         error
-            .Should().Be(new CliError(ShadeKitCliExitCodes.VersionMismatch, ShadeKitCliErrorCodes.VersionMismatch,
-                "The SHADE kit engine 2.1.4 does not fit the kit skills 1.9.0+build.2: the major and minor versions " +
-                "must be equal. Run 'shade-kit integrations install' to install the SHADE kit skills 2.1, then run " +
-                "the skill again."));
-    }
-
-    [Theory]
-    [InlineData(EngineVersionMismatchDirection.EngineOlder, "Update the engine to 1.x, then")]
-    [InlineData(EngineVersionMismatchDirection.EngineNewer,
-        "Run 'shade-kit integrations install' to install the SHADE kit skills engine, then")]
-    public void Map_EngineVersionMismatchWithVersionsThatAreNotSemVer_NamesVersionsWhole(
-        EngineVersionMismatchDirection direction, string expectedRemedy)
-    {
-        // Arrange
-        var mapper = CreateMapper();
-
-        // Act
-        var error = mapper.Map(new EngineVersionMismatchException("engine", "1.x", direction));
-
-        // Assert
-        error
-            .Should().NotBeNull();
-
-        error.Message
-            .Should().StartWith("The SHADE kit engine engine does not fit the kit skills 1.x:")
-            .And.Contain(expectedRemedy);
-    }
-
-    [Fact]
-    public void Map_EngineVersionMismatchWithUndefinedDirection_ThrowsArgumentOutOfRangeException()
-    {
-        // Arrange
-        var mapper = CreateMapper();
-
-        // Act
-        var act = () => mapper.Map(new EngineVersionMismatchException("1.2.0", "1.3.0",
-            (EngineVersionMismatchDirection)99));
-
-        // Assert
-        act.Should().Throw<ArgumentOutOfRangeException>()
-            .WithParameterName("direction");
-    }
-
-    [Theory]
-    [Trait("Requirement", "FP06-1-AC5")]
-    [InlineData("")]
-    [InlineData(" ")]
-    public void Map_InvalidSemanticVersionEmptyOrWhitespace_NamesValueVerbatim(string value)
-    {
-        // Arrange
-        var mapper = CreateMapper();
-
-        // Act
-        var error = mapper.Map(new InvalidSemanticVersionException(value));
-
-        // Assert
-        error
-            .Should().NotBeNull();
-
-        error.Message
-            .Should().Contain($"'{value}' is not a SemVer version");
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP06-1-AC5")]
-    public void Map_InvalidSemanticVersion_ReturnsInvalidArgumentsNamingValueAndGeneralHelp()
-    {
-        // Arrange
-        var mapper = CreateMapper();
-
-        // Act
-        var error = mapper.Map(new InvalidSemanticVersionException("v1.2"));
-
-        // Assert
-        error
-            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
-                "Invalid arguments: 'v1.2' is not a SemVer version such as 1.2.3 or 1.2.3-beta.1. Run " +
-                "'shade-kit --help' for usage."));
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP06-1-AC5")]
-    public void Map_InvalidSemanticVersion_NamesNeitherExpectOptionNorVersionCommand()
-    {
-        // Arrange
-        var mapper = CreateMapper();
-
-        // Act
-        var error = mapper.Map(new InvalidSemanticVersionException("abc"));
-
-        // Assert
-        error
-            .Should().NotBeNull();
-
-        // The Core exception is generic: a second caller must not get a message about --expect.
-        error.Message
-            .Should().NotContain("--expect")
-            .And.NotContain("version --help");
+            .Should().Be(new CliError(ShadeKitCliExitCodes.SkillsOutdated, ShadeKitCliErrorCodes.SkillsOutdated,
+                "The kit skills are written for the CLI contract 1, but the SHADE kit engine 1.4.2 supports only " +
+                "the CLI contracts 2 to 4. Run 'shade-kit integrations install' to install the matching kit " +
+                "skills, then run the skill again."));
     }
 
     [Fact]
@@ -2225,24 +2124,6 @@ public class CliErrorMapperTests
             .WithParameterName("reason");
     }
 
-    [Theory]
-    [Trait("Requirement", "FP06-1-AC4")]
-    [InlineData(EngineVersionMismatchDirection.EngineOlder)]
-    [InlineData(EngineVersionMismatchDirection.EngineNewer)]
-    public void MapWarning_EnginePrereleaseVersionMismatch_ReturnsPrereleaseWarningNamingVersions(
-        EngineVersionMismatchDirection direction)
-    {
-        // Act
-        var warning = CliErrorMapper.MapWarning(
-            new EnginePrereleaseVersionMismatchWarning("1.3.0-beta.1", "1.2.0", direction));
-
-        // Assert
-        warning
-            .Should().Be(new CliJsonMessage(ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch,
-                "The prerelease engine 1.3.0-beta.1 does not fit the kit skills 1.2.0 (the major and minor versions " +
-                "differ); it is used anyway because it is a prerelease."));
-    }
-
     [Fact]
     public void MapWarning_IntegrationPrereleaseRef_ReturnsWarningNamingEngineAndBranch()
     {
@@ -2550,21 +2431,59 @@ public class CliErrorMapperTests
                          "'shade-kit version --help' for usage.");
     }
 
-    [Fact]
-    [Trait("Requirement", "FP06-1-AC5")]
-    public void MapArgumentError_ExpectedVersionMissing_ReturnsInvalidArgumentsWithGotNoneAndVersionHelp()
+    [Theory]
+    [InlineData("version", "--json", "--expect-contract")]
+    [InlineData("version", "--expect-contract", "--json")]
+    public void MapArgumentError_ExpectedContractInvalidWithoutValue_ReturnsInvalidArgumentsWithGotNone(
+        params string[] args)
     {
         // Arrange
-        var exception = new ExpectedVersionMissingException();
+        var exception = new ExpectedContractInvalidException(null);
 
         // Act
-        var error = CliErrorMapper.MapArgumentError(exception, ["version", "--json", "--expect"]);
+        var error = CliErrorMapper.MapArgumentError(exception, args);
 
         // Assert
         error
             .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
-                "Invalid arguments: --expect needs a SemVer version such as 1.2.3 or 1.2.3-beta.1, but got none. " +
+                "Invalid arguments: --expect-contract needs a CLI contract number such as 1, but got none. Run " +
+                "'shade-kit version --help' for usage."));
+    }
+
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("")]
+    [InlineData("01")]
+    public void MapArgumentError_ExpectedContractInvalidWithValue_ReturnsInvalidArgumentsNamingValue(string value)
+    {
+        // Arrange
+        var exception = new ExpectedContractInvalidException(value);
+
+        // Act
+        var error = CliErrorMapper.MapArgumentError(exception, ["version", "--expect-contract", value]);
+
+        // Assert
+        error
+            .Should().Be(new CliError(ShadeKitCliExitCodes.InvalidArguments, ShadeKitCliErrorCodes.InvalidArguments,
+                $"Invalid arguments: --expect-contract needs a CLI contract number such as 1, but got '{value}'. " +
                 "Run 'shade-kit version --help' for usage."));
+    }
+
+    [Fact]
+    public void MapArgumentError_ExpectedContractInvalidWrappedInTargetInvocationException_MapsInnerException()
+    {
+        // Arrange
+        var exception = new TargetInvocationException(new ExpectedContractInvalidException("x"));
+
+        // Act
+        var error = CliErrorMapper.MapArgumentError(exception, ["version", "--expect-contract", "x"]);
+
+        // Assert
+        error
+            .Should().NotBeNull();
+
+        error.Message
+            .Should().Contain("but got 'x'");
     }
 
     [Fact]

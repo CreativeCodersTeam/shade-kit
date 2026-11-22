@@ -1,8 +1,6 @@
 ---
 name: shade-kit-interview
 description: SHADE kit general skill for a structured clarification interview with the human. Asks about one topic per question with an own proposal and its alternatives, blocking topics first, records only the human's answers in the target artifact, and returns the answered, open, and dismissed topics to the calling skill. Loaded by the SHADE kit skills discuss, refine, diagnose, plan, and quick; not meant to be called directly.
-metadata:
-  version: 0.9.0
 ---
 
 # shade-kit-interview

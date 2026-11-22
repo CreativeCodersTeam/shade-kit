@@ -10,9 +10,10 @@ Usage (Python 3 standard library only):
 folder of the outputs, relative to <work> (default: out). Exit code 0 when every check passes, 1 when one fails, 2 on a
 usage error.
 
-The expectations were written for the skill clarifications of 2026-11-18 (S1-S9 in SCENARIOS.md) and for the discuss
-and new skills of package 09 on 2026-11-20 (S10-S17); when a skill text changes what a scenario does, change the
-expectation here together with the skill.
+The expectations were written for the skill clarifications of 2026-11-18 (S1-S9 in SCENARIOS.md), for the discuss
+and new skills of package 09 on 2026-11-20 (S10-S17), and for the refused version handshakes of the CLI contract
+(S18: the engine is older than the skills, S19: the skills are older than the engine); when a skill text changes what
+a scenario does, change the expectation here together with the skill. --only takes any of S1-S19.
 """
 import json
 import re
@@ -28,6 +29,50 @@ GIT_WRITE = re.compile(r"\bgit (switch|checkout|branch|commit|add|stash|reset|pu
 # `-C <dir>`, `-c <key>=<value>`, or `--no-pager` before the subcommand. Prose such as "runs no git command" is no hit.
 GIT_ANY = re.compile(r"(?:`|^[ \t]*(?:\$[ \t]+)?)(?:\S*/)?git(?:\.exe)?[ \t]+"
                      r"(?:-{1,2}[\w.-]+(?:[ =][^\s`]+)?[ \t]+)*[a-z][\w-]*", re.M)
+# A closing message that tells to update the engine, as opposed to the kit skills (the skills remedy). A clause ends at
+# ".", ":", ";", or a line break. A skills word names the skills, a plugin, the integration(s), the marketplace, or the
+# kit on its own; "SHADE kit"/"shade-kit" and "kit engine" are no skills word, so "upgrade the kit engine" counts as an
+# engine update (real skills remedies say "kit skills", "kit plugin", "the kit with ...", never "kit engine"). The tool
+# is shade-kit or SHADE kit, unless a word character or an apostrophe directly follows, a call form (":" before a skill
+# name, e.g. "$shade-kit:shade-kit-next-phase"), or a skills word follows ("/shade-kit-new", "the shade-kit plugin").
+# It counts when the options have:
+# - an update verb (update, upgrade, (re)install, get, download, replace, also -s/-ing) followed within 40 characters
+#   of the same clause, without a skills word between, by "engine" (not "engine's") or the tool ("Updating the engine",
+#   "install the latest shade-kit", "update the CLI (shade-kit)"; not "install the kit skills that match the engine",
+#   "reinstall the SHADE kit integration for the engine", "Install the engine's matching skills");
+# - "engine update"/"engine upgrade", or "engine is too old"/"outdated"/"out of date";
+# - "newer engine" or "newer <tool>" in a clause with no skills word before it and none in the 40 characters after it
+#   ("You need a newer engine"; not "Install the skills that match the newer engine");
+# - `dotnet tool update`/`install`.
+# Every window is bounded or ends at a clause end, so a search stays linear in the length of the options.
+# Known limit: a regex over free wording. A negation ("you do not need to update the engine", "no engine update is
+# needed") still counts as an engine update, and an engine update without one of the verbs above ("bring the engine
+# up to date") is missed. The skill texts are reviewed by hand (tests/skill-scenarios/README.md); a FAIL of the two
+# checks that use this pattern (S18, S19) is read against the closing message before it counts.
+_UPDATE_VERB = (r"(?:updat(?:es?|ing)|upgrad(?:es?|ing)|(?:re)?install(?:s|ing)?|get(?:s|ting)?|download(?:s|ing)?|"
+                r"replac(?:es?|ing))")
+_SKILLS_WORD = r"(?:skill|plugin|integrations?\b|marketplace|(?<!shade[ -])\bkits?\b(?! engine\b))"
+_IN_CLAUSE = rf"(?:(?!{_SKILLS_WORD})[^.:;\n])"
+_TOOL = r"shade[ -]kit(?![\w'’-]|:\S| (?:skills?|plugins?|integrations?|marketplace)\b)"
+_ENGINE = r"engine\b(?!['’]s\b)"
+ENGINE_UPDATE = re.compile(rf"\b{_UPDATE_VERB}\b{_IN_CLAUSE}{{0,40}}?\b(?:{_ENGINE}|{_TOOL})|"
+                           r"\bengine (?:update|upgrade)|\bengine (?:is|was) (?:too old|outdated|out of date)\b|"
+                           rf"(?:^|[.:;]){_IN_CLAUSE}*?\bnewer (?:{_ENGINE}|{_TOOL})"
+                           rf"(?![^.:;\n]{{0,40}}?{_SKILLS_WORD})|"
+                           r"dotnet tool (?:update|install)\b", re.I | re.M)
+# A shade-kit command as a runner records it when it runs it: at the start of a line (a code line, optionally after a
+# list marker or a `$` prompt), or in a code span with at least one option. A span without an option (for example
+# "run `shade-kit integrations install`" in a description of the refusal table) is a mention.
+SHADE_KIT_LINE = re.compile(r"^[ \t]*(?:\d+\.[ \t]+|[-*][ \t]+)?(?:\$[ \t]+)?(shade-kit[ \t]+[a-z][\w-]*[^\n`]*)", re.M)
+SHADE_KIT_SPAN = re.compile(r"`(shade-kit[ \t]+[a-z][\w-]*[^`\n]*)`")
+# A sentence that says the command in the code span was not run: a negation directly before it ("No `a`, `b`", "did
+# not run `a`", "Not run: `a`") or a "was not run" directly after it (also after further spans of a list).
+NOT_RUN_BEFORE = re.compile(r"(?:^|\W)(?:no|not|never|without|not run:?)[ \t]*"
+                            r"(?:(?:\*\*)?`[^`\n]*`(?:\*\*)?[ \t]*(?:,|or|and|nor)?[ \t]*)*(?:\*\*)?$", re.I)
+NOT_RUN_AFTER = re.compile(r"^(?:\*\*)?[ \t]*(?:(?:,|or|and|nor)[ \t]*(?:\*\*)?`[^`\n]*`(?:\*\*)?[ \t]*)*"
+                           r"(?:\((?:is |was )?not run|(?:is|was|were|are|gets?|got)[ \t]+(?:\*\*)?(?:not|never)\b)",
+                           re.I)
+SENTENCE_END = re.compile(r"[.!?;](?=\s|$)")
 # A runner records what it did outside the skill as step 0 (protocol rule 6); the skill checks leave it out.
 RUNNER_PREPARATION = re.compile(r"^0\. .*?(?=^\d+\. |\Z)", re.S | re.M)
 
@@ -39,6 +84,66 @@ def section(text, name):
 
 def closing(text):
     return section(text, "Closing message")
+
+
+def closing_message(text):
+    """Return the closing message itself: the fenced block of the closing section, without the return text.
+
+    Without a fenced block the section counts up to its "Return text" line.
+    """
+    c = closing(text)
+    m = re.search(r"```[a-z]*\n(.*?)```", c, re.S)
+    if m:
+        return m.group(1)
+    return re.split(r"^Return text\b", c, maxsplit=1, flags=re.M)[0].strip()
+
+
+def options_part(message, reason):
+    """Return the closing message after its first paragraph (the line of what happened with the quoted reason).
+
+    The reason (error.message of the refused call) is also removed from that part, so a quoted reason never counts as
+    a remedy.
+    """
+    parts = message.strip().strip("`").strip().split("\n\n", 1)
+    rest = parts[1] if len(parts) > 1 else ""
+    return rest.replace(reason, "") if reason else rest
+
+
+def question_markers(steps, marker):
+    """Return the recorded questions of one kind (protocol rule 4: 'TOOL CALL <tool>' or 'MESSAGE TO HUMAN').
+
+    A marker counts at the start of a line (after a list marker or emphasis) or when its line is directly followed by
+    a fenced block; a mention in prose such as "(no `TOOL CALL`, no `MESSAGE TO HUMAN`)" is no hit.
+    """
+    m = re.escape(marker)
+    pattern = rf"^[ \t]*(?:\d+\.[ \t]+|[-*][ \t]+)?[*_`]*{m}\b|{m}\b[^\n]*\n(?:[ \t]*\n)*[ \t]*```"
+    return re.findall(pattern, steps, re.M)
+
+
+def run_commands(steps):
+    """Return every shade-kit command the steps record as run, in order, whatever its subcommand.
+
+    A command counts at the start of a line or in a code span with an option; a span whose sentence says that this
+    command was not run is left out. Quoted envelopes do not count (their lines start with a quote or a brace, and
+    they quote commands in plain quotes).
+    """
+    found = [(m.start(1), m.group(1).strip()) for m in SHADE_KIT_LINE.finditer(steps)]
+    for m in SHADE_KIT_SPAN.finditer(steps):
+        command = m.group(1).strip()
+        if " -" not in command:
+            continue
+        line_start = steps.rfind("\n", 0, m.start()) + 1
+        line_end = steps.find("\n", m.end())
+        before = steps[line_start:m.start()]
+        after = steps[m.end():line_end if line_end != -1 else len(steps)]
+        ends = list(SENTENCE_END.finditer(before))
+        before = before[ends[-1].end():] if ends else before
+        end = SENTENCE_END.search(after)
+        after = after[:end.start()] if end else after
+        if NOT_RUN_BEFORE.search(before) or NOT_RUN_AFTER.search(after):
+            continue
+        found.append((m.start(1), command))
+    return [command for _, command in sorted(found)]
 
 
 def tool_blocks(text, tool):
@@ -103,7 +208,7 @@ class Checker:
         self.out = out
         self.sso = ids["sso"]
         self.quick = ids["quick"]
-        self.kit_version = ids["kitVersion"]
+        self.contract = ids["contract"]
         self.notes_file = ids.get("notesFile", "")
         self.csv = ids.get("csv", "")
         self.issue_url = "https://github.com/acme/shop/issues/142"
@@ -112,15 +217,15 @@ class Checker:
     def check(self, sid, name, ok):
         self.results.append((sid, name, bool(ok)))
 
-    def codex_forms(self, sid, text, skills):
-        c = closing(text)
+    def codex_forms(self, sid, text, skills, message=None):
+        c = closing(text) if message is None else message
         for s in skills:
             self.check(sid, f"closing names $shade-kit:{s}", f"$shade-kit:{s}" in c)
         self.check(sid, "closing has no slash form /shade-kit-", re.search(r"(?<![:\w])/shade-kit-", c) is None)
         self.check(sid, "no doubled prefix shade-kit-shade-kit", "shade-kit-shade-kit" not in text)
 
-    def slash_forms(self, sid, text, skills):
-        c = closing(text)
+    def slash_forms(self, sid, text, skills, message=None):
+        c = closing(text) if message is None else message
         for s in skills:
             self.check(sid, f"closing names /{s}", f"/{s}" in c)
         self.check(sid, "closing has no $shade-kit: form", "$shade-kit:" not in c)
@@ -216,12 +321,14 @@ class Checker:
                 self.check(sid, "closing has no slash form", re.search(r"(?<![:\w])/shade-kit-", c) is None)
                 self.check(sid, "no doubled prefix", "shade-kit-shade-kit" not in t)
         self.run_intake()
+        self.run_refusals()
         return self.results
 
     def common_intake(self, sid, text, steps):
         commands = kit_commands(steps)
-        self.check(sid, f"first command is the handshake --expect {self.kit_version}",
-                   commands and commands[0].startswith(f"shade-kit version --json --expect {self.kit_version}"))
+        handshake = f"shade-kit version --json --expect-contract {self.contract}"
+        self.check(sid, f"first command is the handshake --expect-contract {self.contract}",
+                   commands and commands[0].startswith(handshake))
         # A multi-line --source breaks the line-based match, so feature new is checked across lines.
         others = [c for c in commands if not c.startswith("shade-kit feature new")]
         new_ok = "shade-kit feature new" not in steps or feature_new_command(steps) != ""
@@ -355,6 +462,48 @@ class Checker:
                                      re.S | re.I) is not None)
                 self.check(sid, "closing names a branch switch", re.search(r"\bswitch", lead, re.I) is not None)
                 self.slash_forms(sid, t, ["shade-kit-refine", "shade-kit-map"])
+
+    def run_refusals(self):
+        """S18 and S19: the handshake is refused, so the skill ends at once with the refusal."""
+        fixtures = {"S18": "env-version-engine-outdated.json", "S19": "env-version-skills-outdated.json"}
+        for sid in ["S18", "S19"]:
+            p = self.out / f"{sid}.md"
+            if not p.exists():
+                self.check(sid, "output exists", False)
+                continue
+            t = p.read_text(encoding="utf-8")
+            steps = section(t, "Steps")
+            # The name and remedy checks look at the closing message only, not at its return text; the remedy checks
+            # look at the options after the quoted reason, which names a remedy of its own.
+            c = closing_message(t)
+            envelope = json.loads((self.work / "fixtures" / fixtures[sid]).read_text(encoding="utf-8"))
+            options = options_part(c, envelope["error"]["message"])
+            skill_part = skill_steps(steps)
+            handshake = f"shade-kit version --json --expect-contract {self.contract}"
+            commands = run_commands(skill_part)
+            self.check(sid, "no MISSING FIXTURE", "MISSING FIXTURE" not in t)
+            self.check(sid, f"exactly one shade-kit command, the handshake --expect-contract {self.contract} "
+                            f"{commands}", len(commands) == 1 and commands[0].startswith(handshake))
+            self.check(sid, "no tool call", not question_markers(steps, "TOOL CALL"))
+            self.check(sid, "no question to the human before the closing",
+                       not question_markers(steps, "MESSAGE TO HUMAN"))
+            self.check(sid, "a closing message is written", c.strip() not in ("", "none"))
+            self.check(sid, "no shade-kit init and no phase next",
+                       not [x for x in commands if re.match(r"shade-kit (?:init|phase next)\b", x)])
+            if sid == "S18":
+                self.check(sid, "options say to update the engine", ENGINE_UPDATE.search(options) is not None)
+                self.check(sid, "options do not tell to run shade-kit integrations install",
+                           "shade-kit integrations install" not in options)
+                self.check(sid, "closing names shade-kit-new only as /shade-kit-new",
+                           re.search(r"(?<![/\w-])shade-kit-new\b", c) is None)
+                self.slash_forms(sid, t, [], message=c)
+            if sid == "S19":
+                self.check(sid, "options contain shade-kit integrations install",
+                           "shade-kit integrations install" in options)
+                self.check(sid, "options do not tell to update the engine", ENGINE_UPDATE.search(options) is None)
+                self.check(sid, "closing names shade-kit-next-phase only as $shade-kit:shade-kit-next-phase",
+                           re.search(r"(?<![:\w-])shade-kit-next-phase\b", c) is None)
+                self.codex_forms(sid, t, [], message=c)
 
 
 def main(argv):

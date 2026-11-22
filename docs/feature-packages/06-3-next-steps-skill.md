@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal), 2026-11-11 (06-6: a `phase next` result passed by the calling skill replaces the skill's own call, stated once in flow step 3). 2026-11-13 (06-9: `continue` is `null` in `new`, flow step 3), 2026-11-15 (package 08: calls in the form of the running agent), 2026-11-18 (scenario runs: the `featureId` never shortened, the "what happened" line written by the skill itself). AC1 to AC4 implemented; loaded by 06-5, 06-6, and, since 2026-11-13, by every phase skill and by `new`, `discuss`, and `drop` (06-9). |
+| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-08 (implementation: `skills/shade-kit-next-steps/SKILL.md`; the steps of a pending transition and of a `done` feature, the refusal table keyed by error code, a missing `shade-kit`, a failing `phase next`, repeated warnings, the closing line of a refusal), 2026-11-11 (06-6: a `phase next` result passed by the calling skill replaces the skill's own call, stated once in flow step 3). 2026-11-13 (06-9: `continue` is `null` in `new`, flow step 3), 2026-11-15 (package 08: calls in the form of the running agent), 2026-11-18 (scenario runs: the `featureId` never shortened, the "what happened" line written by the skill itself), and 2026-11-22 (refusal rows `engine-outdated` and `skills-outdated` replace the version mismatch row; scenario runs S18 and S19 in [06-1](06-1-engine-version-check.md#scenario-runs)). AC1 to AC4 implemented; loaded by 06-5, 06-6, and, since 2026-11-13, by every phase skill and by `new`, `discuss`, and `drop` (06-9). |
 | Source | [06 Skill foundation](06-skill-foundation.md) (next-steps message), [phase start analysis](../../research/shade-kit-phase-start-analysis.md) |
 | Kind | Skill (new general skill) |
 | Depends on | 06-2 |
@@ -43,7 +43,10 @@ Every kit skill that ends, after a refused start, a "no", or the end of its work
 
   | Refusal | Options named |
   |---|---|
-  | Version mismatch (50 `version-mismatch`, 06-1) or `shade-kit` missing (handshake) | What to update and how, from the message |
+  | Version mismatch (50 `version-mismatch`, 06-1) or `shade-kit` missing (handshake) | What to update and how, from the message. Replaced on 2026-11-22 (06-1, CLI contract) by the next three rows |
+  | 54 `engine-outdated` (handshake) | Update the engine (the `shade-kit` dotnet global tool or the self-contained binary), then call the skill again. **Implemented** on 2026-11-22 |
+  | 55 `skills-outdated` (handshake) | Run `shade-kit integrations install`, start a new agent session so that the agent loads the new skills, then call the skill again. **Implemented** on 2026-11-22 |
+  | `shade-kit` not found (handshake, no envelope) | Install the engine, make sure it is on `PATH`, then call the skill again. **Implemented** |
   | 10 `kit-root-not-found` | `shade-kit init` |
   | 17 `kit-file-write-failed` | Check the named file or folder in `.shadekit/` and its permissions, then call the skill again |
   | 20–22 (format too new, upgrade needed, invalid file) | Update the engine, run `shade-kit upgrade`, or fix the named file |
@@ -59,7 +62,7 @@ Every kit skill that ends, after a refused start, a "no", or the end of its work
 
   Rows 17, 47, and the fallback row added on 2026-11-04. **Decided** on 2026-11-04 (rows); the table stays **Proposed** as a whole.
 - For the refusals 41, 42, and 44 the skill also calls `phase next --json`. For 37, 40, 46, and 20–22 `phase next` fails with the same code, so the options come from the refusal itself (package 04).
-- The warnings of `phase start` and `phase next` (for example `gates-defaults-used`, `gate-entry-ignored`, `engine-prerelease-version-mismatch`) are always shown with their message. **Decided** on 2026-11-04.
+- The warnings of `phase start` and `phase next` (for example `gates-defaults-used`, `gate-entry-ignored`, `engine-prerelease-version-mismatch`) are always shown with their message. **Decided** on 2026-11-04. The warning `engine-prerelease-version-mismatch` was removed on 2026-11-22 with the `--expect` check (06-1); the rule is unchanged.
 - The message starts nothing: the human chooses by calling the skill.
 - **Implemented** in `skills/shade-kit-next-steps/SKILL.md` (2026-11-08). The following decisions came out of the implementation clarification; **Decided** on 2026-11-08 by the user unless marked otherwise:
   - Pending transition (current phase `awaiting-approval`): the message names the pending step, `/shade-kit-<pending>`, and also discarding it and continuing the current phase with `/shade-kit-<current>`. The phase skill asks before it discards anything (resume-pending, 06-5). The second step is taken from `current`, not from the profile.

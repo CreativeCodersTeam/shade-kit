@@ -919,14 +919,15 @@ public sealed class IntegrationsCommandsEndToEndTests : IDisposable
             .Should().Be(0);
 
         GetLines(output.TrimEnd())
-            .Should().Equal("shade-kit 0.8.0", "claude: shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)");
+            .Should().Equal("shade-kit 0.8.0", "CLI contract 1 (supported: 1 to 1)",
+                "claude: shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)");
     }
 
     [Fact]
     public async Task Version_ClaudeNotOnPath_SucceedsWithEmptyIntegrationsAndNoWarning()
     {
         // Act
-        var run = await _harness.RunJsonAsync("version", "--json", "--expect", "0.8.0");
+        var run = await _harness.RunJsonAsync("version", "--json");
 
         // Assert
         run.ExitCode
@@ -934,9 +935,6 @@ public sealed class IntegrationsCommandsEndToEndTests : IDisposable
 
         run.Root.GetProperty("ok").GetBoolean()
             .Should().BeTrue();
-
-        run.Root.GetProperty("data").GetProperty("expectedVersion").GetString()
-            .Should().Be("0.8.0");
 
         run.Root.GetProperty("data").GetProperty("integrations").GetArrayLength()
             .Should().Be(0);
@@ -969,16 +967,16 @@ public sealed class IntegrationsCommandsEndToEndTests : IDisposable
     }
 
     [Fact]
-    public async Task Version_ExpectMismatchWithInstalledIntegration_StillExits50()
+    public async Task Version_ExpectContractMismatchWithInstalledIntegration_Exits54WithoutAskingClaude()
     {
         // Arrange
         _claude.AttachTo(_harness).WithInstalledPlugin("v0.8.0");
 
         // Act
-        var run = await _harness.RunJsonAsync("version", "--json", "--expect", "0.9.0");
+        var run = await _harness.RunJsonAsync("version", "--json", "--expect-contract", "999");
 
         // Assert
-        AssertError(run, ShadeKitCliExitCodes.VersionMismatch, ShadeKitCliErrorCodes.VersionMismatch);
+        AssertError(run, ShadeKitCliExitCodes.EngineOutdated, ShadeKitCliErrorCodes.EngineOutdated);
 
         _claude.Calls
             .Should().BeEmpty();

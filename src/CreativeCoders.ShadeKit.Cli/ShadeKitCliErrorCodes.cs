@@ -156,11 +156,6 @@ public static class ShadeKitCliErrorCodes
     public const string ChecklistTemplateNotFound = "checklist-template-not-found";
 
     /// <summary>
-    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.VersionMismatch" />.
-    /// </summary>
-    public const string VersionMismatch = "version-mismatch";
-
-    /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.AgentNotFound" />.
     /// </summary>
     public const string AgentNotFound = "agent-not-found";
@@ -174,6 +169,16 @@ public static class ShadeKitCliErrorCodes
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.IntegrationConflict" />.
     /// </summary>
     public const string IntegrationConflict = "integration-conflict";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.EngineOutdated" />.
+    /// </summary>
+    public const string EngineOutdated = "engine-outdated";
+
+    /// <summary>
+    /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.SkillsOutdated" />.
+    /// </summary>
+    public const string SkillsOutdated = "skills-outdated";
 
     /// <summary>
     /// Represents the error code that belongs to <see cref="ShadeKitCliExitCodes.Canceled" />.
@@ -226,10 +231,11 @@ public static class ShadeKitCliErrorCodes
             ShadeKitCliExitCodes.CompleteNotAllowed => CompleteNotAllowed,
             ShadeKitCliExitCodes.PhaseStateInvalid => PhaseStateInvalid,
             ShadeKitCliExitCodes.ChecklistTemplateNotFound => ChecklistTemplateNotFound,
-            ShadeKitCliExitCodes.VersionMismatch => VersionMismatch,
             ShadeKitCliExitCodes.AgentNotFound => AgentNotFound,
             ShadeKitCliExitCodes.AgentCommandFailed => AgentCommandFailed,
             ShadeKitCliExitCodes.IntegrationConflict => IntegrationConflict,
+            ShadeKitCliExitCodes.EngineOutdated => EngineOutdated,
+            ShadeKitCliExitCodes.SkillsOutdated => SkillsOutdated,
             ShadeKitCliExitCodes.Canceled => Canceled,
             ShadeKitCliExitCodes.HostError => HostError,
             _ => throw new ArgumentOutOfRangeException(nameof(exitCode), exitCode, "The exit code is not defined.")
