@@ -19,7 +19,7 @@ Ideas can be explored freely before they become a feature, without creating any 
 - The `new` phase skill for every profile.
 - The template `discussion.md`. `request.md` has no template since 2026-10-25; the engine writes it (package 03).
 - `shade-kit feature new --move-source` (package 03), so that discussion notes move into the feature created from them. **Decided** on 2026-11-20 (implementation).
-- The kit version `0.9.0` of all skills, because `shade-kit-new` needs `--move-source` (package 06-2). **Decided** on 2026-11-20 (implementation). Replaced on 2026-11-22 ([06-2](06-2-skill-conventions-and-version.md#cli-contract-in-the-handshake)): the skills carry no kit version; they name the CLI contract `1`, which includes `--move-source`, so an engine without the option is not in the window.
+- The kit version `0.9.0` of all skills, because `shade-kit-new` needs `--move-source` (package 06-2). **Decided** on 2026-11-20 (implementation). Replaced on 2026-11-22 ([06-2](06-2-skill-conventions-and-version.md#cli-contract-in-the-handshake)): the skills carry no kit version; they name the CLI contract `1`, which includes `--move-source`; every engine that supports the contract `1` knows the option. An engine without the option is older than the contract and does not check it at all (it ignores `--expect-contract` and answers `ok: true`, see the transition risk under [Open points](#open-points)).
 
 ### Out of scope
 

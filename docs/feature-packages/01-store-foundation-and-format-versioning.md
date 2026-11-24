@@ -143,7 +143,7 @@ Every file the kit writes into a repository is safe across branch merges and kit
 - **FP01-AC4** A file with a `schemaVersion` above the supported one stops every command that touches it, with the minimum engine version in the message.
 - **FP01-AC5** A file with an older `schemaVersion` makes write commands stop with "upgrade needed" and leaves the file byte-for-byte unchanged.
 - **FP01-AC6** A migration chain for a file type can be registered and applied in memory; a test migrates a v1 fixture through a sample v2 step.
-- **FP01-AC7** `shade-kit version --json` returns the engine version and one format version per file type.
+- **FP01-AC7** `shade-kit version --json` returns the engine version, one format version per file type, and, since 2026-11-22, the CLI contract window `contract` (06-1, `ProgramTests.RunAsync_VersionJson_WritesContract`).
 - **FP01-AC8** In JSON mode, every error produces a JSON document with an error code and a non-zero exit code.
 - **FP01-AC9** Every JSON file the engine writes carries the `minEngineVersion` that belongs to its `schemaVersion`.
 - **FP01-AC10** A read command on a file with an older `schemaVersion` returns its result with an `upgrade-needed` warning when `outdatedFormatOnRead` is `migrate-and-warn` or absent, and stops with exit code 21 when it is `stop`.

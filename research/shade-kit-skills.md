@@ -15,7 +15,7 @@ Status: draft, 2026-10-17, updated 2026-10-18 (consistency review: entry protoco
 
 Entry protocol of every phase skill (from concept section 11.4, extended on 2026-10-18 and 2026-10-30):
 
-1. Version handshake: `shade-kit version --json`. Stop on a mismatch and name what to update.
+1. Version handshake: `shade-kit version --json --expect-contract <n>` with the CLI contract the skill is written for (since 2026-11-22; before, `--expect <kit version>`, package 06-1). Stop on a refusal (`engine-outdated`, `skills-outdated`) and name what to update.
 2. `shade-kit phase start <phase> --json`.
    - Refused: end with the reason and the user's options (from `shade-kit phase next --json` when a feature is current). Nothing has changed.
    - Already in progress (new session, another `refine` round): the engine changes nothing and returns no gate. Tell the user and ask: continue the phase (go to step 5) or end with the next steps.
