@@ -11,6 +11,7 @@ using CreativeCoders.ShadeKit.Core.Formats;
 using CreativeCoders.ShadeKit.Core.Integrations;
 using CreativeCoders.ShadeKit.Core.Integrations.Warnings;
 using CreativeCoders.ShadeKit.Core.Versions;
+using CreativeCoders.ShadeKit.Core.Versions.Exceptions;
 using FakeItEasy;
 using Spectre.Console;
 using Spectre.Console.Testing;
@@ -19,19 +20,21 @@ namespace CreativeCoders.ShadeKit.Cli.Tests.Commands.Version;
 
 public class VersionCommandTests
 {
-    private const string OlderEngineMessage =
-        "The SHADE kit engine 1.2.3 does not fit the kit skills 1.3.0: the major and minor versions must be equal. " +
-        "Update the engine to 1.3, then run the skill again.";
+    // The context of the tests maps failures with CliErrorMapperTests.CreateMapper, whose engine version is 1.0.0.
+    private const string MapperEngineVersion = "1.0.0";
 
-    private const string NewerEngineMessage =
-        "The SHADE kit engine 1.2.3 does not fit the kit skills 1.1.0: the major and minor versions must be equal. " +
-        "Run 'shade-kit integrations install' to install the SHADE kit skills 1.2, then run the skill again.";
+    private const string EngineOutdatedMessage =
+        "The SHADE kit engine 1.0.0 supports the CLI contracts 1 to 1, but the kit skills need the CLI contract 2. " +
+        "Update the engine, then run the skill again.";
+
+    private const string SkillsOutdatedMessage =
+        "The kit skills are written for the CLI contract 1, but the SHADE kit engine 1.0.0 supports only the CLI " +
+        "contracts 2 to 3. Run 'shade-kit integrations install' to install the matching kit skills, then run the " +
+        "skill again.";
+
+    private const string ContractLine = "CLI contract 1 (supported: 1 to 1)";
 
     private const string PluginId = "shade-kit@creativecoders-shade-kit";
-
-    private const string PrereleaseWarningMessage =
-        "The prerelease engine 1.2.3-beta.1 does not fit the kit skills 1.3.0 (the major and minor versions differ); " +
-        "it is used anyway because it is a prerelease.";
 
     private static readonly InstalledIntegration ClaudeIntegration =
         new InstalledIntegration("claude", PluginId, "0.8.0", "v0.8.0", true);
@@ -49,14 +52,30 @@ public class VersionCommandTests
         await command.ExecuteAsync(new VersionCommandOptions());
 
         // Assert
-        console.Output.TrimEnd()
-            .Should().Be("shade-kit 1.2.3");
-
         console.Lines
-            .Should().Equal("shade-kit 1.2.3");
+            .Should().Equal("shade-kit 1.2.3", ContractLine);
 
         jsonOutput.ToString()
             .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainMode_WritesContractLineAfterVersionLine()
+    {
+        // Arrange
+        var console = new TestConsole().Width(1000);
+        var command = CreateCommand(console, TextWriter.Null, "1.2.3",
+            integrationService: CreateIntegrationService(ClaudeIntegration));
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions());
+
+        // Assert
+        console.Lines
+            .Should().Equal(
+                "shade-kit 1.2.3",
+                $"CLI contract {CliContract.Current} (supported: {CliContract.MinSupported} to {CliContract.Current})",
+                "claude: shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)");
     }
 
     [Fact]
@@ -105,8 +124,64 @@ public class VersionCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_JsonMode_WritesContractWithCurrentAndMinSupported()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), jsonOutput, "1.2.3");
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true });
+
+        // Assert
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+        var data = document.RootElement.GetProperty("data");
+
+        data.EnumerateObject().Select(x => x.Name)
+            .Should().Equal("engineVersion", "formats", "contract", "integrations");
+
+        data.GetProperty("contract").EnumerateObject().Select(x => (x.Name, x.Value.GetInt32()))
+            .Should().Equal(("current", CliContract.Current), ("minSupported", CliContract.MinSupported));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeWithWiderWindow_WritesCurrentAndMinSupportedOfWindow()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), jsonOutput, "1.2.3",
+            checker: new CliContractChecker(new CliContractWindow(2, 4)));
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true });
+
+        // Assert
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+
+        document.RootElement.GetProperty("data").GetProperty("contract").EnumerateObject()
+            .Select(x => (x.Name, x.Value.GetInt32()))
+            .Should().Equal(("current", 4), ("minSupported", 2));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeWithWiderWindow_WritesContractLineOfWindow()
+    {
+        // Arrange
+        var console = new TestConsole().Width(1000);
+        var command = CreateCommand(console, TextWriter.Null, "1.2.3",
+            checker: new CliContractChecker(new CliContractWindow(2, 4)));
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions());
+
+        // Assert
+        console.Lines
+            .Should().Equal("shade-kit 1.2.3", "CLI contract 4 (supported: 2 to 4)");
+    }
+
+    [Fact]
     [Trait("Requirement", "FP06-1-AC6")]
-    public async Task ExecuteAsync_JsonModeWithoutExpect_WritesEnvelopeWithoutExpectedVersionUnchanged()
+    public async Task ExecuteAsync_JsonModeWithoutExpectContract_WritesEnvelopeWithContractAndIntegrations()
     {
         // Arrange
         using var jsonOutput = new StringWriter();
@@ -130,6 +205,10 @@ public class VersionCommandTests
                       "current-feature": 1,
                       "templates-lock": 1
                     },
+                    "contract": {
+                      "current": 1,
+                      "minSupported": 1
+                    },
                     "integrations": []
                   },
                   "warnings": [],
@@ -139,15 +218,13 @@ public class VersionCommandTests
     }
 
     [Theory]
-    [Trait("Requirement", "FP06-1-AC6")]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ExecuteAsync_WithoutExpect_DoesNotCheckEngineVersion(bool json)
+    public async Task ExecuteAsync_WithoutExpectContract_DoesNotCheckContract(bool json)
     {
         // Arrange
-        var checker = A.Fake<IEngineVersionChecker>();
-        var command = new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()),
-            CreateEngineVersionProvider("1.2.3"), FormatRegistry.CreateDefault(), checker, CreateIntegrationService());
+        var checker = CreateChecker();
+        var command = CreateCommand(new TestConsole(), TextWriter.Null, "1.2.3", checker: checker);
 
         // Act
         var result = await command.ExecuteAsync(new VersionCommandOptions { Json = json });
@@ -156,46 +233,34 @@ public class VersionCommandTests
         result.ExitCode
             .Should().Be(0);
 
-        A.CallTo(checker)
+        A.CallTo(() => checker.Check(A<int>._))
             .MustNotHaveHappened();
     }
 
-    [Theory]
-    [Trait("Requirement", "FP06-1-AC3")]
-    [InlineData("1.2.3")]
-    [InlineData("1.2.0")]
-    [InlineData("1.2.9")]
-    [InlineData("1.2.0-rc.1")]
-    [InlineData("1.2.0+build.5")]
-    public async Task ExecuteAsync_JsonModeExpectWithEqualMajorAndMinor_WritesSuccessWithExpectedVersionAndNoWarning(
-        string expect)
+    [Fact]
+    public async Task ExecuteAsync_JsonModeExpectContractInWindow_WritesSuccess()
     {
         // Arrange
+        var checker = CreateChecker();
         var console = new TestConsole();
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, jsonOutput, "1.2.3");
+        var command = CreateCommand(console, jsonOutput, "1.2.3", checker: checker);
 
         // Act
-        var result = await command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = expect });
+        var result = await command.ExecuteAsync(new VersionCommandOptions { Json = true, ExpectContract = 1 });
 
         // Assert
         result.ExitCode
             .Should().Be(0);
+
+        A.CallTo(() => checker.Check(1))
+            .MustHaveHappenedOnceExactly();
 
         using var document = JsonDocument.Parse(jsonOutput.ToString());
         var root = document.RootElement;
 
         root.GetProperty("ok").GetBoolean()
             .Should().BeTrue();
-
-        root.GetProperty("data").EnumerateObject().Select(x => x.Name)
-            .Should().Equal("engineVersion", "formats", "expectedVersion", "integrations");
-
-        root.GetProperty("data").GetProperty("engineVersion").GetString()
-            .Should().Be("1.2.3");
-
-        root.GetProperty("data").GetProperty("expectedVersion").GetString()
-            .Should().Be(expect);
 
         root.GetProperty("warnings").GetArrayLength()
             .Should().Be(0);
@@ -208,99 +273,161 @@ public class VersionCommandTests
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC3")]
-    public async Task ExecuteAsync_PlainModeExpectWithDifferentPatch_WritesOnlyToolNameAndEngineVersion()
+    public async Task ExecuteAsync_JsonModeExpectContractWithRealChecker_SucceedsForEveryContractInWindow()
     {
         // Arrange
-        var console = new TestConsole();
-        using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, jsonOutput, "1.2.3");
+        var checker = new CliContractChecker(new CliContractWindow(2, 4));
+        var expectedContracts = new List<int>();
 
         // Act
-        var result = await command.ExecuteAsync(new VersionCommandOptions { Expect = "1.2.0" });
+        foreach (var contract in new[] { 2, 3, 4 })
+        {
+            using var jsonOutput = new StringWriter();
+            var command = CreateCommand(new TestConsole(), jsonOutput, "1.2.3", checker: checker);
+
+            await command.ExecuteAsync(new VersionCommandOptions { Json = true, ExpectContract = contract });
+
+            using var document = JsonDocument.Parse(jsonOutput.ToString());
+
+            expectedContracts.Add(document.RootElement.GetProperty("data").GetProperty("expectedContract").GetInt32());
+        }
 
         // Assert
-        result.ExitCode
-            .Should().Be(0);
-
-        console.Lines
-            .Should().Equal("shade-kit 1.2.3");
-
-        jsonOutput.ToString()
-            .Should().BeEmpty();
+        expectedContracts
+            .Should().Equal(2, 3, 4);
     }
 
-    [Theory]
-    [Trait("Requirement", "FP06-1-AC1")]
-    [Trait("Requirement", "FP06-1-AC2")]
-    [InlineData("1.3.0", OlderEngineMessage)]
-    [InlineData("1.1.0", NewerEngineMessage)]
-    public async Task ExecuteAsync_JsonModeReleaseEngineMismatch_WritesVersionMismatchEnvelopeAndAbortsWith50(
-        string expect, string message)
+    [Fact]
+    public async Task ExecuteAsync_JsonModeExpectContract_WritesExpectedContract()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), jsonOutput, "1.2.3");
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true, ExpectContract = 1 });
+
+        // Assert
+        jsonOutput.ToString()
+            .Should().Be(
+                """
+                {
+                  "ok": true,
+                  "data": {
+                    "engineVersion": "1.2.3",
+                    "formats": {
+                      "config": 1,
+                      "gates": 1,
+                      "feature": 1,
+                      "current-feature": 1,
+                      "templates-lock": 1
+                    },
+                    "contract": {
+                      "current": 1,
+                      "minSupported": 1
+                    },
+                    "expectedContract": 1
+                  },
+                  "warnings": [],
+                  "error": null
+                }
+                """.ReplaceLineEndings("\n") + "\n");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeWithoutExpectContract_OmitsExpectedContract()
+    {
+        // Arrange
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), jsonOutput, "1.2.3");
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true });
+
+        // Assert
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+
+        document.RootElement.GetProperty("data").TryGetProperty("expectedContract", out _)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_JsonModeEngineOutdated_WritesEngineOutdatedEnvelopeAndAbortsWith54()
     {
         // Arrange
         var console = new TestConsole();
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, jsonOutput, "1.2.3");
+        var command = CreateCommand(console, jsonOutput, MapperEngineVersion,
+            checker: CreateThrowingChecker(new EngineContractOutdatedException(2, 1, 1)));
 
         // Act
-        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = expect });
+        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = true, ExpectContract = 2 });
 
         // Assert
         var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
 
         exception.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.VersionMismatch);
+            .Should().Be(ShadeKitCliExitCodes.EngineOutdated);
 
         exception.PrintMessage
             .Should().BeFalse();
 
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
-        var root = document.RootElement;
-
-        root.GetProperty("ok").GetBoolean()
-            .Should().BeFalse();
-
-        root.GetProperty("data").ValueKind
-            .Should().Be(JsonValueKind.Null);
-
-        root.GetProperty("error").GetProperty("code").GetString()
-            .Should().Be(ShadeKitCliErrorCodes.VersionMismatch);
-
-        root.GetProperty("error").GetProperty("message").GetString()
-            .Should().Be(message);
+        AssertFailureEnvelope(jsonOutput.ToString(), ShadeKitCliErrorCodes.EngineOutdated, EngineOutdatedMessage);
 
         console.Output
             .Should().BeEmpty();
     }
 
-    [Theory]
-    [Trait("Requirement", "FP06-1-AC1")]
-    [Trait("Requirement", "FP06-1-AC2")]
-    [InlineData("1.3.0", OlderEngineMessage)]
-    [InlineData("1.1.0", NewerEngineMessage)]
-    public async Task ExecuteAsync_PlainModeReleaseEngineMismatch_AbortsWith50AndMessageWithoutOutput(
-        string expect, string message)
+    [Fact]
+    public async Task ExecuteAsync_JsonModeSkillsOutdated_WritesSkillsOutdatedEnvelopeAndAbortsWith55()
     {
         // Arrange
         var console = new TestConsole();
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, jsonOutput, "1.2.3");
+        var command = CreateCommand(console, jsonOutput, MapperEngineVersion,
+            checker: CreateThrowingChecker(new SkillsContractOutdatedException(1, 2, 3)));
 
         // Act
-        var act = () => command.ExecuteAsync(new VersionCommandOptions { Expect = expect });
+        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = true, ExpectContract = 1 });
 
         // Assert
         var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
 
         exception.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.VersionMismatch);
+            .Should().Be(ShadeKitCliExitCodes.SkillsOutdated);
+
+        exception.PrintMessage
+            .Should().BeFalse();
+
+        AssertFailureEnvelope(jsonOutput.ToString(), ShadeKitCliErrorCodes.SkillsOutdated, SkillsOutdatedMessage);
+
+        console.Output
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeEngineOutdated_AbortsWith54AndMessageWithoutOutput()
+    {
+        // Arrange
+        var console = new TestConsole();
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(console, jsonOutput, MapperEngineVersion,
+            checker: CreateThrowingChecker(new EngineContractOutdatedException(2, 1, 1)));
+
+        // Act
+        var act = () => command.ExecuteAsync(new VersionCommandOptions { ExpectContract = 2 });
+
+        // Assert
+        var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
+
+        exception.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.EngineOutdated);
 
         exception.PrintMessage
             .Should().BeTrue();
 
         exception.Message
-            .Should().Be(message);
+            .Should().Be(EngineOutdatedMessage);
 
         console.Output
             .Should().BeEmpty();
@@ -309,182 +436,125 @@ public class VersionCommandTests
             .Should().BeEmpty();
     }
 
-    [Theory]
-    [Trait("Requirement", "FP06-1-AC1")]
-    [InlineData("2.0.0")]
-    [InlineData("0.9.0")]
-    public async Task ExecuteAsync_ReleaseEngineWithDifferentMajor_AbortsWith50(string expect)
-    {
-        // Arrange
-        var command = CreateCommand(new TestConsole(), TextWriter.Null, "1.2.3");
-
-        // Act
-        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = expect });
-
-        // Assert
-        (await act.Should().ThrowAsync<CliCommandAbortException>())
-            .Which.ExitCode.Should().Be(ShadeKitCliExitCodes.VersionMismatch);
-    }
-
     [Fact]
-    [Trait("Requirement", "FP06-1-AC4")]
-    public async Task ExecuteAsync_JsonModePrereleaseEngineMismatch_WritesSuccessEnvelopeWithWarning()
+    public async Task ExecuteAsync_PlainModeSkillsOutdated_AbortsWith55AndMessageWithoutOutput()
     {
         // Arrange
         var console = new TestConsole();
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, jsonOutput, "1.2.3-beta.1");
+        var command = CreateCommand(console, jsonOutput, MapperEngineVersion,
+            checker: CreateThrowingChecker(new SkillsContractOutdatedException(1, 2, 3)));
 
         // Act
-        var result = await command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = "1.3.0" });
+        var act = () => command.ExecuteAsync(new VersionCommandOptions { ExpectContract = 1 });
 
         // Assert
-        result.ExitCode
-            .Should().Be(0);
+        var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
 
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
-        var root = document.RootElement;
+        exception.ExitCode
+            .Should().Be(ShadeKitCliExitCodes.SkillsOutdated);
 
-        root.GetProperty("ok").GetBoolean()
+        exception.PrintMessage
             .Should().BeTrue();
 
-        root.GetProperty("data").GetProperty("engineVersion").GetString()
-            .Should().Be("1.2.3-beta.1");
-
-        root.GetProperty("data").GetProperty("expectedVersion").GetString()
-            .Should().Be("1.3.0");
-
-        root.GetProperty("warnings").EnumerateArray()
-            .Select(x => (x.GetProperty("code").GetString(), x.GetProperty("message").GetString()))
-            .Should().Equal((ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch, PrereleaseWarningMessage));
-
-        root.GetProperty("error").ValueKind
-            .Should().Be(JsonValueKind.Null);
+        exception.Message
+            .Should().Be(SkillsOutdatedMessage);
 
         console.Output
+            .Should().BeEmpty();
+
+        jsonOutput.ToString()
             .Should().BeEmpty();
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC4")]
-    public async Task ExecuteAsync_PlainModePrereleaseEngineMismatch_WritesWarningBeforeToolNameAndEngineVersion()
+    public async Task ExecuteAsync_ExpectContract_DoesNotReadIntegrationsAndOmitsField()
     {
         // Arrange
-        // A wide console keeps the long warning on one line.
+        var integrationService = CreateIntegrationService(ClaudeIntegration);
+        using var jsonOutput = new StringWriter();
+        var command = CreateCommand(new TestConsole(), jsonOutput, "1.2.3", integrationService: integrationService);
+
+        // Act
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true, ExpectContract = 1 });
+
+        // Assert
+        A.CallTo(integrationService)
+            .MustNotHaveHappened();
+
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
+
+        document.RootElement.GetProperty("data").TryGetProperty("integrations", out _)
+            .Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task ExecuteAsync_ContractMismatch_DoesNotReadIntegrations(bool engineOutdated, bool json)
+    {
+        // Arrange
+        Exception mismatch = engineOutdated
+            ? new EngineContractOutdatedException(7, 1, 1)
+            : new SkillsContractOutdatedException(7, 8, 9);
+
+        var integrationService = CreateIntegrationService(ClaudeIntegration);
+        var command = CreateCommand(new TestConsole(), TextWriter.Null, "1.2.3",
+            integrationService: integrationService, checker: CreateThrowingChecker(mismatch));
+
+        // Act
+        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = json, ExpectContract = 7 });
+
+        // Assert
+        await act.Should().ThrowAsync<CliCommandAbortException>();
+
+        A.CallTo(integrationService)
+            .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PlainModeExpectContract_WritesNoIntegrationLines()
+    {
+        // Arrange
         var console = new TestConsole().Width(1000);
-        using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, jsonOutput, "1.2.3-beta.1");
+        var integrationService = CreateIntegrationService(ClaudeIntegration);
+        var command = CreateCommand(console, TextWriter.Null, "1.2.3", integrationService: integrationService);
 
         // Act
-        var result = await command.ExecuteAsync(new VersionCommandOptions { Expect = "1.3.0" });
+        var result = await command.ExecuteAsync(new VersionCommandOptions { ExpectContract = 1 });
 
         // Assert
         result.ExitCode
             .Should().Be(0);
 
         console.Lines
-            .Should().Equal($"Warning: {PrereleaseWarningMessage}", "shade-kit 1.2.3-beta.1");
+            .Should().Equal("shade-kit 1.2.3", ContractLine);
 
-        jsonOutput.ToString()
-            .Should().BeEmpty();
-    }
-
-    [Theory]
-    [Trait("Requirement", "FP06-1-AC5")]
-    [InlineData("abc")]
-    [InlineData("")]
-    [InlineData(" ")]
-    [InlineData("v1.2.3")]
-    [InlineData("1.2")]
-    [InlineData("1.2.3.4")]
-    public async Task ExecuteAsync_JsonModeInvalidExpect_WritesInvalidArgumentsEnvelopeAndAbortsWith2(string expect)
-    {
-        // Arrange
-        var console = new TestConsole();
-        using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, jsonOutput, "1.2.3");
-
-        // Act
-        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = expect });
-
-        // Assert
-        var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
-
-        exception.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
-
-        exception.PrintMessage
-            .Should().BeFalse();
-
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
-        var root = document.RootElement;
-
-        root.GetProperty("ok").GetBoolean()
-            .Should().BeFalse();
-
-        root.GetProperty("error").GetProperty("code").GetString()
-            .Should().Be(ShadeKitCliErrorCodes.InvalidArguments);
-
-        root.GetProperty("error").GetProperty("message").GetString()
-            .Should().Be(CreateInvalidExpectMessage(expect));
-
-        console.Output
-            .Should().BeEmpty();
+        A.CallTo(integrationService)
+            .MustNotHaveHappened();
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC5")]
-    public async Task ExecuteAsync_PlainModeInvalidExpect_AbortsWith2AndMessageWithoutOutput()
+    public async Task ExecuteAsync_JsonModeWithoutExpectContract_WritesIntegrations()
     {
         // Arrange
-        var console = new TestConsole();
+        var integrationService = CreateIntegrationService(ClaudeIntegration);
         using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, jsonOutput, "1.2.3");
+        var command = CreateCommand(new TestConsole(), jsonOutput, "1.2.3", integrationService: integrationService);
 
         // Act
-        var act = () => command.ExecuteAsync(new VersionCommandOptions { Expect = "abc" });
+        await command.ExecuteAsync(new VersionCommandOptions { Json = true });
 
         // Assert
-        var exception = (await act.Should().ThrowAsync<CliCommandAbortException>()).Which;
+        A.CallTo(() => integrationService.GetInstalledAsync(A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
 
-        exception.ExitCode
-            .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
+        using var document = JsonDocument.Parse(jsonOutput.ToString());
 
-        exception.PrintMessage
-            .Should().BeTrue();
-
-        exception.Message
-            .Should().Be(CreateInvalidExpectMessage("abc"));
-
-        console.Output
-            .Should().BeEmpty();
-
-        jsonOutput.ToString()
-            .Should().BeEmpty();
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ExecuteAsync_ExpectWithInvalidEngineVersion_ThrowsInvalidOperationExceptionAndWritesNothing(
-        bool json)
-    {
-        // Arrange
-        var console = new TestConsole();
-        using var jsonOutput = new StringWriter();
-        var command = CreateCommand(console, jsonOutput, "not-a-version");
-
-        // Act
-        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = json, Expect = "1.2.3" });
-
-        // Assert
-        await act.Should().ThrowAsync<InvalidOperationException>();
-
-        console.Output
-            .Should().BeEmpty();
-
-        jsonOutput.ToString()
-            .Should().BeEmpty();
+        document.RootElement.GetProperty("data").GetProperty("integrations").GetArrayLength()
+            .Should().Be(1);
     }
 
     [Fact]
@@ -632,6 +702,7 @@ public class VersionCommandTests
         console.Lines
             .Should().Equal(
                 "shade-kit 0.8.0",
+                ContractLine,
                 "claude: shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)",
                 "claude: shade-kit@creativecoders-shade-kit (main) (disabled)");
     }
@@ -685,74 +756,8 @@ public class VersionCommandTests
             .Should().Equal(
                 "Warning: The SHADE kit integration of the agent 'claude' cannot be read, so it is not listed: " +
                 "claude was not found on the PATH.",
-                "shade-kit 0.8.0");
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP06-1-AC4")]
-    public async Task ExecuteAsync_PrereleaseMismatchAndAgentUnavailable_WritesCheckWarningBeforeAgentWarning()
-    {
-        // Arrange
-        using var jsonOutput = new StringWriter();
-        var command = CreateCommand(new TestConsole(), jsonOutput, "1.2.3-beta.1",
-            integrationService: CreateIntegrationService(new InstalledIntegrationsResult([ClaudeIntegration],
-                [new AgentUnavailableWarning("other", "It fails.")])));
-
-        // Act
-        await command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = "1.3.0" });
-
-        // Assert
-        using var document = JsonDocument.Parse(jsonOutput.ToString());
-        var root = document.RootElement;
-
-        root.GetProperty("warnings").EnumerateArray().Select(x => x.GetProperty("code").GetString())
-            .Should().Equal(ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch,
-                ShadeKitCliWarningCodes.AgentUnavailable);
-
-        root.GetProperty("data").EnumerateObject().Select(x => x.Name)
-            .Should().Equal("engineVersion", "formats", "expectedVersion", "integrations");
-
-        root.GetProperty("data").GetProperty("integrations").GetArrayLength()
-            .Should().Be(1);
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP06-1-AC1")]
-    public async Task ExecuteAsync_ReleaseEngineMismatch_DoesNotReadIntegrations()
-    {
-        // Arrange
-        var integrationService = CreateIntegrationService(ClaudeIntegration);
-        var command = CreateCommand(new TestConsole(), TextWriter.Null, "1.2.3",
-            integrationService: integrationService);
-
-        // Act
-        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = "1.3.0" });
-
-        // Assert
-        await act.Should().ThrowAsync<CliCommandAbortException>();
-
-        A.CallTo(() => integrationService.GetInstalledAsync(A<CancellationToken>._))
-            .MustNotHaveHappened();
-    }
-
-    [Fact]
-    [Trait("Requirement", "FP06-1-AC5")]
-    public async Task ExecuteAsync_InvalidExpect_DoesNotReadIntegrations()
-    {
-        // Arrange
-        var integrationService = CreateIntegrationService(ClaudeIntegration);
-        var command = CreateCommand(new TestConsole(), TextWriter.Null, "1.2.3",
-            integrationService: integrationService);
-
-        // Act
-        var act = () => command.ExecuteAsync(new VersionCommandOptions { Json = true, Expect = "abc" });
-
-        // Assert
-        (await act.Should().ThrowAsync<CliCommandAbortException>())
-            .Which.ExitCode.Should().Be(ShadeKitCliExitCodes.InvalidArguments);
-
-        A.CallTo(() => integrationService.GetInstalledAsync(A<CancellationToken>._))
-            .MustNotHaveHappened();
+                "shade-kit 0.8.0",
+                ContractLine);
     }
 
     [Fact]
@@ -761,11 +766,10 @@ public class VersionCommandTests
         // Arrange
         using var cancellationTokenSource = new CancellationTokenSource();
         var integrationService = CreateIntegrationService();
-        var engineVersionProvider = CreateEngineVersionProvider("1.2.3");
         var command = new VersionCommand(
             TestShadeKitCommandContext.Create(new TestConsole(),
                 cancellation: new TestCliCancellation(cancellationTokenSource.Token)),
-            engineVersionProvider, FormatRegistry.CreateDefault(), new EngineVersionChecker(engineVersionProvider),
+            CreateEngineVersionProvider("1.2.3"), FormatRegistry.CreateDefault(), CreateChecker(),
             integrationService);
 
         // Act
@@ -781,7 +785,7 @@ public class VersionCommandTests
     {
         // Act
         var act = () => new VersionCommand(null!, CreateEngineVersionProvider("1.0.0"), FormatRegistry.CreateDefault(),
-            A.Fake<IEngineVersionChecker>(), CreateIntegrationService());
+            A.Fake<ICliContractChecker>(), CreateIntegrationService());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -793,7 +797,7 @@ public class VersionCommandTests
     {
         // Act
         var act = () => new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()), null!,
-            FormatRegistry.CreateDefault(), A.Fake<IEngineVersionChecker>(), CreateIntegrationService());
+            FormatRegistry.CreateDefault(), A.Fake<ICliContractChecker>(), CreateIntegrationService());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -805,7 +809,7 @@ public class VersionCommandTests
     {
         // Act
         var act = () => new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()),
-            CreateEngineVersionProvider("1.0.0"), null!, A.Fake<IEngineVersionChecker>(), CreateIntegrationService());
+            CreateEngineVersionProvider("1.0.0"), null!, A.Fake<ICliContractChecker>(), CreateIntegrationService());
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
@@ -813,7 +817,7 @@ public class VersionCommandTests
     }
 
     [Fact]
-    public void Ctor_NullEngineVersionChecker_ThrowsArgumentNullException()
+    public void Ctor_NullCliContractChecker_ThrowsArgumentNullException()
     {
         // Act
         var act = () => new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()),
@@ -821,7 +825,7 @@ public class VersionCommandTests
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("engineVersionChecker");
+            .WithParameterName("cliContractChecker");
     }
 
     [Fact]
@@ -829,7 +833,7 @@ public class VersionCommandTests
     {
         // Act
         var act = () => new VersionCommand(TestShadeKitCommandContext.Create(new TestConsole()),
-            CreateEngineVersionProvider("1.0.0"), FormatRegistry.CreateDefault(), A.Fake<IEngineVersionChecker>(),
+            CreateEngineVersionProvider("1.0.0"), FormatRegistry.CreateDefault(), A.Fake<ICliContractChecker>(),
             null!);
 
         // Assert
@@ -852,13 +856,48 @@ public class VersionCommandTests
     }
 
     private static VersionCommand CreateCommand(IAnsiConsole console, TextWriter jsonOutput, string engineVersion,
-        IFormatRegistry? formatRegistry = null, IIntegrationService? integrationService = null)
+        IFormatRegistry? formatRegistry = null, IIntegrationService? integrationService = null,
+        ICliContractChecker? checker = null)
     {
-        var engineVersionProvider = CreateEngineVersionProvider(engineVersion);
-
         return new VersionCommand(TestShadeKitCommandContext.Create(console, jsonOutput: jsonOutput),
-            engineVersionProvider, formatRegistry ?? FormatRegistry.CreateDefault(),
-            new EngineVersionChecker(engineVersionProvider), integrationService ?? CreateIntegrationService());
+            CreateEngineVersionProvider(engineVersion), formatRegistry ?? FormatRegistry.CreateDefault(),
+            checker ?? CreateChecker(), integrationService ?? CreateIntegrationService());
+    }
+
+    // FakeItEasy cannot create a dummy CliContractWindow (its constructor rejects 0), so every fake checker that the
+    // command runs with reports the window of the engine.
+    private static ICliContractChecker CreateChecker()
+    {
+        var checker = A.Fake<ICliContractChecker>();
+        A.CallTo(() => checker.Window).Returns(CliContract.Window);
+
+        return checker;
+    }
+
+    private static ICliContractChecker CreateThrowingChecker(Exception exception)
+    {
+        var checker = CreateChecker();
+        A.CallTo(() => checker.Check(A<int>._)).Throws(exception);
+
+        return checker;
+    }
+
+    private static void AssertFailureEnvelope(string output, string errorCode, string message)
+    {
+        using var document = JsonDocument.Parse(output);
+        var root = document.RootElement;
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeFalse();
+
+        root.GetProperty("data").ValueKind
+            .Should().Be(JsonValueKind.Null);
+
+        root.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(errorCode);
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().Be(message);
     }
 
     private static IIntegrationService CreateIntegrationService(params InstalledIntegration[] integrations)
@@ -880,11 +919,5 @@ public class VersionCommandTests
         A.CallTo(() => engineVersionProvider.Version).Returns(version);
 
         return engineVersionProvider;
-    }
-
-    private static string CreateInvalidExpectMessage(string expect)
-    {
-        return $"Invalid arguments: '{expect}' is not a SemVer version such as 1.2.3 or 1.2.3-beta.1. Run " +
-               "'shade-kit --help' for usage.";
     }
 }

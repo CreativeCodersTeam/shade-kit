@@ -1,8 +1,6 @@
 ---
 name: shade-kit-new
 description: SHADE kit phase skill for `new`. Creates a feature with a workflow profile (feature, bugfix, quick) from free text, an issue URL, a Markdown file, or discussion notes; the CLI writes request.md. Use when the user wants to start a new SHADE kit feature, bug fix, or quick change. Runs only when the user calls it by name (`/shade-kit-new`); never load it on your own or from another skill.
-metadata:
-  version: 0.9.0
 ---
 
 # shade-kit-new
@@ -19,9 +17,9 @@ Keep every `warnings` entry (`{ code, message }`) of every CLI call of this run.
 
 ## Flow
 
-1. Version handshake: run `shade-kit version --json --expect 0.9.0`; 0.9.0 is the kit version of this skill (`metadata.version` in its frontmatter).
-   - `ok` is `true`: continue. A warning `engine-prerelease-version-mismatch` means that a prerelease engine is used although its major or minor version differs; keep it like every warning and continue.
-   - `ok` is `false` (for example `version-mismatch`), or the shell reports that `shade-kit` is not found: stop before any other CLI call. End ([Ending](#ending)) with **refusal** and the failure envelope, or with "`shade-kit` not found".
+1. Version handshake: run `shade-kit version --json --expect-contract 1`; 1 is the CLI contract this skill is written for.
+   - `ok` is `true`: continue.
+   - `ok` is `false` (for example `engine-outdated` or `skills-outdated`), or the shell reports that `shade-kit` is not found: stop before any other CLI call. End ([Ending](#ending)) with **refusal** and the failure envelope, or with "`shade-kit` not found".
 2. **Active feature:** `shade-kit feature current --json`. A failure envelope (for example `kit-root-not-found` without `.shadekit/`): end with **refusal** and the envelope. If it resolves a feature with status `active`, tell the human in the question which feature is current (id, phase, state) and ask, with the agent's structured question tool (in Claude Code `AskUserQuestion`, in GitHub Copilot CLI `ask_user`, in OpenAI Codex CLI `request_user_input`, which Codex offers only in plan mode by default; without one, also in Codex outside plan mode, a plain question): create a new feature anyway, or end here. On "end here", or without an answer, end with **end of work** and the line "No new feature created; `<id>` stays current." No current feature, or a `done` one: go on. Keep `resolvedFrom` for step 8.
 3. **Input:** collect the requirement source: free text, an issue URL, the path of a Markdown file, or discussion notes. Discussion notes are a file in `.shadekit/discussions/` (notes written without a feature) or in the `discussions/` folder of a feature.
 4. **Profile:** if the user named one, use it. Otherwise read the input (the text, or the file you were given; an issue or a web page is not read, see step 5) and propose a profile: a defect report suggests `bugfix`, a small and clear change `quick`, a new capability that needs a spec and a plan `feature`. When the input suggests none of them, propose "the repository default": the CLI then applies `defaultProfile` of the repository configuration, whose value you do not know, because you do not read the configuration. Ask with the same question tool as in step 2, with the proposal first and the other choices among `feature`, `bugfix`, `quick`, and "the repository default".

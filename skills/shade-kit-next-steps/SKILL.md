@@ -1,8 +1,6 @@
 ---
 name: shade-kit-next-steps
 description: SHADE kit general skill that writes the closing message of a kit skill. Shows what the human can do now and which skill to call for it, after the end of the work, a "no", or a refused start, and shows the warnings of the CLI calls. Starts nothing. Loaded by every SHADE kit skill that ends; not meant to be called directly.
-metadata:
-  version: 0.9.0
 ---
 
 # shade-kit-next-steps
@@ -92,7 +90,9 @@ The table is keyed by `error.code`; the envelope has no exit code, the numbers a
 
 | Error code (exit code) | Options to name |
 |---|---|
-| `version-mismatch` (50), or `shade-kit` not found | What to update and how, from the message: update the engine or the kit skills so that their major and minor versions match. If `shade-kit` was not found: install the engine (the `shade-kit` dotnet global tool or the self-contained binary), make sure it is on `PATH`, then call the skill again. |
+| `engine-outdated` (54) | The kit skills need a newer engine than the installed one (the message names both CLI contracts): update the engine (the `shade-kit` dotnet global tool or the self-contained binary), then call the skill again. |
+| `skills-outdated` (55) | The kit skills are older than the engine supports (the message names both CLI contracts): run `shade-kit integrations install`, start a new agent session so the agent loads the new skills, then call the skill again. |
+| `shade-kit` not found | Install the engine (the `shade-kit` dotnet global tool or the self-contained binary), make sure it is on `PATH`, then call the skill again. |
 | `kit-root-not-found` (10) | `shade-kit init` |
 | `kit-file-write-failed` (17) | Check the named file or folder in `.shadekit/` and its permissions, then call the skill again. |
 | `format-too-new` (20), `upgrade-needed` (21), `invalid-file` (22) | Update the engine, run `shade-kit upgrade`, or fix the named file. |

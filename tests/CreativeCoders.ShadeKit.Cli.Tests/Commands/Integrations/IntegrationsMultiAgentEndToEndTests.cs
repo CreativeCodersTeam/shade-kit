@@ -688,7 +688,7 @@ public sealed class IntegrationsMultiAgentEndToEndTests : IDisposable
         _codex.AttachTo(_harness).WithInstalledPlugin("v0.8.0");
 
         // Act
-        var run = await _harness.RunJsonAsync("version", "--json", "--expect", "0.8.0");
+        var run = await _harness.RunJsonAsync("version", "--json");
 
         // Assert
         run.ExitCode
@@ -756,6 +756,7 @@ public sealed class IntegrationsMultiAgentEndToEndTests : IDisposable
         GetLines(output.TrimEnd())
             .Should().Equal(
                 "shade-kit 0.8.0",
+                "CLI contract 1 (supported: 1 to 1)",
                 "claude: shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0)",
                 "copilot: shade-kit@creativecoders-shade-kit 0.8.0 (v0.8.0) (disabled)",
                 "codex: shade-kit@creativecoders-shade-kit (disabled)");

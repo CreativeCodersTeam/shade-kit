@@ -18,6 +18,7 @@ using CreativeCoders.ShadeKit.Core.Store.Exceptions;
 using CreativeCoders.ShadeKit.Core.Templates;
 using CreativeCoders.ShadeKit.Core.Trackers;
 using CreativeCoders.ShadeKit.Core.Versions;
+using CreativeCoders.ShadeKit.Core.Versions.Exceptions;
 using CreativeCoders.ShadeKit.Core.Web;
 using CreativeCoders.ShadeKit.Core.Workflow;
 using CreativeCoders.ShadeKit.Core.Workflow.Engine;
@@ -72,7 +73,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFormatRegistry), typeof(FormatRegistry))]
     [InlineData(typeof(IVersionedJsonSerializer), typeof(VersionedJsonSerializer))]
     [InlineData(typeof(IEngineVersionProvider), typeof(EngineVersionProvider))]
-    [InlineData(typeof(IEngineVersionChecker), typeof(EngineVersionChecker))]
+    [InlineData(typeof(ICliContractChecker), typeof(CliContractChecker))]
     [InlineData(typeof(IRepositoryInitializer), typeof(RepositoryInitializer))]
     [InlineData(typeof(IShippedTemplateReader), typeof(ShippedTemplateReader))]
     [InlineData(typeof(IGitIgnorePlanner), typeof(GitIgnorePlanner))]
@@ -124,6 +125,36 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
 
         firstInstance.Should().BeOfType(implementationType);
         secondInstance.Should().BeSameAs(firstInstance);
+    }
+
+    [Fact]
+    public void AddShadeKitCore_ServiceCollection_RegistersCliContractCheckerWithCliContractWindow()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddShadeKitCore();
+
+        // Assert
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var checker = serviceProvider.GetRequiredService<ICliContractChecker>();
+
+        checker.Window
+            .Should().Be(CliContract.Window);
+
+        checker.Invoking(x => x.Check(CliContract.Current))
+            .Should().NotThrow();
+
+        checker.Invoking(x => x.Check(CliContract.MinSupported))
+            .Should().NotThrow();
+
+        checker.Invoking(x => x.Check(CliContract.Current + 1))
+            .Should().Throw<EngineContractOutdatedException>();
+
+        checker.Invoking(x => x.Check(CliContract.MinSupported - 1))
+            .Should().Throw<SkillsContractOutdatedException>();
     }
 
     [Fact]
@@ -235,7 +266,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IGitRepositoryLocator))]
     [InlineData(typeof(IVersionedJsonSerializer))]
     [InlineData(typeof(IEngineVersionProvider))]
-    [InlineData(typeof(IEngineVersionChecker))]
+    [InlineData(typeof(ICliContractChecker))]
     [InlineData(typeof(IRepositoryInitializer))]
     [InlineData(typeof(IShippedTemplateReader))]
     [InlineData(typeof(IGitIgnorePlanner))]
@@ -295,7 +326,7 @@ public class ShadeKitCoreServiceCollectionExtensionsTests
     [InlineData(typeof(IFormatRegistry))]
     [InlineData(typeof(IVersionedJsonSerializer))]
     [InlineData(typeof(IEngineVersionProvider))]
-    [InlineData(typeof(IEngineVersionChecker))]
+    [InlineData(typeof(ICliContractChecker))]
     [InlineData(typeof(IRepositoryInitializer))]
     [InlineData(typeof(IShippedTemplateReader))]
     [InlineData(typeof(IGitIgnorePlanner))]

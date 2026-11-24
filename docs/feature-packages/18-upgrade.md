@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-24 (documentation check: line endings of the instruction section follow package 02; staged multi-file write as open point) and 2026-10-25 (orphaned `request.md` template as open point), and 2026-11-15 (package 08: no further instruction file) |
+| Status | Draft, 2026-10-14, updated 2026-10-24 (documentation check: line endings of the instruction section follow package 02; staged multi-file write as open point) and 2026-10-25 (orphaned `request.md` template as open point), and 2026-11-15 (package 08: no further instruction file), and 2026-11-22 ("kit version" made precise: `kitVersion` is the product version of the running engine; the skills carry no version of their own since then and name the CLI contract, 06-1) |
 | Source | Concept §2 (Lifecycle), §3.1 (`upgrade`), [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.2, §9.3, §9.5) |
 | Depends on | 01, 02, 05, 08 |
 | Enables | Kit releases that change a file format or a template, without stranding existing repositories |
@@ -19,7 +19,7 @@ When the kit evolves, a team brings its repository to the new formats with one s
 - Migrating every versioned JSON file in `.shadekit/` with the chains from package 01.
 - Updating shipped templates through `templates.lock.json`.
 - Updating the managed instruction section (packages 02 and 08).
-- Adding templates and gate entries that a newer kit version ships and the repository does not have yet.
+- Adding templates and gate entries that a newer engine version ships and the repository does not have yet.
 
 ### Out of scope
 
@@ -44,7 +44,7 @@ When the kit evolves, a team brings its repository to the new formats with one s
 
 ### Templates
 
-For each template the running kit version ships (**Decided**, concept §9.5):
+For each template the running engine ships (**Decided**, concept §9.5):
 
 | State in the repository | Action |
 |---|---|
@@ -53,12 +53,12 @@ For each template the running kit version ships (**Decided**, concept §9.5):
 | Missing because the kit added it in a newer version | Added. |
 | Deleted by the team although it is in the lock | Not recreated; reported. **Proposed.** |
 
-`templates.lock.json` then records the new kit version and the hash of the new shipped content for every template. A template the team changed therefore keeps counting as changed on later upgrades. **Proposed.**
+`templates.lock.json` then records the version of the running engine as `kitVersion` and the hash of the new shipped content for every template. A template the team changed therefore keeps counting as changed on later upgrades. **Proposed.**
 
 ### Gates and configuration
 
-- New gate entries that a kit version adds to the defaults are added to `gates.json`. Values the team changed are never overwritten. **Proposed.**
-- `kitVersion` in `config.json` is set to the running kit version.
+- New gate entries that an engine version adds to the defaults are added to `gates.json`. Values the team changed are never overwritten. **Proposed.**
+- `kitVersion` in `config.json` is set to the version of the running engine, as `init` writes it (package 02). Until 2026-11-22 this was called the running kit version, which the skills also carried; since then the skills carry no version, and whether skills and engine fit is checked by the CLI contract, not by `kitVersion` (06-1). `upgrade` does not touch the agent integrations (out of scope).
 
 ### Instruction section
 

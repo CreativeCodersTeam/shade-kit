@@ -12,20 +12,20 @@ for `SingleSkillSourceTests`, files named `SKILL.md`, of which there are none he
 | Path | Purpose |
 |---|---|
 | `RUNNER-PROTOCOL.md` | The rules every runner follows: which files it may read, how it records commands, questions, and answers, and the sections of its output. |
-| `SCENARIOS.md` | The scenario catalog with the shared fixture table. Placeholders: `<work>` (the work folder), `<repository>` (this repository), `<kit-version>`, `<sso-feature>`, `<quick-feature>`. |
-| `generate_fixtures.py` | Builds the work folder from the current engine: fixtures, fixture repositories, `ids.json`, and resolved copies of the catalog and the protocol. |
+| `SCENARIOS.md` | The scenario catalog with the shared fixture table. Placeholders: `<work>` (the work folder), `<repository>` (this repository), `<contract>` (the CLI contract), `<sso-feature>`, `<quick-feature>`. |
+| `generate_fixtures.py` | Builds the work folder from the current engine: fixtures, fixture repositories, `ids.json`, and resolved copies of the catalog and the protocol. It reads the CLI contract from the version handshake sentence of `skills/shade-kit-phase-entry/SKILL.md`. |
 | `checks/check_runs.py` | The expectations and the checker. Runners must never see it. |
 
 The work folder (outside this repository) holds after the generator:
 
 | Path | Content |
 |---|---|
-| `fixtures/*.json` | The JSON envelopes of the real engine calls; the fixture table of the catalog names the ones the runners use. |
-| `ids.json` | `sso` and `quick` (the generated feature ids), `kitVersion`, `notesFile` (the notes of S13), and `csv` (the feature that S17 creates). |
+| `fixtures/*.json` | The JSON envelopes of the real engine calls; the fixture table of the catalog names the ones the runners use. `env-version-engine-outdated.json` and `env-version-skills-outdated.json` are the refused handshakes (`--expect-contract 999` and `0`). They come from these stand-in calls, so their `error.message` names the contract 999 or 0, not the contract the skill passes. |
+| `ids.json` | `sso` and `quick` (the generated feature ids), `contract` (the CLI contract, a number), `notesFile` (the notes of S13), and `csv` (the feature that S17 creates). |
 | `repo/` | The fixture repository: `init`, a `feature` profile feature in `refine`, and a `quick` profile feature whose `finish` was requested, with five team items in its Definition of Done copy. |
 | `repo-s5/`, `repo-s6/` | Copies of `repo/` that the gate-check runs edit. |
 | `repo-s9/` | A copy of `repo/` whose quick `request.md` asks for a change that is too large for `quick`. |
-| `repo-empty/` | An initialised repository without features (no current feature). |
+| `repo-empty/` | An initialised repository without features (no current feature). S18 reads it, and S19 reads `repo/`, without a copy: neither gets past the handshake. |
 | `repo-s10/`, `repo-s14/` | Copies of `repo-empty/`; the `discuss` run of S10 writes its notes into `repo-s10/`. |
 | `repo-s13/` | A copy of `repo-empty/` with discussion notes in `.shadekit/discussions/` (`notesFile` in `ids.json`). |
 | `repo-s11/`, `repo-s15/`, `repo-s16/` | Copies of `repo/` with the sso feature selected as current; S11 writes its notes into `repo-s11/`. |
@@ -105,3 +105,9 @@ Write your output to <work>/out/<id>.md. Do not read any other file in <work>/ou
   review round 2: S17 checks read the closing message, `feature new` must carry its own `--json`, step 0 of a runner
   is left out of the git check, `--only` refuses unknown ids; iteration 3 re-checked 84 of 84, S17 iteration 4 18 of
   18.
+- **2026-11-22:** two scenarios S18–S19 for the CLI contract handshake: `shade-kit-new` with an engine older than
+  the skills (S18, `engine-outdated`, Claude Code) and `shade-kit-next-phase` with skills older than the engine
+  (S19, `skills-outdated`, OpenAI Codex CLI default mode). 22 of 22 checks. After review round 1: the engine-update
+  check of both (`ENGINE_UPDATE`) also counts an update named through the tool ("get a newer shade-kit") and no
+  longer counts "install the kit plugin that matches the engine" (checker gap D-23 of 06-1, closed); re-checked on
+  the same outputs 22 of 22.

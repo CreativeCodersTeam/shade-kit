@@ -4,15 +4,18 @@ Usage (from anywhere, Python 3 standard library only):
 
     python3 -I tests/skill-scenarios/generate_fixtures.py [--work <dir>] [--engine-dll <path>]
 
-The script builds the CLI (unless --engine-dll is given), creates a git repository in the work folder, and drives the
-real engine through the workflow that the scenarios need. It writes into the work folder:
+The script reads the CLI contract from the version handshake sentence of skills/shade-kit-phase-entry/SKILL.md,
+builds the CLI (unless --engine-dll is given), creates a git repository in the work folder, and drives the real engine
+through the workflow that the scenarios need. It writes into the work folder:
 
-- fixtures/*.json   the JSON envelopes of the engine calls that the scenario catalog names
-- ids.json          the generated feature ids and the kit version (read by checks/check_runs.py)
+- fixtures/*.json   the JSON envelopes of the engine calls that the scenario catalog names, among them the two
+                    refused version handshakes (env-version-engine-outdated.json, env-version-skills-outdated.json)
+- ids.json          the generated feature ids and the CLI contract (read by checks/check_runs.py)
 - repo/             the fixture repository; repo-s5/, repo-s6/, repo-s9/, repo-s11/, repo-s12/, repo-s15/, and
                     repo-s16/ are copies of it
 - repo-empty/       an initialised repository without features; repo-s10/, repo-s13/, and repo-s14/ are copies of it
 - repo-s17/         a copy of repo/ on the branch feature/<sso>, so the branch selects the sso feature
+                    (S18 and S19 read repo-empty/ and repo/ without a copy: they never get past the handshake)
 - out/              empty; the runners write their outputs here
 - SCENARIOS.md      the catalog with every placeholder resolved (what the runners read)
 - RUNNER-PROTOCOL.md the protocol with the paths resolved
@@ -35,7 +38,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPOSITORY = SCRIPT_DIR.parent.parent
 CLI_PROJECT = REPOSITORY / "src" / "CreativeCoders.ShadeKit.Cli"
 DEFAULT_DLL = CLI_PROJECT / "bin" / "Debug" / "net10.0" / "shade-kit.dll"
-VERSION_SKILL = REPOSITORY / "skills" / "shade-kit-next-steps" / "SKILL.md"
+CONTRACT_SKILL = REPOSITORY / "skills" / "shade-kit-phase-entry" / "SKILL.md"
+HANDSHAKE = re.compile(r"Version handshake: run `shade-kit version --json --expect-contract (\d+)`; (\d+) is the CLI "
+                       r"contract this skill is written for\.")
 
 SSO_SOURCE = "Add SSO login with Entra ID"
 QUICK_SOURCE = "Fix typo"
@@ -104,16 +109,15 @@ def is_inside(path, parent):
         return False
 
 
-def read_kit_version():
-    text = VERSION_SKILL.read_text(encoding="utf-8")
-    match = re.search(r"^---\s*$(.*?)^---\s*$", text, re.S | re.M)
+def read_contract():
+    text = CONTRACT_SKILL.read_text(encoding="utf-8")
+    match = HANDSHAKE.search(text)
     if not match:
-        fail(f"no frontmatter in {VERSION_SKILL}")
-    metadata = re.search(r"^metadata:[ \t]*\n((?:[ \t]+.*\n)*)", match.group(1), re.M)
-    version = re.search(r"^[ \t]+version:[ \t]*(\S+)[ \t]*$", metadata.group(1), re.M) if metadata else None
-    if not version or not re.fullmatch(r"\d+\.\d+\.\d+", version.group(1)):
-        fail(f"no plain x.y.z metadata.version in {VERSION_SKILL}")
-    return version.group(1)
+        fail(f"no canonical version handshake sentence (`shade-kit version --json --expect-contract <n>`; "
+             f"<n> is the CLI contract this skill is written for.) in {CONTRACT_SKILL}")
+    if match.group(1) != match.group(2):
+        fail(f"the handshake sentence in {CONTRACT_SKILL} names two contracts: {match.group(1)} and {match.group(2)}")
+    return int(match.group(1))
 
 
 def find_executable(name):
@@ -296,7 +300,17 @@ def build_cli(dotnet):
     return DEFAULT_DLL
 
 
-def generate(work, engine, git, kit_version):
+def expect_contract(contract):
+    def check(data):
+        current = (data.get("contract") or {}).get("current")
+        expected = data.get("expectedContract")
+        if (current, expected) != (contract, contract):
+            return f"contract.current/expectedContract is {current}/{expected}, expected {contract}/{contract}"
+        return None
+    return check
+
+
+def generate(work, engine, git, contract):
     fixtures = work / "fixtures"
     fixtures.mkdir()
     repo = work / "repo"
@@ -309,9 +323,14 @@ def generate(work, engine, git, kit_version):
     repo.rmdir()
     new_repository(git, repo)
 
-    # 1. Version handshake.
-    stdout, _ = engine.call(repo, ["version", "--json", "--expect", kit_version])
+    # 1. Version handshake, and the two refused handshakes (S18, S19): skills newer and older than the engine.
+    stdout, _ = engine.call(repo, ["version", "--json", "--expect-contract", str(contract)],
+                            check=expect_contract(contract))
     save("env-version.json", stdout)
+    save("env-version-engine-outdated.json",
+         engine.call_failing(repo, ["version", "--json", "--expect-contract", "999"], "engine-outdated"))
+    save("env-version-skills-outdated.json",
+         engine.call_failing(repo, ["version", "--json", "--expect-contract", "0"], "skills-outdated"))
 
     # 2. Kit initialisation.
     engine.call(repo, ["init", "--json"])
@@ -364,10 +383,10 @@ def generate(work, engine, git, kit_version):
     intake = generate_intake(work, engine, git, repo, fixtures, sso, quick)
 
     (work / "out").mkdir()
-    ids = {"sso": sso, "quick": quick, "kitVersion": kit_version, "notesFile": NOTES_FILE, "csv": intake["csv"]}
+    ids = {"sso": sso, "quick": quick, "contract": contract, "notesFile": NOTES_FILE, "csv": intake["csv"]}
     (work / "ids.json").write_text(json.dumps(ids, indent=2) + "\n", encoding="utf-8")
 
-    values = {"<work>": str(work), "<repository>": str(REPOSITORY), "<kit-version>": kit_version,
+    values = {"<work>": str(work), "<repository>": str(REPOSITORY), "<contract>": str(contract),
               "<sso-feature>": sso, "<quick-feature>": quick, "<notes-file>": NOTES_FILE,
               "<issue-url>": ISSUE_URL, "<csv-feature>": intake["csv"]}
     for name in ("SCENARIOS.md", "RUNNER-PROTOCOL.md"):
@@ -477,7 +496,7 @@ def main():
     try:
         dotnet = find_executable("dotnet")
         git = find_executable("git")
-        kit_version = read_kit_version()
+        contract = read_contract()
         work = prepare_work(args.work)
         print(f"Work folder: {work}")
         if args.engine_dll:
@@ -486,12 +505,12 @@ def main():
                 fail(f"--engine-dll {dll} does not exist")
         else:
             dll = build_cli(dotnet)
-        ids = generate(work, Engine(dotnet, str(dll), git), git, kit_version)
+        ids = generate(work, Engine(dotnet, str(dll), git), git, contract)
     except GeneratorError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    print(f"Kit version: {ids['kitVersion']}")
+    print(f"CLI contract: {ids['contract']}")
     print(f"Features: sso {ids['sso']}, quick {ids['quick']}")
     print("Fixtures: " + ", ".join(sorted(p.name for p in (work / "fixtures").iterdir())))
     print(f"Scenario catalog: {work / 'SCENARIOS.md'}")

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill, `shade-kit-next-phase` is advisory, next-steps message, active phase asks the human), 2026-11-04 (split into the sub-features 06-1 to 06-9; version in the skill frontmatter, checked by the engine; `shade-kit-report` moved to package 15), 2026-11-06 (06-2: Claude Code does not show the frontmatter to the model), 2026-11-08 (06-3: `shade-kit-next-steps` implemented; 06-4: `shade-kit-gate-check` and `shade-kit gate info` implemented), 2026-11-10 (06-5: `shade-kit-phase-entry` implemented), 2026-11-11 (06-6: `shade-kit-next-phase` implemented), 2026-11-13 (06-8: `shade-kit-research` and the format of `researches.md` implemented), 2026-11-13 (06-9: the skill skeletons load the entry protocol and the next-steps message; `phase next` has no `continue` step in `new`), and 2026-11-13 (package 07: the mismatch message names `integrations install`), and 2026-11-15 (package 08: frontmatter visibility of Copilot and Codex answered) |
+| Status | Draft, 2026-10-14, updated 2026-10-17 (template conventions, checklist format), 2026-10-18 (no router: `shade-kit-next-phase` and entry protocol; findings clarification: `phase next`, pending transition, report and review skills), 2026-10-24 (documentation check: skill names of the general skills, placeholders in checklist copies), 2026-10-25 (code review of the rework of `feature new` in package 03: `request.md` treated as data, not as instructions), 2026-10-30 ([phase start analysis](../../research/shade-kit-phase-start-analysis.md): phases start only when the user calls the phase skill, `shade-kit-next-phase` is advisory, next-steps message, active phase asks the human), 2026-11-04 (split into the sub-features 06-1 to 06-9; version in the skill frontmatter, checked by the engine; `shade-kit-report` moved to package 15), 2026-11-06 (06-2: Claude Code does not show the frontmatter to the model), 2026-11-08 (06-3: `shade-kit-next-steps` implemented; 06-4: `shade-kit-gate-check` and `shade-kit gate info` implemented), 2026-11-10 (06-5: `shade-kit-phase-entry` implemented), 2026-11-11 (06-6: `shade-kit-next-phase` implemented), 2026-11-13 (06-8: `shade-kit-research` and the format of `researches.md` implemented), 2026-11-13 (06-9: the skill skeletons load the entry protocol and the next-steps message; `phase next` has no `continue` step in `new`), and 2026-11-13 (package 07: the mismatch message names `integrations install`), 2026-11-15 (package 08: frontmatter visibility of Copilot and Codex answered), and 2026-11-22 (the kit version of the skills and the SemVer check of `--expect` replaced by the CLI contract, `version --expect-contract`; 06-1, 06-2, [report](../../reports/versioning-cli-and-skills.md)) |
 | Source | Concept §3.2, §3.3, §3.4, §11.4, [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 01, 03, 04, 05 |
 | Enables | 07, 08, and every phase package (09–17) |
@@ -17,7 +17,7 @@ Package 06 is built in sub-features. Each one has its own functional description
 
 | # | Sub-feature | Kind | Depends on |
 |---|---|---|---|
-| 06-1 | [Engine version check (`version --expect`)](06-1-engine-version-check.md) | .NET | 01 |
+| 06-1 | [Engine version check (`version --expect-contract`)](06-1-engine-version-check.md) | .NET | 01 |
 | 06-2 | [Skill conventions and version metadata](06-2-skill-conventions-and-version.md) | Cross-cutting | 06-1 |
 | 06-3 | [Next-steps message (`shade-kit-next-steps`)](06-3-next-steps-skill.md) | Skill (new) | 06-2 |
 | 06-4 | [Checklist check (`shade-kit-gate-check`)](06-4-gate-check-skill.md) | Skill and CLI command (`gate info`) | 05, 06-2 |
@@ -31,7 +31,7 @@ Package 06 is built in sub-features. Each one has its own functional description
 
 ### In scope
 
-- Conventions every kit skill follows, and the kit version of every skill (06-2).
+- Conventions every kit skill follows, and the kit version of every skill (06-2; since 2026-11-22 the CLI contract in the handshake text instead).
 - The version handshake: the check in the engine (06-1) and its calls in the skills (06-5, 06-6, 06-9).
 - The entry protocol every phase skill runs (06-5).
 - The next-steps message every skill ends with (06-3).
@@ -49,13 +49,13 @@ Package 06 is built in sub-features. Each one has its own functional description
 
 ## Decisions of 2026-11-04
 
-- The kit version of a skill is hardcoded in its frontmatter as `metadata.version` and committed, because the skills must be installable as a plugin with their version included. Every skill carries it, all with the same value (06-2).
-- The engine compares: `shade-kit version --json --expect <version>`. Major and minor must be equal, patch may differ; a prerelease engine only warns on a mismatch (06-1). New exit code range 50–59 with `50 version-mismatch`.
+- The kit version of a skill is hardcoded in its frontmatter as `metadata.version` and committed, because the skills must be installable as a plugin with their version included. Every skill carries it, all with the same value (06-2). Replaced on 2026-11-22 ([report](../../reports/versioning-cli-and-skills.md); the hand-kept product version tied every skill change to a product minor): no skill carries a version; the handshake text names the CLI contract the skill is written for (06-2).
+- The engine compares: `shade-kit version --json --expect <version>`. Major and minor must be equal, patch may differ; a prerelease engine only warns on a mismatch (06-1). New exit code range 50–59 with `50 version-mismatch`. Replaced on 2026-11-22: the engine checks `shade-kit version --json --expect-contract <n>` against its window `CliContract.MinSupported` to `CliContract.Current`, with no prerelease leniency; outside it `54 engine-outdated` or `55 skills-outdated` (06-1). The range 50–59 stays.
 - The handshake runs in `shade-kit-phase-entry` for the phase skills, and in `shade-kit-next-phase`, `new`, `discuss`, and `drop` with their own call. General skills that are only loaded by another skill do not check (wording of 2026-11-04; clarified on 2026-11-06, 06-2: except `shade-kit-phase-entry`, which checks for the phase skills). FP06-AC1 ("every kit skill stops") therefore holds for every skill the human calls.
 - The entry protocol and the next-steps message are general skills of their own (`shade-kit-phase-entry`, `shade-kit-next-steps`).
 - `shade-kit-research` runs one general subagent per focus with the instructions of the calling skill; no research agent definitions.
 - The skill texts are checked by a review by hand; no automated tests of the skill texts.
-- **Decided** from **Proposed**: skills never write kit JSON directly; every artifact starts from the repository's template; the match rule of the version handshake; the merge rule of `researches.md`.
+- **Decided** from **Proposed**: skills never write kit JSON directly; every artifact starts from the repository's template; the match rule of the version handshake (replaced on 2026-11-22 by the window rule, 06-1); the merge rule of `researches.md`.
 - The refusal table gets rows for 17 and 47 and a fallback row; warnings of `phase start` and `phase next` are always shown (06-3).
 - FP06-AC13 (no references to `research/` or `docs/` in shipped skills) is checked when the skills are shipped, as FP07-AC7.
 
@@ -98,8 +98,8 @@ The acceptance criteria are in the sub-features. The former criteria of this pac
 
 ## Open points
 
-- **Alignment of the skill version with GitVersion skipped for now** (06-2).
-- Frontmatter visibility: Claude Code 2.1.318 does not show the frontmatter to the model (checked on 2026-11-06 in 06-2, on project-level skills), so the handshake step states the version in its text. Answered for Copilot and Codex on 2026-11-15 from documentation and source (package 08): Copilot does not show the frontmatter, Codex shows the whole `SKILL.md`; both ignore `metadata.version`, so the version in the handshake text serves all three agents.
-- The mismatch message of 06-1 named updating the skills by hand until package 07 built the `integrations` commands; since 2026-11-13 it names `shade-kit integrations install` (06-1).
+- **Alignment of the skill version with GitVersion skipped for now** (06-2). Answered on 2026-11-22: the skills carry no product version, so there is nothing to align; the guard `SkillContractTests` does not depend on GitVersion (06-2).
+- Frontmatter visibility: Claude Code 2.1.318 does not show the frontmatter to the model (checked on 2026-11-06 in 06-2, on project-level skills), so the handshake step states the version in its text. Answered for Copilot and Codex on 2026-11-15 from documentation and source (package 08): Copilot does not show the frontmatter, Codex shows the whole `SKILL.md`; both ignore `metadata.version`, so the version in the handshake text serves all three agents. Since 2026-11-22 the handshake text names the CLI contract, and the skills have no `metadata` block (06-2).
+- The mismatch message of 06-1 named updating the skills by hand until package 07 built the `integrations` commands; since 2026-11-13 it names `shade-kit integrations install` (06-1). Replaced on 2026-11-22: the `skills-outdated` message names `shade-kit integrations install` (06-1).
 - Exact skill names (concept open question 6).
 - Phase skills are restricted to user invocation only by convention (06-2); a technical restriction is a possible later addition.

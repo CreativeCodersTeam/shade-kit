@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-13 (implementation: the eight phase skills load `shade-kit-phase-entry` and `shade-kit-next-steps`; `new`, `discuss`, and `drop` run the handshake with `--expect 0.7.0` and end with `shade-kit-next-steps`; `phase next` returns no `continue` step in `new`; the planned-commands sentence removed from 12 skeletons). AC1 to AC8 implemented. |
+| Status | Draft, 2026-11-04 (split from package 06), updated 2026-11-13 (implementation: the eight phase skills load `shade-kit-phase-entry` and `shade-kit-next-steps`; `new`, `discuss`, and `drop` run the handshake with `--expect 0.7.0` and end with `shade-kit-next-steps`; `phase next` returns no `continue` step in `new`; the planned-commands sentence removed from 12 skeletons), and 2026-11-22 (the handshake of `new`, `discuss`, and `drop` names the CLI contract, `--expect-contract 1`; 06-1, 06-2; scenario S18 of `new` recorded in [06-1](06-1-engine-version-check.md#scenario-runs)). AC1 to AC8 implemented. |
 | Source | [06 Skill foundation](06-skill-foundation.md), open points in [README](README.md#open-questions) (skill skeletons not aligned with the built `phase` commands) |
 | Kind | Cross-cutting (all skill skeletons), with one engine change (`WorkflowPhase.CanContinue`, package 04) |
 | Depends on | 06-3, 06-5, 06-6 |
@@ -43,7 +43,7 @@ Every skill the human calls is gated and ends the same way before its phase is w
 
 ### `new`, `discuss`, `drop`
 
-- Step 1 is the version handshake with the version stated in the text of the step, as 06-2 sets out (the frontmatter is the source, but the model does not see it): `shade-kit version --json --expect <version>` (06-1, 06-2). **Decided** on 2026-11-04, the version in the text on 2026-11-06. **Implemented** (`--expect 0.7.0`, with the same text as the handshake step of `shade-kit-next-phase`).
+- Step 1 is the version handshake with the version stated in the text of the step, as 06-2 sets out (the frontmatter is the source, but the model does not see it): `shade-kit version --json --expect <version>` (06-1, 06-2). **Decided** on 2026-11-04, the version in the text on 2026-11-06. **Implemented** (`--expect 0.7.0`, with the same text as the handshake step of `shade-kit-next-phase`). Replaced on 2026-11-22 (06-1, 06-2; CLI contract): step 1 runs `shade-kit version --json --expect-contract 1` with the handshake sentence of 06-2; on `ok: false` (for example `engine-outdated` or `skills-outdated`), or if `shade-kit` is not found, the skill stops before any other CLI call and ends with a refusal. **Implemented**.
 - The last step loads `shade-kit-next-steps` (06-3). **Implemented**: every way of ending, a failed CLI call included, loads it with **refusal** or **end of work**.
 - A failure envelope of `feature current` ends `discuss` with **refusal** before the discussion (for example `kit-root-not-found`, because the notes live in `.shadekit/`), and `new` likewise. **Decided** on 2026-11-13.
 - The descriptions of `discuss` and `drop` also say that they run only when the user calls them by name or asks for them. **Decided** on 2026-11-13.
@@ -66,7 +66,7 @@ All skill texts under `skills/` are reviewed by hand against the conventions of 
 
 ## Acceptance criteria
 
-Status as of 2026-11-13. There are no automated tests of the skill texts (06-2), so each criterion names how it is proven: the review by hand above and scenario runs. In each run a subagent loads the skill from a skills folder, follows it with canned CLI envelopes and canned answers, and records every command, skill load, question, read, write, and message as a timeline; a script checks the timelines. The baseline is the skeletons before this change. The scenarios, timelines, and script were kept outside the repository.
+Status as of 2026-11-13; the runs below are a historical record of the `--expect` handshake (scenarios 7 and 10 test its mismatch and its prerelease warning), replaced on 2026-11-22 by the CLI contract (06-1). The refusal `engine-outdated` of the new handshake ran on 2026-11-22 as S18 with `new`, played as Claude Code ([06-1](06-1-engine-version-check.md#scenario-runs)). There are no automated tests of the skill texts (06-2), so each criterion names how it is proven: the review by hand above and scenario runs. In each run a subagent loads the skill from a skills folder, follows it with canned CLI envelopes and canned answers, and records every command, skill load, question, read, write, and message as a timeline; a script checks the timelines. The baseline is the skeletons before this change. The scenarios, timelines, and script were kept outside the repository.
 
 | # | Scenario | New text, iteration 1 | Iteration 2 | Skeletons (baseline) |
 |---|---|---|---|---|
@@ -93,7 +93,7 @@ Checks in every scenario: the first `shade-kit` command is the handshake with `-
 - **FP06-9-AC4** The description of every phase skill says that it runs only when the user calls it by name. **Implemented.** Proven by the review by hand (all eight descriptions, and those of `new`, `discuss`, and `drop`).
 - **FP06-9-AC5** No kit skill writes a kit JSON file directly; a review of the skill texts finds only CLI calls for state changes. **Implemented.** Proven by the review by hand and in all scenarios (common check).
 - **FP06-9-AC6** For a feature whose current phase is `in-progress`, the phase skill of that phase, called by the human, runs no gate. **Implemented.** Proven in scenario 3: `shade-kit-gate-check` not loaded, no `phase approve` or `phase reject`, the continue question before any read (the entry protocol of 06-5; FP06-5-AC7).
-- **FP06-9-AC7** `new`, `discuss`, and `drop` stop before any other work when the engine's minor version differs from their own, and end with the next-steps message. **Implemented.** Proven in scenario 7 (no further command, no question, the message names what to update); scenarios 8 to 11 run the handshake first; scenario 10 shows the prerelease warning in the closing message. `discuss` and `drop` take the same handshake text; their mismatch has no scenario run.
+- **FP06-9-AC7** `new`, `discuss`, and `drop` stop before any other work when the engine's minor version differs from their own, and end with the next-steps message. **Implemented.** Proven in scenario 7 (no further command, no question, the message names what to update); scenarios 8 to 11 run the handshake first; scenario 10 shows the prerelease warning in the closing message. `discuss` and `drop` take the same handshake text; their mismatch has no scenario run. Since 2026-11-22: with an engine that does not support the CLI contract of the skill; proven for `new` and `engine-outdated` by S18 (06-1: one CLI call, no question, refusal through `shade-kit-next-steps` with the engine update); the prerelease warning of scenario 10 no longer exists.
 - **FP06-9-AC8** No skill says that a built `phase` command is planned. **Implemented.** Proven by the review by hand: the sentence is gone from all 12 skeletons.
 
 ## Open points

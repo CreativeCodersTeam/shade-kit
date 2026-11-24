@@ -211,13 +211,6 @@ public static class ShadeKitCliExitCodes
     public const int ChecklistTemplateNotFound = 47;
 
     /// <summary>
-    /// Represents the exit code returned when <c>shade-kit version --expect</c> names a version whose major or minor
-    /// version differs from that of the running release engine. The error code is
-    /// <see cref="ShadeKitCliErrorCodes.VersionMismatch" />.
-    /// </summary>
-    public const int VersionMismatch = 50;
-
-    /// <summary>
     /// Represents the exit code returned when no supported agent is detected, for example by
     /// <c>shade-kit integrations install</c> without <c>--agent</c>, or when the CLI of an agent that a command needs
     /// is not found in any absolute directory of the <c>PATH</c> environment variable: for Claude Code <c>claude</c>,
@@ -243,6 +236,21 @@ public static class ShadeKitCliExitCodes
     /// code is <see cref="ShadeKitCliErrorCodes.IntegrationConflict" />.
     /// </summary>
     public const int IntegrationConflict = 53;
+
+    /// <summary>
+    /// Represents the exit code returned when <c>shade-kit version --expect-contract</c> names a CLI contract that is
+    /// newer than the current CLI contract of the engine: the kit skills need a CLI contract newer than this engine
+    /// supports, so the engine must be updated. The error code is <see cref="ShadeKitCliErrorCodes.EngineOutdated" />.
+    /// </summary>
+    public const int EngineOutdated = 54;
+
+    /// <summary>
+    /// Represents the exit code returned when <c>shade-kit version --expect-contract</c> names a CLI contract that is
+    /// older than the oldest CLI contract the engine supports: the kit skills are written for a CLI contract older
+    /// than this engine supports, so they must be reinstalled with <c>shade-kit integrations install</c>. The error
+    /// code is <see cref="ShadeKitCliErrorCodes.SkillsOutdated" />.
+    /// </summary>
+    public const int SkillsOutdated = 55;
 
     /// <summary>
     /// Represents the exit code returned when the user cancels a running command, for example by pressing Ctrl+C. The

@@ -6,7 +6,7 @@ Fixture table shared by the scenarios S1–S9 (command → file):
 
 | Command | Fixture |
 |---|---|
-| `shade-kit version --json --expect <kit-version>` | `env-version.json` |
+| `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
 | `shade-kit phase start refine --json` | `env-start-refine-already.json` |
 | `shade-kit phase start quick --json` | `env-start-quick.json` |
 | `shade-kit phase next --json` | scenarios S1–S4: `env-next-refine.json`; scenario S9: `env-next-quick.json` |
@@ -85,7 +85,7 @@ write them: yes. To any other question: "yes".
 
   | Command | Fixture |
   |---|---|
-  | `shade-kit version --json --expect <kit-version>` | `env-version.json` |
+  | `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
   | `shade-kit feature current --json` | `env-current-none.json` |
   | `shade-kit phase next --json` | `env-next-none.json` |
 
@@ -97,7 +97,7 @@ write them: yes. To any other question: "yes".
 
   | Command | Fixture |
   |---|---|
-  | `shade-kit version --json --expect <kit-version>` | `env-version.json` |
+  | `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
   | `shade-kit feature current --json` | `env-current-sso.json` |
   | `shade-kit phase next --json` | `env-next-refine.json` |
 
@@ -109,7 +109,7 @@ write them: yes. To any other question: "yes".
 
   | Command | Fixture |
   |---|---|
-  | `shade-kit version --json --expect <kit-version>` | `env-version.json` |
+  | `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
   | `shade-kit feature current --json` | `env-current-done.json` |
   | `shade-kit phase next --json` | `env-next-done.json` |
 
@@ -122,7 +122,7 @@ write them: yes. To any other question: "yes".
 
   | Command | Fixture |
   |---|---|
-  | `shade-kit version --json --expect <kit-version>` | `env-version.json` |
+  | `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
   | `shade-kit feature current --json` | `env-current-none.json` |
   | any `shade-kit feature new … --json` | `env-new-notes.json` |
   | `shade-kit phase next --json` | `env-next-new-notes.json` |
@@ -136,7 +136,7 @@ write them: yes. To any other question: "yes".
 
   | Command | Fixture |
   |---|---|
-  | `shade-kit version --json --expect <kit-version>` | `env-version.json` |
+  | `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
   | `shade-kit feature current --json` | `env-current-none.json` |
   | any `shade-kit feature new … --json` | `env-new-issue.json` |
   | `shade-kit phase next --json` | `env-next-none.json` |
@@ -150,7 +150,7 @@ write them: yes. To any other question: "yes".
 
   | Command | Fixture |
   |---|---|
-  | `shade-kit version --json --expect <kit-version>` | `env-version.json` |
+  | `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
   | `shade-kit feature current --json` | `env-current-sso.json` |
   | `shade-kit phase next --json` | `env-next-refine.json` |
 
@@ -169,7 +169,7 @@ write them: yes. To any other question: "yes".
 
   | Command | Fixture |
   |---|---|
-  | `shade-kit version --json --expect <kit-version>` | `env-version.json` |
+  | `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
   | `shade-kit feature current --json` | `env-current-sso.json` |
   | any `shade-kit feature new … --json` | `env-new-bugfix.json` |
   | `shade-kit phase next --json` | `env-next-new-bugfix.json` |
@@ -183,8 +183,33 @@ write them: yes. To any other question: "yes".
 
   | Command | Fixture |
   |---|---|
-  | `shade-kit version --json --expect <kit-version>` | `env-version.json` |
+  | `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
   | `shade-kit feature current --json` | `env-current-sso-branch.json` |
   | any `shade-kit feature new … --json` | `env-new-csv.json` |
   | `shade-kit feature show <csv-feature> --json` | `env-show-csv.json` |
   | `shade-kit phase next --json` | `env-next-refine-branch.json` |
+
+## Version handshake refusals (S18–S19)
+
+These scenarios replace the shared fixture table with their own table. Commands that are not in a scenario's table have
+no fixture (rule 3 of the protocol).
+
+## S18 — new in Claude Code, the engine is older than the skills
+- Agent: Claude Code; `AskUserQuestion` is available.
+- Skill: `shade-kit-new`; the human typed `/shade-kit-new` and then: "Login with SSO".
+- Repository: `<work>/repo-empty` (read only).
+- Fixtures:
+
+  | Command | Fixture |
+  |---|---|
+  | `shade-kit version --json --expect-contract <contract>` | `env-version-engine-outdated.json` |
+
+## S19 — next-phase in OpenAI Codex CLI, the skills are older than the engine
+- Agent: OpenAI Codex CLI, default mode (not plan mode); `request_user_input` is not available.
+- Skill: `shade-kit-next-phase`; the human typed `$shade-kit:shade-kit-next-phase`.
+- Repository: `<work>/repo` (read only).
+- Fixtures:
+
+  | Command | Fixture |
+  |---|---|
+  | `shade-kit version --json --expect-contract <contract>` | `env-version-skills-outdated.json` |

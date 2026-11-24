@@ -9,6 +9,7 @@ using CreativeCoders.ShadeKit.Cli.Output;
 using CreativeCoders.ShadeKit.Core.Engine;
 using CreativeCoders.ShadeKit.Core.Git;
 using CreativeCoders.ShadeKit.Core.Integrations;
+using CreativeCoders.ShadeKit.Core.Versions;
 using CreativeCoders.ShadeKit.Tests.Shared;
 using CreativeCoders.SysConsole.Cli.Parsing;
 using CreativeCoders.SysConsole.Cli.Parsing.Exceptions;
@@ -27,8 +28,8 @@ public sealed class ProgramTests : IDisposable
 
     private const string StackTraceLinePrefix = "   at ";
 
-    private const string ExpectWithoutValueMessage =
-        "Invalid arguments: --expect needs a SemVer version such as 1.2.3 or 1.2.3-beta.1, but got none. Run " +
+    private const string ExpectContractWithoutValueMessage =
+        "Invalid arguments: --expect-contract needs a CLI contract number such as 1, but got none. Run " +
         "'shade-kit version --help' for usage.";
 
     private readonly CurrentDirectoryScope _currentDirectory = new CurrentDirectoryScope();
@@ -82,21 +83,63 @@ public sealed class ProgramTests : IDisposable
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC1")]
-    [Trait("Requirement", "FP06-1-AC2")]
-    public async Task RunAsync_VersionJsonExpectMismatchWithReleaseEngine_WritesOnlyVersionMismatchEnvelopeAndReturns50()
+    public async Task RunAsync_VersionJson_WritesContract()
     {
         // Arrange
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await RunProgramAsync(["version", "--json", "--expect", "1.3.0"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--json"], output, error);
+
+        // Assert
+        exitCode
+            .Should().Be(0);
+
+        using var document = JsonDocument.Parse(output.ToString());
+        var data = document.RootElement.GetProperty("data");
+
+        data.EnumerateObject().Select(x => x.Name)
+            .Should().Equal("engineVersion", "formats", "contract", "integrations");
+
+        data.GetProperty("contract").EnumerateObject().Select(x => (x.Name, x.Value.GetInt32()))
+            .Should().Equal(("current", CliContract.Current), ("minSupported", CliContract.MinSupported));
+    }
+
+    [Fact]
+    public async Task RunAsync_VersionPlain_WritesContractLineAfterVersionLine()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await RunProgramAsync(["version"], output, error,
             x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
 
         // Assert
         exitCode
-            .Should().Be(ShadeKitCliExitCodes.VersionMismatch);
+            .Should().Be(0);
+
+        output.ToString().ReplaceLineEndings("\n").TrimEnd().Split('\n')
+            .Should().Equal("shade-kit 1.2.3",
+                $"CLI contract {CliContract.Current} (supported: {CliContract.MinSupported} to {CliContract.Current})");
+    }
+
+    [Fact]
+    public async Task RunAsync_VersionJsonExpectContract999_WritesEngineOutdatedAndReturns54()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await RunProgramAsync(["version", "--json", "--expect-contract", "999"], output, error,
+            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.EngineOutdated);
 
         var text = output.ToString();
 
@@ -110,58 +153,88 @@ public sealed class ProgramTests : IDisposable
             .Should().BeFalse();
 
         root.GetProperty("error").GetProperty("code").GetString()
-            .Should().Be(ShadeKitCliErrorCodes.VersionMismatch);
+            .Should().Be(ShadeKitCliErrorCodes.EngineOutdated);
 
         root.GetProperty("error").GetProperty("message").GetString()
-            .Should().Be("The SHADE kit engine 1.2.3 does not fit the kit skills 1.3.0: the major and minor versions " +
-                         "must be equal. Update the engine to 1.3, then run the skill again.");
+            .Should().Be($"The SHADE kit engine 1.2.3 supports the CLI contracts {CliContract.MinSupported} to " +
+                         $"{CliContract.Current}, but the kit skills need the CLI contract 999. Update the engine, " +
+                         "then run the skill again.");
 
         error.ToString()
             .Should().BeNullOrWhiteSpace("the host writes only its empty footer line to standard error");
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC1")]
-    [Trait("Requirement", "FP06-1-AC2")]
-    public async Task RunAsync_VersionPlainExpectMismatchWithReleaseEngine_WritesOnlyMessageAndReturns50()
+    public async Task RunAsync_VersionPlainExpectContract999_WritesOnlyMessageAndReturns54()
     {
         // Arrange
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await RunProgramAsync(["version", "--expect", "1.1.0"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--expect-contract", "999"], output, error,
             x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
 
         // Assert
         exitCode
-            .Should().Be(ShadeKitCliExitCodes.VersionMismatch);
+            .Should().Be(ShadeKitCliExitCodes.EngineOutdated);
 
         // In plain mode the host prints the abort message to the console of the run, which writes to standard output
         // and wraps long lines at spaces; folding the whitespace joins the wrapped lines again.
         Regex.Replace(output.ToString(), @"\s+", " ").TrimEnd()
-            .Should().Be("The SHADE kit engine 1.2.3 does not fit the kit skills 1.1.0: the major and minor versions " +
-                         "must be equal. Run 'shade-kit integrations install' to install the SHADE kit skills 1.2, " +
+            .Should().Be($"The SHADE kit engine 1.2.3 supports the CLI contracts {CliContract.MinSupported} to " +
+                         $"{CliContract.Current}, but the kit skills need the CLI contract 999. Update the engine, " +
                          "then run the skill again.");
-
-        output.ToString()
-            .Should().NotContain("shade-kit 1.2.3");
 
         error.ToString()
             .Should().BeEmpty();
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC4")]
-    public async Task RunAsync_VersionJsonExpectMismatchWithPrereleaseEngine_WritesSuccessEnvelopeWithWarning()
+    public async Task RunAsync_VersionJsonExpectContract0_WritesSkillsOutdatedAndReturns55()
     {
         // Arrange
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await RunProgramAsync(["version", "--json", "--expect", "99.0.0"], output, error,
-            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3-beta.1")));
+        var exitCode = await RunProgramAsync(["version", "--json", "--expect-contract", "0"], output, error,
+            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
+
+        // Assert
+        exitCode
+            .Should().Be(ShadeKitCliExitCodes.SkillsOutdated);
+
+        using var document = JsonDocument.Parse(output.ToString());
+        var root = document.RootElement;
+
+        root.GetProperty("ok").GetBoolean()
+            .Should().BeFalse();
+
+        root.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(ShadeKitCliErrorCodes.SkillsOutdated);
+
+        root.GetProperty("error").GetProperty("message").GetString()
+            .Should().Be("The kit skills are written for the CLI contract 0, but the SHADE kit engine 1.2.3 supports " +
+                         $"only the CLI contracts {CliContract.MinSupported} to {CliContract.Current}. Run " +
+                         "'shade-kit integrations install' to install the matching kit skills, then run the skill " +
+                         "again.");
+
+        error.ToString()
+            .Should().BeNullOrWhiteSpace("the host writes only its empty footer line to standard error");
+    }
+
+    [Fact]
+    public async Task RunAsync_VersionJsonExpectContract1_WritesSuccessWithExpectedContract()
+    {
+        // Arrange
+        var integrationService = CreateIntegrationService();
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Act
+        var exitCode = await RunProgramAsync(["version", "--json", "--expect-contract", "1"], output, error,
+            x => x.AddSingleton(integrationService));
 
         // Assert
         exitCode
@@ -173,42 +246,53 @@ public sealed class ProgramTests : IDisposable
         root.GetProperty("ok").GetBoolean()
             .Should().BeTrue();
 
-        root.GetProperty("data").GetProperty("expectedVersion").GetString()
-            .Should().Be("99.0.0");
+        root.GetProperty("data").EnumerateObject().Select(x => x.Name)
+            .Should().Equal("engineVersion", "formats", "contract", "expectedContract");
 
-        root.GetProperty("warnings").EnumerateArray().Select(x => x.GetProperty("code").GetString())
-            .Should().Equal(ShadeKitCliWarningCodes.EnginePrereleaseVersionMismatch);
+        root.GetProperty("data").GetProperty("expectedContract").GetInt32()
+            .Should().Be(1);
+
+        root.GetProperty("data").TryGetProperty("integrations", out _)
+            .Should().BeFalse();
+
+        root.GetProperty("warnings").GetArrayLength()
+            .Should().Be(0);
+
+        A.CallTo(integrationService)
+            .MustNotHaveHappened();
     }
 
     [Theory]
-    [Trait("Requirement", "FP06-1-AC5")]
     [InlineData("abc")]
+    [InlineData("01")]
+    [InlineData("1.0")]
+    [InlineData("2147483648")]
     [InlineData("")]
-    public async Task RunAsync_VersionJsonExpectNotSemVer_WritesOnlyInvalidArgumentsEnvelopeAndReturns2(string expect)
+    public async Task RunAsync_VersionJsonExpectContractNotANumber_WritesInvalidArgumentsAndReturns2(string value)
     {
         // Arrange
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await RunProgramAsync(["version", "--json", "--expect", expect], output, error);
+        var exitCode = await RunProgramAsync(["version", "--json", "--expect-contract", value], output, error);
 
         // Assert
         exitCode
             .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
 
-        AssertOnlyInvalidArgumentsEnvelope(output.ToString(), $"'{expect}' is not a SemVer version such as 1.2.3 or " +
-            "1.2.3-beta.1.", "shade-kit --help");
+        AssertOnlyInvalidArgumentsEnvelope(output.ToString(),
+            $"--expect-contract needs a CLI contract number such as 1, but got '{value}'", "shade-kit version --help");
 
         error.ToString()
             .Should().BeNullOrWhiteSpace("the host writes only its empty footer line to standard error");
     }
 
     [Theory]
-    [Trait("Requirement", "FP06-1-AC5")]
-    [InlineData("version", "--json", "--expect")]
-    [InlineData("version", "--expect", "--json")]
-    public async Task RunAsync_VersionJsonExpectWithoutValue_WritesOnlyInvalidArgumentsEnvelopeAndReturns2(
+    [InlineData("version", "--json", "--expect-contract")]
+    [InlineData("version", "--expect-contract", "--json")]
+    [InlineData("version", "--json", "--expect-contract", "-1")]
+    public async Task RunAsync_VersionExpectContractWithoutValue_WritesInvalidArgumentsAndReturns2(
         params string[] args)
     {
         // Arrange
@@ -216,57 +300,53 @@ public sealed class ProgramTests : IDisposable
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await RunProgramAsync(args, output, error,
-            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
+        var exitCode = await RunProgramAsync(args, output, error);
 
         // Assert
         exitCode
             .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
 
-        AssertOnlyInvalidArgumentsEnvelope(output.ToString(), "--expect", "shade-kit version --help");
+        AssertOnlyInvalidArgumentsEnvelope(output.ToString(), "--expect-contract", "shade-kit version --help");
 
         using var document = JsonDocument.Parse(output.ToString());
 
         document.RootElement.GetProperty("error").GetProperty("message").GetString()
-            .Should().Be(ExpectWithoutValueMessage);
+            .Should().Be(ExpectContractWithoutValueMessage);
 
         error.ToString()
             .Should().BeEmpty();
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC5")]
-    public async Task RunAsync_VersionPlainExpectWithoutValue_WritesMessageToStandardErrorAndReturns2()
+    public async Task RunAsync_VersionPlainExpectContractWithoutValue_WritesMessageToStandardErrorAndReturns2()
     {
         // Arrange
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await RunProgramAsync(["version", "--expect"], output, error,
-            x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
+        var exitCode = await RunProgramAsync(["version", "--expect-contract"], output, error);
 
         // Assert
         exitCode
             .Should().Be(ShadeKitCliExitCodes.InvalidArguments);
 
         error.ToString()
-            .Should().Be(ExpectWithoutValueMessage + Environment.NewLine);
+            .Should().Be(ExpectContractWithoutValueMessage + Environment.NewLine);
 
         output.ToString()
             .Should().BeEmpty();
     }
 
     [Fact]
-    [Trait("Requirement", "FP06-1-AC3")]
-    public async Task RunAsync_VersionJsonExpectMatchingVersion_WritesSuccessEnvelopeWithExpectedVersion()
+    public async Task RunAsync_VersionJsonExpectOldOption_IsNotChecked()
     {
         // Arrange
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         // Act
-        var exitCode = await RunProgramAsync(["version", "--json", "--expect", "1.2.0"], output, error,
+        var exitCode = await RunProgramAsync(["version", "--json", "--expect", "0.9.0"], output, error,
             x => x.AddSingleton(CreateEngineVersionProvider("1.2.3")));
 
         // Assert
@@ -279,14 +359,11 @@ public sealed class ProgramTests : IDisposable
         root.GetProperty("ok").GetBoolean()
             .Should().BeTrue();
 
-        root.GetProperty("data").GetProperty("engineVersion").GetString()
-            .Should().Be("1.2.3");
+        root.GetProperty("data").TryGetProperty("expectedContract", out _)
+            .Should().BeFalse();
 
-        root.GetProperty("data").GetProperty("expectedVersion").GetString()
-            .Should().Be("1.2.0");
-
-        root.GetProperty("warnings").GetArrayLength()
-            .Should().Be(0);
+        root.GetProperty("data").TryGetProperty("expectedVersion", out _)
+            .Should().BeFalse();
     }
 
     [Fact]

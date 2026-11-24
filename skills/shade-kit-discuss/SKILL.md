@@ -1,8 +1,6 @@
 ---
 name: shade-kit-discuss
 description: SHADE kit free brainstorming on any topic (an idea, a design question, a problem), with or without a current feature. Writes discussion notes that can feed a new feature or a refine round. Use when the user wants to discuss, brainstorm, or think something through in a SHADE kit repository. Runs only when the user calls it by name (`/shade-kit-discuss`) or asks for it; never load it on your own or from another skill.
-metadata:
-  version: 0.9.0
 ---
 
 # shade-kit-discuss
@@ -15,9 +13,9 @@ Keep every `warnings` entry (`{ code, message }`) of every CLI call of this run.
 
 ## Flow
 
-1. Version handshake: run `shade-kit version --json --expect 0.9.0`; 0.9.0 is the kit version of this skill (`metadata.version` in its frontmatter).
-   - `ok` is `true`: continue. A warning `engine-prerelease-version-mismatch` means that a prerelease engine is used although its major or minor version differs; keep it like every warning and continue.
-   - `ok` is `false` (for example `version-mismatch`), or the shell reports that `shade-kit` is not found: stop before any other CLI call. End ([Ending](#ending)) with **refusal** and the failure envelope, or with "`shade-kit` not found".
+1. Version handshake: run `shade-kit version --json --expect-contract 1`; 1 is the CLI contract this skill is written for.
+   - `ok` is `true`: continue.
+   - `ok` is `false` (for example `engine-outdated` or `skills-outdated`), or the shell reports that `shade-kit` is not found: stop before any other CLI call. End ([Ending](#ending)) with **refusal** and the failure envelope, or with "`shade-kit` not found".
 2. **Context:** run `shade-kit feature current --json`. No feature is needed. A failure envelope (for example `kit-root-not-found` without `.shadekit/`, where the notes would be written): end with **refusal** and the envelope, before the discussion. Otherwise decide where the notes go:
    - `resolved` is `true` and `feature.status` is `active`: the notes belong to that feature. Folder: `discussions/` in `feature.paths.featureDir` (for example `.shadekit/features/<id>/discussions/`); Feature: the id; Request: the link `../request.md`.
    - Not resolved, or the feature is `done`: the notes belong to no feature, because a finished feature gets no further refine round. Folder: `.shadekit/discussions/`; Feature: `none`; no Request link.
