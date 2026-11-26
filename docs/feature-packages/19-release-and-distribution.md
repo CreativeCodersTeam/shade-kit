@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-18 (reduced to the remaining scope; CI and release workflow are implemented; release notes and branch protection checked) and 2026-11-13 (package 07 implementation: the content is not packed into the release; the release tag names the tree that `integrations install` installs; a release engine whose tag does not exist installs from `main`) and 2026-11-14 (package 07 review rework: the guard test `SkillKitVersionTests` ties the skills' kit version to the build version, so a tag build with stale skills fails its tests) and 2026-11-22 (the version lockstep of skills and engine replaced by the CLI contract: the guard `SkillContractTests`, FP19-AC3 reworded, the proposal "a format change is at least a minor release" dropped; [06-1](06-1-engine-version-check.md), [report](../../reports/versioning-cli-and-skills.md)) |
+| Status | Draft, 2026-10-14, updated 2026-10-18 (reduced to the remaining scope; CI and release workflow are implemented; release notes and branch protection checked) and 2026-11-13 (package 07 implementation: the content is not packed into the release; the release tag names the tree that `integrations install` installs; a release engine whose tag does not exist installs from `main`) and 2026-11-14 (package 07 review rework: the guard test `SkillKitVersionTests` ties the skills' kit version to the build version, so a tag build with stale skills fails its tests) and 2026-11-22 (the version lockstep of skills and engine replaced by the CLI contract: the guard `SkillContractTests`, FP19-AC3 reworded, the proposal "a format change is at least a minor release" dropped; [06-1](06-1-engine-version-check.md), [06-1 Background](06-1-engine-version-check.md#background-why-a-cli-contract)) |
 | Source | Concept §3.4; `CLAUDE.md` (Engine deliverables, CI), [concept §9.6](../../research/shade-kit-concept.md#9-version-drift) |
 | Depends on | 07, 08 (the content comes from the tagged tree of this repository); technically every package that is part of a release |
 | Enables | Teams outside the kit repository can install and use SHADE kit |
@@ -11,7 +11,7 @@ Labels follow the concept: **Decided**, **Proposed**, **Open**, **Unverified**, 
 
 ## Benefit
 
-A developer gets SHADE kit on any supported machine in one step, with or without a .NET installation, and every release delivers engine and agent content with the same version number, so the version handshake works out of the box. Since 2026-11-22 both come from the same tag, and the handshake checks the CLI contract, which the tag build guarantees to fit (06-1, 06-2).
+A developer gets SHADE kit on any supported machine in one step, with or without a .NET installation, and every release delivers engine and agent content from the same tag `v<version>`, so the version handshake works out of the box: it checks the CLI contract, which the tag build guarantees to fit (06-1, 06-2). Until 2026-11-22 the benefit was "with the same version number"; the agent content carries no version since then.
 
 ## Implemented
 

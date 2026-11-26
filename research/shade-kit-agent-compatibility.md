@@ -1,6 +1,6 @@
 # SHADE kit agent compatibility
 
-Status: draft, 2026-11-15. Result of the compatibility research of [package 08](../docs/feature-packages/08-copilot-and-codex-integration.md) (Step 1, FP08-AC1) and of the decisions on it confirmed by the user at Gate 2 on 2026-11-15; updated 2026-11-15 (implementation of package 08: the **Proposed** items of section 2 decided as D1, D2, D5, D6; D3 stays **Open**). Answers [concept](shade-kit-concept.md) open question 5. Design notes only; nothing here is shipped.
+Status: draft, 2026-11-15. Result of the compatibility research of [package 08](../docs/feature-packages/08-copilot-and-codex-integration.md) (Step 1, FP08-AC1) and of the decisions on it confirmed by the user at Gate 2 on 2026-11-15; updated 2026-11-15 (implementation of package 08: the **Proposed** items of section 2 decided as D1, D2, D5, D6; D3 stays **Open**), and 2026-11-24 (the CLI contract of 2026-11-22: the checks by hand in section 8 expect the handshake `--expect-contract 1`, and the notes on `metadata.version` say that the skills no longer carry it). Answers [concept](shade-kit-concept.md) open question 5. Design notes only; nothing here is shipped.
 
 Labels as in the [concept](shade-kit-concept.md): **Decided**, **Proposed**, **Open**, **Unverified**. **FACT** marks a claim taken from an official documentation page, the official changelog, the npm registry, or the source code at the named tag. A claim that rests only on inference, on a user report in an issue, or on a community post is **Unverified**.
 
@@ -105,8 +105,8 @@ Labels as in the [concept](shade-kit-concept.md): **Decided**, **Proposed**, **O
 
 **Frontmatter visibility**
 
-- "Skill content injected to the model no longer includes YAML frontmatter metadata" [1.0.48]. **FACT** (C-LOG). So, as in Claude Code, the model does not see `metadata.version`; the version stated in the text of the handshake step (06-2) is what the model reads. That the skill list shows name and description: **Unverified**.
-- How the parser types `version: 0.8.0`: the YAML library is not documented (one native binary). `metadata` is an ignored field, so the type does not reach any code path. Under the YAML 1.2.2 core schema `0.8.0` is a string (https://yaml.org/spec/1.2.2/, read 2026-11-15); the YAML 1.1 float pattern (https://yaml.org/type/float.html, read 2026-11-15) formally matches it. For Copilot: **Unverified**; risk low because the field is ignored.
+- "Skill content injected to the model no longer includes YAML frontmatter metadata" [1.0.48]. **FACT** (C-LOG). So, as in Claude Code, the model does not see `metadata.version`; the version stated in the text of the handshake step (06-2) is what the model reads. Since 2026-11-22 the skills have no `metadata` block; the handshake text names the CLI contract (06-1, 06-2). That the skill list shows name and description: **Unverified**.
+- How the parser types `version: 0.8.0`: the YAML library is not documented (one native binary). `metadata` is an ignored field, so the type does not reach any code path. Under the YAML 1.2.2 core schema `0.8.0` is a string (https://yaml.org/spec/1.2.2/, read 2026-11-15); the YAML 1.1 float pattern (https://yaml.org/type/float.html, read 2026-11-15) formally matches it. For Copilot: **Unverified**; risk low because the field is ignored. Moot since 2026-11-22: the skills have no `metadata` block (06-2).
 
 **CLI detection**
 
@@ -180,8 +180,8 @@ Labels as in the [concept](shade-kit-concept.md): **Decided**, **Proposed**, **O
 
 **Frontmatter visibility**
 
-- The model **does** see the frontmatter: on a mention the whole file is injected, frontmatter included (see above). **FACT** (X-SRC). So `metadata.version` is visible as text; the handshake step still states the version in its text (06-2), which is what all three agents have in common.
-- Codex uses `serde_yaml` 0.9. **FACT** (X-SRC `codex-rs/Cargo.toml`). `metadata.version` is ignored by the parser, so its type reaches no code path (**FACT**, parser above). That `serde_yaml` 0.9 reads `0.8.0` as a string: **Unverified** (not run; YAML 1.2 core schema says string). That a `metadata` value that is not a mapping would fail the skill: **Unverified**; shade-kit's is a mapping.
+- The model **does** see the frontmatter: on a mention the whole file is injected, frontmatter included (see above). **FACT** (X-SRC). So `metadata.version` is visible as text; the handshake step still states the version in its text (06-2), which is what all three agents have in common. Since 2026-11-22 the skills have no `metadata` block; the handshake text names the CLI contract (06-1, 06-2).
+- Codex uses `serde_yaml` 0.9. **FACT** (X-SRC `codex-rs/Cargo.toml`). `metadata.version` is ignored by the parser, so its type reaches no code path (**FACT**, parser above). That `serde_yaml` 0.9 reads `0.8.0` as a string: **Unverified** (not run; YAML 1.2 core schema says string). That a `metadata` value that is not a mapping would fail the skill: **Unverified**; shade-kit's was a mapping; since 2026-11-22 the skills have no `metadata` block (06-2).
 - The bundled `skill-creator/scripts/quick_validate.py` allows only `name`, `description`, `license`, `allowed-tools`, `metadata`. **FACT** (X-SRC `codex-rs/skills/src/assets/samples/skill-creator/scripts/quick_validate.py`). Only a validator, not the loader; shade-kit uses only `name`, `description`, `metadata`.
 
 **CLI detection**
@@ -194,7 +194,7 @@ Labels as in the [concept](shade-kit-concept.md): **Decided**, **Proposed**, **O
 
 | Capability | Status | Chosen handling | What is lost | Sources |
 |---|---|---|---|---|
-| `SKILL.md` format | Supported | Same skill files (decision 1); `metadata.version` ignored by the parser | — | X-SKL; X-SRC `codex-rs/skills/src/parser.rs` (read 2026-11-15) |
+| `SKILL.md` format | Supported | Same skill files (decision 1); `metadata.version` ignored by the parser (the skills have none since 2026-11-22) | — | X-SKL; X-SRC `codex-rs/skills/src/parser.rs` (read 2026-11-15) |
 | Plugin layout (`.claude-plugin/` manifests, `skills/`) | Supported | Same manifests and tree (decision 1); skills namespaced `shade-kit:` | — | X-PLG; X-SRC `codex-rs/utils/plugins/src/plugin_namespace.rs`, `codex-rs/core-plugins/src/marketplace.rs`, `codex-rs/ext/skills/src/loader/namespace.rs` (read 2026-11-15) |
 | Plugin mechanism, user-level install | Supported with a different format (no `plugin update`) | `marketplace add --ref` / `plugin add`; keep: `marketplace upgrade` + `plugin add`; switch: `plugin remove`, `marketplace remove`, `marketplace add`, `plugin add`; outcome `installed` or `updated` (decisions 2, 3); kept directory marketplace D1, ref check D5 | — (no `current` outcome) | X-CMD, X-PLG; X-SRC `codex-rs/cli/src/plugin_cmd.rs`, `codex-rs/cli/src/marketplace_cmd.rs`, `codex-rs/core-plugins/src/manager.rs`, `codex-rs/core-plugins/src/store.rs` (read 2026-11-15) |
 | Subagents, parallel | Supported | `shade-kit-research` one subagent per focus with `spawn_agent`; `shade-kit-review` in a subagent; skill texts name `spawn_agent` (decision 7) | — | X-SUB; X-SRC `codex-rs/core/src/config/mod.rs`, `codex-rs/core/src/tools/router.rs` (read 2026-11-15) |
@@ -248,7 +248,7 @@ Neither CLI may be installed on the development machine (user decision), so the 
 
 ### Preparation (both agents)
 
-1. Record the operating system, `copilot --version` or `codex --version`, and `shade-kit version --json` (engine version). The skills expect kit version `0.8.0`, so the engine's major.minor must be `0.8`; with another version the handshake fails with exit code 50, which is a valid result of the handshake but not the check.
+1. Record the operating system, `copilot --version` or `codex --version`, and `shade-kit version --json` (engine version and `contract`). The skills are written for the CLI contract `1`, so `data.contract` must have `minSupported` ≤ 1 ≤ `current`; otherwise the handshake fails with exit code 54 `engine-outdated` or 55 `skills-outdated`, which is a valid result of the handshake but not the check (06-1). Until 2026-11-22 the skills expected the kit version `0.8.0`, and another major.minor failed with exit code 50.
 2. Use the engine of the working tree: `dotnet run --project src/CreativeCoders.ShadeKit.Cli -- <command>` (below written as `shade-kit <command>`), or an installed tool of the version under test.
 3. Developer override: to install the working tree instead of the tag, prefix the install with `SHADE_KIT_MARKETPLACE_SOURCE=<absolute path of the working tree>` (or `owner/repo#ref`). Without it the engine installs from `CreativeCodersTeam/shade-kit` at `v<engine version>`, or `main` for a prerelease engine or a missing tag. Record which source was used.
 4. Create a scratch repository: `mkdir <scratch> && cd <scratch> && git init && shade-kit init`.
@@ -260,7 +260,7 @@ Neither CLI may be installed on the development machine (user decision), so the 
 3. `shade-kit version --json`: record `integrations`; expected an entry for `copilot` with the kit version (`null` kit version and ref for a directory source).
 4. In the scratch repository start `copilot` (interactive). Run `/skills` and record whether the 19 shade-kit skills are listed and under which names.
 5. Type `/shade-kit-next-phase`. Allow the shell command when asked. Check and record:
-   - the first command the agent runs is `shade-kit version --json --expect 0.8.0` (the handshake);
+   - the first command the agent runs is `shade-kit version --json --expect-contract 1` (the handshake, 06-1; `--expect 0.8.0` until 2026-11-22);
    - it then runs `shade-kit feature current --json`, and, with no feature, ends with "No current feature, and no active feature to pick." and a closing message, which shows that it loaded `shade-kit-next-steps` by name (record whether the `skill` tool was called and with which name);
    - the calls in the closing message use the form `/shade-kit-<x>`.
 6. Optional: type "Use the /shade-kit-next-phase skill" instead, and record whether it loads.
@@ -280,7 +280,7 @@ Neither CLI may be installed on the development machine (user decision), so the 
 
 ### What to record
 
-For each step: the command or input, the full output (JSON verbatim), pass or fail against the expectation, and the agent and engine versions. FP08-AC2 or FP08-AC3 passes when step 5 runs the handshake `shade-kit version --json --expect 0.8.0` after a marketplace install by step 1. Attach the record to package 08.
+For each step: the command or input, the full output (JSON verbatim), pass or fail against the expectation, and the agent and engine versions. FP08-AC2 or FP08-AC3 passes when step 5 runs the handshake `shade-kit version --json --expect-contract 1` (`--expect 0.8.0` until 2026-11-22) after a marketplace install by step 1. Attach the record to package 08.
 
 ### Unverified points the run should also confirm
 
@@ -302,7 +302,7 @@ For each step: the command or input, the full output (JSON verbatim), pass or fa
 - **Unverified:** everything that needs a running CLI: the end-to-end install from the marketplace, loading `shade-kit-next-phase` in a session, the version handshake there (FP08-AC2, FP08-AC3), and every point of the list in section 8.
 - **Unverified:** the Copilot `ask_user` parameter schema (options and questions per call, header length).
 - **Unverified:** which of the two Copilot subagent limit statements applies (section 3.1).
-- **Unverified:** the YAML library of Copilot, and how `serde_yaml` 0.9 types `0.8.0`; both ignore the field.
+- **Unverified:** the YAML library of Copilot, and how `serde_yaml` 0.9 types `0.8.0`; both ignore the field (moot since 2026-11-22: the skills have no `metadata` block, 06-2).
 - **Unverified:** Copilot reading nested `AGENTS.md` files, and whether a linked `AGENTS.md` → `CLAUDE.md` is loaded once.
 - **Unverified:** whether the shade-kit descriptions fit Codex's skill-list budget unshortened.
 - **Unverified:** the size of the whole-tree copy in the Codex plugin cache (the plugin root is the repository root); the same question is open for Claude Code (package 07).

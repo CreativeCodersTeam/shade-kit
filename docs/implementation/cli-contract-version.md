@@ -1,5 +1,5 @@
 > **Date:** 2026-11-22
-> **Requirement:** Empfehlung aus `reports/versioning-cli-and-skills.md` („Eine Vertragsnummer entkoppelt CLI und Skills“)
+> **Requirement:** Recommendation of the analysis of 2026-11-21 ("one contract number decouples CLI and skills"); the report was removed on 2026-11-24, its content is in [06-1 Background](../feature-packages/06-1-engine-version-check.md#background-why-a-cli-contract)
 > **Branch:** feature/rework-versioning-branch-mgmt
 > **Mode:** sub-agents (sequential, ein Implementer und ein Verifier pro Task)
 > **Status:** complete — mit zurückgestellten Review-Befunden (Abschnitt 9)
@@ -16,7 +16,7 @@ Alle 5 Tasks sind erledigt. Task 4 war nach zwei FAIL-Verifikationen vorübergeh
 
 ## 2. Preconditions
 
-- **Arbeitsbaum beim Start:** Er war dirty, mit dem gestagten Rename `reports/Versionierung von CLI und Skills.md` → `reports/versioning-cli-and-skills.md`. Nach D-1 hast du zuerst committet (`6b675f8`), der Baum war danach sauber.
+- **Arbeitsbaum beim Start:** Er war dirty, mit dem gestagten Rename der Berichtsdatei auf einen englischen Dateinamen (Bericht am 2026-11-24 entfernt, Inhalt in [06-1 Background](../feature-packages/06-1-engine-version-check.md#background-why-a-cli-contract)). Nach D-1 hast du zuerst committet (`6b675f8`), der Baum war danach sauber.
 - **Skill-Liste der Laufzeit:** verfügbar, mit rund 75 Skills und 13 Agent-Typen.
 - **Größenhinweis:** `n/a`. Die Arbeit war nicht klein: 5 Tasks und mehr als 70 Dateien.
 
@@ -63,7 +63,7 @@ Die Verdikte stammen aus Teil B der Reviews, Stand Runde 4. `proven` heißt, ein
 | D-1 | Arbeitsbaum | Rename zuerst committen, danach sauber | recommended accepted | — |
 | D-2 | G-4 Integrationen überspringen | Bei `--expect-contract` keine Abfrage, `data.integrations` fehlt; Plain-Modus und `version` ohne Option listen weiter | recommended accepted | 1 |
 | D-3 | G-5 `metadata.version` | Aus allen 19 Skills entfernen, Regel aus CLAUDE.md und 06-2 streichen | recommended accepted | 1 |
-| D-4 | G-10 `research_notes/` | Unangetastet lassen | recommended accepted | 1 |
+| D-4 | G-10 research notes of the analysis | Unangetastet lassen (removed on 2026-11-24; the facts they supported are in [06-1 Background](../feature-packages/06-1-engine-version-check.md#background-why-a-cli-contract)) | recommended accepted | 1 |
 | D-5 | 1 Struktur | Wie im Bericht: Core/Versions(+Exceptions), Cli/Commands/Version, Core.Tests/Skills | recommended accepted | 1 |
 | D-6 | G-6 Doku | Feature-Pakete vor Ort umschreiben, Ersetztes datiert behalten, ein Eintrag im Konsistenzlog | recommended accepted | 1 |
 | D-7 | 2 Architektur | Statisches `CliContract`; `ICliContractChecker`/`CliContractChecker(CliContractWindow)` als Singleton mit `CliContract.Window` | recommended accepted | 1 |

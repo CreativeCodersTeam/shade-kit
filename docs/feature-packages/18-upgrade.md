@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 2026-10-14, updated 2026-10-24 (documentation check: line endings of the instruction section follow package 02; staged multi-file write as open point) and 2026-10-25 (orphaned `request.md` template as open point), and 2026-11-15 (package 08: no further instruction file), and 2026-11-22 ("kit version" made precise: `kitVersion` is the product version of the running engine; the skills carry no version of their own since then and name the CLI contract, 06-1) |
+| Status | Draft, 2026-10-14, updated 2026-10-24 (documentation check: line endings of the instruction section follow package 02; staged multi-file write as open point) and 2026-10-25 (orphaned `request.md` template as open point), and 2026-11-15 (package 08: no further instruction file), and 2026-11-22 ("kit version" made precise: `kitVersion` is the product version of the running engine; the skills carry no version of their own since then and name the CLI contract, 06-1), and 2026-11-24 (open point: the prerelease `kitVersion` of a branch build) |
 | Source | Concept §2 (Lifecycle), §3.1 (`upgrade`), [§9](../../research/shade-kit-concept.md#9-version-drift) (§9.2, §9.3, §9.5) |
 | Depends on | 01, 02, 05, 08 |
 | Enables | Kit releases that change a file format or a template, without stranding existing repositories |
@@ -85,5 +85,6 @@ A summary per file: migrated from version x to y, template replaced, `.new` writ
 
 ## Open points
 
+- `init` (package 02) and `upgrade` write the version of the running engine as `kitVersion` into `config.json` and `templates.lock.json`; for a branch build this is a prerelease version such as `0.9.0-<branch>.<n>` (`RepositoryInitializer` uses `EngineVersionProvider.Version`). Whether a repository initialised or upgraded with a development build should record that value is **Open** (found in the CLI contract analysis of 2026-11-21, [06-1 Background](06-1-engine-version-check.md#local-testing)).
 - A staged write of several files (temporary file, then rename) through `ITextFileWriter` / `IKitStore`; the line ending is decided for the final path, as `IKitStore.CreateDirectoryWriter` does for `feature new` (package 03). **Open.**
 - A `.shadekit/templates/request.md` written by `init` before 2026-10-25, and its entry in `templates.lock.json`, are orphaned: the kit no longer ships a `request.md` template, `init` no longer writes it, and `feature new` neither reads nor changes it (packages 02 and 03). `upgrade` may remove it, for example only when it is unchanged against the lock hash, like a shipped template it replaces. **Open.**
