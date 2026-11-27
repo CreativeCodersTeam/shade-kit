@@ -65,4 +65,4 @@ Because `bugfix` has no `refine` and no `map`, `diagnose` uses the interview ski
 
 ## Open points
 
-- None.
+- `spec.md` has a last section "Changes" since package 10 (2026-11-26, D-3, D-7): one line per round that wrote the spec, naming the REQ and AC IDs it added, changed, or removed. `shade-kit-diagnose` writes it when it is worked out here, by the same rules as `refine` (in `skills/shade-kit-refine/references/spec-rules.md`, [10](10-refine.md#specmd)); how the skill gets them is open, because a file of a skill's folder is read by that skill only (06-2); until then a spec written by `diagnose` has no "Changes" section, and a later `refine` round adds it.

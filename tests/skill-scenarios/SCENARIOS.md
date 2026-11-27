@@ -213,3 +213,76 @@ no fixture (rule 3 of the protocol).
   | Command | Fixture |
   |---|---|
   | `shade-kit version --json --expect-contract <contract>` | `env-version-skills-outdated.json` |
+
+## Refine (S20–S23)
+
+These scenarios replace the shared fixture table with their own table. Commands that are not in a scenario's table have
+no fixture (rule 3 of the protocol). The sso feature `<sso-feature>` is in `refine`, in progress; `shade-kit phase start
+refine` returns `already-in-progress`. No tool to start subagents is available in these runs (no `Agent`, no `task`, no
+`spawn_agent`), so the research runs its focuses one after the other. Label each numbered step of `shade-kit-refine` in
+your output as `**refine step <n> — <what>**` (for example `**refine step 5 — interview**`), so that the steps can be
+told apart.
+
+Fixture table shared by S20–S23:
+
+| Command | Fixture |
+|---|---|
+| `shade-kit version --json --expect-contract <contract>` | `env-version.json` |
+| `shade-kit phase start refine --json` | `env-start-refine-already.json` |
+| `shade-kit feature show <sso-feature> --json` | `env-show-sso.json` |
+| `shade-kit phase next --json` | `env-next-refine.json` |
+
+## S20 — refine in Claude Code, first round
+- Agent: Claude Code; `AskUserQuestion` is available.
+- Skill: `shade-kit-refine`; the human typed `/shade-kit-refine`.
+- Repository: `<work>/repo-s20` (you may write `spec.md` and `researches.md` in the feature folder; run `git`
+  read-only and `date` for real).
+- Canned answers:
+  - to the question whether to continue refine or end: continue refine;
+  - to a question whether to dismiss topics: dismiss all the ones you proposed;
+  - to the first topic question of the interview: "Later, I have to ask the product owner first." (deferred);
+  - to every other topic question of the interview: the option you proposed (the recommended one);
+  - to every question of the review of the requirements: keep it as written (the recommended option);
+  - to any other question: the option you proposed, or "yes".
+
+## S21 — refine in GitHub Copilot CLI, second round, a research focus fails
+- Agent: GitHub Copilot CLI; `ask_user` is available.
+- Skill: `shade-kit-refine`; the human typed `/shade-kit-refine`.
+- Repository: `<work>/repo-s21` (you may edit `spec.md` and `researches.md` in the feature folder; run `git`
+  read-only and `date` for real). The feature folder holds the `spec.md` and `researches.md` of a first round.
+- The `security` focus of the research fails on every run: record it as failed with the reason "the research run timed
+  out" and do not research it. The `gaps` focus runs normally.
+- Canned answers:
+  - to the question whether to continue refine or end: continue refine;
+  - to the question whether to research a failed focus again: research it again;
+  - to a question whether to dismiss topics: dismiss all the ones you proposed;
+  - to the question of Q-001 (guests and the password login): "Guests get Entra ID B2B guest accounts and sign in
+    through SSO too. There is no password login any more.";
+  - to the question of Q-002 (the sign-in time): "Under 2 seconds at p95.";
+  - to the question of A-001 (sessions of 8 hours): confirm it;
+  - to every other topic question of the interview: the option you proposed (the recommended one);
+  - to every question of the review of the requirements: keep it as written (the recommended option);
+  - to any other question: the option you proposed, or "yes".
+
+## S22 — refine in OpenAI Codex CLI, no spec template
+- Agent: OpenAI Codex CLI, default mode (not plan mode); `request_user_input` is not available.
+- Skill: `shade-kit-refine`; the human typed `$shade-kit:shade-kit-refine`.
+- Repository: `<work>/repo-s22` (read only). `.shadekit/templates/spec.md` is missing, and the feature has no
+  `spec.md` yet.
+- Canned answers: to the question whether to continue refine or end: continue refine. To any other question: "yes".
+
+## S23 — refine in Claude Code, second round on a spec without "Changes"
+- Agent: Claude Code; `AskUserQuestion` is available.
+- Skill: `shade-kit-refine`; the human typed `/shade-kit-refine`.
+- Repository: `<work>/repo-s23` (you may edit `spec.md` and `researches.md` in the feature folder; run `git`
+  read-only and `date` for real). The feature folder holds the `spec.md` and `researches.md` of a first round; the
+  `spec.md` was written before the "Changes" section existed and has none.
+- Canned answers:
+  - to the question whether to continue refine or end: continue refine;
+  - to a question whether to dismiss topics: dismiss all the ones you proposed;
+  - to the question of Q-001 (guests and the password login): "Guests keep the password login.";
+  - to the question of Q-002 (the sign-in time): "Under 2 seconds at p95.";
+  - to the question of A-001 (sessions of 8 hours): confirm it;
+  - to every other topic question of the interview: the option you proposed (the recommended one);
+  - to every question of the review of the requirements: keep it as written (the recommended option);
+  - to any other question: the option you proposed, or "yes".

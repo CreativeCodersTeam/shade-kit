@@ -232,4 +232,57 @@ public class ShippedTemplatesTests
             .Should().NotContain(x => x.ResourcePath == "request.template.md"
                                       || x.RepositoryPath == ".shadekit/templates/request.md");
     }
+
+    [Fact]
+    [Trait("Requirement", "FP10-AC4")]
+    public void ReadContent_SpecTemplate_HasSectionsInRuleOrderEndingWithChanges()
+    {
+        // Arrange
+        var template = ShippedTemplates.All.Single(x => x.ResourcePath == "spec.template.md");
+
+        // Act
+        var content = new ShippedTemplateReader().ReadContent(template);
+
+        // Assert
+        var headings = content.Split('\n')
+            .Where(line => line.StartsWith("## ", StringComparison.Ordinal))
+            .ToArray();
+
+        headings
+            .Should().Equal(
+                "## Goal",
+                "## Glossary",
+                "## Requirements",
+                "## Edge cases",
+                "## Security considerations",
+                "## Out of scope",
+                "## Assumptions",
+                "## Open questions",
+                "## Decisions",
+                "## Changes");
+    }
+
+    [Fact]
+    [Trait("Requirement", "FP10-AC4")]
+    public void ReadContent_SpecTemplate_GuidanceFollowsSpecRulesForChangesAndSecurity()
+    {
+        // Arrange
+        var template = ShippedTemplates.All.Single(x => x.ResourcePath == "spec.template.md");
+
+        // Act
+        var content = new ShippedTemplateReader().ReadContent(template);
+
+        // Assert
+        content
+            .Should().Contain("- 2026-10-24: added REQ-004; changed AC-001.2; removed REQ-003",
+                "an added or removed requirement is named by its REQ- ID alone in the Changes example")
+            .And.NotContain("added REQ-004, AC-004.1",
+                "the criteria of an added requirement go with it and are not listed");
+
+        content
+            .Should().Contain("- {{finding}} → {{REQ-nnn | AC-nnn.n | open: Q-nnn}}",
+                "a security finding that no requirement handles yet points to its open question")
+            .And.Contain("None identified: <reason>",
+                "an empty security section names the reason after a colon");
+    }
 }

@@ -23,6 +23,8 @@ from pathlib import Path
 
 NOTES_NAME = re.compile(r"^\d{8}-\d{4}-[a-z0-9]+(-[a-z0-9]+)*(-\d+)?\.md$")
 NOTES_SECTIONS = ("## Context", "## Options", "## Conclusions", "## Open questions")
+SPEC_SECTIONS = ("Goal", "Glossary", "Requirements", "Edge cases", "Security considerations", "Out of scope",
+                 "Assumptions", "Open questions", "Decisions", "Changes")
 GIT_WRITE = re.compile(r"\bgit (switch|checkout|branch|commit|add|stash|reset|push|tag|merge|rebase|restore|rm|mv|"
                        r"worktree|cherry-pick|revert|clean|config (?!user\.name\b|--get\b))")
 # A git command as a runner records it: in a code span or at the start of a code line, with global options such as
@@ -197,6 +199,48 @@ def notes_files(folder):
     return sorted(folder.glob("*.md")) if folder.is_dir() else []
 
 
+# A recommendation of another round, not the neutral "whether to run another round or move on is your decision".
+RECOMMEND_ROUND = re.compile(r"recommend\w*[^.\n]{0,80}?\banother (?:refine )?round", re.I)
+REFINE_STEP = re.compile(r"^\d+\.\s+\*\*(?:shade-kit-)?refine step (\d+)\b", re.M | re.I)
+
+
+def refine_step(steps, number):
+    """The text of the refine steps with the given number (several runs of one step, e.g. a second research, count)."""
+    marks = [(m.start(), int(m.group(1))) for m in REFINE_STEP.finditer(steps)]
+    parts = []
+    for i, (start, n) in enumerate(marks):
+        if n == number:
+            end = next((s for s, m in marks[i + 1:] if m != number), len(steps))
+            parts.append(steps[start:end])
+    return "\n".join(parts)
+
+
+def question_texts(part):
+    """Everything asked in a part of the steps: tool call blocks of any tool and plain messages."""
+    blocks = [b for tool in ("AskUserQuestion", "ask_user", "request_user_input") for b in tool_blocks(part, tool)]
+    return "\n".join(blocks + plain_messages(part))
+
+
+def interview_return(part):
+    """The topic IDs the recorded return of an interview lists as answered or open, and the topics that were asked.
+
+    The return lists every topic by its ID under "Answered:" and "Open:"; the questions carry the progress "Topic n/m"
+    (the question text need not name the ID), so the asked topics are the distinct n."""
+    m = re.search(r"^[ \t]*Answered:", part, re.M)
+    listed = []
+    if m:
+        rest = part[m.end():]
+        end = re.search(r"^[ \t]*(Dismissed|Conflicts|New topics)\b", rest, re.M)
+        listed = re.findall(r"^[ \t]*- ((?:G|RS|Q|A|T)-?\d+)\b", rest[:end.start()] if end else rest, re.M)
+    asked = set(re.findall(r"Topic (\d+)/\d+", part))
+    return listed, asked
+
+
+def refine_report(text, steps):
+    """Step 9 of refine and the closing message: the report the human reads."""
+    return refine_step(steps, 9) + "\n" + closing(text)
+
+
 def git_status(repo):
     result = subprocess.run(["git", "status", "--porcelain"], cwd=str(repo), capture_output=True, text=True)
     return result.stdout.strip() if result.returncode == 0 else f"git status failed: {result.stderr}"
@@ -322,6 +366,7 @@ class Checker:
                 self.check(sid, "no doubled prefix", "shade-kit-shade-kit" not in t)
         self.run_intake()
         self.run_refusals()
+        self.run_refine()
         return self.results
 
     def common_intake(self, sid, text, steps):
@@ -504,6 +549,214 @@ class Checker:
                 self.check(sid, "closing names shade-kit-next-phase only as $shade-kit:shade-kit-next-phase",
                            re.search(r"(?<![:\w-])shade-kit-next-phase\b", c) is None)
                 self.codex_forms(sid, t, [], message=c)
+
+
+    def common_refine(self, sid, text, steps, repo):
+        commands = run_commands(skill_steps(steps))
+        handshake = f"shade-kit version --json --expect-contract {self.contract}"
+        self.check(sid, f"first command is the handshake --expect-contract {self.contract}",
+                   commands and commands[0].startswith(handshake))
+        self.check(sid, f"every shade-kit command has --json {commands}",
+                   commands and all("--json" in c for c in commands))
+        self.check(sid, "ran phase start refine --json", "shade-kit phase start refine --json" in commands)
+        self.check(sid, f"ran feature show {self.sso} --json",
+                   f"shade-kit feature show {self.sso} --json" in commands)
+        self.check(sid, "no phase approve/reject/complete and no other phase start",
+                   not [c for c in commands if re.match(r"shade-kit phase (approve|reject|complete)\b", c)
+                        or (c.startswith("shade-kit phase start") and c != "shade-kit phase start refine --json")])
+        # A restore command the skill names in a message to the human is not run, so fenced blocks are left out, and
+        # prose ("the git commit that ran init was not looked up") is no command: only code spans and command lines
+        # count, the way a runner records a command it ran.
+        recorded = re.sub(r"```.*?```", "", skill_steps(steps), flags=re.S)
+        candidates = re.findall(r"`([^`\n]+)`", recorded) + re.findall(r"^[ \t]*(?:\$[ \t]+)?(git[ \t].*)$", recorded,
+                                                                        re.M)
+        self.check(sid, "no git command that changes the repository",
+                   not [c for c in candidates if GIT_WRITE.search(c)])
+        self.check(sid, "a closing message is written", closing(text).strip() not in ("", "none"))
+        feature = f".shadekit/features/{self.sso}/"
+        # git_status strips the output, so the status column of the first line may have lost its leading space.
+        changed = [re.sub(r"^\s*\S+\s+", "", line).strip('"') for line in git_status(repo).splitlines()
+                   if line.strip()]
+        allowed = {feature + "spec.md", feature + "researches.md"}
+        self.check(sid, f"only spec.md and researches.md of the feature changed {changed}",
+                   all(x in allowed for x in changed))
+
+    def spec_checks(self, sid, spec):
+        headings = re.findall(r"^## (.+)$", spec, re.M)
+        self.check(sid, f"spec.md sections in rule order {headings}", headings == list(SPEC_SECTIONS))
+        self.check(sid, "no placeholder or guidance comment left", "{{" not in spec and "<!--" not in spec)
+        blocks = re.split(r"^### ", section(spec, "Requirements"), flags=re.M)[1:]
+        reqs = [b for b in blocks if re.match(r"REQ-\d{3} ", b)]
+        self.check(sid, f"every requirement subsection has a REQ- ID ({len(blocks)} subsections)",
+                   blocks and len(reqs) == len(blocks))
+        ok_fields, ok_criteria = True, True
+        for b in reqs:
+            number = b[4:7]
+            if not (re.search(r"^- Priority: (must|should|could)\s*$", b, re.M)
+                    and re.search(r"^- Status: (active|removed \(.+\))\s*$", b, re.M)):
+                ok_fields = False
+            criteria = re.findall(r"\*\*AC-(\d{3})\.\d+\*\*", b)
+            if not criteria or any(c != number for c in criteria):
+                ok_criteria = False
+        self.check(sid, "every requirement has a priority and a status", reqs and ok_fields)
+        self.check(sid, "every requirement has at least one AC-<its number>.n", reqs and ok_criteria)
+        self.check(sid, "out of scope stated", section(spec, "Out of scope").strip() != "")
+        open_part = section(spec, "Open questions")
+        self.check(sid, "open questions section stated", open_part.strip() != "")
+        open_ids = re.findall(r"\*\*(Q-\d{3})\*\*", open_part)
+        decided = re.findall(r"\*\*(Q-\d{3})\*\*", section(spec, "Decisions"))
+        self.check(sid, f"no Q- ID both open and decided {open_ids} {decided}",
+                   not set(open_ids) & set(decided) and len(set(open_ids + decided)) == len(open_ids + decided))
+        self.check(sid, "every open question has its inline marker",
+                   all(f"(open: {q})" in spec for q in open_ids))
+        self.check(sid, "no inline marker for a decided question",
+                   not [q for q in decided if f"(open: {q})" in spec])
+        self.check(sid, "decisions name who and when",
+                   all(re.search(r"\(Scenario Fixture, \d{4}-\d\d-\d\d\)\s*$", line)
+                       for line in section(spec, "Decisions").splitlines() if line.startswith("- **Q-")))
+        edges = [x for x in section(spec, "Edge cases").splitlines() if x.startswith("- ")]
+        self.check(sid, "every edge case points to an AC or out of scope",
+                   all(re.search(r"→ (AC-\d{3}\.\d+|out of scope)", x) for x in edges))
+        security = section(spec, "Security considerations")
+        lines = [x for x in security.splitlines() if x.startswith("- ")]
+        self.check(sid, "security considerations linked or None identified",
+                   (lines and all(re.search(r"→ (REQ-\d{3}|AC-\d{3}\.\d+|open: Q-\d{3})", x) for x in lines))
+                   or security.strip().startswith("None identified"))
+        return reqs
+
+    def run_refine(self):
+        """S20-S23: refine, first round, later round with a failing focus, missing spec template, old spec."""
+        for sid in ["S20", "S21", "S22", "S23"]:
+            p = self.out / f"{sid}.md"
+            if not p.exists():
+                self.check(sid, "output exists", False)
+                continue
+            t = p.read_text(encoding="utf-8")
+            steps = section(t, "Steps")
+            c = closing(t)
+            repo = self.work / f"repo-{sid.lower()}"
+            feature_dir = repo / ".shadekit" / "features" / self.sso
+            spec_path = feature_dir / "spec.md"
+            spec = spec_path.read_text(encoding="utf-8") if spec_path.is_file() else ""
+            research_path = feature_dir / "researches.md"
+            research = research_path.read_text(encoding="utf-8") if research_path.is_file() else ""
+            self.check(sid, "no MISSING FIXTURE", "MISSING FIXTURE" not in t)
+            self.common_refine(sid, t, steps, repo)
+            if sid == "S20":
+                self.check(sid, "spec.md created", spec != "")
+                self.spec_checks(sid, spec)
+                self.check(sid, "spec.md has LF line endings like the template", "\r" not in spec)
+                changes = [x for x in section(spec, "Changes").splitlines() if x.startswith("- ")]
+                self.check(sid, f"one Changes line '- <date>: created' {changes}",
+                           len(changes) == 1 and re.match(r"^- \d{4}-\d\d-\d\d: created\s*$", changes[0]))
+                self.check(sid, "researches.md has refine / gaps and refine / security",
+                           "\n## refine / gaps\n" in research and "\n## refine / security\n" in research)
+                gaps = re.findall(r"^- \*\*(G-\d+)\*\*(.*)$", section(research, "refine / gaps"), re.M)
+                listed, asked = interview_return(refine_step(steps, 5))
+                self.check(sid, f"every gap finding was asked in the interview or dismissed {[g for g, _ in gaps]}",
+                           gaps and all("Dismissed:" in rest or g in listed for g, rest in gaps))
+                self.check(sid, f"the interview asked as many topics as it returned ({len(asked)} asked, "
+                                f"{len(listed)} answered or open)", listed and len(asked) >= len(listed))
+                review = question_texts(refine_step(steps, 7))
+                req_ids = re.findall(r"^### (REQ-\d{3}) ", spec, re.M)
+                self.check(sid, f"every requirement of the round is put to the review {req_ids}",
+                           req_ids and all(re.search(rf"\b{r}\b", review) for r in req_ids))
+                notes = re.findall(r"Dismissed:([^\n]*)", research)
+                self.check(sid, f"Dismissed reasons name no finding ID ({len(notes)})",
+                           all(re.search(r"\b(?:G|RS)-\d+\b", x) is None for x in notes))
+                self.check(sid, "the deferred topic is an open question",
+                           re.search(r"\*\*Q-\d{3}\*\*", section(spec, "Open questions")) is not None)
+                self.check(sid, "report recommends another round",
+                           RECOMMEND_ROUND.search(refine_report(t, steps)))
+                self.slash_forms(sid, t, ["shade-kit-refine"])
+            if sid == "S21":
+                reqs = self.spec_checks(sid, spec)
+                ids = [b[:7] for b in reqs]
+                self.check(sid, f"REQ-001 to REQ-003 kept {ids}", ids[:3] == ["REQ-001", "REQ-002", "REQ-003"])
+                req3 = next((b for b in reqs if b.startswith("REQ-003")), "")
+                self.check(sid, "REQ-003 marked removed, not deleted",
+                           re.search(r"^- Status: removed \(.+\)\s*$", req3, re.M)
+                           and "**AC-003.1**" in req3)
+                decided = section(spec, "Decisions")
+                self.check(sid, "Q-001 and Q-002 under Decisions", "**Q-001**" in decided and "**Q-002**" in decided)
+                self.check(sid, "Q-001 and Q-002 no longer open",
+                           "**Q-001**" not in section(spec, "Open questions")
+                           and "**Q-002**" not in section(spec, "Open questions"))
+                self.check(sid, "A-001 confirmed",
+                           re.search(r"\*\*A-001\*\*.*\(confirmed\)\s*$", section(spec, "Assumptions"), re.M))
+                changes = [x for x in section(spec, "Changes").splitlines() if x.startswith("- ")]
+                self.check(sid, f"first Changes line kept and a second appended {changes}",
+                           len(changes) == 2 and changes[0] == "- 2026-11-21: created"
+                           and re.match(r"^- \d{4}-\d\d-\d\d: .*removed[^;]*REQ-003", changes[1]))
+                added = re.findall(r"REQ-(\d{3})", changes[1].split("added", 1)[1].split(";", 1)[0]) \
+                    if len(changes) == 2 and "added" in changes[1] else []
+                self.check(sid, f"an added requirement is named without its criteria {added}",
+                           not [n for n in added if f"AC-{n}." in changes[1]])
+                # Edited in place: lines that no canned answer touches stay byte for byte as the first round wrote them.
+                kept = ["| Company account | entity | An employee's account in the company's Entra ID tenant. "
+                        "Belongs to one employee. |",
+                        "- **AC-001.1** Given an employee with a valid company account, when they choose \"Sign in with "
+                        "SSO\", then they are signed in and see the portal start page.",
+                        "- **AC-002.1** Given an employee whose company account was disabled, when they try to sign in, "
+                        "then the sign-in is refused."]
+                self.check(sid, "untouched lines stay unchanged (edited in place)",
+                           all(line in spec.splitlines() for line in kept))
+                security = section(research, "refine / security")
+                self.check(sid, "the failed focus left refine / security of round 1 unchanged",
+                           security.strip().startswith("Date: 2026-11-21") and "**RS-2**" in security)
+                rs2 = next((x for x in security.splitlines() if x.startswith("- **RS-2**")), "")
+                self.check(sid, "the obsolete guest-password point is dismissed or still in the spec",
+                           "Dismissed:" in rs2 or re.search(r"password", section(spec, "Security considerations"), re.I))
+                gaps = section(research, "refine / gaps")
+                self.check(sid, "refine / gaps replaced with a new run",
+                           re.search(r"^Date: (\d{4}-\d\d-\d\d)", gaps, re.M)
+                           and not gaps.strip().startswith("Date: 2026-11-21"))
+                blocks = tool_blocks(steps, "ask_user")
+                retry = [b for b in blocks if re.search(r"again", b, re.I) and re.search(r"security", b, re.I)]
+                self.check(sid, f"one question offers to research the failed focus again ({len(retry)})",
+                           len(retry) == 1)
+                self.check(sid, "research loaded a second time", steps.count("shade-kit-research") >= 2)
+                report = refine_report(t, steps)
+                self.check(sid, "report names the missing security research",
+                           re.search(r"security[^\n]*(missing|failed|timed out)|(missing|failed)[^\n]*security",
+                                     report, re.I))
+                self.check(sid, "report recommends another round", RECOMMEND_ROUND.search(report))
+                touched = sorted(set(re.findall(r"REQ-(\d{3})|AC-(\d{3})\.\d+", changes[1]) if len(changes) == 2
+                                     else []))
+                touched_reqs = sorted({f"REQ-{a or b}" for a, b in touched})
+                review = question_texts(refine_step(steps, 7))
+                self.check(sid, f"every requirement the round touched is put to the review {touched_reqs}",
+                           touched_reqs and all(re.search(rf"\b{r}\b", review) for r in touched_reqs))
+                self.slash_forms(sid, t, ["shade-kit-refine"])
+            if sid == "S23":
+                self.spec_checks(sid, spec)
+                changes = [x for x in section(spec, "Changes").splitlines() if x.startswith("- ")]
+                self.check(sid, f"Changes added at the end with one line for this round, not 'created' {changes}",
+                           spec.rstrip().split("\n## ")[-1].startswith("Changes") and len(changes) == 1
+                           and re.match(r"^- \d{4}-\d\d-\d\d: ", changes[0]) and "created" not in changes[0])
+                self.check(sid, "the line names the changed AC-001.2",
+                           changes and re.search(r"\bAC-001\.2\b", changes[0]) is not None)
+                decided = section(spec, "Decisions")
+                self.check(sid, "Q-001 and Q-002 under Decisions", "**Q-001**" in decided and "**Q-002**" in decided)
+                self.check(sid, "REQ-003 stays active (guests keep the password login)",
+                           re.search(r"### REQ-003 .*?^- Status: active", section(spec, "Requirements"), re.S | re.M))
+                self.check(sid, "report recommends another round only while something is open",
+                           bool(re.search(r"\*\*Q-\d{3}\*\*", section(spec, "Open questions"))
+                                or re.search(r"\(unconfirmed\)", section(spec, "Assumptions")))
+                           == bool(RECOMMEND_ROUND.search(refine_report(t, steps))))
+                self.slash_forms(sid, t, ["shade-kit-refine"])
+            if sid == "S22":
+                self.check(sid, "no spec.md written", not spec_path.exists())
+                self.check(sid, "no researches.md written", not research_path.exists())
+                # The entry return names the general skills, so the checks look at what the research and the
+                # interview would do: the research runs its own feature show, the interview asks Topic n/m questions.
+                shows = [x for x in run_commands(skill_steps(steps)) if x.startswith("shade-kit feature show")]
+                self.check(sid, f"no research run (one feature show, {len(shows)})", len(shows) == 1)
+                self.check(sid, "no interview question", re.search(r"Topic \d+/\d+", steps) is None)
+                self.check(sid, "names the missing template", ".shadekit/templates/spec.md" in t)
+                self.check(sid, "repository unchanged (git status clean)", git_status(repo) == "")
+                self.check(sid, "no tool call", "TOOL CALL" not in steps)
+                self.codex_forms(sid, t, ["shade-kit-refine"])
 
 
 def main(argv):

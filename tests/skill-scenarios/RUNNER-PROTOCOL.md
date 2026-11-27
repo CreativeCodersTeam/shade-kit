@@ -10,10 +10,11 @@ canned CLI results, the repository to work in, and the human's canned answers.
 ## Rules
 
 1. **Skill texts.** The skills are in `<repository>/skills/<name>/SKILL.md`. Read the skill you were given and follow it
-   step by step. When it says to load another skill, read that skill's `SKILL.md` and follow it at that point. Read no
-   other file of `<repository>/` (no docs, no tests, no source code). In `<work>/`, read only `RUNNER-PROTOCOL.md`,
-   `SCENARIOS.md`, the fixtures your scenario uses, and the repository folder your scenario names; never read the output
-   of another run.
+   step by step. When it says to load another skill, read that skill's `SKILL.md` and follow it at that point. When a
+   skill tells you to read a file of its own folder (for example `references/spec-rules.md`), read
+   `<repository>/skills/<name>/<that file>`. Read no other file of `<repository>/` (no docs, no tests, no source
+   code). In `<work>/`, read only `RUNNER-PROTOCOL.md`, `SCENARIOS.md`, the fixtures your scenario uses, and the
+   repository folder your scenario names; never read the output of another run.
 2. **The agent you play.** Behave as that agent would, and apply every rule the skill texts give for it (tool names, call
    forms, limits). The scenario says whether a structured question tool is available. You do not really have the other
    agents' tools: never call a real question tool (no `AskUserQuestion`, no other dialog). Instead record the call (rule 4).

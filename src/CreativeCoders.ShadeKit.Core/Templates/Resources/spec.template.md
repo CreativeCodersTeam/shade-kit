@@ -78,12 +78,12 @@ Example:
 ## Security considerations
 
 <!--
-Findings of the security research in researches.md: section "refine / security" (requirement level: data that needs protection, roles and permissions, abuse cases), or in the bugfix profile section "diagnose / security" (code level: whether the bug is a vulnerability and what the fix touches). Link each finding to the requirement or criterion that handles it. If there are none, write "None identified." with the reason.
+Findings of the security research in researches.md: section "refine / security" (requirement level: data that needs protection, roles and permissions, abuse cases), or in the bugfix profile section "diagnose / security" (code level: whether the bug is a vulnerability and what the fix touches). Link each finding to the requirement or criterion that handles it, or to the open question that asks how it is handled (→ open: Q-nnn). If there are none, write "None identified: <reason>".
 Example:
 - Tokens from the identity provider are secrets and must never be logged → REQ-004
 -->
 
-- {{finding}} → {{REQ-nnn | AC-nnn.n}}
+- {{finding}} → {{REQ-nnn | AC-nnn.n | open: Q-nnn}}
 
 ## Out of scope
 
@@ -122,3 +122,15 @@ Example:
 -->
 
 - **Q-nnn** ({{REQ-nnn}}) {{question}} → {{answer}} ({{decided by}}, {{date}})
+
+## Changes
+
+<!--
+One line per round that wrote this spec, oldest first, so that later phases can see which requirements and criteria changed since their artifacts were written. The first round writes "created". A later round names the REQ and AC IDs it added, changed, or removed (an added or removed requirement by its REQ ID alone; its criteria go with it), or says that none changed.
+Example:
+- 2026-10-17: created
+- 2026-10-24: added REQ-004; changed AC-001.2; removed REQ-003
+- 2026-10-25: no requirement or criterion changed
+-->
+
+- {{date}}: {{created | added …; changed …; removed … | no requirement or criterion changed}}

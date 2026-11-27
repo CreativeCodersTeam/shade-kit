@@ -31,6 +31,10 @@ The work folder (outside this repository) holds after the generator:
 | `repo-s11/`, `repo-s15/`, `repo-s16/` | Copies of `repo/` with the sso feature selected as current; S11 writes its notes into `repo-s11/`. |
 | `repo-s12/` | A copy of `repo/` whose quick feature is finished and selected again, without `templates/discussion.md`. |
 | `repo-s17/` | A copy of `repo/` on the branch `feature/<sso>`, without the local override, so the branch selects the sso feature. |
+| `repo-s20/` | A copy of `repo/` whose sso feature has a longer `request.md` and discussion notes in its `discussions/`, without `spec.md` and `researches.md`; the first `refine` round of S20 writes them. `env-show-sso.json` comes from it. |
+| `repo-s21/` | A copy of `repo-s20/` with the `spec.md` and `researches.md` of a first round (two open questions, one unconfirmed assumption); S21 edits them. |
+| `repo-s22/` | A copy of `repo-s20/` without `.shadekit/templates/spec.md`; S22 reads it. |
+| `repo-s23/` | A copy of `repo-s20/` with the `spec.md` of a first round written before the "Changes" section existed (no such section) and its `researches.md`; S23 edits them. |
 | `out/` | Empty; each runner writes `out/<id>.md`. |
 | `SCENARIOS.md`, `RUNNER-PROTOCOL.md` | The resolved copies the runners read. |
 
@@ -111,3 +115,13 @@ Write your output to <work>/out/<id>.md. Do not read any other file in <work>/ou
   check of both (`ENGINE_UPDATE`) also counts an update named through the tool ("get a newer shade-kit") and no
   longer counts "install the kit plugin that matches the engine" (checker gap D-23 of 06-1, closed); re-checked on
   the same outputs 22 of 22.
+- **2026-11-26:** four scenarios S20–S23 for package 10: `shade-kit-refine` in its first round (S20, Claude Code),
+  in a second round on a fixture `spec.md` with a research focus that fails twice (S21, GitHub Copilot CLI), without
+  the spec template (S22, OpenAI Codex CLI default mode), and in a second round on a `spec.md` without "Changes" (S23,
+  Claude Code, added after review round 1), with their own fixture table and repositories. The runner protocol now
+  lets a runner read the files a skill names in its own folder (`references/spec-rules.md`), and the refine runners
+  label their steps `refine step <n>`, so that the checks of the interview, the review, and the report read their own
+  part of the output. Counted with the final checker, S20–S22: iteration 1 94 of 95, iteration 2 93 of 95 (S21
+  rewrote a requirement under its old ID), iteration 3 94 of 95 (an obsolete point left without its `Dismissed:`
+  note); iteration 4 with S23 125 of 125. 28 mutations of the outputs, one per criterion check and the four realistic
+  violations that review round 1 found, all detected.

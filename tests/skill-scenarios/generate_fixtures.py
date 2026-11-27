@@ -16,6 +16,9 @@ through the workflow that the scenarios need. It writes into the work folder:
 - repo-empty/       an initialised repository without features; repo-s10/, repo-s13/, and repo-s14/ are copies of it
 - repo-s17/         a copy of repo/ on the branch feature/<sso>, so the branch selects the sso feature
                     (S18 and S19 read repo-empty/ and repo/ without a copy: they never get past the handshake)
+- repo-s20/         a copy of repo/ whose sso feature has a longer request.md and discussion notes; repo-s21/ (with
+                    the spec.md and researches.md of a first refine round), repo-s22/ (without the spec template), and
+                    repo-s23/ (like repo-s21/, but the spec.md has no "Changes" section) are copies of it
 - out/              empty; the runners write their outputs here
 - SCENARIOS.md      the catalog with every placeholder resolved (what the runners read)
 - RUNNER-PROTOCOL.md the protocol with the paths resolved
@@ -81,6 +84,149 @@ Cons:
 None.
 """
 ISSUE_URL = "https://github.com/acme/shop/issues/142"
+REFINE_REQUEST = """# SSO login
+
+Users of the shop admin portal should sign in with their company account through Entra ID instead of a password.
+
+- Admins sign in with SSO; the login must be fast.
+- Guests from partner companies also need access.
+- When an employee leaves the company, they must lose access.
+- Keep the audit log of sign-ins.
+"""
+REFINE_NOTES_FILE = "20261121-1000-sso-scope.md"
+REFINE_NOTES_TEXT = """# SSO scope
+
+Feature: `<sso>` · Request: [request.md](../request.md) · Date: 2026-11-21 · Participants: Scenario Fixture
+
+## Context
+
+The admin portal has a password login today.
+
+## Options
+
+### Sessions of 8 hours
+
+A session lasts one working day.
+
+Pros:
+
+- Admins sign in once a day.
+
+Cons:
+
+- A stolen session stays valid for a whole day.
+
+## Conclusions
+
+- Sessions last at most 8 hours.
+
+## Open questions
+
+- Do guests keep a password login?
+"""
+SPEC_ROUND_1_DATE = "2026-11-21"
+SPEC_ROUND_1 = """# Spec: SSO login
+
+Feature: `<sso>` · Request: [request.md](request.md) · Research: [researches.md](researches.md)
+
+## Goal
+
+Employees of the shop admin portal sign in with their company account through Entra ID, so that they keep no separate password and lose access when they leave the company.
+
+## Glossary
+
+| Term | Kind | Meaning |
+|---|---|---|
+| Company account | entity | An employee's account in the company's Entra ID tenant. Belongs to one employee. |
+| Guest | term | A user from a partner company without a company account. |
+
+## Requirements
+
+### REQ-001 – Sign in with Entra ID
+
+- Priority: must
+- Status: active
+- Rationale: Employees must not keep a separate password for the portal.
+
+An employee with a company account signs in to the admin portal through Entra ID.
+
+Acceptance criteria:
+
+- **AC-001.1** Given an employee with a valid company account, when they choose "Sign in with SSO", then they are signed in and see the portal start page.
+- **AC-001.2** The SSO sign-in completes within the agreed time. (open: Q-002)
+
+### REQ-002 – Access ends when an employee leaves
+
+- Priority: must
+- Status: active
+- Rationale: Former employees must not reach the portal.
+
+An employee whose company account is disabled can no longer sign in, and their open sessions end.
+
+Acceptance criteria:
+
+- **AC-002.1** Given an employee whose company account was disabled, when they try to sign in, then the sign-in is refused.
+
+### REQ-003 – Password login for guests
+
+- Priority: should
+- Status: active
+- Rationale: Guests from partner companies have no company account.
+
+Guests sign in with a user name and a password. (open: Q-001)
+
+Acceptance criteria:
+
+- **AC-003.1** Given a guest with a valid password, when they sign in, then they see the portal start page.
+
+## Edge cases
+
+- The company account is disabled while the employee is signed in → AC-002.1
+
+## Security considerations
+
+- Sign-in events in the audit log contain personal data → REQ-001
+- Guest passwords are credentials that must be stored securely → REQ-003
+
+## Out of scope
+
+- Identity providers other than Entra ID.
+
+## Assumptions
+
+- **A-001** Sessions last at most 8 hours, as the discussion notes say. (unconfirmed)
+
+## Open questions
+
+- **Q-001** (REQ-003) Do guests keep a password login, or do they sign in through Entra ID too?
+- **Q-002** (REQ-001) Which sign-in time counts as "fast"?
+
+## Decisions
+
+None.
+
+## Changes
+
+- 2026-11-21: created
+"""
+RESEARCH_ROUND_1 = """# Research: SSO login
+
+Feature: `<sso>` · Request: [request.md](request.md) · Spec: [spec.md](spec.md)
+
+## refine / gaps
+
+Date: 2026-11-21
+
+- **G-1** "The login must be fast" has no target time. Source: request.md:5
+- **G-2** The request does not say whether guests keep a password login. Source: request.md:6
+
+## refine / security
+
+Date: 2026-11-21
+
+- **RS-1** Sign-in events in the audit log contain personal data. Source: request.md:8
+- **RS-2** Guest passwords are credentials. Source: request.md:6. Assumption: the request implies a password login for guests.
+"""
 CSV_SOURCE = "Export the order list as CSV."
 BUGFIX_TEXT = """Login fails when the user's name contains an umlaut
 Steps: sign in as "Jörg Müller"; the page shows error 500 and the log has $LOGIN_ERROR."""
@@ -382,6 +528,9 @@ def generate(work, engine, git, contract):
     # 8. Discuss and new (S10-S17).
     intake = generate_intake(work, engine, git, repo, fixtures, sso, quick)
 
+    # 9. Refine (S20-S22).
+    generate_refine(work, engine, git, repo, fixtures, sso)
+
     (work / "out").mkdir()
     ids = {"sso": sso, "quick": quick, "contract": contract, "notesFile": NOTES_FILE, "csv": intake["csv"]}
     (work / "ids.json").write_text(json.dumps(ids, indent=2) + "\n", encoding="utf-8")
@@ -485,6 +634,52 @@ def generate_intake(work, engine, git, repo, fixtures, sso, quick):
     (s12 / ".shadekit" / "templates" / "discussion.md").unlink()
     git_commit(git, s12, "fixture s12")
     return {"csv": csv_feature}
+
+
+def generate_refine(work, engine, git, repo, fixtures, sso):
+    """Builds the repositories and the fixture of the refine scenarios S20-S22."""
+
+    def save(name, stdout):
+        (fixtures / name).write_text(stdout, encoding="utf-8")
+
+    def expect_show(data):
+        if data.get("id") != sso or data.get("currentPhase") != "refine":
+            return f"feature show returned {data.get('id')} in {data.get('currentPhase')}, expected {sso} in refine"
+        return None
+
+    # S20: the first refine round. A longer request and notes, so that the research has something to find.
+    s20 = copy_repository(work, repo, "repo-s20")
+    feature_dir = s20 / ".shadekit" / "features" / sso
+    write_text(feature_dir / "request.md", REFINE_REQUEST, "\n")
+    (feature_dir / "discussions").mkdir()
+    write_text(feature_dir / "discussions" / REFINE_NOTES_FILE, REFINE_NOTES_TEXT.replace("<sso>", sso), "\n")
+    if (feature_dir / "spec.md").exists() or (feature_dir / "researches.md").exists():
+        fail("S20: the sso feature already has a spec.md or researches.md")
+    git_commit(git, s20, "fixture s20")
+    stdout, _ = engine.call(s20, ["feature", "show", sso, "--json"], check=expect_show)
+    save("env-show-sso.json", stdout)
+
+    # S21: a later round on the spec and the research of the first round.
+    s21 = copy_repository(work, s20, "repo-s21")
+    feature_dir = s21 / ".shadekit" / "features" / sso
+    write_text(feature_dir / "spec.md", SPEC_ROUND_1.replace("<sso>", sso), "\n")
+    write_text(feature_dir / "researches.md", RESEARCH_ROUND_1.replace("<sso>", sso), "\n")
+    git_commit(git, s21, "fixture s21")
+
+    # S23: a later round on a spec written before the "Changes" section existed.
+    s23 = copy_repository(work, s20, "repo-s23")
+    feature_dir = s23 / ".shadekit" / "features" / sso
+    old_spec = SPEC_ROUND_1.split("\n## Changes\n", 1)[0] + "\n"
+    if "## Changes" in old_spec or not old_spec.rstrip().endswith("None."):
+        fail("S23: the fixture spec still has a Changes section or does not end with its Decisions")
+    write_text(feature_dir / "spec.md", old_spec.replace("<sso>", sso), "\n")
+    write_text(feature_dir / "researches.md", RESEARCH_ROUND_1.replace("<sso>", sso), "\n")
+    git_commit(git, s23, "fixture s23")
+
+    # S22: the first round, but the repository's spec template is missing.
+    s22 = copy_repository(work, s20, "repo-s22")
+    (s22 / ".shadekit" / "templates" / "spec.md").unlink()
+    git_commit(git, s22, "fixture s22")
 
 
 def main():
